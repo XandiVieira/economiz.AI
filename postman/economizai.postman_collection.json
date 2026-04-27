@@ -1,0 +1,36 @@
+{
+	"info": {
+		"name": "economizai",
+		"description": "API collection for the economizai backend (NFC-e collaborative price intelligence). Maintain in sync with every endpoint change. The 'E2E Flow' folder runs all requests in logical order — each request seeds data for the next.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "E2E Flow",
+			"description": "Sequential test suite — run top to bottom. Each step seeds variables (token, ids) for the next.",
+			"item": []
+		},
+		{
+			"name": "Auth",
+			"item": []
+		},
+		{
+			"name": "Receipts",
+			"item": []
+		},
+		{
+			"name": "Users",
+			"item": []
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080/api/v1"
+		},
+		{
+			"key": "token",
+			"value": ""
+		}
+	]
+}
