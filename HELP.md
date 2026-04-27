@@ -230,4 +230,24 @@ These came up while structuring the project — open for discussion:
 - Decided: monetization architected from Day 1 — see MONETIZATION.md.
 - Wrote CLAUDE.md, HELP.md, MONETIZATION.md.
 - Hardened pom.xml and added base scaffolding (i18n, db/migration, postman folders).
-- Initialized git, configured local user (Alexandre Vieira / xandivieira@gmail.com), prepared GitHub remote at https://github.com/XandiVieira/economiz.AI.git.
+- Initialized git, configured local user (Alexandre Vieira / xandivieira@gmail.com), pushed initial three commits to https://github.com/XandiVieira/economiz.AI.git.
+- **Auth foundation implemented (Phase 1, ported from parkhere):**
+  - BaseEntity (UUID id, createdAt, updatedAt) + User (extends UserDetails) + Role + SubscriptionTier enums.
+  - User has `subscriptionTier` (FREE default) and `contributionOptIn` (true default) — Day-1 hooks for monetization and LGPD-aware collaborative contribution.
+  - UserRepository (findByEmail, existsByEmail).
+  - JWT layer: JwtService (HS256 via JJWT 0.12), JwtAuthenticationFilter, ApplicationConfig (UserDetailsService bean).
+  - SecurityConfig: stateless sessions, BCrypt, CORS via `economizai.cors.allowed-origins`, public `/api/v1/auth/**` + `/swagger-ui/**` + `/v3/api-docs/**`, `/api/v1/admin/**` requires ADMIN, everything else authenticated, 401 entry point.
+  - i18n-aware exception handling: DomainException, LocalizedMessageService, MessageSourceConfig (default locale pt), GlobalExceptionHandler with EmailAlreadyExists / InvalidCredentials / InvalidCurrentPassword / UserNotFound / validation / generic.
+  - DTOs: RegisterRequest, LoginRequest, UpdateUserRequest, ChangePasswordRequest, AuthResponse, UserResponse.
+  - UserService: register, login, getProfile, updateProfile, changePassword.
+  - AuthController: POST /api/v1/auth/register (201), POST /api/v1/auth/login (200).
+  - UserController: GET /api/v1/users/me, PUT /api/v1/users/me, PUT /api/v1/users/me/password.
+  - Flyway V1__create_users.sql.
+  - i18n keys for all auth/validation messages in pt + en.
+  - 26 tests passing: JwtServiceTest (5), UserServiceTest (9), AuthControllerTest (5), UserControllerTest (6), contextLoads (1).
+  - Postman collection populated: Auth (register, login), Users (me / update / change password), and a 7-step E2E Flow that exercises register → login → me → update → change password → re-login with new password → old password rejected.
+- **Spring Boot 4 notes carried forward from parkhere:**
+  - `@WebMvcTest` lives in `org.springframework.boot.webmvc.test.autoconfigure`.
+  - ObjectMapper not auto-wired in `@WebMvcTest` — instantiate manually.
+  - Need `HttpStatusEntryPoint(UNAUTHORIZED)` in SecurityConfig for proper 401 responses.
+- Test setup: H2 in-memory in `application-test.yaml`, `@ActiveProfiles("test")` on `@SpringBootTest`, Flyway disabled in tests (Hibernate `create-drop` recreates schema).
