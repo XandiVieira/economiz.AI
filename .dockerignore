@@ -1,0 +1,11 @@
+target/
+.git/
+.idea/
+.vscode/
+*.iml
+.env
+.DS_Store
+postman/
+HELP.md
+MONETIZATION.md
+CLAUDE.md

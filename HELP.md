@@ -216,7 +216,32 @@ These came up while structuring the project — open for discussion:
 ./mvnw spring-boot:run        # run the app
 ./mvnw test                    # run tests
 ./mvnw clean package           # build jar
+docker build -t economizai .  # build production image (mirror of Render build)
 ```
+
+### Deploying to Render
+
+The repo ships with a `Dockerfile` (multi-stage Eclipse Temurin 21 build →
+JRE runtime, exposes port 10000) and a `.dockerignore`. Render auto-detects
+the Dockerfile when you create a Web Service from the GitHub repo — no
+`render.yaml` needed (mirrors the parkhere setup).
+
+Steps:
+
+1. Push to `main` on `https://github.com/XandiVieira/economiz.AI`.
+2. In Render, **New → PostgreSQL** with name `economizai-db`.
+3. **New → Web Service** → connect the GitHub repo. Runtime: **Docker**.
+4. Set environment variables (see `.env.example`):
+   - `DATABASE_URL` → JDBC form, e.g. `jdbc:postgresql://<internal-host>/<db>`.
+     Take the host/port/db from Render's "Internal Database URL" but
+     change the `postgres://...` prefix to `jdbc:postgresql://...`.
+   - `DB_USERNAME` / `DB_PASSWORD` → from Render's DB credentials.
+   - `JWT_SECRET` → generate a random 64+ char string (`openssl rand -hex 64`).
+   - `CORS_ORIGINS` → the eventual frontend Render URL.
+5. Deploy. Flyway runs migrations V1–V4 on first boot.
+
+Smoke-check after deploy: `https://<service>.onrender.com/swagger-ui` should
+return Swagger UI.
 
 ---
 
