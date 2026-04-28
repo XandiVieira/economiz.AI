@@ -151,6 +151,91 @@ deliverable units; ship a phase, then plan the next.
 - Top markets / top categories endpoints
 - Migration adds `products`, `product_aliases`, normalized FKs on `receipt_items`
 
+### Phase 2.5 — Auto-categorization (exploratory)
+
+**Goal:** Eliminate the "every new product has `category=null`" friction so
+the spend-by-category dashboard is useful from day 1, without paying an LLM
+per-call.
+
+**Why exploratory:** classical ML accuracy on Brazilian product short-text
+needs to be validated against real receipt data before we commit. If
+v1 lands < 85% accuracy, we revisit (LLM fallback for low-confidence,
+hybrid, or just punt to manual).
+
+- `ProductCategoryClassifier` Spring service using **Smile** (Apache 2.0,
+  ~2 MB JAR). Algorithm: **TF-IDF on character n-grams (3-5) +
+  Multinomial Naive Bayes** as the v1 baseline. Char n-grams handle
+  noisy receipt text ("ARROZ TIO J TP1 5KG") without needing perfect
+  tokenization.
+- Training data: every `Product` where `category IS NOT NULL` is one
+  labeled example. Cold-start with a curated CSV under
+  `src/main/resources/seed/product-categories.csv` (~500 common
+  Brazilian items) until organic data accumulates.
+- Inference is in-process, sub-millisecond. No per-call cost.
+- Confidence threshold: only auto-set `product.category` when
+  `predictedProbability > 0.75`. Otherwise leave null and let the user
+  set it manually (the failure mode is "review queue grows", not
+  "wrong category pollutes dashboards").
+- Wire into `CanonicalizationService`: after creating/matching a Product,
+  if `category` is null, predict and set if confident.
+- Feedback loop: when a user `PATCH`es `product.category`, mark that
+  example as high-priority for the next training pass.
+- Endpoint: `POST /admin/categorizer/retrain` (manual trigger) +
+  weekly cron once volume justifies it.
+
+**Reach goal:** export the trained model + 100k labeled Brazilian
+product examples as a B2B asset (CPG analytics firms struggle with
+NFC-e text normalization).
+
+### Phase 2.6 — Preferences & right-sized quantities (exploratory)
+
+**Goal:** Recommendations respect what this household actually wants and
+can store, instead of always pushing the cheapest unit price.
+
+**Motivation:** A 5kg sack of rice is cheaper per kg, but if a single-person
+household takes 8 months to finish it (and might spoil it), it's not
+actually a better deal. Same for brand preference — if the user always
+buys Tio João, recommending an unknown white-label even at 30% off may
+just be ignored.
+
+**Why exploratory:** the preference model can over-engineer fast (storage
+capacity dimensions, perishability tables, consumption rate per person).
+V1 should be lean and prove value before adding sophistication.
+
+V1 scope (lean):
+
+- Add `Household.householdSize` (Integer 1-10, default 1, user-editable
+  in profile).
+- New `HouseholdProductPreference` entity: `(household_id, product_id)`
+  with optional `preferredBrand`, `preferredQuantityMin/Max`,
+  `strength` enum (`NICE_TO_HAVE` / `IMPORTANT` / `MUST_HAVE`).
+- **Implicit learning** (no UI required): on receipt confirm, derive
+  per-(household, product) stats from purchase history:
+  - typical brand = mode of brands purchased
+  - typical pack size = median of quantities
+  - frequency = purchases per month
+  Surface these as read-only "auto-detected preferences" in the API.
+- **Explicit override:** user can `PATCH` a preference to lock it
+  (e.g., "MUST_HAVE lactose-free milk", strength=MUST_HAVE).
+
+V1 uses (Phase 3 features built on top of this):
+
+- "Best market" recommendations filter out pack sizes outside the
+  household's preferred range when ranking by total cost.
+- Shopping list generator picks the pack size that minimizes
+  `cost / consumed_units_before_typical_repurchase` instead of raw
+  unit price — this is the "right-size" heuristic.
+- For `MUST_HAVE` brand preferences, the cheapest-substitute path is
+  hidden entirely.
+
+V2 (out of scope for this exploratory phase, but architectural
+placeholder):
+
+- Storage capacity hints (`SMALL_APARTMENT` / `HOUSE` / `BULK_FRIENDLY`).
+- Per-product perishability flag (rice = OK to bulk, milk = not).
+- Consumption rate model per person (4-person family eats 3.5x what a
+  couple eats — not exactly 2x).
+
 ### Phase 3 — Consumption Intelligence (E4)
 
 **Goal:** App tells the user what to buy next, where, and when.
@@ -160,6 +245,8 @@ deliverable units; ship a phase, then plan the next.
 - Suggested shopping list generation
 - "Best market for this item near me" — requires market geocoding + the price index
 - Basket optimization: given a shopping list, suggest split across nearby markets
+- **Recommendations are filtered through the Phase 2.6 preference model**
+  (right-sized pack, preferred brand) when available.
 
 ### Phase 4 — Collaborative Price Index (E5)
 
