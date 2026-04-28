@@ -251,3 +251,76 @@ These came up while structuring the project — open for discussion:
   - ObjectMapper not auto-wired in `@WebMvcTest` — instantiate manually.
   - Need `HttpStatusEntryPoint(UNAUTHORIZED)` in SecurityConfig for proper 401 responses.
 - Test setup: H2 in-memory in `application-test.yaml`, `@ActiveProfiles("test")` on `@SpringBootTest`, Flyway disabled in tests (Hibernate `create-drop` recreates schema).
+
+### Session 2 (2026-04-27) — Phase 1 implemented
+
+**Households (E2):**
+- `Household` entity with 6-char alphanumeric `inviteCode` (avoids visually ambiguous chars 0/O/1/I).
+- Auto-created on registration via `HouseholdService.createSoloHousehold` wired into `UserService.register`.
+- Endpoints: `GET /api/v1/households/me`, `POST /api/v1/households/join`, `POST /api/v1/households/leave`. Empty households auto-deleted on leave/join.
+- V2 migration: `households` table + `users.household_id` FK with backfill block.
+
+**Receipt domain (E1):**
+- `Receipt` (status-machine PENDING_CONFIRMATION → CONFIRMED/REJECTED) + `ReceiptItem` with `NUMERIC(12,3)` qty / `NUMERIC(12,2)` totals per CLAUDE.md money rule.
+- `UnidadeFederativa` enum keyed by IBGE code; `ReceiptStatus` enum.
+- V3 migration: `receipts` + `receipt_items` with FK cascade and indexes on `household_id`, `status`, `issued_at`.
+
+**SEFAZ ingestion (E1):**
+- `SefazAdapter` interface + `RioGrandeDoSulAdapter` (Jsoup parser, RestClient with timeout).
+- `SefazIngestionService` discovers adapters by `supportedState()`; throws `UnsupportedStateException` for unknown UFs (only RS implemented).
+- `ChaveAcessoParser` extracts the 44-digit chave from raw chave / pipe-separated payload / full SEFAZ URL; derives UF from positions 0-1.
+- `CpfMasker` strips formatted (`123.456.789-00`) and raw 11-digit CPFs from HTML before persistence (LGPD).
+- `RestClientConfig` provides `RestClient.Builder` bean — Spring Boot 4 webmvc starter does not auto-configure it.
+
+**Receipt API:**
+- `POST /api/v1/receipts` (201) submit QR; `GET` paginated list scoped to household; `GET /{id}`, `PATCH /{id}/items/{itemId}`, `POST /{id}/confirm`, `POST /{id}/reject`. Edits + status transitions only allowed in `PENDING_CONFIRMATION`.
+- Authorization scoped at household level (not user) — household members share the receipt history.
+- Duplicate chave returns 409 (`ReceiptAlreadyIngestedException`).
+
+**Cross-cutting:**
+- `GlobalExceptionHandler` extended for all new exceptions (404/400/409/502 mapping).
+- i18n: 11 new keys in pt + en (households, receipts, SEFAZ).
+- Synthetic NFC-e fixture under `src/test/resources/fixtures/sefaz/rs/nfce-sample.html` — replace with real captured pages as production volume grows.
+- Postman collection extended: Households + Receipts folders, E2E flow grew 7 → 15 steps. Receipt steps gracefully skip when `qrPayload` collection variable isn't set to a real QR.
+
+**Tests: 26 → 78 passing.**
+- New: `ChaveAcessoParserTest` (10), `CpfMaskerTest` (5), `RioGrandeDoSulAdapterTest` (6), `HouseholdServiceTest` (7), `ReceiptServiceTest` (8), `HouseholdControllerTest` (5), `ReceiptControllerTest` (11).
+
+### Session 3 (2026-04-28) — Phase 2 implemented
+
+**Product domain (E3 canonicalization):**
+- `Product` (canonical: ean unique nullable, normalizedName, brand, category enum, unit) + `ProductAlias` (rawDescription → normalizedDescription unique → product). `ProductCategory` enum: GROCERIES / BEVERAGES / PRODUCE / MEAT_DAIRY / BAKERY / CLEANING / PERSONAL_CARE / OTHER (English internal, can localize at display layer).
+- `DescriptionNormalizer` (NFD strip accents, lowercase, collapse punctuation/whitespace) is the join key between raw NFC-e descriptions and aliases.
+- V4 migration: `products` + `product_aliases` + `receipt_items.product_id` nullable FK.
+
+**Canonicalization pipeline:**
+- `CanonicalizationService.canonicalize(Receipt)` runs **on confirm** (not on submit — lets users fix descriptions first). Strategy: EAN match → auto-create `Product` if EAN unknown → fallback to alias lookup → leave unmatched.
+- Auto-creates an alias when EAN matches (so future receipts with the same product but different raw description hit the alias path).
+- Wired into `ReceiptService.confirm` so canonicalization is transparent.
+
+**Product API:**
+- `GET /products?query=...` (paginated search by name or exact EAN), `GET /products/{id}`, `POST /products` (201, backfills receipt items by EAN), `PATCH /products/{id}` (set category/brand), `POST /products/{id}/aliases` (creates alias + backfills matching unmatched items in current household).
+- `GET /products/unmatched` (review queue): list of receipt items in current household with `product_id IS NULL` from CONFIRMED receipts.
+
+**Insights API:**
+- `GET /insights/spend?from=&to=` returns total + buckets by month (year+month numeric), market (cnpj+name), category. Only CONFIRMED receipts.
+- `GET /insights/markets/top?limit=`, `GET /insights/categories/top?limit=` — top-N slice of `/spend`.
+- `GET /insights/products/{id}/price-history?from=&to=` — chronological unit-price points for a canonical product, scoped to household.
+- All endpoints scoped to household_id.
+
+**Receipt list filters:**
+- `GET /receipts?from=&to=&marketCnpj=&category=` — added optional filters using JPA Specifications (cleanest for variable WHERE clauses).
+- Default sort `issuedAt DESC`. Replaces previous fixed `findAllByHouseholdIdOrderByIssuedAtDesc`.
+
+**Cross-cutting fixes:**
+- **Spring Boot 4.0 split Flyway autoconfig** into a separate `spring-boot-flyway` artifact — added to pom.xml. Without it, Flyway dependency is on classpath but no autoconfig runs and the schema is never created. Symptom: app starts cleanly but every JPA call fails with `relation "users" does not exist`.
+- **Postgres "could not determine data type of parameter $2"**: JPQL `:param IS NULL OR ...` patterns send untyped null parameters that PostgreSQL JDBC can't infer. Fixed by (a) sentinel dates (1900-01-01 / 2999-12-31) at the service layer for InsightsRepository, (b) JPA Specifications for ReceiptRepository (predicates only added when params non-null).
+- **LazyInitializationException on `User.household.getInviteCode()`**: `User.household` is `FetchType.LAZY`, accessing fields beyond `getId()` outside a transaction throws. Fixed `HouseholdService.getMine` to re-fetch the household by ID inside `@Transactional(readOnly = true)`. ID-only access on lazy proxies is still safe (Hibernate short-circuits).
+- `GlobalExceptionHandler` extended for product/alias/EAN exceptions (404/409). i18n: 3 new keys pt + en.
+
+**Postman:**
+- Products + Insights folders added.
+- E2E flow grew 15 → 21 steps. Newman E2E full pass against real Postgres + running app: **21/21 requests, 29/29 assertions green**.
+
+**Tests: 78 → 110 passing.**
+- New: `DescriptionNormalizerTest` (5), `CanonicalizationServiceTest` (6), `ProductServiceTest` (6), `ProductControllerTest` (7), `InsightsControllerTest` (4), `InsightsRepositoryTest` (4, integration `@DataJpaTest`).

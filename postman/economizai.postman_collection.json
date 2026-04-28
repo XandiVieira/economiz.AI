@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "economizai",
-    "description": "API collection for the economizai backend (NFC-e collaborative price intelligence). Maintain in sync with every endpoint change. The 'E2E Flow' folder runs all requests in logical order \u2014 each request seeds variables for the next.",
+    "description": "API collection for the economizai backend (NFC-e collaborative price intelligence). Maintain in sync with every endpoint change. The 'E2E Flow' folder runs all requests in logical order — each request seeds variables for the next.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -15,26 +15,16 @@
     ]
   },
   "variable": [
-    {
-      "key": "baseUrl",
-      "value": "http://localhost:8080",
-      "type": "string"
-    },
-    {
-      "key": "token",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "e2eEmail",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "e2eUserId",
-      "value": "",
-      "type": "string"
-    }
+    {"key": "baseUrl", "value": "http://localhost:8080", "type": "string"},
+    {"key": "token", "value": "", "type": "string"},
+    {"key": "e2eEmail", "value": "", "type": "string"},
+    {"key": "e2eUserId", "value": "", "type": "string"},
+    {"key": "e2eHouseholdId", "value": "", "type": "string"},
+    {"key": "e2eInviteCode", "value": "", "type": "string"},
+    {"key": "e2eReceiptId", "value": "", "type": "string"},
+    {"key": "e2eReceiptItemId", "value": "", "type": "string"},
+    {"key": "e2eProductId", "value": "", "type": "string"},
+    {"key": "qrPayload", "value": "PASTE_REAL_NFCE_QR_PAYLOAD_HERE", "type": "string", "description": "Set this to a real NFC-e QR string (full SEFAZ URL or pipe-separated p= value) before running the receipt steps."}
   ],
   "item": [
     {
@@ -45,48 +35,20 @@
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept-Language",
-                "value": "pt"
-              }
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Accept-Language", "value": "pt"}
             ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/auth/register",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "auth",
-                "register"
-              ]
-            },
-            "auth": {
-              "type": "noauth"
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Demo User\",\n  \"email\": \"demo@example.com\",\n  \"password\": \"password123\"\n}"
-            }
+            "url": {"raw": "{{baseUrl}}/api/v1/auth/register", "host": ["{{baseUrl}}"], "path": ["api","v1","auth","register"]},
+            "auth": {"type": "noauth"},
+            "body": {"mode": "raw", "raw": "{\n  \"name\": \"Demo User\",\n  \"email\": \"demo@example.com\",\n  \"password\": \"password123\"\n}"}
           },
           "response": [],
           "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Register returns 201', function () { pm.response.to.have.status(201); });",
-                  "var data = pm.response.json();",
-                  "if (data.token) pm.collectionVariables.set('token', data.token);"
-                ]
-              }
-            }
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('Register returns 201', function () { pm.response.to.have.status(201); });",
+              "var data = pm.response.json();",
+              "if (data.token) pm.collectionVariables.set('token', data.token);"
+            ]}}
           ]
         },
         {
@@ -94,48 +56,20 @@
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept-Language",
-                "value": "pt"
-              }
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Accept-Language", "value": "pt"}
             ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/auth/login",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "auth",
-                "login"
-              ]
-            },
-            "auth": {
-              "type": "noauth"
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"demo@example.com\",\n  \"password\": \"password123\"\n}"
-            }
+            "url": {"raw": "{{baseUrl}}/api/v1/auth/login", "host": ["{{baseUrl}}"], "path": ["api","v1","auth","login"]},
+            "auth": {"type": "noauth"},
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"demo@example.com\",\n  \"password\": \"password123\"\n}"}
           },
           "response": [],
           "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Login returns 200', function () { pm.response.to.have.status(200); });",
-                  "var data = pm.response.json();",
-                  "if (data.token) pm.collectionVariables.set('token', data.token);"
-                ]
-              }
-            }
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('Login returns 200', function () { pm.response.to.have.status(200); });",
+              "var data = pm.response.json();",
+              "if (data.token) pm.collectionVariables.set('token', data.token);"
+            ]}}
           ]
         }
       ]
@@ -147,24 +81,8 @@
           "name": "Get my profile",
           "request": {
             "method": "GET",
-            "header": [
-              {
-                "key": "Accept-Language",
-                "value": "pt"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/users/me",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "users",
-                "me"
-              ]
-            }
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/users/me", "host": ["{{baseUrl}}"], "path": ["api","v1","users","me"]}
           },
           "response": []
         },
@@ -173,31 +91,11 @@
           "request": {
             "method": "PUT",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept-Language",
-                "value": "pt"
-              }
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Accept-Language", "value": "pt"}
             ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/users/me",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "users",
-                "me"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Updated Name\"\n}"
-            }
+            "url": {"raw": "{{baseUrl}}/api/v1/users/me", "host": ["{{baseUrl}}"], "path": ["api","v1","users","me"]},
+            "body": {"mode": "raw", "raw": "{\n  \"name\": \"Updated Name\"\n}"}
           },
           "response": []
         },
@@ -206,32 +104,240 @@
           "request": {
             "method": "PUT",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept-Language",
-                "value": "pt"
-              }
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Accept-Language", "value": "pt"}
             ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/users/me/password",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "users",
-                "me",
-                "password"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"currentPassword\": \"password123\",\n  \"newPassword\": \"newPassword123\"\n}"
-            }
+            "url": {"raw": "{{baseUrl}}/api/v1/users/me/password", "host": ["{{baseUrl}}"], "path": ["api","v1","users","me","password"]},
+            "body": {"mode": "raw", "raw": "{\n  \"currentPassword\": \"password123\",\n  \"newPassword\": \"newPassword123\"\n}"}
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Households",
+      "item": [
+        {
+          "name": "Get my household",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/households/me", "host": ["{{baseUrl}}"], "path": ["api","v1","households","me"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Join household by invite code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Accept-Language", "value": "pt"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/v1/households/join", "host": ["{{baseUrl}}"], "path": ["api","v1","households","join"]},
+            "body": {"mode": "raw", "raw": "{\n  \"inviteCode\": \"ABC123\"\n}"}
+          },
+          "response": []
+        },
+        {
+          "name": "Leave household",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/households/leave", "host": ["{{baseUrl}}"], "path": ["api","v1","households","leave"]}
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Receipts",
+      "item": [
+        {
+          "name": "Submit NFC-e QR",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Accept-Language", "value": "pt"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/v1/receipts", "host": ["{{baseUrl}}"], "path": ["api","v1","receipts"]},
+            "body": {"mode": "raw", "raw": "{\n  \"qrPayload\": \"{{qrPayload}}\"\n}"}
+          },
+          "response": []
+        },
+        {
+          "name": "List receipts (paginated)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/receipts?page=0&size=20", "host": ["{{baseUrl}}"], "path": ["api","v1","receipts"], "query": [
+              {"key": "page", "value": "0"},
+              {"key": "size", "value": "20"}
+            ]}
+          },
+          "response": []
+        },
+        {
+          "name": "Get receipt by id",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/receipts/{{e2eReceiptId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","receipts","{{e2eReceiptId}}"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Update receipt item",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Accept-Language", "value": "pt"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/v1/receipts/{{e2eReceiptId}}/items/{{e2eReceiptItemId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","receipts","{{e2eReceiptId}}","items","{{e2eReceiptItemId}}"]},
+            "body": {"mode": "raw", "raw": "{\n  \"rawDescription\": \"ARROZ TIO JOAO TIPO 1 5KG\",\n  \"ean\": \"7891234567890\",\n  \"quantity\": 2,\n  \"unit\": \"UN\",\n  \"unitPrice\": 28.90,\n  \"totalPrice\": 57.80\n}"}
+          },
+          "response": []
+        },
+        {
+          "name": "Confirm receipt",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/receipts/{{e2eReceiptId}}/confirm", "host": ["{{baseUrl}}"], "path": ["api","v1","receipts","{{e2eReceiptId}}","confirm"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Reject receipt",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/receipts/{{e2eReceiptId}}/reject", "host": ["{{baseUrl}}"], "path": ["api","v1","receipts","{{e2eReceiptId}}","reject"]}
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Products",
+      "item": [
+        {
+          "name": "Search products",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/products?query=arroz&page=0&size=20", "host": ["{{baseUrl}}"], "path": ["api","v1","products"], "query": [
+              {"key": "query", "value": "arroz"},
+              {"key": "page", "value": "0"},
+              {"key": "size", "value": "20"}
+            ]}
+          },
+          "response": []
+        },
+        {
+          "name": "List unmatched items (review queue)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/products/unmatched", "host": ["{{baseUrl}}"], "path": ["api","v1","products","unmatched"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Create canonical product",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Accept-Language", "value": "pt"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/v1/products", "host": ["{{baseUrl}}"], "path": ["api","v1","products"]},
+            "body": {"mode": "raw", "raw": "{\n  \"ean\": \"7891234567890\",\n  \"normalizedName\": \"Arroz Tio Joao Tipo 1 5kg\",\n  \"brand\": \"Tio Joao\",\n  \"category\": \"GROCERIES\",\n  \"unit\": \"UN\"\n}"}
+          },
+          "response": []
+        },
+        {
+          "name": "Update product (set category/brand)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Accept-Language", "value": "pt"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/v1/products/{{e2eProductId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","products","{{e2eProductId}}"]},
+            "body": {"mode": "raw", "raw": "{\n  \"normalizedName\": \"Arroz Tio Joao Tipo 1 5kg\",\n  \"brand\": \"Tio Joao\",\n  \"category\": \"GROCERIES\",\n  \"unit\": \"UN\"\n}"}
+          },
+          "response": []
+        },
+        {
+          "name": "Add alias to product (links unmatched items)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Accept-Language", "value": "pt"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/v1/products/{{e2eProductId}}/aliases", "host": ["{{baseUrl}}"], "path": ["api","v1","products","{{e2eProductId}}","aliases"]},
+            "body": {"mode": "raw", "raw": "{\n  \"rawDescription\": \"ARROZ TIO J TP1 5KG\"\n}"}
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Insights",
+      "item": [
+        {
+          "name": "Spend dashboard (all time)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/insights/spend", "host": ["{{baseUrl}}"], "path": ["api","v1","insights","spend"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Spend dashboard (date range)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/insights/spend?from=2026-01-01T00:00:00&to=2026-12-31T23:59:59", "host": ["{{baseUrl}}"], "path": ["api","v1","insights","spend"], "query": [
+              {"key": "from", "value": "2026-01-01T00:00:00"},
+              {"key": "to", "value": "2026-12-31T23:59:59"}
+            ]}
+          },
+          "response": []
+        },
+        {
+          "name": "Top markets",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/insights/markets/top?limit=5", "host": ["{{baseUrl}}"], "path": ["api","v1","insights","markets","top"], "query": [
+              {"key": "limit", "value": "5"}
+            ]}
+          },
+          "response": []
+        },
+        {
+          "name": "Top categories",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/insights/categories/top?limit=5", "host": ["{{baseUrl}}"], "path": ["api","v1","insights","categories","top"], "query": [
+              {"key": "limit", "value": "5"}
+            ]}
+          },
+          "response": []
+        },
+        {
+          "name": "Price history for product",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/insights/products/{{e2eProductId}}/price-history", "host": ["{{baseUrl}}"], "path": ["api","v1","insights","products","{{e2eProductId}}","price-history"]}
           },
           "response": []
         }
@@ -239,72 +345,38 @@
     },
     {
       "name": "E2E Flow",
-      "description": "Sequential test suite \u2014 run top to bottom. Each step seeds variables for the next.",
+      "description": "Sequential test suite — run top to bottom. Each step seeds variables for the next. Steps 8–11 require a real NFC-e QR payload in the {{qrPayload}} collection variable; otherwise they will report parsing/fetch errors but won't break the auth/household flow.",
       "item": [
         {
           "name": "1. Register new user",
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept-Language",
-                "value": "pt"
-              }
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Accept-Language", "value": "pt"}
             ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/auth/register",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "auth",
-                "register"
-              ]
-            },
-            "auth": {
-              "type": "noauth"
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"E2E Test User\",\n  \"email\": \"e2e@test.com\",\n  \"password\": \"password123\"\n}"
-            }
+            "url": {"raw": "{{baseUrl}}/api/v1/auth/register", "host": ["{{baseUrl}}"], "path": ["api","v1","auth","register"]},
+            "auth": {"type": "noauth"},
+            "body": {"mode": "raw", "raw": "{\n  \"name\": \"E2E Test User\",\n  \"email\": \"e2e@test.com\",\n  \"password\": \"password123\"\n}"}
           },
           "response": [],
           "event": [
-            {
-              "listen": "prerequest",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "var email = 'e2e-' + Date.now() + '@test.com';",
-                  "pm.collectionVariables.set('e2eEmail', email);",
-                  "pm.request.body.raw = JSON.stringify({ name: 'E2E Test User', email: email, password: 'password123' });"
-                ]
-              }
-            },
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Register returns 201', function () { pm.response.to.have.status(201); });",
-                  "pm.test('Response has token, default FREE tier, contributionOptIn=true', function () {",
-                  "    var d = pm.response.json();",
-                  "    pm.expect(d.token).to.be.a('string');",
-                  "    pm.expect(d.user.subscriptionTier).to.eql('FREE');",
-                  "    pm.expect(d.user.contributionOptIn).to.eql(true);",
-                  "    pm.collectionVariables.set('token', d.token);",
-                  "    pm.collectionVariables.set('e2eUserId', d.user.id);",
-                  "});"
-                ]
-              }
-            }
+            {"listen": "prerequest", "script": {"type": "text/javascript", "exec": [
+              "var email = 'e2e-' + Date.now() + '@test.com';",
+              "pm.collectionVariables.set('e2eEmail', email);",
+              "pm.request.body.raw = JSON.stringify({ name: 'E2E Test User', email: email, password: 'password123' });"
+            ]}},
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('Register returns 201', function () { pm.response.to.have.status(201); });",
+              "pm.test('Response has token, default FREE tier, contributionOptIn=true', function () {",
+              "    var d = pm.response.json();",
+              "    pm.expect(d.token).to.be.a('string');",
+              "    pm.expect(d.user.subscriptionTier).to.eql('FREE');",
+              "    pm.expect(d.user.contributionOptIn).to.eql(true);",
+              "    pm.collectionVariables.set('token', d.token);",
+              "    pm.collectionVariables.set('e2eUserId', d.user.id);",
+              "});"
+            ]}}
           ]
         },
         {
@@ -312,88 +384,36 @@
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept-Language",
-                "value": "pt"
-              }
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Accept-Language", "value": "pt"}
             ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/auth/login",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "auth",
-                "login"
-              ]
-            },
-            "auth": {
-              "type": "noauth"
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{e2eEmail}}\",\n  \"password\": \"password123\"\n}"
-            }
+            "url": {"raw": "{{baseUrl}}/api/v1/auth/login", "host": ["{{baseUrl}}"], "path": ["api","v1","auth","login"]},
+            "auth": {"type": "noauth"},
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"{{e2eEmail}}\",\n  \"password\": \"password123\"\n}"}
           },
           "response": [],
           "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Login returns 200', function () { pm.response.to.have.status(200); });",
-                  "var d = pm.response.json();",
-                  "pm.collectionVariables.set('token', d.token);"
-                ]
-              }
-            }
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('Login returns 200', function () { pm.response.to.have.status(200); });",
+              "var d = pm.response.json();",
+              "pm.collectionVariables.set('token', d.token);"
+            ]}}
           ]
         },
         {
           "name": "3. Get my profile",
           "request": {
             "method": "GET",
-            "header": [
-              {
-                "key": "Accept-Language",
-                "value": "pt"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/users/me",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "users",
-                "me"
-              ]
-            }
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/users/me", "host": ["{{baseUrl}}"], "path": ["api","v1","users","me"]}
           },
           "response": [],
           "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
-                  "var d = pm.response.json();",
-                  "pm.test('Email matches registered email', function () {",
-                  "    pm.expect(d.email).to.eql(pm.collectionVariables.get('e2eEmail'));",
-                  "});"
-                ]
-              }
-            }
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+              "var d = pm.response.json();",
+              "pm.test('Email matches registered email', function () { pm.expect(d.email).to.eql(pm.collectionVariables.get('e2eEmail')); });"
+            ]}}
           ]
         },
         {
@@ -401,44 +421,18 @@
           "request": {
             "method": "PUT",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept-Language",
-                "value": "pt"
-              }
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Accept-Language", "value": "pt"}
             ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/users/me",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "users",
-                "me"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Updated E2E User\"\n}"
-            }
+            "url": {"raw": "{{baseUrl}}/api/v1/users/me", "host": ["{{baseUrl}}"], "path": ["api","v1","users","me"]},
+            "body": {"mode": "raw", "raw": "{\n  \"name\": \"Updated E2E User\"\n}"}
           },
           "response": [],
           "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
-                  "pm.test('Name updated', function () { pm.expect(pm.response.json().name).to.eql('Updated E2E User'); });"
-                ]
-              }
-            }
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Name updated', function () { pm.expect(pm.response.json().name).to.eql('Updated E2E User'); });"
+            ]}}
           ]
         },
         {
@@ -446,44 +440,17 @@
           "request": {
             "method": "PUT",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept-Language",
-                "value": "pt"
-              }
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Accept-Language", "value": "pt"}
             ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/users/me/password",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "users",
-                "me",
-                "password"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"currentPassword\": \"password123\",\n  \"newPassword\": \"newPassword123\"\n}"
-            }
+            "url": {"raw": "{{baseUrl}}/api/v1/users/me/password", "host": ["{{baseUrl}}"], "path": ["api","v1","users","me","password"]},
+            "body": {"mode": "raw", "raw": "{\n  \"currentPassword\": \"password123\",\n  \"newPassword\": \"newPassword123\"\n}"}
           },
           "response": [],
           "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Returns 200', function () { pm.response.to.have.status(200); });"
-                ]
-              }
-            }
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('Returns 200', function () { pm.response.to.have.status(200); });"
+            ]}}
           ]
         },
         {
@@ -491,48 +458,20 @@
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept-Language",
-                "value": "pt"
-              }
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Accept-Language", "value": "pt"}
             ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/auth/login",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "auth",
-                "login"
-              ]
-            },
-            "auth": {
-              "type": "noauth"
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{e2eEmail}}\",\n  \"password\": \"newPassword123\"\n}"
-            }
+            "url": {"raw": "{{baseUrl}}/api/v1/auth/login", "host": ["{{baseUrl}}"], "path": ["api","v1","auth","login"]},
+            "auth": {"type": "noauth"},
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"{{e2eEmail}}\",\n  \"password\": \"newPassword123\"\n}"}
           },
           "response": [],
           "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Returns 200 with new password', function () { pm.response.to.have.status(200); });",
-                  "var d = pm.response.json();",
-                  "pm.collectionVariables.set('token', d.token);"
-                ]
-              }
-            }
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('Returns 200 with new password', function () { pm.response.to.have.status(200); });",
+              "var d = pm.response.json();",
+              "pm.collectionVariables.set('token', d.token);"
+            ]}}
           ]
         },
         {
@@ -540,46 +479,304 @@
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept-Language",
-                "value": "pt"
-              }
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Accept-Language", "value": "pt"}
             ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/auth/login",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "auth",
-                "login"
-              ]
-            },
-            "auth": {
-              "type": "noauth"
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{e2eEmail}}\",\n  \"password\": \"password123\"\n}"
-            }
+            "url": {"raw": "{{baseUrl}}/api/v1/auth/login", "host": ["{{baseUrl}}"], "path": ["api","v1","auth","login"]},
+            "auth": {"type": "noauth"},
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"{{e2eEmail}}\",\n  \"password\": \"password123\"\n}"}
           },
           "response": [],
           "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Old password returns 401', function () { pm.response.to.have.status(401); });"
-                ]
-              }
-            }
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('Old password returns 401', function () { pm.response.to.have.status(401); });"
+            ]}}
+          ]
+        },
+        {
+          "name": "8. Get my household (auto-created on register)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/households/me", "host": ["{{baseUrl}}"], "path": ["api","v1","households","me"]}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+              "var d = pm.response.json();",
+              "pm.test('Has invite code and current user as member', function () {",
+              "    pm.expect(d.inviteCode).to.be.a('string');",
+              "    pm.expect(d.members.length).to.be.at.least(1);",
+              "    pm.expect(d.members[0].email).to.eql(pm.collectionVariables.get('e2eEmail'));",
+              "    pm.collectionVariables.set('e2eHouseholdId', d.id);",
+              "    pm.collectionVariables.set('e2eInviteCode', d.inviteCode);",
+              "});"
+            ]}}
+          ]
+        },
+        {
+          "name": "9. Submit NFC-e QR (requires real qrPayload variable)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Accept-Language", "value": "pt"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/v1/receipts", "host": ["{{baseUrl}}"], "path": ["api","v1","receipts"]},
+            "body": {"mode": "raw", "raw": "{\n  \"qrPayload\": \"{{qrPayload}}\"\n}"}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "var qr = pm.collectionVariables.get('qrPayload');",
+              "if (!qr || qr.indexOf('PASTE_REAL') === 0) {",
+              "    pm.test.skip('qrPayload not set — skipping receipt steps');",
+              "    return;",
+              "}",
+              "pm.test('Returns 201', function () { pm.response.to.have.status(201); });",
+              "var d = pm.response.json();",
+              "pm.test('Status is PENDING_CONFIRMATION', function () { pm.expect(d.status).to.eql('PENDING_CONFIRMATION'); });",
+              "pm.test('Has at least one item', function () { pm.expect(d.items.length).to.be.at.least(1); });",
+              "pm.collectionVariables.set('e2eReceiptId', d.id);",
+              "pm.collectionVariables.set('e2eReceiptItemId', d.items[0].id);"
+            ]}}
+          ]
+        },
+        {
+          "name": "10. List receipts (paginated)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/receipts?page=0&size=20", "host": ["{{baseUrl}}"], "path": ["api","v1","receipts"], "query": [
+              {"key": "page", "value": "0"},
+              {"key": "size", "value": "20"}
+            ]}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+              "var d = pm.response.json();",
+              "pm.test('Has content array', function () { pm.expect(d.content).to.be.an('array'); });"
+            ]}}
+          ]
+        },
+        {
+          "name": "11. Get receipt by id",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/receipts/{{e2eReceiptId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","receipts","{{e2eReceiptId}}"]}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "if (!pm.collectionVariables.get('e2eReceiptId')) { pm.test.skip('No receipt id — skipping'); return; }",
+              "pm.test('Returns 200', function () { pm.response.to.have.status(200); });"
+            ]}}
+          ]
+        },
+        {
+          "name": "12. Patch first receipt item",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Accept-Language", "value": "pt"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/v1/receipts/{{e2eReceiptId}}/items/{{e2eReceiptItemId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","receipts","{{e2eReceiptId}}","items","{{e2eReceiptItemId}}"]},
+            "body": {"mode": "raw", "raw": "{\n  \"rawDescription\": \"ITEM REVISADO\",\n  \"quantity\": 1,\n  \"unit\": \"UN\",\n  \"unitPrice\": 9.99,\n  \"totalPrice\": 9.99\n}"}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "if (!pm.collectionVariables.get('e2eReceiptItemId')) { pm.test.skip('No item id — skipping'); return; }",
+              "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+              "var d = pm.response.json();",
+              "pm.test('Item description updated', function () {",
+              "    var item = d.items.find(function (i) { return i.id === pm.collectionVariables.get('e2eReceiptItemId'); });",
+              "    pm.expect(item.rawDescription).to.eql('ITEM REVISADO');",
+              "});"
+            ]}}
+          ]
+        },
+        {
+          "name": "13. Confirm receipt",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/receipts/{{e2eReceiptId}}/confirm", "host": ["{{baseUrl}}"], "path": ["api","v1","receipts","{{e2eReceiptId}}","confirm"]}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "if (!pm.collectionVariables.get('e2eReceiptId')) { pm.test.skip('No receipt id — skipping'); return; }",
+              "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+              "var d = pm.response.json();",
+              "pm.test('Status is CONFIRMED', function () { pm.expect(d.status).to.eql('CONFIRMED'); });",
+              "pm.test('confirmedAt is set', function () { pm.expect(d.confirmedAt).to.not.be.null; });"
+            ]}}
+          ]
+        },
+        {
+          "name": "14. Confirm again should 400 (already confirmed)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/receipts/{{e2eReceiptId}}/confirm", "host": ["{{baseUrl}}"], "path": ["api","v1","receipts","{{e2eReceiptId}}","confirm"]}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "if (!pm.collectionVariables.get('e2eReceiptId')) { pm.test.skip('No receipt id — skipping'); return; }",
+              "pm.test('Returns 400', function () { pm.response.to.have.status(400); });"
+            ]}}
+          ]
+        },
+        {
+          "name": "15. Submit same QR again should 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Accept-Language", "value": "pt"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/v1/receipts", "host": ["{{baseUrl}}"], "path": ["api","v1","receipts"]},
+            "body": {"mode": "raw", "raw": "{\n  \"qrPayload\": \"{{qrPayload}}\"\n}"}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "var qr = pm.collectionVariables.get('qrPayload');",
+              "if (!qr || qr.indexOf('PASTE_REAL') === 0) { pm.test.skip('qrPayload not set — skipping'); return; }",
+              "pm.test('Duplicate returns 409', function () { pm.response.to.have.status(409); });"
+            ]}}
+          ]
+        },
+        {
+          "name": "16. List unmatched items after confirm",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/products/unmatched", "host": ["{{baseUrl}}"], "path": ["api","v1","products","unmatched"]}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+              "var arr = pm.response.json();",
+              "pm.test('Returns an array', function () { pm.expect(arr).to.be.an('array'); });",
+              "if (arr.length > 0) {",
+              "    pm.collectionVariables.set('e2eUnmatchedDescription', arr[0].rawDescription);",
+              "    pm.collectionVariables.set('e2eUnmatchedEan', arr[0].ean || '');",
+              "}"
+            ]}}
+          ]
+        },
+        {
+          "name": "17. Create canonical product (uses first unmatched item)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Accept-Language", "value": "pt"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/v1/products", "host": ["{{baseUrl}}"], "path": ["api","v1","products"]},
+            "body": {"mode": "raw", "raw": "{\n  \"normalizedName\": \"E2E Canonical Product\",\n  \"category\": \"GROCERIES\",\n  \"unit\": \"UN\"\n}"}
+          },
+          "response": [],
+          "event": [
+            {"listen": "prerequest", "script": {"type": "text/javascript", "exec": [
+              "var ean = pm.collectionVariables.get('e2eUnmatchedEan');",
+              "var body = { normalizedName: 'E2E Canonical Product', category: 'GROCERIES', unit: 'UN' };",
+              "if (ean) body.ean = ean + 'E2E';",
+              "pm.request.body.raw = JSON.stringify(body);"
+            ]}},
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('Returns 201', function () { pm.response.to.have.status(201); });",
+              "var d = pm.response.json();",
+              "pm.collectionVariables.set('e2eProductId', d.id);"
+            ]}}
+          ]
+        },
+        {
+          "name": "18. Add alias (links matching unmatched items)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Accept-Language", "value": "pt"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/v1/products/{{e2eProductId}}/aliases", "host": ["{{baseUrl}}"], "path": ["api","v1","products","{{e2eProductId}}","aliases"]},
+            "body": {"mode": "raw", "raw": "{\n  \"rawDescription\": \"PLACEHOLDER\"\n}"}
+          },
+          "response": [],
+          "event": [
+            {"listen": "prerequest", "script": {"type": "text/javascript", "exec": [
+              "var desc = pm.collectionVariables.get('e2eUnmatchedDescription');",
+              "if (!desc) desc = 'E2E ALIAS ' + Date.now();",
+              "pm.request.body.raw = JSON.stringify({ rawDescription: desc });"
+            ]}},
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "if (!pm.collectionVariables.get('e2eProductId')) { pm.test.skip('No product id — skipping'); return; }",
+              "pm.test('Returns 201', function () { pm.response.to.have.status(201); });"
+            ]}}
+          ]
+        },
+        {
+          "name": "19. Spend dashboard returns aggregated data",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/insights/spend", "host": ["{{baseUrl}}"], "path": ["api","v1","insights","spend"]}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+              "var d = pm.response.json();",
+              "pm.test('Has total + buckets', function () {",
+              "    pm.expect(d.total).to.not.be.null;",
+              "    pm.expect(d.byMonth).to.be.an('array');",
+              "    pm.expect(d.byMarket).to.be.an('array');",
+              "    pm.expect(d.byCategory).to.be.an('array');",
+              "});"
+            ]}}
+          ]
+        },
+        {
+          "name": "20. Top markets",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/insights/markets/top?limit=5", "host": ["{{baseUrl}}"], "path": ["api","v1","insights","markets","top"], "query": [
+              {"key": "limit", "value": "5"}
+            ]}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Returns an array', function () { pm.expect(pm.response.json()).to.be.an('array'); });"
+            ]}}
+          ]
+        },
+        {
+          "name": "21. Filter receipts by date range",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/receipts?from=2026-01-01T00:00:00&to=2026-12-31T23:59:59", "host": ["{{baseUrl}}"], "path": ["api","v1","receipts"], "query": [
+              {"key": "from", "value": "2026-01-01T00:00:00"},
+              {"key": "to", "value": "2026-12-31T23:59:59"}
+            ]}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('Returns 200', function () { pm.response.to.have.status(200); });"
+            ]}}
           ]
         }
       ]
