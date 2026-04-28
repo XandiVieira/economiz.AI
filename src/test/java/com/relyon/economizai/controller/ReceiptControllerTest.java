@@ -12,6 +12,7 @@ import com.relyon.economizai.exception.ReceiptNotEditableException;
 import com.relyon.economizai.exception.ReceiptNotFoundException;
 import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
 import com.relyon.economizai.security.JwtService;
@@ -37,6 +38,7 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -160,7 +162,8 @@ class ReceiptControllerTest {
         var summary = new ReceiptSummaryResponse(UUID.randomUUID(), "Mercado X", LocalDateTime.now(),
                 new BigDecimal("57.80"), 1, ReceiptStatus.CONFIRMED);
         Page<ReceiptSummaryResponse> page = new PageImpl<>(List.of(summary));
-        when(receiptService.list(any(User.class), any(Pageable.class))).thenReturn(page);
+        when(receiptService.list(any(User.class), isNull(), isNull(), isNull(), isNull(ProductCategory.class), any(Pageable.class)))
+                .thenReturn(page);
 
         mockMvc.perform(get("/api/v1/receipts")
                         .with(SecurityMockMvcRequestPostProcessors.user(user)))

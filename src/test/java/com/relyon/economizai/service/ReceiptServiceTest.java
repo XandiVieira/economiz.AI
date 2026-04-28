@@ -14,6 +14,7 @@ import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
 import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.repository.ReceiptRepository;
+import com.relyon.economizai.service.canonicalization.CanonicalizationService;
 import com.relyon.economizai.service.sefaz.ParsedReceipt;
 import com.relyon.economizai.service.sefaz.ParsedReceiptItem;
 import com.relyon.economizai.service.sefaz.SefazIngestionService;
@@ -45,6 +46,7 @@ class ReceiptServiceTest {
     @Mock private ReceiptRepository receiptRepository;
     @Mock private ReceiptItemRepository receiptItemRepository;
     @Mock private SefazIngestionService sefazIngestionService;
+    @Mock private CanonicalizationService canonicalizationService;
 
     @InjectMocks private ReceiptService receiptService;
 

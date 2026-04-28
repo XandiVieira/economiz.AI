@@ -38,9 +38,12 @@ public class HouseholdService {
         return saved;
     }
 
+    @Transactional(readOnly = true)
     public HouseholdResponse getMine(User user) {
-        var members = userRepository.findAllByHouseholdId(user.getHousehold().getId());
-        return HouseholdResponse.from(user.getHousehold(), members);
+        var household = householdRepository.findById(user.getHousehold().getId())
+                .orElseThrow(() -> new IllegalStateException("Household missing for user " + user.getEmail()));
+        var members = userRepository.findAllByHouseholdId(household.getId());
+        return HouseholdResponse.from(household, members);
     }
 
     @Transactional

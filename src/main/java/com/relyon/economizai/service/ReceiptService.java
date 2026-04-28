@@ -11,20 +11,28 @@ import com.relyon.economizai.exception.ReceiptNotFoundException;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.repository.ReceiptRepository;
+import com.relyon.economizai.service.canonicalization.CanonicalizationService;
 import com.relyon.economizai.service.sefaz.ChaveAcessoParser;
 import com.relyon.economizai.service.sefaz.ParsedReceipt;
 import com.relyon.economizai.service.sefaz.SefazIngestionService;
+import jakarta.persistence.criteria.JoinType;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
@@ -35,6 +43,7 @@ public class ReceiptService {
     private final ReceiptRepository receiptRepository;
     private final ReceiptItemRepository receiptItemRepository;
     private final SefazIngestionService sefazIngestionService;
+    private final CanonicalizationService canonicalizationService;
 
     @Transactional
     public ReceiptResponse submit(User user, SubmitReceiptRequest request) {
@@ -53,10 +62,41 @@ public class ReceiptService {
     }
 
     @Transactional(readOnly = true)
-    public Page<ReceiptSummaryResponse> list(User user, Pageable pageable) {
+    public Page<ReceiptSummaryResponse> list(User user,
+                                             LocalDateTime from,
+                                             LocalDateTime to,
+                                             String cnpjEmitente,
+                                             ProductCategory category,
+                                             Pageable pageable) {
+        var cnpj = Optional.ofNullable(cnpjEmitente).map(String::trim).filter(s -> !s.isBlank()).orElse(null);
+        var sortedPageable = pageable.getSort().isUnsorted()
+                ? org.springframework.data.domain.PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
+                        Sort.by(Sort.Direction.DESC, "issuedAt"))
+                : pageable;
         return receiptRepository
-                .findAllByHouseholdIdOrderByIssuedAtDesc(user.getHousehold().getId(), pageable)
+                .findAll(filtered(user.getHousehold().getId(), from, to, cnpj, category), sortedPageable)
                 .map(ReceiptSummaryResponse::from);
+    }
+
+    private Specification<com.relyon.economizai.model.Receipt> filtered(UUID householdId,
+                                                                        LocalDateTime from,
+                                                                        LocalDateTime to,
+                                                                        String cnpj,
+                                                                        ProductCategory category) {
+        return (root, query, cb) -> {
+            var predicates = new ArrayList<Predicate>();
+            predicates.add(cb.equal(root.get("household").get("id"), householdId));
+            if (from != null) predicates.add(cb.greaterThanOrEqualTo(root.get("issuedAt"), from));
+            if (to != null) predicates.add(cb.lessThanOrEqualTo(root.get("issuedAt"), to));
+            if (cnpj != null) predicates.add(cb.equal(root.get("cnpjEmitente"), cnpj));
+            if (category != null) {
+                if (query != null) query.distinct(true);
+                var items = root.join("items", JoinType.INNER);
+                var product = items.join("product", JoinType.INNER);
+                predicates.add(cb.equal(product.get("category"), category));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
     }
 
     @Transactional(readOnly = true)
@@ -70,6 +110,7 @@ public class ReceiptService {
         requirePending(receipt);
         receipt.setStatus(ReceiptStatus.CONFIRMED);
         receipt.setConfirmedAt(LocalDateTime.now());
+        canonicalizationService.canonicalize(receipt);
         var saved = receiptRepository.save(receipt);
         log.info("Receipt {} confirmed by user {}", saved.getId(), user.getEmail());
         return ReceiptResponse.from(saved);

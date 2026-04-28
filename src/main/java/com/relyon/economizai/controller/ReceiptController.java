@@ -5,6 +5,7 @@ import com.relyon.economizai.dto.request.UpdateReceiptItemRequest;
 import com.relyon.economizai.dto.response.ReceiptResponse;
 import com.relyon.economizai.dto.response.ReceiptSummaryResponse;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.service.ReceiptService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -12,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -21,8 +23,10 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @RestController
@@ -40,9 +44,14 @@ public class ReceiptController {
     }
 
     @GetMapping
-    public ResponseEntity<Page<ReceiptSummaryResponse>> list(@AuthenticationPrincipal User user,
-                                                             @PageableDefault(size = 20) Pageable pageable) {
-        return ResponseEntity.ok(receiptService.list(user, pageable));
+    public ResponseEntity<Page<ReceiptSummaryResponse>> list(
+            @AuthenticationPrincipal User user,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
+            @RequestParam(required = false) String marketCnpj,
+            @RequestParam(required = false) ProductCategory category,
+            @PageableDefault(size = 20) Pageable pageable) {
+        return ResponseEntity.ok(receiptService.list(user, from, to, marketCnpj, category, pageable));
     }
 
     @GetMapping("/{id}")

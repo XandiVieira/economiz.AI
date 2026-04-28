@@ -27,6 +27,10 @@ public class ReceiptItem extends BaseEntity {
     @JoinColumn(name = "receipt_id", nullable = false)
     private Receipt receipt;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "product_id")
+    private Product product;
+
     @Column(name = "line_number", nullable = false)
     private Integer lineNumber;
 

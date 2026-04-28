@@ -78,6 +78,7 @@ class HouseholdServiceTest {
     void getMine_returnsHouseholdWithMembers() {
         var household = buildHousehold("ABC123");
         var user = buildUser(household);
+        when(householdRepository.findById(household.getId())).thenReturn(Optional.of(household));
         when(userRepository.findAllByHouseholdId(household.getId())).thenReturn(List.of(user));
 
         var response = householdService.getMine(user);

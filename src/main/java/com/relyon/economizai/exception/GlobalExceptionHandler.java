@@ -41,7 +41,7 @@ public class GlobalExceptionHandler {
         return respond(ex, HttpStatus.NOT_FOUND, "User not found");
     }
 
-    @ExceptionHandler({HouseholdNotFoundException.class, ReceiptNotFoundException.class, ReceiptItemNotFoundException.class})
+    @ExceptionHandler({HouseholdNotFoundException.class, ReceiptNotFoundException.class, ReceiptItemNotFoundException.class, ProductNotFoundException.class})
     public ResponseEntity<ErrorResponse> handleNotFound(DomainException ex) {
         return respond(ex, HttpStatus.NOT_FOUND, "Entity not found");
     }
@@ -51,8 +51,8 @@ public class GlobalExceptionHandler {
         return respond(ex, HttpStatus.BAD_REQUEST, "Bad request");
     }
 
-    @ExceptionHandler(ReceiptAlreadyIngestedException.class)
-    public ResponseEntity<ErrorResponse> handleConflict(ReceiptAlreadyIngestedException ex) {
+    @ExceptionHandler({ReceiptAlreadyIngestedException.class, ProductAliasConflictException.class, EanConflictException.class})
+    public ResponseEntity<ErrorResponse> handleConflict(DomainException ex) {
         return respond(ex, HttpStatus.CONFLICT, "Conflict");
     }
 

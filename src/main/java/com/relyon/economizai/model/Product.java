@@ -1,0 +1,39 @@
+package com.relyon.economizai.model;
+
+import com.relyon.economizai.model.enums.ProductCategory;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.experimental.SuperBuilder;
+
+@Entity
+@Table(name = "products")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@SuperBuilder
+public class Product extends BaseEntity {
+
+    @Column(length = 14, unique = true)
+    private String ean;
+
+    @Column(name = "normalized_name", nullable = false, length = 255)
+    private String normalizedName;
+
+    @Column(length = 100)
+    private String brand;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 30)
+    private ProductCategory category;
+
+    @Column(length = 10)
+    private String unit;
+}
