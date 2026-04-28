@@ -7,6 +7,7 @@ import com.relyon.economizai.dto.request.UpdateUserRequest;
 import com.relyon.economizai.exception.EmailAlreadyExistsException;
 import com.relyon.economizai.exception.InvalidCredentialsException;
 import com.relyon.economizai.exception.InvalidCurrentPasswordException;
+import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.Role;
 import com.relyon.economizai.model.enums.SubscriptionTier;
@@ -43,10 +44,14 @@ class UserServiceTest {
     @Mock
     private JwtService jwtService;
 
+    @Mock
+    private HouseholdService householdService;
+
     @InjectMocks
     private UserService userService;
 
     private User buildUser() {
+        var household = Household.builder().id(UUID.randomUUID()).inviteCode("ABC123").build();
         var user = User.builder()
                 .id(UUID.randomUUID())
                 .name("John")
@@ -56,6 +61,7 @@ class UserServiceTest {
                 .subscriptionTier(SubscriptionTier.FREE)
                 .contributionOptIn(true)
                 .active(true)
+                .household(household)
                 .build();
         user.setCreatedAt(LocalDateTime.now());
         user.setUpdatedAt(LocalDateTime.now());
@@ -65,7 +71,9 @@ class UserServiceTest {
     @Test
     void register_shouldCreateUserAndReturnToken() {
         var request = new RegisterRequest("John", "john@test.com", "password123");
+        var household = Household.builder().id(UUID.randomUUID()).inviteCode("ABC123").build();
         when(userRepository.existsByEmail("john@test.com")).thenReturn(false);
+        when(householdService.createSoloHousehold()).thenReturn(household);
         when(passwordEncoder.encode("password123")).thenReturn("encoded");
         when(userRepository.save(any(User.class))).thenAnswer(inv -> {
             var user = inv.<User>getArgument(0);

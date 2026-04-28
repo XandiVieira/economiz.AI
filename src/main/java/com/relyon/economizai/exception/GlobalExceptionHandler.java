@@ -23,34 +23,42 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(EmailAlreadyExistsException.class)
     public ResponseEntity<ErrorResponse> handleEmailAlreadyExists(EmailAlreadyExistsException ex) {
-        var message = messageService.translate(ex);
-        log.warn("Registration attempt with existing email: {}", message);
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(new ErrorResponse(HttpStatus.CONFLICT.value(), message, LocalDateTime.now()));
+        return respond(ex, HttpStatus.CONFLICT, "Registration attempt with existing email");
     }
 
     @ExceptionHandler(InvalidCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleInvalidCredentials(InvalidCredentialsException ex) {
-        var message = messageService.translate(ex);
-        log.warn("Failed login attempt");
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ErrorResponse(HttpStatus.UNAUTHORIZED.value(), message, LocalDateTime.now()));
+        return respond(ex, HttpStatus.UNAUTHORIZED, "Failed login attempt");
     }
 
     @ExceptionHandler(InvalidCurrentPasswordException.class)
     public ResponseEntity<ErrorResponse> handleInvalidCurrentPassword(InvalidCurrentPasswordException ex) {
-        var message = messageService.translate(ex);
-        log.warn("Invalid current password");
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ErrorResponse(HttpStatus.BAD_REQUEST.value(), message, LocalDateTime.now()));
+        return respond(ex, HttpStatus.BAD_REQUEST, "Invalid current password");
     }
 
     @ExceptionHandler(UserNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleUserNotFound(UserNotFoundException ex) {
-        var message = messageService.translate(ex);
-        log.warn("User not found: {}", message);
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new ErrorResponse(HttpStatus.NOT_FOUND.value(), message, LocalDateTime.now()));
+        return respond(ex, HttpStatus.NOT_FOUND, "User not found");
+    }
+
+    @ExceptionHandler({HouseholdNotFoundException.class, ReceiptNotFoundException.class, ReceiptItemNotFoundException.class})
+    public ResponseEntity<ErrorResponse> handleNotFound(DomainException ex) {
+        return respond(ex, HttpStatus.NOT_FOUND, "Entity not found");
+    }
+
+    @ExceptionHandler({InvalidInviteCodeException.class, InvalidQrPayloadException.class, UnsupportedStateException.class, ReceiptParseException.class, ReceiptNotEditableException.class, AlreadyInHouseholdException.class})
+    public ResponseEntity<ErrorResponse> handleBadRequest(DomainException ex) {
+        return respond(ex, HttpStatus.BAD_REQUEST, "Bad request");
+    }
+
+    @ExceptionHandler(ReceiptAlreadyIngestedException.class)
+    public ResponseEntity<ErrorResponse> handleConflict(ReceiptAlreadyIngestedException ex) {
+        return respond(ex, HttpStatus.CONFLICT, "Conflict");
+    }
+
+    @ExceptionHandler(SefazFetchException.class)
+    public ResponseEntity<ErrorResponse> handleSefazFetch(SefazFetchException ex) {
+        return respond(ex, HttpStatus.BAD_GATEWAY, "SEFAZ fetch failed");
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -69,6 +77,13 @@ public class GlobalExceptionHandler {
         log.error("Unexpected error", ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR.value(), message, LocalDateTime.now()));
+    }
+
+    private ResponseEntity<ErrorResponse> respond(DomainException ex, HttpStatus status, String logContext) {
+        var message = messageService.translate(ex);
+        log.warn("{}: {}", logContext, message);
+        return ResponseEntity.status(status)
+                .body(new ErrorResponse(status.value(), message, LocalDateTime.now()));
     }
 
     public record ErrorResponse(int status, String message, LocalDateTime timestamp, Map<String, String> errors) {

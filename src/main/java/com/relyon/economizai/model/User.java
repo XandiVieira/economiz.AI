@@ -6,6 +6,9 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -55,6 +58,10 @@ public class User extends BaseEntity implements UserDetails {
     @Column(nullable = false)
     @Builder.Default
     private boolean active = true;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "household_id", nullable = false)
+    private Household household;
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {

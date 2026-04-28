@@ -26,6 +26,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final HouseholdService householdService;
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -33,15 +34,17 @@ public class UserService {
             throw new EmailAlreadyExistsException(request.email());
         }
 
+        var household = householdService.createSoloHousehold();
         var user = User.builder()
                 .name(request.name())
                 .email(request.email())
                 .password(passwordEncoder.encode(request.password()))
+                .household(household)
                 .build();
 
         var savedUser = userRepository.save(user);
         var token = jwtService.generateToken(savedUser);
-        log.info("New user registered: {}", savedUser.getEmail());
+        log.info("New user registered: {} (household {})", savedUser.getEmail(), household.getId());
         return new AuthResponse(token, UserResponse.from(savedUser));
     }
 
