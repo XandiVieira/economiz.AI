@@ -41,7 +41,7 @@ class RioGrandeDoSulAdapterTest {
     @Test
     void resolveUrl_buildsUrlFromParam() {
         var resolved = adapter.resolveUrl(CHAVE_RS + "|2|1|1|hash");
-        assertTrue(resolved.startsWith("https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx?p="));
+        assertTrue(resolved.startsWith("https://dfe-portal.svrs.rs.gov.br/Dfe/QrCodeNFce?p="));
         assertTrue(resolved.contains(CHAVE_RS));
     }
 

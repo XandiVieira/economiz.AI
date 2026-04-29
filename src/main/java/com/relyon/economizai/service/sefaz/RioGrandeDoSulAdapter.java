@@ -10,37 +10,30 @@ import org.jsoup.nodes.Element;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientResponseException;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Slf4j
 @Component
 public class RioGrandeDoSulAdapter implements SefazAdapter {
 
-    private static final String PORTAL_URL = "https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx";
+    private static final String PORTAL_URL = "https://dfe-portal.svrs.rs.gov.br/Dfe/QrCodeNFce";
     private static final DateTimeFormatter ISSUED_AT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
-    private static final Pattern CODIGO = Pattern.compile("(?:Código|Codigo)\\s*:\\s*(\\d+)", Pattern.CASE_INSENSITIVE);
-    private static final Pattern QTDE = Pattern.compile("Qtde\\.?\\s*:?\\s*([\\d.,]+)", Pattern.CASE_INSENSITIVE);
-    private static final Pattern UN = Pattern.compile("UN\\s*:?\\s*([A-Za-z]+)", Pattern.CASE_INSENSITIVE);
-    private static final Pattern VL_UNIT = Pattern.compile("Vl\\.?\\s*Unit\\.?\\s*:?\\s*([\\d.,]+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern CNPJ = Pattern.compile("CNPJ\\s*:?\\s*([\\d./-]{14,18})", Pattern.CASE_INSENSITIVE);
     private static final Pattern EMISSION = Pattern.compile("Emiss[aã]o\\s*:?\\s*(\\d{2}/\\d{2}/\\d{4}\\s+\\d{2}:\\d{2}:\\d{2})", Pattern.CASE_INSENSITIVE);
 
     private final RestClient restClient;
 
     public RioGrandeDoSulAdapter(RestClient.Builder builder,
-                                 @Value("${economizai.ingestion.sefaz.timeout-ms:10000}") int timeoutMs,
+                                 @Value("${economizai.ingestion.sefaz.timeout-ms:30000}") int timeoutMs,
                                  @Value("${economizai.ingestion.sefaz.user-agent:economizai}") String userAgent) {
         var requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(timeoutMs);
+        requestFactory.setConnectTimeout(Math.min(timeoutMs, 10000));
         requestFactory.setReadTimeout(timeoutMs);
         this.restClient = builder
                 .defaultHeader("User-Agent", userAgent)
@@ -57,15 +50,19 @@ public class RioGrandeDoSulAdapter implements SefazAdapter {
     @Override
     public String fetchHtml(String qrPayload) {
         var url = resolveUrl(qrPayload);
-        log.debug("Fetching SEFAZ-RS NFC-e at {}", url);
+        log.info("Fetching SEFAZ-RS NFC-e at {}", url);
         try {
             var html = restClient.get().uri(url).retrieve().body(String.class);
             if (html == null || html.isBlank()) {
+                log.warn("SEFAZ-RS returned empty body for {}", url);
                 throw new SefazFetchException(supportedState().name());
             }
+            log.info("Fetched SEFAZ-RS HTML ({} bytes)", html.length());
             return html;
-        } catch (RestClientResponseException | ResourceAccessException ex) {
-            log.warn("SEFAZ-RS fetch failed: {}", ex.getMessage());
+        } catch (SefazFetchException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            log.warn("SEFAZ-RS fetch failed: {}: {}", ex.getClass().getSimpleName(), ex.getMessage());
             throw new SefazFetchException(supportedState().name());
         }
     }
@@ -75,9 +72,10 @@ public class RioGrandeDoSulAdapter implements SefazAdapter {
         var document = Jsoup.parse(html);
         var items = parseItems(document);
         if (items.isEmpty()) {
+            log.warn("Parser found no items in SEFAZ-RS HTML for chave {}", chaveAcesso);
             throw new ReceiptParseException("no-items-found");
         }
-        return ParsedReceipt.builder()
+        var parsed = ParsedReceipt.builder()
                 .chaveAcesso(chaveAcesso)
                 .cnpjEmitente(parseCnpj(document))
                 .marketName(parseMarketName(document))
@@ -88,6 +86,9 @@ public class RioGrandeDoSulAdapter implements SefazAdapter {
                 .rawHtml(html)
                 .items(items)
                 .build();
+        log.info("Parsed SEFAZ-RS receipt: market='{}', total={}, items={}",
+                parsed.marketName(), parsed.totalAmount(), items.size());
+        return parsed;
     }
 
     public String resolveUrl(String qrPayload) {
@@ -109,12 +110,11 @@ public class RioGrandeDoSulAdapter implements SefazAdapter {
             var description = textOfFirst(row, "span.txtTit, td.txtTit, .txtTit2");
             if (description.isBlank()) continue;
 
-            var rowText = row.text();
-            var ean = matchGroup(CODIGO, rowText);
-            var qty = parseDecimalOrZero(matchGroup(QTDE, rowText));
-            var unit = matchGroup(UN, rowText);
-            var unitPrice = parseDecimalOrNull(matchGroup(VL_UNIT, rowText));
-            var totalPrice = parseDecimalOrNull(textOfFirst(row, "span.valor, td.valor"));
+            var ean = afterColon(textOfFirst(row, "span.RCod, .RCod"));
+            var qty = parseDecimalOrZero(afterColon(textOfFirst(row, "span.Rqtd, span.Rqtde, .Rqtd, .Rqtde")));
+            var unit = afterColon(textOfFirst(row, "span.RUN, .RUN"));
+            var unitPrice = parseDecimalOrNull(afterColon(textOfFirst(row, "span.RvlUnit, .RvlUnit")));
+            var totalPrice = parseDecimalOrNull(textOfFirst(row, "span.valor, td.valor, .valor"));
             if (totalPrice == null && unitPrice != null && qty.signum() > 0) {
                 totalPrice = unitPrice.multiply(qty);
             }
@@ -124,7 +124,7 @@ public class RioGrandeDoSulAdapter implements SefazAdapter {
             items.add(ParsedReceiptItem.builder()
                     .lineNumber(line)
                     .rawDescription(description.trim())
-                    .ean(ean.isBlank() ? null : ean)
+                    .ean(extractEan(ean))
                     .quantity(qty.signum() == 0 ? BigDecimal.ONE : qty)
                     .unit(unit.isBlank() ? null : unit.toUpperCase())
                     .unitPrice(unitPrice)
@@ -148,8 +148,13 @@ public class RioGrandeDoSulAdapter implements SefazAdapter {
     }
 
     private String parseMarketAddress(Document document) {
-        var addr = textOfFirst(document, "#u20 .text, .endereco, #conteudo .text");
-        return addr.isBlank() ? null : addr.trim();
+        for (var b : document.select("#u20 .text, .endereco, #conteudo .text")) {
+            var text = b.text().trim();
+            if (!text.isEmpty() && !text.toLowerCase().contains("cnpj")) {
+                return text;
+            }
+        }
+        return null;
     }
 
     private LocalDateTime parseIssuedAt(Document document) {
@@ -165,8 +170,13 @@ public class RioGrandeDoSulAdapter implements SefazAdapter {
     }
 
     private BigDecimal parseTotal(Document document) {
-        var total = textOfFirst(document, "#totalNota .totalNumb, .totalNumb.txtMax, span.totalNumb");
-        return parseDecimalOrNull(total);
+        var grandTotal = document.selectFirst(".totalNumb.txtMax");
+        if (grandTotal != null) return parseDecimalOrNull(grandTotal.text());
+        var labelled = document.selectFirst("#totalNota .totalNumb");
+        if (labelled != null) return parseDecimalOrNull(labelled.text());
+        var allTotals = document.select("span.totalNumb");
+        if (!allTotals.isEmpty()) return parseDecimalOrNull(allTotals.last().text());
+        return null;
     }
 
     private static String textOfFirst(Element root, String selector) {
@@ -174,9 +184,19 @@ public class RioGrandeDoSulAdapter implements SefazAdapter {
         return el == null ? "" : el.text();
     }
 
-    private static String matchGroup(Pattern pattern, String text) {
-        Matcher matcher = pattern.matcher(text);
-        return matcher.find() ? matcher.group(1) : "";
+    private static String afterColon(String text) {
+        if (text == null || text.isBlank()) return "";
+        var idx = text.lastIndexOf(':');
+        return (idx >= 0 ? text.substring(idx + 1) : text).trim();
+    }
+
+    private static String extractEan(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        var matcher = Pattern.compile("\\d+").matcher(raw);
+        if (!matcher.find()) return null;
+        var digits = matcher.group();
+        if (digits.length() > 14) digits = digits.substring(digits.length() - 14);
+        return digits;
     }
 
     private static BigDecimal parseDecimalOrNull(String value) {

@@ -30,7 +30,7 @@ economizai:
     k-anonymity: 3
   ingestion:
     sefaz:
-      timeout-ms: 10000
+      timeout-ms: 30000
       user-agent: "economizai/0.1 (+https://github.com/XandiVieira/economiz.AI)"
 
 springdoc:
