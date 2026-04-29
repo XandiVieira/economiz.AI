@@ -73,10 +73,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex) {
-        var message = messageService.translate("error.internal");
-        log.error("Unexpected error", ex);
+        var localized = messageService.translate("error.internal");
+        log.error("Unexpected error: {}: {}", ex.getClass().getName(), ex.getMessage(), ex);
+        var debug = ex.getClass().getSimpleName() + ": " + ex.getMessage();
+        var body = localized + " [debug: " + debug + "]";
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR.value(), message, LocalDateTime.now()));
+                .body(new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR.value(), body, LocalDateTime.now()));
     }
 
     private ResponseEntity<ErrorResponse> respond(DomainException ex, HttpStatus status, String logContext) {
