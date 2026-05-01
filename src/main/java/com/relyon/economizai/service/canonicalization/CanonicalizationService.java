@@ -6,6 +6,8 @@ import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.repository.ProductAliasRepository;
 import com.relyon.economizai.repository.ProductRepository;
+import com.relyon.economizai.service.extraction.ProductExtraction;
+import com.relyon.economizai.service.extraction.ProductExtractor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -18,6 +20,7 @@ public class CanonicalizationService {
 
     private final ProductRepository productRepository;
     private final ProductAliasRepository aliasRepository;
+    private final ProductExtractor productExtractor;
 
     @Transactional
     public CanonicalizationOutcome canonicalize(Receipt receipt) {
@@ -51,11 +54,8 @@ public class CanonicalizationService {
                 ensureAlias(byEan.get(), item.getRawDescription(), normalized);
                 return ItemResult.MATCHED;
             }
-            var created = productRepository.save(Product.builder()
-                    .ean(item.getEan())
-                    .normalizedName(item.getRawDescription())
-                    .unit(item.getUnit())
-                    .build());
+            var extraction = productExtractor.extract(item.getRawDescription());
+            var created = productRepository.save(buildEnrichedProduct(item, extraction));
             item.setProduct(created);
             ensureAlias(created, item.getRawDescription(), normalized);
             return ItemResult.CREATED;
@@ -71,6 +71,19 @@ public class CanonicalizationService {
 
     private boolean hasEan(ReceiptItem item) {
         return item.getEan() != null && !item.getEan().isBlank();
+    }
+
+    private Product buildEnrichedProduct(ReceiptItem item, ProductExtraction extraction) {
+        return Product.builder()
+                .ean(item.getEan())
+                .normalizedName(item.getRawDescription())
+                .unit(item.getUnit())
+                .genericName(extraction.genericName())
+                .brand(extraction.brand())
+                .category(extraction.category())
+                .packSize(extraction.packSize())
+                .packUnit(extraction.packUnit())
+                .build();
     }
 
     private void ensureAlias(Product product, String rawDescription, String normalized) {

@@ -60,7 +60,8 @@ class ProductControllerTest {
     }
 
     private ProductResponse sampleProduct(UUID id) {
-        return new ProductResponse(id, "789", "Arroz Tio Joao", "Tio Joao", ProductCategory.GROCERIES, "UN");
+        return new ProductResponse(id, "789", "Arroz Tio Joao", "Arroz", "Tio João",
+                ProductCategory.GROCERIES, "UN", new java.math.BigDecimal("5"), "KG");
     }
 
     @Test
@@ -80,7 +81,7 @@ class ProductControllerTest {
     void create_returns201() throws Exception {
         var user = buildUser();
         var id = UUID.randomUUID();
-        var request = new CreateProductRequest("789", "Arroz Tio Joao", "Tio Joao", ProductCategory.GROCERIES, "UN");
+        var request = new CreateProductRequest("789", "Arroz Tio Joao", null, "Tio Joao", ProductCategory.GROCERIES, "UN", null, null);
         when(productService.create(any(CreateProductRequest.class))).thenReturn(sampleProduct(id));
 
         mockMvc.perform(post("/api/v1/products")
@@ -94,7 +95,7 @@ class ProductControllerTest {
     @Test
     void create_returns409OnDuplicateEan() throws Exception {
         var user = buildUser();
-        var request = new CreateProductRequest("789", "Arroz", null, null, null);
+        var request = new CreateProductRequest("789", "Arroz", null, null, null, null, null, null);
         when(productService.create(any(CreateProductRequest.class))).thenThrow(new EanConflictException("789"));
 
         mockMvc.perform(post("/api/v1/products")

@@ -1,0 +1,158 @@
+# keyword (normalized — no accents, lowercase),genericName,category
+# Multi-word keywords use single space. Empty genericName = brand-only hint.
+arroz,Arroz,GROCERIES
+feijao,Feijão,GROCERIES
+acucar,Açúcar,GROCERIES
+sal,Sal,GROCERIES
+oleo,Óleo,GROCERIES
+azeite,Azeite,GROCERIES
+farinha,Farinha,GROCERIES
+macarrao,Macarrão,GROCERIES
+massa,Massa,GROCERIES
+molho,Molho,GROCERIES
+extrato,Extrato de Tomate,GROCERIES
+fuba,Fubá,GROCERIES
+amido,Amido de Milho,GROCERIES
+fermento,Fermento,GROCERIES
+maionese,Maionese,GROCERIES
+ketchup,Ketchup,GROCERIES
+mostarda,Mostarda,GROCERIES
+vinagre,Vinagre,GROCERIES
+biscoito,Biscoito,GROCERIES
+bolacha,Biscoito,GROCERIES
+chocolate,Chocolate,GROCERIES
+achocolatado,Achocolatado,GROCERIES
+cereal,Cereal,GROCERIES
+aveia,Aveia,GROCERIES
+granola,Granola,GROCERIES
+mel,Mel,GROCERIES
+geleia,Geleia,GROCERIES
+leite,Leite,MEAT_DAIRY
+leite condensado,Leite Condensado,GROCERIES
+creme de leite,Creme de Leite,MEAT_DAIRY
+queijo,Queijo,MEAT_DAIRY
+iogurte,Iogurte,MEAT_DAIRY
+manteiga,Manteiga,MEAT_DAIRY
+margarina,Margarina,MEAT_DAIRY
+requeijao,Requeijão,MEAT_DAIRY
+ovo,Ovo,MEAT_DAIRY
+ovos,Ovo,MEAT_DAIRY
+pao,Pão,BAKERY
+torrada,Torrada,BAKERY
+bolo,Bolo,BAKERY
+rosquinha,Rosquinha,BAKERY
+panettone,Panettone,BAKERY
+carne,Carne,MEAT_DAIRY
+file,Filé,MEAT_DAIRY
+costela,Costela,MEAT_DAIRY
+alcatra,Alcatra,MEAT_DAIRY
+patinho,Patinho,MEAT_DAIRY
+acem,Acém,MEAT_DAIRY
+linguica,Linguiça,MEAT_DAIRY
+salsicha,Salsicha,MEAT_DAIRY
+hamburguer,Hambúrguer,MEAT_DAIRY
+nuggets,Nuggets,MEAT_DAIRY
+peito frango,Peito de Frango,MEAT_DAIRY
+coxa frango,Coxa de Frango,MEAT_DAIRY
+frango,Frango,MEAT_DAIRY
+peixe,Peixe,MEAT_DAIRY
+bacalhau,Bacalhau,MEAT_DAIRY
+sardinha,Sardinha,MEAT_DAIRY
+atum,Atum,MEAT_DAIRY
+salmao,Salmão,MEAT_DAIRY
+camarao,Camarão,MEAT_DAIRY
+presunto,Presunto,MEAT_DAIRY
+mortadela,Mortadela,MEAT_DAIRY
+salame,Salame,MEAT_DAIRY
+bacon,Bacon,MEAT_DAIRY
+peito peru,Peito de Peru,MEAT_DAIRY
+tomate,Tomate,PRODUCE
+batata,Batata,PRODUCE
+cebola,Cebola,PRODUCE
+alho,Alho,PRODUCE
+cenoura,Cenoura,PRODUCE
+beterraba,Beterraba,PRODUCE
+abobrinha,Abobrinha,PRODUCE
+pepino,Pepino,PRODUCE
+pimentao,Pimentão,PRODUCE
+abobora,Abóbora,PRODUCE
+mandioca,Mandioca,PRODUCE
+inhame,Inhame,PRODUCE
+alface,Alface,PRODUCE
+rucula,Rúcula,PRODUCE
+couve,Couve,PRODUCE
+espinafre,Espinafre,PRODUCE
+brocolis,Brócolis,PRODUCE
+couve flor,Couve-flor,PRODUCE
+banana,Banana,PRODUCE
+maca,Maçã,PRODUCE
+laranja,Laranja,PRODUCE
+mexerica,Mexerica,PRODUCE
+mamao,Mamão,PRODUCE
+abacaxi,Abacaxi,PRODUCE
+melancia,Melancia,PRODUCE
+melao,Melão,PRODUCE
+uva,Uva,PRODUCE
+manga,Manga,PRODUCE
+abacate,Abacate,PRODUCE
+limao,Limão,PRODUCE
+morango,Morango,PRODUCE
+agua,Água,BEVERAGES
+agua mineral,Água Mineral,BEVERAGES
+refrigerante,Refrigerante,BEVERAGES
+coca,Refrigerante,BEVERAGES
+guarana,Refrigerante,BEVERAGES
+sprite,Refrigerante,BEVERAGES
+fanta,Refrigerante,BEVERAGES
+suco,Suco,BEVERAGES
+nectar,Néctar,BEVERAGES
+cha,Chá,BEVERAGES
+cafe,Café,BEVERAGES
+cerveja,Cerveja,BEVERAGES
+chope,Chope,BEVERAGES
+vinho,Vinho,BEVERAGES
+espumante,Espumante,BEVERAGES
+energetico,Energético,BEVERAGES
+isotonico,Isotônico,BEVERAGES
+sabao,Sabão,CLEANING
+sabao po,Sabão em Pó,CLEANING
+sabao em po,Sabão em Pó,CLEANING
+sabao liquido,Sabão Líquido,CLEANING
+detergente,Detergente,CLEANING
+amaciante,Amaciante,CLEANING
+alvejante,Alvejante,CLEANING
+desinfetante,Desinfetante,CLEANING
+desinf,Desinfetante,CLEANING
+agua sanitaria,Água Sanitária,CLEANING
+limpador,Limpador,CLEANING
+limp,Limpador,CLEANING
+multiuso,Limpador Multiuso,CLEANING
+veja,,CLEANING
+pinho sol,Desinfetante,CLEANING
+pinho,Desinfetante,CLEANING
+cif,Sapólio,CLEANING
+sapon,Sapólio,CLEANING
+sapolio,Sapólio,CLEANING
+esponja,Esponja,CLEANING
+saco lixo,Saco de Lixo,CLEANING
+saco de lixo,Saco de Lixo,CLEANING
+papel toalha,Papel Toalha,CLEANING
+guardanapo,Guardanapo,CLEANING
+alcool,Álcool,CLEANING
+luva,Luva,CLEANING
+shampoo,Shampoo,PERSONAL_CARE
+condicionador,Condicionador,PERSONAL_CARE
+sabonete,Sabonete,PERSONAL_CARE
+creme dental,Creme Dental,PERSONAL_CARE
+pasta dente,Creme Dental,PERSONAL_CARE
+escova dente,Escova de Dente,PERSONAL_CARE
+fio dental,Fio Dental,PERSONAL_CARE
+desodorante,Desodorante,PERSONAL_CARE
+absorvente,Absorvente,PERSONAL_CARE
+fralda,Fralda,PERSONAL_CARE
+papel higienico,Papel Higiênico,PERSONAL_CARE
+hidratante,Hidratante,PERSONAL_CARE
+protetor solar,Protetor Solar,PERSONAL_CARE
+algodao,Algodão,PERSONAL_CARE
+cotonete,Cotonete,PERSONAL_CARE
+lenco umedecido,Lenço Umedecido,PERSONAL_CARE

@@ -41,6 +41,7 @@ class ProductServiceTest {
     @Mock private ProductRepository productRepository;
     @Mock private ProductAliasRepository aliasRepository;
     @Mock private ReceiptItemRepository receiptItemRepository;
+    @Mock private com.relyon.economizai.service.extraction.ProductExtractor productExtractor;
 
     @InjectMocks private ProductService productService;
 
@@ -64,7 +65,8 @@ class ProductServiceTest {
 
     @Test
     void createProduct_savesAndBackfillsByEan() {
-        var request = new CreateProductRequest("789", "Arroz Tio Joao", "Tio Joao", ProductCategory.GROCERIES, "UN");
+        var request = new CreateProductRequest("789", "Arroz Tio Joao", null, "Tio Joao", ProductCategory.GROCERIES, "UN", null, null);
+        when(productExtractor.extract(any())).thenReturn(com.relyon.economizai.service.extraction.ProductExtraction.EMPTY);
         when(productRepository.findByEan("789")).thenReturn(Optional.empty());
         when(productRepository.save(any(Product.class))).thenAnswer(inv -> {
             var p = inv.<Product>getArgument(0);
@@ -81,7 +83,7 @@ class ProductServiceTest {
 
     @Test
     void createProduct_rejectsDuplicateEan() {
-        var request = new CreateProductRequest("789", "Arroz", null, null, null);
+        var request = new CreateProductRequest("789", "Arroz", null, null, null, null, null, null);
         when(productRepository.findByEan("789")).thenReturn(Optional.of(Product.builder().id(UUID.randomUUID()).build()));
 
         assertThrows(EanConflictException.class, () -> productService.create(request));

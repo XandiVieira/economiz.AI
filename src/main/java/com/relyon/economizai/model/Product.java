@@ -12,6 +12,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
+import java.math.BigDecimal;
+
 @Entity
 @Table(name = "products")
 @Getter
@@ -27,6 +29,9 @@ public class Product extends BaseEntity {
     @Column(name = "normalized_name", nullable = false, length = 255)
     private String normalizedName;
 
+    @Column(name = "generic_name", length = 100)
+    private String genericName;
+
     @Column(length = 100)
     private String brand;
 
@@ -36,4 +41,10 @@ public class Product extends BaseEntity {
 
     @Column(length = 10)
     private String unit;
+
+    @Column(name = "pack_size", precision = 10, scale = 3)
+    private BigDecimal packSize;
+
+    @Column(name = "pack_unit", length = 10)
+    private String packUnit;
 }

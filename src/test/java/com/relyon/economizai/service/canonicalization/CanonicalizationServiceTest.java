@@ -32,6 +32,7 @@ class CanonicalizationServiceTest {
 
     @Mock private ProductRepository productRepository;
     @Mock private ProductAliasRepository aliasRepository;
+    @Mock private com.relyon.economizai.service.extraction.ProductExtractor productExtractor;
 
     @InjectMocks private CanonicalizationService service;
 
@@ -73,6 +74,10 @@ class CanonicalizationServiceTest {
     @Test
     void createsNewProductWhenEanIsUnknown() {
         var receipt = buildReceipt(item("LEITE INTEGRAL 1L", "123"));
+        when(productExtractor.extract(any())).thenReturn(
+                new com.relyon.economizai.service.extraction.ProductExtraction(
+                        "Leite", null, new java.math.BigDecimal("1"), "L",
+                        com.relyon.economizai.model.enums.ProductCategory.MEAT_DAIRY));
         when(productRepository.findByEan("123")).thenReturn(Optional.empty());
         when(productRepository.save(any(Product.class))).thenAnswer(inv -> {
             var p = inv.<Product>getArgument(0);
@@ -84,8 +89,12 @@ class CanonicalizationServiceTest {
         var outcome = service.canonicalize(receipt);
 
         assertEquals(1, outcome.created());
-        assertNotNull(receipt.getItems().get(0).getProduct());
-        assertEquals("123", receipt.getItems().get(0).getProduct().getEan());
+        var product = receipt.getItems().get(0).getProduct();
+        assertNotNull(product);
+        assertEquals("123", product.getEan());
+        assertEquals("Leite", product.getGenericName());
+        assertEquals("L", product.getPackUnit());
+        assertEquals(com.relyon.economizai.model.enums.ProductCategory.MEAT_DAIRY, product.getCategory());
     }
 
     @Test

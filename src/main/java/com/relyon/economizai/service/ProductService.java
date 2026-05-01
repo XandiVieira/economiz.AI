@@ -16,6 +16,7 @@ import com.relyon.economizai.repository.ProductAliasRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.service.canonicalization.DescriptionNormalizer;
+import com.relyon.economizai.service.extraction.ProductExtractor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -34,6 +35,7 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final ProductAliasRepository aliasRepository;
     private final ReceiptItemRepository receiptItemRepository;
+    private final ProductExtractor productExtractor;
 
     @Transactional(readOnly = true)
     public Page<ProductResponse> search(String query, Pageable pageable) {
@@ -52,12 +54,16 @@ public class ProductService {
                 && productRepository.findByEan(request.ean()).isPresent()) {
             throw new EanConflictException(request.ean());
         }
+        var extracted = productExtractor.extract(request.normalizedName());
         var product = productRepository.save(Product.builder()
                 .ean(blankToNull(request.ean()))
                 .normalizedName(request.normalizedName())
-                .brand(blankToNull(request.brand()))
-                .category(request.category())
+                .genericName(firstNonBlank(request.genericName(), extracted.genericName()))
+                .brand(firstNonBlank(request.brand(), extracted.brand()))
+                .category(request.category() != null ? request.category() : extracted.category())
                 .unit(blankToNull(request.unit()))
+                .packSize(request.packSize() != null ? request.packSize() : extracted.packSize())
+                .packUnit(firstNonBlank(request.packUnit(), extracted.packUnit()))
                 .build());
         log.info("Product {} created (ean={}, name='{}')", product.getId(), product.getEan(), product.getNormalizedName());
         if (product.getEan() != null) {
@@ -71,9 +77,12 @@ public class ProductService {
     public ProductResponse update(UUID id, UpdateProductRequest request) {
         var product = loadProduct(id);
         product.setNormalizedName(request.normalizedName());
+        product.setGenericName(blankToNull(request.genericName()));
         product.setBrand(blankToNull(request.brand()));
         product.setCategory(request.category());
         product.setUnit(blankToNull(request.unit()));
+        product.setPackSize(request.packSize());
+        product.setPackUnit(blankToNull(request.packUnit()));
         var saved = productRepository.save(product);
         log.info("Product {} updated", saved.getId());
         return ProductResponse.from(saved);
@@ -140,5 +149,10 @@ public class ProductService {
 
     private static String blankToNull(String value) {
         return (value == null || value.isBlank()) ? null : value;
+    }
+
+    private static String firstNonBlank(String preferred, String fallback) {
+        var p = blankToNull(preferred);
+        return p != null ? p : blankToNull(fallback);
     }
 }
