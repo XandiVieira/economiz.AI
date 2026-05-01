@@ -401,8 +401,76 @@
       ]
     },
     {
+      "name": "Categorizer",
+      "description": "ML classifier status + manual triggers. Authenticated.",
+      "item": [
+        {
+          "name": "Classifier status",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/categorizer/status", "host": ["{{baseUrl}}"], "path": ["api","v1","categorizer","status"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Retrain ML now",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/categorizer/retrain", "host": ["{{baseUrl}}"], "path": ["api","v1","categorizer","retrain"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Auto-promote learned dictionary",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/categorizer/auto-promote", "host": ["{{baseUrl}}"], "path": ["api","v1","categorizer","auto-promote"]}
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Price index (collaborative)",
+      "description": "K-anonymity-protected aggregates. Will return empty until enough households contribute.",
+      "item": [
+        {
+          "name": "Reference price for a (product, market)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/price-index/products/{{e2eProductId}}/markets/93015006005182/reference", "host": ["{{baseUrl}}"], "path": ["api","v1","price-index","products","{{e2eProductId}}","markets","93015006005182","reference"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Best markets for a product",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/price-index/products/{{e2eProductId}}/best-markets?limit=10", "host": ["{{baseUrl}}"], "path": ["api","v1","price-index","products","{{e2eProductId}}","best-markets"], "query": [
+              {"key": "limit", "value": "10"}
+            ]}
+          },
+          "response": []
+        },
+        {
+          "name": "Current community promos",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/price-index/promos", "host": ["{{baseUrl}}"], "path": ["api","v1","price-index","promos"]}
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "E2E Flow",
-      "description": "Sequential test suite — run top to bottom. Each step seeds variables for the next. Steps 8–11 require a real NFC-e QR payload in the {{qrPayload}} collection variable; otherwise they will report parsing/fetch errors but won't break the auth/household flow.",
+      "description": "Sequential test suite — run top to bottom. Each step seeds variables for the next. Steps 9+ require a real NFC-e QR payload in the {{qrPayload}} collection variable; otherwise they will report parsing/fetch errors but won't break the auth/household flow.",
       "item": [
         {
           "name": "1. Register new user",
@@ -659,7 +727,7 @@
           ]
         },
         {
-          "name": "13. Confirm receipt",
+          "name": "13. Confirm receipt (returns receipt + personalPromos)",
           "request": {
             "method": "POST",
             "header": [{"key": "Accept-Language", "value": "pt"}],
@@ -671,8 +739,9 @@
               "if (!pm.collectionVariables.get('e2eReceiptId')) { pm.test.skip('No receipt id — skipping'); return; }",
               "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
               "var d = pm.response.json();",
-              "pm.test('Status is CONFIRMED', function () { pm.expect(d.status).to.eql('CONFIRMED'); });",
-              "pm.test('confirmedAt is set', function () { pm.expect(d.confirmedAt).to.not.be.null; });"
+              "pm.test('receipt.status is CONFIRMED', function () { pm.expect(d.receipt.status).to.eql('CONFIRMED'); });",
+              "pm.test('confirmedAt is set', function () { pm.expect(d.receipt.confirmedAt).to.not.be.null; });",
+              "pm.test('personalPromos is an array', function () { pm.expect(d.personalPromos).to.be.an('array'); });"
             ]}}
           ]
         },
@@ -833,6 +902,174 @@
           "event": [
             {"listen": "test", "script": {"type": "text/javascript", "exec": [
               "pm.test('Returns 200', function () { pm.response.to.have.status(200); });"
+            ]}}
+          ]
+        },
+        {
+          "name": "22. Categorizer status",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/categorizer/status", "host": ["{{baseUrl}}"], "path": ["api","v1","categorizer","status"]}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+              "var d = pm.response.json();",
+              "pm.test('Has ready + threshold fields', function () {",
+              "    pm.expect(d).to.have.property('ready');",
+              "    pm.expect(d).to.have.property('confidenceThreshold');",
+              "});"
+            ]}}
+          ]
+        },
+        {
+          "name": "23. Trigger ML retrain",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/categorizer/retrain", "host": ["{{baseUrl}}"], "path": ["api","v1","categorizer","retrain"]}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+              "var d = pm.response.json();",
+              "pm.test('Has trained flag', function () { pm.expect(d).to.have.property('trained'); });"
+            ]}}
+          ]
+        },
+        {
+          "name": "24. Trigger learned-dictionary auto-promotion",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/categorizer/auto-promote", "host": ["{{baseUrl}}"], "path": ["api","v1","categorizer","auto-promote"]}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+              "var d = pm.response.json();",
+              "pm.test('Has promoted/learnedTotal counters', function () {",
+              "    pm.expect(d).to.have.property('promoted');",
+              "    pm.expect(d).to.have.property('learnedTotal');",
+              "});"
+            ]}}
+          ]
+        },
+        {
+          "name": "25. Reference price (k-anon protected, often empty with low data)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/price-index/products/{{e2eProductId}}/markets/93015006005182/reference", "host": ["{{baseUrl}}"], "path": ["api","v1","price-index","products","{{e2eProductId}}","markets","93015006005182","reference"]}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "if (!pm.collectionVariables.get('e2eProductId')) { pm.test.skip('No product id — skipping'); return; }",
+              "pm.test('Returns 200 (200 even when k-anon hides data)', function () { pm.response.to.have.status(200); });",
+              "var d = pm.response.json();",
+              "pm.test('Has sampleCount + distinctHouseholds', function () {",
+              "    pm.expect(d).to.have.property('sampleCount');",
+              "    pm.expect(d).to.have.property('distinctHouseholds');",
+              "});"
+            ]}}
+          ]
+        },
+        {
+          "name": "26. Best markets for a product",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/price-index/products/{{e2eProductId}}/best-markets?limit=10", "host": ["{{baseUrl}}"], "path": ["api","v1","price-index","products","{{e2eProductId}}","best-markets"], "query": [
+              {"key": "limit", "value": "10"}
+            ]}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "if (!pm.collectionVariables.get('e2eProductId')) { pm.test.skip('No product id — skipping'); return; }",
+              "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Returns an array', function () { pm.expect(pm.response.json()).to.be.an('array'); });"
+            ]}}
+          ]
+        },
+        {
+          "name": "27. Current community promos",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/price-index/promos", "host": ["{{baseUrl}}"], "path": ["api","v1","price-index","promos"]}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Returns an array', function () { pm.expect(pm.response.json()).to.be.an('array'); });"
+            ]}}
+          ]
+        },
+        {
+          "name": "28. LGPD: opt-out of collaborative contribution",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Accept-Language", "value": "pt"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/v1/users/me/contribution", "host": ["{{baseUrl}}"], "path": ["api","v1","users","me","contribution"]},
+            "body": {"mode": "raw", "raw": "{\n  \"contributionOptIn\": false\n}"}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('contributionOptIn=false', function () {",
+              "    pm.expect(pm.response.json().contributionOptIn).to.eql(false);",
+              "});"
+            ]}}
+          ]
+        },
+        {
+          "name": "29. LGPD: export my data",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/users/me/export", "host": ["{{baseUrl}}"], "path": ["api","v1","users","me","export"]}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+              "var d = pm.response.json();",
+              "pm.test('Has user + household + receipts in export', function () {",
+              "    pm.expect(d).to.have.property('user');",
+              "    pm.expect(d).to.have.property('household');",
+              "    pm.expect(d.receipts).to.be.an('array');",
+              "});"
+            ]}}
+          ]
+        },
+        {
+          "name": "30. LGPD: delete my account (idempotent terminator)",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/users/me", "host": ["{{baseUrl}}"], "path": ["api","v1","users","me"]}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+              "// Clear correlation variables so a re-run starts clean",
+              "pm.collectionVariables.set('token', '');",
+              "pm.collectionVariables.set('e2eReceiptId', '');",
+              "pm.collectionVariables.set('e2eReceiptItemId', '');",
+              "pm.collectionVariables.set('e2eProductId', '');",
+              "pm.collectionVariables.set('e2eHouseholdId', '');"
             ]}}
           ]
         }
