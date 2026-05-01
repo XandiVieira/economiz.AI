@@ -187,7 +187,36 @@ hybrid, or just punt to manual).
 product examples as a B2B asset (CPG analytics firms struggle with
 NFC-e text normalization).
 
-### Phase 2.6 — Preferences & right-sized quantities (exploratory)
+### Phase 2.6 — Preferences & right-sized quantities (auto-derive shipped)
+
+**Status:** auto-derivation shipped (read-only). Manual override deferred —
+intended as a PRO feature (see MONETIZATION.md).
+
+- ✅ `HouseholdPreferenceService` derives per-generic preferences directly
+  from confirmed purchase history. Pure stateless computation, no new tables —
+  the data lives in receipts already, recomputing per request is cheap at
+  current volume.
+- ✅ Volume-gated: silently skip generics with fewer than
+  `economizai.preferences.min-purchases-per-generic` (default 5) confirmed
+  purchases. Empty list until the household has data — no low-confidence
+  noise.
+- ✅ Brand preference uses concentration thresholds:
+  top brand share ≥ `must-have-brand-share` (default 0.85) → `MUST_HAVE`,
+  ≥ `preferred-brand-share` (default 0.60) → `PREFERRED`, otherwise omitted.
+  `AVOID` is intentionally NOT auto-derived — it requires "user actively
+  rejected this brand" signal which only manual UI gives. Reserved for PRO.
+- ✅ Pack-size preference: dominant `(packSize, packUnit)` of the household's
+  purchases of that generic, plus the observed min/max range so downstream
+  consumers can soft-rank rather than hard-exclude.
+- ✅ `GET /api/v1/preferences` — list of `HouseholdPreferenceResponse` with
+  confidence (LOW/MEDIUM/HIGH based on sample size).
+- 🟡 **Wire into best-markets / suggested-list ranking** — deferred. The
+  derived preferences are computed but other endpoints don't consume them
+  yet. Adding the soft-ranking is a one-shot change once we want to validate
+  it; meanwhile the data is observable via `/preferences` for the FE to
+  surface as-is ("we noticed you usually buy 1L Italac").
+
+**Original (pre-implementation) plan, kept for reference:**
 
 **Goal:** Recommendations respect what this household actually wants and
 can store, instead of always pushing the cheapest unit price.

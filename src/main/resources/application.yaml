@@ -50,6 +50,17 @@ economizai:
   personal-promo:
     threshold-pct: 10                          # personal promo if price < (user's own median - X%)
     min-purchases-for-baseline: 3              # need this many prior purchases to detect personal promos
+  consumption:
+    enabled: true                              # master switch for Phase 3 consumption-intelligence endpoints
+    min-purchases-for-prediction: 3            # below this, a product is silently skipped from /predictions
+    history-lookback-days: 365                 # window for computing inter-purchase intervals
+    running-low-threshold-days: 7              # days-until-runout that flips status to RUNNING_LOW
+    ran-out-grace-days: 0                      # tolerance before flipping to RAN_OUT
+  preferences:
+    enabled: true                              # master switch for Phase 2.6 derived preferences
+    min-purchases-per-generic: 5               # below this, a generic is silently skipped (no preference shown)
+    must-have-brand-share: 0.85                # top brand >= this fraction of purchases → MUST_HAVE
+    preferred-brand-share: 0.60                # top brand in [preferred, mustHave) → PREFERRED
   geo:
     user-agent: "economizai/0.1 (xandivieira@gmail.com)"  # required by Nominatim usage policy
     timeout-ms: 8000
