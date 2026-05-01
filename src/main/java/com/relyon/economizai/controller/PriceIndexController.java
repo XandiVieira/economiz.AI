@@ -1,6 +1,7 @@
 package com.relyon.economizai.controller;
 
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.service.geo.WatchedMarketService;
 import com.relyon.economizai.service.priceindex.CommunityPromoService;
 import com.relyon.economizai.service.priceindex.PriceIndexService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -35,6 +36,7 @@ public class PriceIndexController {
 
     private final PriceIndexService priceIndexService;
     private final CommunityPromoService communityPromoService;
+    private final WatchedMarketService watchedMarketService;
 
     @GetMapping("/products/{productId}/markets/{marketCnpj}/reference")
     public ResponseEntity<PriceIndexService.ReferencePrice> reference(@PathVariable UUID productId,
@@ -49,7 +51,8 @@ public class PriceIndexController {
             @RequestParam(defaultValue = "10") int limit,
             @RequestParam(required = false) Double radiusKm) {
         return ResponseEntity.ok(priceIndexService.bestMarkets(productId, limit,
-                user.getHomeLatitude(), user.getHomeLongitude(), radiusKm));
+                user.getHomeLatitude(), user.getHomeLongitude(), radiusKm,
+                watchedMarketService.watchedCnpjs(user)));
     }
 
     @GetMapping("/promos")
@@ -57,6 +60,7 @@ public class PriceIndexController {
             @AuthenticationPrincipal User user,
             @RequestParam(required = false) Double radiusKm) {
         return ResponseEntity.ok(communityPromoService.detectAll(
-                user.getHomeLatitude(), user.getHomeLongitude(), radiusKm));
+                user.getHomeLatitude(), user.getHomeLongitude(), radiusKm,
+                watchedMarketService.watchedCnpjs(user)));
     }
 }

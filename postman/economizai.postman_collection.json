@@ -517,6 +517,57 @@
       ]
     },
     {
+      "name": "Markets",
+      "description": "Market catalogue (visited + watched + nearby) and the user's watchlist of CNPJs to monitor regardless of distance.",
+      "item": [
+        {
+          "name": "List markets (catalogue for picker)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/markets", "host": ["{{baseUrl}}"], "path": ["api","v1","markets"]}
+          },
+          "response": []
+        },
+        {
+          "name": "List markets within radius (km)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/markets?radiusKm=10", "host": ["{{baseUrl}}"], "path": ["api","v1","markets"], "query": [{"key": "radiusKm", "value": "10"}]}
+          },
+          "response": []
+        },
+        {
+          "name": "My watched markets",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/markets/watched", "host": ["{{baseUrl}}"], "path": ["api","v1","markets","watched"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Pin market to watchlist",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/markets/watched/93015006005182", "host": ["{{baseUrl}}"], "path": ["api","v1","markets","watched","93015006005182"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Unpin market from watchlist",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/markets/watched/93015006005182", "host": ["{{baseUrl}}"], "path": ["api","v1","markets","watched","93015006005182"]}
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "E2E Flow",
       "description": "Sequential test suite — run top to bottom. Each step seeds variables for the next. Steps 9+ require a real NFC-e QR payload in the {{qrPayload}} collection variable; otherwise they will report parsing/fetch errors but won't break the auth/household flow.",
       "item": [
@@ -1102,7 +1153,75 @@
           ]
         },
         {
-          "name": "30. LGPD: delete my account (idempotent terminator)",
+          "name": "30. List markets (catalogue)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/markets", "host": ["{{baseUrl}}"], "path": ["api","v1","markets"]}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Returns an array', function () { pm.expect(pm.response.json()).to.be.an('array'); });",
+              "var rows = pm.response.json();",
+              "if (rows.length > 0) { pm.collectionVariables.set('e2eMarketCnpj', rows[0].cnpj); }"
+            ]}}
+          ]
+        },
+        {
+          "name": "31. Pin market to watchlist (uses first market from catalogue)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/markets/watched/{{e2eMarketCnpj}}", "host": ["{{baseUrl}}"], "path": ["api","v1","markets","watched","{{e2eMarketCnpj}}"]}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "if (!pm.collectionVariables.get('e2eMarketCnpj')) { pm.test.skip('No market available — skipping'); return; }",
+              "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('watching=true after pin', function () { pm.expect(pm.response.json().watching).to.eql(true); });"
+            ]}}
+          ]
+        },
+        {
+          "name": "32. My watched markets includes pinned",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/markets/watched", "host": ["{{baseUrl}}"], "path": ["api","v1","markets","watched"]}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "if (!pm.collectionVariables.get('e2eMarketCnpj')) { pm.test.skip('No market available — skipping'); return; }",
+              "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Pinned market is in the watchlist', function () {",
+              "    var rows = pm.response.json();",
+              "    var found = rows.some(function (r) { return r.cnpj === pm.collectionVariables.get('e2eMarketCnpj'); });",
+              "    pm.expect(found).to.eql(true);",
+              "});"
+            ]}}
+          ]
+        },
+        {
+          "name": "33. Unpin market from watchlist",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/markets/watched/{{e2eMarketCnpj}}", "host": ["{{baseUrl}}"], "path": ["api","v1","markets","watched","{{e2eMarketCnpj}}"]}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "if (!pm.collectionVariables.get('e2eMarketCnpj')) { pm.test.skip('No market available — skipping'); return; }",
+              "pm.test('Returns 204', function () { pm.response.to.have.status(204); });"
+            ]}}
+          ]
+        },
+        {
+          "name": "34. LGPD: delete my account (idempotent terminator)",
           "request": {
             "method": "DELETE",
             "header": [{"key": "Accept-Language", "value": "pt"}],
@@ -1117,7 +1236,8 @@
               "pm.collectionVariables.set('e2eReceiptId', '');",
               "pm.collectionVariables.set('e2eReceiptItemId', '');",
               "pm.collectionVariables.set('e2eProductId', '');",
-              "pm.collectionVariables.set('e2eHouseholdId', '');"
+              "pm.collectionVariables.set('e2eHouseholdId', '');",
+              "pm.collectionVariables.set('e2eMarketCnpj', '');"
             ]}}
           ]
         }

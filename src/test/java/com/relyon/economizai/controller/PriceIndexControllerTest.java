@@ -5,6 +5,7 @@ import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.LocalizedMessageService;
+import com.relyon.economizai.service.geo.WatchedMarketService;
 import com.relyon.economizai.service.priceindex.CommunityPromoService;
 import com.relyon.economizai.service.priceindex.PriceIndexService;
 import org.junit.jupiter.api.Test;
@@ -19,10 +20,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -36,6 +39,7 @@ class PriceIndexControllerTest {
 
     @MockitoBean private PriceIndexService priceIndexService;
     @MockitoBean private CommunityPromoService communityPromoService;
+    @MockitoBean private WatchedMarketService watchedMarketService;
     @MockitoBean private JwtService jwtService;
     @MockitoBean private UserDetailsService userDetailsService;
     @MockitoBean private LocalizedMessageService localizedMessageService;
@@ -76,30 +80,31 @@ class PriceIndexControllerTest {
     @Test
     void bestMarkets_returnsRanking() throws Exception {
         var pid = UUID.randomUUID();
-        when(priceIndexService.bestMarkets(any(), anyInt(),
-                org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(),
-                org.mockito.ArgumentMatchers.isNull())).thenReturn(List.of(
-                new PriceIndexService.MarketPriceRow("93015006005182", "93015006", "Mercado X",
-                        new BigDecimal("10"), new BigDecimal("9"), 5, 3L, null)
-        ));
+        when(watchedMarketService.watchedCnpjs(any())).thenReturn(Set.of());
+        when(priceIndexService.bestMarkets(any(), anyInt(), isNull(), isNull(), isNull(), any()))
+                .thenReturn(List.of(
+                        new PriceIndexService.MarketPriceRow("93015006005182", "93015006", "Mercado X",
+                                new BigDecimal("10"), new BigDecimal("9"), 5, 3L, null, false)
+                ));
 
         mockMvc.perform(get("/api/v1/price-index/products/" + pid + "/best-markets")
                         .with(SecurityMockMvcRequestPostProcessors.user(principal())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].cnpj").value("93015006005182"))
-                .andExpect(jsonPath("$[0].cnpjRoot").value("93015006"));
+                .andExpect(jsonPath("$[0].cnpjRoot").value("93015006"))
+                .andExpect(jsonPath("$[0].watching").value(false));
     }
 
     @Test
     void promos_returnsCurrentPromos() throws Exception {
-        when(communityPromoService.detectAll(org.mockito.ArgumentMatchers.isNull(),
-                org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull()))
+        when(watchedMarketService.watchedCnpjs(any())).thenReturn(Set.of());
+        when(communityPromoService.detectAll(isNull(), isNull(), isNull(), any()))
                 .thenReturn(List.of(
-                new CommunityPromoService.CommunityPromo(UUID.randomUUID(), "Arroz",
-                        "93015006005182", "93015006", "Mercado X",
-                        new BigDecimal("22"), new BigDecimal("28"), new BigDecimal("21.43"),
-                        5, 3L, null)
-        ));
+                        new CommunityPromoService.CommunityPromo(UUID.randomUUID(), "Arroz",
+                                "93015006005182", "93015006", "Mercado X",
+                                new BigDecimal("22"), new BigDecimal("28"), new BigDecimal("21.43"),
+                                5, 3L, null, false)
+                ));
 
         mockMvc.perform(get("/api/v1/price-index/promos")
                         .with(SecurityMockMvcRequestPostProcessors.user(principal())))

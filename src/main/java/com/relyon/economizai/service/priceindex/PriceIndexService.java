@@ -6,6 +6,8 @@ import com.relyon.economizai.model.PriceObservationAudit;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.repository.PriceObservationAuditRepository;
 import com.relyon.economizai.repository.PriceObservationRepository;
+import com.relyon.economizai.service.geo.DistanceCalculator;
+import com.relyon.economizai.service.geo.MarketLocationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -14,9 +16,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Owns the collaborative price index (Phase 4).
@@ -47,7 +53,7 @@ public class PriceIndexService {
     private final PriceObservationRepository observationRepository;
     private final PriceObservationAuditRepository auditRepository;
     private final CollaborativeProperties properties;
-    private final com.relyon.economizai.service.geo.MarketLocationService marketLocationService;
+    private final MarketLocationService marketLocationService;
 
     @Transactional
     public int recordContributions(Receipt receipt) {
@@ -118,15 +124,17 @@ public class PriceIndexService {
 
     @Transactional(readOnly = true)
     public List<MarketPriceRow> bestMarkets(UUID productId, int limit,
-                                            BigDecimal userLatitude, BigDecimal userLongitude, Double radiusKm) {
+                                            BigDecimal userLatitude, BigDecimal userLongitude, Double radiusKm,
+                                            Set<String> watchedCnpjs) {
         if (!properties.getCollaborative().isEnabled()) return List.of();
         var since = LocalDateTime.now().minusDays(properties.getCollaborative().getLookbackDays());
         var observations = observationRepository.findRecentByProduct(productId, since);
         if (observations.isEmpty()) return List.of();
 
+        var watched = watchedCnpjs == null ? Set.<String>of() : watchedCnpjs;
         var byMarket = observations.stream()
-                .collect(java.util.stream.Collectors.groupingBy(PriceObservation::getMarketCnpj));
-        var locations = marketLocationService.findByCnpjs(new java.util.ArrayList<>(byMarket.keySet()));
+                .collect(Collectors.groupingBy(PriceObservation::getMarketCnpj));
+        var locations = marketLocationService.findByCnpjs(new ArrayList<>(byMarket.keySet()));
 
         return byMarket.entrySet().stream()
                 .map(entry -> {
@@ -136,21 +144,25 @@ public class PriceIndexService {
                     var distinct = auditRepository.countDistinctHouseholdsForProductMarket(productId, cnpj, since);
                     if (distinct < properties.getCollaborative().getMinHouseholdsForPublic()) return null;
                     var location = locations.get(cnpj);
+                    var isWatched = watched.contains(cnpj);
                     Double distanceKm = null;
                     if (userLatitude != null && userLongitude != null && location != null && location.hasCoordinates()) {
-                        distanceKm = com.relyon.economizai.service.geo.DistanceCalculator.kmBetween(
+                        distanceKm = DistanceCalculator.kmBetween(
                                 userLatitude, userLongitude, location.getLatitude(), location.getLongitude());
-                        if (radiusKm != null && distanceKm > radiusKm) return null;
-                    } else if (radiusKm != null && userLatitude != null) {
+                        // watched markets bypass the radius filter
+                        if (radiusKm != null && distanceKm > radiusKm && !isWatched) return null;
+                    } else if (radiusKm != null && userLatitude != null && !isWatched) {
                         // user wanted a radius filter but we don't have this market's coords yet → exclude
                         return null;
                     }
                     var prices = rows.stream().map(PriceObservation::getUnitPrice).toList();
                     return new MarketPriceRow(cnpj, cnpjRoot(cnpj), rows.get(0).getMarketName(),
-                            median(prices), min(prices), rows.size(), distinct, distanceKm);
+                            median(prices), min(prices), rows.size(), distinct, distanceKm, isWatched);
                 })
-                .filter(java.util.Objects::nonNull)
-                .sorted(Comparator.comparing(MarketPriceRow::medianPrice))
+                .filter(Objects::nonNull)
+                .sorted(Comparator
+                        .comparing(MarketPriceRow::watching, Comparator.reverseOrder())
+                        .thenComparing(MarketPriceRow::medianPrice))
                 .limit(limit)
                 .toList();
     }
@@ -189,5 +201,5 @@ public class PriceIndexService {
     public record MarketPriceRow(String cnpj, String cnpjRoot, String marketName,
                                  BigDecimal medianPrice, BigDecimal minPrice,
                                  int sampleCount, long distinctHouseholds,
-                                 Double distanceKm) {}
+                                 Double distanceKm, boolean watching) {}
 }

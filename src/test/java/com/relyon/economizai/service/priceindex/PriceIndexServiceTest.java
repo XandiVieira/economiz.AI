@@ -2,6 +2,7 @@ package com.relyon.economizai.service.priceindex;
 
 import com.relyon.economizai.config.CollaborativeProperties;
 import com.relyon.economizai.model.Household;
+import com.relyon.economizai.model.MarketLocation;
 import com.relyon.economizai.model.PriceObservation;
 import com.relyon.economizai.model.PriceObservationAudit;
 import com.relyon.economizai.model.Product;
@@ -10,23 +11,25 @@ import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.repository.PriceObservationAuditRepository;
 import com.relyon.economizai.repository.PriceObservationRepository;
+import com.relyon.economizai.service.geo.MarketLocationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -38,7 +41,7 @@ class PriceIndexServiceTest {
 
     @Mock private PriceObservationRepository observationRepository;
     @Mock private PriceObservationAuditRepository auditRepository;
-    @Mock private com.relyon.economizai.service.geo.MarketLocationService marketLocationService;
+    @Mock private MarketLocationService marketLocationService;
 
     private CollaborativeProperties properties;
     private PriceIndexService service;
@@ -203,19 +206,44 @@ class PriceIndexServiceTest {
         var productId = UUID.randomUUID();
         // market A: 5 obs from 3 households (passes) median 10
         // market B: 5 obs from 1 household (k-anon blocks) median 8
-        var observations = new java.util.ArrayList<PriceObservation>();
+        var observations = new ArrayList<PriceObservation>();
         for (var i = 0; i < 5; i++) observations.add(obsAt(productId, "AAAAAAAA000111", "A", new BigDecimal("10")));
         for (var i = 0; i < 5; i++) observations.add(obsAt(productId, "BBBBBBBB000111", "B", new BigDecimal("8")));
 
         when(observationRepository.findRecentByProduct(eq(productId), any())).thenReturn(observations);
         when(auditRepository.countDistinctHouseholdsForProductMarket(eq(productId), eq("AAAAAAAA000111"), any())).thenReturn(3L);
         when(auditRepository.countDistinctHouseholdsForProductMarket(eq(productId), eq("BBBBBBBB000111"), any())).thenReturn(1L);
-        when(marketLocationService.findByCnpjs(any())).thenReturn(java.util.Map.of());
+        when(marketLocationService.findByCnpjs(any())).thenReturn(Map.of());
 
-        var rows = service.bestMarkets(productId, 10, null, null, null);
+        var rows = service.bestMarkets(productId, 10, null, null, null, Set.of());
 
         assertEquals(1, rows.size(), "k-anon must hide market B");
         assertEquals("AAAAAAAA000111", rows.get(0).cnpj());
+    }
+
+    @Test
+    void bestMarkets_watchedMarketBypassesRadiusFilter() {
+        var productId = UUID.randomUUID();
+        var observations = new ArrayList<PriceObservation>();
+        // distant market — would be excluded by 1km radius — but is in the watchlist
+        for (var i = 0; i < 5; i++) observations.add(obsAt(productId, "DDDDDDDD000111", "Distante", new BigDecimal("9")));
+
+        when(observationRepository.findRecentByProduct(eq(productId), any())).thenReturn(observations);
+        when(auditRepository.countDistinctHouseholdsForProductMarket(eq(productId), eq("DDDDDDDD000111"), any()))
+                .thenReturn(3L);
+        var loc = MarketLocation.builder()
+                .cnpj("DDDDDDDD000111").cnpjRoot("DDDDDDDD")
+                .latitude(new BigDecimal("-30.0500000")).longitude(new BigDecimal("-51.2200000")) // ~10km away
+                .build();
+        when(marketLocationService.findByCnpjs(any())).thenReturn(Map.of("DDDDDDDD000111", loc));
+
+        var rows = service.bestMarkets(productId, 10,
+                new BigDecimal("-30.0000000"), new BigDecimal("-51.2000000"),
+                1.0, // 1km radius — would normally exclude
+                Set.of("DDDDDDDD000111"));
+
+        assertEquals(1, rows.size(), "watched market must bypass radius filter");
+        assertTrue(rows.get(0).watching());
     }
 
     private PriceObservation obs(UUID productId, BigDecimal price) {

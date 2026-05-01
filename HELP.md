@@ -248,6 +248,30 @@ placeholder):
 - **Recommendations are filtered through the Phase 2.6 preference model**
   (right-sized pack, preferred brand) when available.
 
+### Phase 5c — Watched Markets (shipped)
+
+User-curated CNPJs to monitor regardless of distance — solves the
+"market on my commute is outside home radius but I want its promos"
+case. Combines with `radiusKm` filter as `radius OR watched`.
+
+- ✅ V13 migration: `user_watched_markets (user_id, market_cnpj)` —
+  unique on the pair, cascade on user delete. Soft FK to
+  `market_locations` (the cache rebuilds itself from receipts).
+- ✅ `MarketController` endpoints:
+  - `GET /api/v1/markets[?radiusKm=X]` — catalogue for the picker UI:
+    union of (a) markets the household has shopped at, (b) currently
+    watched, (c) (optional) within radius. Each row carries `visited`
+    and `watching` flags so the FE can draw the right checkbox state.
+  - `GET /api/v1/markets/watched` — "Meus mercados" view.
+  - `POST /api/v1/markets/watched/{cnpj}` (idempotent), `DELETE /…/{cnpj}`.
+- ✅ Wired into existing price-index queries: watched markets bypass
+  the radius filter in both `GET /price-index/products/{id}/best-markets`
+  and `GET /price-index/promos`. Each row in the response carries a
+  `watching` boolean.
+- Markets enter the catalogue automatically when a household submits a
+  receipt with a previously unseen CNPJ — see
+  `MarketLocationService.registerMarketFromReceipt`.
+
 ### Phase 4 — Collaborative Price Index (E5) — shipped
 
 **Goal:** Anonymized contributions power shared price intelligence.

@@ -1,9 +1,12 @@
 package com.relyon.economizai.service.priceindex;
 
 import com.relyon.economizai.config.CollaborativeProperties;
+import com.relyon.economizai.model.MarketLocation;
 import com.relyon.economizai.model.PriceObservation;
 import com.relyon.economizai.repository.PriceObservationAuditRepository;
 import com.relyon.economizai.repository.PriceObservationRepository;
+import com.relyon.economizai.service.geo.DistanceCalculator;
+import com.relyon.economizai.service.geo.MarketLocationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -15,6 +18,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -45,18 +49,20 @@ public class CommunityPromoService {
     private final PriceObservationRepository observationRepository;
     private final PriceObservationAuditRepository auditRepository;
     private final CollaborativeProperties properties;
-    private final com.relyon.economizai.service.geo.MarketLocationService marketLocationService;
+    private final MarketLocationService marketLocationService;
 
     /** Backwards-compat overload used by tests + scheduled jobs (no distance filter). */
     public List<CommunityPromo> detectAll() {
-        return detectAll(null, null, null);
+        return detectAll(null, null, null, Set.of());
     }
 
     @Transactional(readOnly = true)
-    public List<CommunityPromo> detectAll(java.math.BigDecimal userLatitude,
-                                          java.math.BigDecimal userLongitude,
-                                          Double radiusKm) {
+    public List<CommunityPromo> detectAll(BigDecimal userLatitude,
+                                          BigDecimal userLongitude,
+                                          Double radiusKm,
+                                          Set<String> watchedCnpjs) {
         if (!properties.getCollaborative().isEnabled()) return List.of();
+        var watched = watchedCnpjs == null ? Set.<String>of() : watchedCnpjs;
 
         var since = LocalDateTime.now().minusDays(properties.getCollaborative().getLookbackDays());
         var observations = observationRepository.findRecent(since);
@@ -65,7 +71,7 @@ public class CommunityPromoService {
         var locations = (userLatitude != null && userLongitude != null)
                 ? marketLocationService.findByCnpjs(observations.stream()
                         .map(PriceObservation::getMarketCnpj).distinct().toList())
-                : java.util.Map.<String, com.relyon.economizai.model.MarketLocation>of();
+                : Map.<String, MarketLocation>of();
 
         // Group by (productId, marketCnpj)
         Map<UUID, Map<String, List<PriceObservation>>> byProductMarket = observations.stream()
@@ -87,14 +93,15 @@ public class CommunityPromoService {
                 if (distinctHouseholds < properties.getCollaborative().getMinHouseholdsForPublic()) continue;
 
                 Double distanceKm = null;
+                var isWatched = watched.contains(marketCnpj);
                 if (userLatitude != null && userLongitude != null) {
                     var location = locations.get(marketCnpj);
                     if (location == null || !location.hasCoordinates()) {
-                        if (radiusKm != null) continue; // user wants radius filter but no coords
+                        if (radiusKm != null && !isWatched) continue; // user wants radius filter but no coords
                     } else {
-                        distanceKm = com.relyon.economizai.service.geo.DistanceCalculator.kmBetween(
+                        distanceKm = DistanceCalculator.kmBetween(
                                 userLatitude, userLongitude, location.getLatitude(), location.getLongitude());
-                        if (radiusKm != null && distanceKm > radiusKm) continue;
+                        if (radiusKm != null && distanceKm > radiusKm && !isWatched) continue;
                     }
                 }
 
@@ -130,7 +137,8 @@ public class CommunityPromoService {
                             dropPct,
                             recentPrices.size(),
                             distinctHouseholds,
-                            distanceKm
+                            distanceKm,
+                            isWatched
                     );
                     promos.add(promo);
                     log.info("community_promo.detected product={} market={} recent={} baseline={} dropPct={} samples={} households={}",
@@ -153,6 +161,7 @@ public class CommunityPromoService {
             BigDecimal dropPct,
             int recentSampleCount,
             long distinctHouseholds,
-            Double distanceKm
+            Double distanceKm,
+            boolean watching
     ) {}
 }
