@@ -84,7 +84,7 @@ class PromoDetectorTest {
         var currentItem = itemWithProduct(receipt, product, new BigDecimal("20.00"));
 
         // historical median = 28.00. 20 is ~28% below → above the 10% threshold.
-        when(receiptItemRepository.findAllByProductIdOrderByReceiptIssuedAtAsc(product.getId()))
+        when(receiptItemRepository.findHouseholdHistoryForProduct(product.getId(), household.getId()))
                 .thenReturn(List.of(
                         historicalItem(household, product, new BigDecimal("28.00")),
                         historicalItem(household, product, new BigDecimal("28.00")),
@@ -104,7 +104,7 @@ class PromoDetectorTest {
         var receipt = buildReceipt(household);
         itemWithProduct(receipt, product, new BigDecimal("1.00"));
 
-        when(receiptItemRepository.findAllByProductIdOrderByReceiptIssuedAtAsc(product.getId()))
+        when(receiptItemRepository.findHouseholdHistoryForProduct(product.getId(), household.getId()))
                 .thenReturn(List.of(historicalItem(household, product, new BigDecimal("100.00")))); // only 1 prior
 
         assertEquals(0, detector.detectPersonalPromos(receipt).size());
@@ -117,7 +117,7 @@ class PromoDetectorTest {
         var receipt = buildReceipt(household);
         itemWithProduct(receipt, product, new BigDecimal("27.50")); // ~2% below median 28 — within 10% threshold
 
-        when(receiptItemRepository.findAllByProductIdOrderByReceiptIssuedAtAsc(product.getId()))
+        when(receiptItemRepository.findHouseholdHistoryForProduct(product.getId(), household.getId()))
                 .thenReturn(List.of(
                         historicalItem(household, product, new BigDecimal("28.00")),
                         historicalItem(household, product, new BigDecimal("28.00")),

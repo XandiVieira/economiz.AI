@@ -2,7 +2,6 @@ package com.relyon.economizai.service.priceindex;
 
 import com.relyon.economizai.config.CollaborativeProperties;
 import com.relyon.economizai.model.Receipt;
-import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.repository.ReceiptItemRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,15 +40,12 @@ public class PromoDetector {
     @Transactional(readOnly = true)
     public List<PersonalPromo> detectPersonalPromos(Receipt receipt) {
         var promos = new ArrayList<PersonalPromo>();
+        var householdId = receipt.getHousehold().getId();
         for (var item : receipt.getItems()) {
             if (item.getProduct() == null || item.getUnitPrice() == null) continue;
             var historical = receiptItemRepository
-                    .findAllByProductIdOrderByReceiptIssuedAtAsc(item.getProduct().getId()).stream()
+                    .findHouseholdHistoryForProduct(item.getProduct().getId(), householdId).stream()
                     .filter(prev -> !prev.getId().equals(item.getId()))
-                    .filter(prev -> prev.getReceipt() != null
-                            && prev.getReceipt().getHousehold() != null
-                            && prev.getReceipt().getHousehold().getId().equals(receipt.getHousehold().getId()))
-                    .filter(prev -> prev.getReceipt().getStatus() == ReceiptStatus.CONFIRMED)
                     .filter(prev -> prev.getUnitPrice() != null)
                     .toList();
             if (historical.size() < properties.getPersonalPromo().getMinPurchasesForBaseline()) continue;

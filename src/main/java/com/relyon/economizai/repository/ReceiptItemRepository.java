@@ -31,6 +31,20 @@ public interface ReceiptItemRepository extends JpaRepository<ReceiptItem, UUID> 
 
     List<ReceiptItem> findAllByProductIdOrderByReceiptIssuedAtAsc(UUID productId);
 
+    /** Same intent as the method above but fetches receipt + household up front,
+     *  used by promo detection where we filter by household + receipt status per row. */
+    @Query("""
+        SELECT ri FROM ReceiptItem ri
+        JOIN FETCH ri.receipt r
+        JOIN FETCH r.household
+        WHERE ri.product.id = :productId
+          AND r.household.id = :householdId
+          AND r.status = 'CONFIRMED'
+        ORDER BY r.issuedAt ASC
+    """)
+    List<ReceiptItem> findHouseholdHistoryForProduct(@Param("productId") UUID productId,
+                                                     @Param("householdId") UUID householdId);
+
     /** All confirmed purchases of any product by this household, oldest first.
      *  Joins receipt + product so callers can build per-product histories without N+1. */
     @Query("""
