@@ -88,6 +88,173 @@ community wins."
 - Outlier filter: drop observations more than N standard deviations from the rolling median for that (product, market) before they hit the index.
 - Users can opt-out of contribution. Their data still powers their own dashboards but never lands in PriceObservation.
 
+---
+
+## Community Strategy — the deep moat
+
+The personal product is the hook. The collaborative panel is the **moat**. Every
+architectural and product decision should be evaluated against: *does this make
+the panel more valuable as it grows, and harder to replicate by anyone without it?*
+
+### Why community is where the value compounds
+
+A single user with a personal price tracker has a useful tool. A million users
+contributing to a shared anonymized panel becomes a **public-good infrastructure
+play** that competitors can't catch up to without years of cold-start. The
+asymmetry isn't 1M× value — it's roughly N log N because of network effects:
+
+- **More households** → finer geographic coverage → better "near me" answers.
+- **More markets** → cross-market arbitrage detection works.
+- **More categories** → category-level inflation tracking becomes meaningful.
+- **More time** → trend detection (price velocity, seasonality) becomes possible.
+- **More chains** → competitive comparison panels for B2B.
+
+The personal product is what each user gets *individually*. The community
+product is what they all get *because everyone else is also using it*. This
+second loop is where retention becomes structural rather than feature-based.
+
+### What we have today (Phase 4 + 5 shipped)
+
+- ✅ `PriceObservation` table with no user_id (LGPD-anonymized contribution atom)
+- ✅ Private `PriceObservationAudit` for k-anon counting and right-to-delete
+- ✅ K-anonymity guard at query time (default K=3 distinct households)
+- ✅ Reference price + best-markets + community-promo endpoints, all gated
+- ✅ Personal-promo detection on every confirm (uses each user's own history)
+- ✅ Watched markets (user-curated CNPJs that bypass radius)
+- ✅ Volume-gated everywhere — endpoints return empty until data is real, never
+  show low-confidence "guesses" that erode trust
+
+### Community-value features still to build (priority order)
+
+**Tier 1 — high-leverage, build with current data shape:**
+
+1. **Personal inflation index.** For each household, compute a basket-level
+   IPCA-equivalent over their purchase history. Real-time, beats the
+   government's monthly IPCA which lags ~6 weeks. This is a flagship PRO feature
+   *and* a viral B2C hook ("você sentiu que tudo subiu? aqui está o número
+   exato pra sua casa este mês"). Built from data we already have.
+2. **Cross-market basket optimization.** Given a user's suggested shopping list,
+   solve: "go to market A for these 4 items, market B for these 3, save R$Y vs.
+   buying everything at one place." The math is simple; the value is huge.
+   Requires Phase 3 (done) + price index (done) + watched markets (done).
+3. **Price-drop alerts ("avise-me quando").** User says "alert me when leite
+   Italac drops below R$6 within 5km of home." Alerts fire when a confirmed
+   receipt anywhere in the network triggers the rule. Pure community value:
+   one user's confirmed receipt benefits another. **The retention loop.**
+4. **Inflation heat map per neighborhood.** Visualize price change % per
+   `cep` prefix or city zone. K-anon protected (won't render zones with <3
+   households). Both consumer-facing ("see your zone vs. neighbors") and B2B-sellable.
+
+**Tier 2 — needs richer data or new infra:**
+
+5. **Stockout signals.** A market that consistently doesn't carry product X (no
+   observations, while neighbors do) is signal for both the user ("don't bother
+   stopping here") and the brand ("our distribution gap is here"). Requires
+   distinguishing "didn't buy" from "wasn't there" — non-trivial.
+6. **Price velocity citywide.** "Milk up 8% in Porto Alegre this month" — derive
+   from rolling medians per (product, city, week). Unlock category-level views
+   (rice up 12%, beans down 3%). Foundation for the news-media partnership
+   strategy in MONETIZATION.md §2.
+7. **Substitution graph.** "When product X is 20% above its median, users buy
+   product Y instead at this market." Powerful B2B intel; consumer-side becomes
+   "cheaper alternative we noticed others reaching for."
+8. **Trust + reputation layer.** Weight contributions by household tenure and
+   confirmed-receipt-count. Heavy contributors' receipts count more, so a
+   single bad-actor account can't pollute the median. *Avoid* publicly ranking
+   users — anonymization is the brand promise.
+9. **Forecasting.** With ≥6 months of cross-market data per product+region,
+   simple seasonality models give "expect rice prices to dip in March" — useful
+   for both consumers ("buy in bulk now / wait") and B2B (procurement timing).
+
+**Tier 3 — exit-aware features (build only if growth justifies):**
+
+10. **Open API for academic researchers.** Free tier of the B2B data product,
+    permissive license for inflation research. Trades short-term revenue for
+    legitimacy and citations that justify regulatory comfort.
+11. **Real-time IBGE companion data.** Cross-reference our index against
+    official IBGE inflation, surface discrepancies. Gives credibility for
+    eventual government / central-bank conversations.
+
+### Anonymization at scale — what works at 100, breaks at 100k
+
+**Today (K=3 distinct households per bucket):**
+- Adequate for now (small panel, ops is the only adversary).
+- Trivially defeated by a determined attacker once the panel grows.
+
+**Before we hit 10k MAU we need:**
+
+1. **Differential privacy** for any aggregate exposed publicly or to B2B. Add
+   calibrated Laplacian noise to medians and counts so individual contributions
+   are statistically deniable. The K=3 threshold becomes a *floor*, not the
+   only protection.
+2. **Bucket coarsening** — for sparse (product, market, week) cells, fall back
+   to (product, chain, month) aggregates. Don't let the API surface a row that
+   uniquely identifies one household.
+3. **Audit pipeline** for re-identification risk. Run periodic pen-tests:
+   "given the public outputs, can I infer that household X bought product Y
+   at market Z on date D?" If yes, tighten the gate.
+4. **Right-to-be-forgotten cascades.** When a user deletes their account, their
+   `PriceObservationAudit` rows are deleted. The corresponding `PriceObservation`
+   rows can stay (they're anonymized) but the contribution count for k-anon
+   recalculation must drop them. Test this end-to-end before we have anyone to
+   delete.
+5. **Geographic obfuscation.** `cep` is too precise — 8 digits identifies one
+   block. Truncate to 5 digits (neighborhood) for any public output. Keep full
+   `cep` in audit only.
+
+### Contribution quality — the abuse model
+
+As soon as the panel becomes valuable, someone has incentive to poison it. Threats:
+
+- **Fake receipts** — generated NFC-e with a real chave but fake prices. Blocked
+  by re-fetching SEFAZ HTML and comparing against submitted parsed values.
+  Already done implicitly (we fetch + parse from SEFAZ ourselves; the user
+  only submits the QR string).
+- **Real-but-distorted purchases** — buying 1 item at an unusual price to bias
+  a competitor's market down. Mitigated by the outlier filter (>N stddev from
+  rolling median) — the column exists but the logic is deferred until we have
+  enough volume to validate the math.
+- **Mass automated submissions** — bot accounts submitting many receipts.
+  Mitigations needed: rate limiting per user/IP, CAPTCHA on suspicious volume,
+  reputation weighting (new accounts contribute less).
+- **Markets gaming their own listings** — a chain employee submitting fake
+  promo receipts. Mitigated by k-anonymity (one bad household = no impact),
+  cross-receipt validation (chave de acesso uniqueness), and reputation.
+
+We don't need to build all of this Day 1, but the **architecture must allow it**:
+the audit table already does, the master switch already does, k-anon already
+does. The reputation column doesn't exist yet — should land before we open the
+B2B channel.
+
+### What we explicitly are not doing
+
+- **Not** building a social network. No public profiles, no following, no
+  reviews. The community is statistical, not social. Lower abuse surface,
+  better LGPD posture, less product complexity.
+- **Not** publishing per-household data anywhere, ever. Even if a user wants
+  to share it, we're not the channel.
+- **Not** optimizing for "most contributions" leaderboards. Gamification in
+  this space attracts spammers more than it attracts good signal.
+- **Not** building user-to-user features (chat, comments). Same reason.
+
+### Cold-start strategy
+
+The panel is useless to user 1 (no one to compare against) but valuable to
+user 1,000. Bridge the gap:
+
+1. **Niche down hard at launch.** Porto Alegre supermarkets only. A user there
+   gets useful "best markets near you" answers from week 1 because we focus
+   density. Expanding "Brazil-wide" before density is fatal.
+2. **Personal product carries the panel.** The hook is "I save money on my own
+   shopping" (works for a user of one). The panel is a side effect they don't
+   need to care about for the app to be valuable.
+3. **Showcase what the panel makes possible** as soon as K=3 fires for
+   anything — "5 households in your area also tracked this product, here's the
+   range" — even if the data is tiny, the *concept* is what makes them invite
+   others.
+4. **Direct outreach.** Personal posts in r/portoalegre, local Whatsapp groups
+   for grocery deals. The first 100 users come from one founder's network.
+
 ### Tech Stack
 
 - Java 21, Spring Boot 4.0.6, Maven

@@ -7,39 +7,79 @@ their area, even if the actual paywall is unenforced for months.
 
 ## Revenue Models (by priority)
 
-### 1. Freemium — economizai Pro (R$9.90/month)
+### 1. Freemium — economizai Pro (R$9.90/month, R$89/year)
 
-**Free tier:**
-- Up to 5 receipts/month uploaded
-- Last 90 days of personal history
-- Basic spend dashboard (current month only)
-- Reference price for any product (collaborative index — read-only)
-- Ads on dashboards and between list results
+**Pricing rationale.** Anchor against streaming (R$25–R$45/mo) and Nubank Ultravioleta
+(R$24/mo) — clearly less than one streaming service. Annual pricing offers ~25%
+discount to reduce churn. The "I save R$X/mo on groceries" pitch needs the price
+small enough that the comparison is unflattering — R$9.90 is "the difference is
+one box of milk".
 
-**Pro tier:**
-- Unlimited receipt uploads
-- Unlimited history
-- Full price-evolution charts (any range)
-- Stock-out predictions and suggested shopping lists
-- Cross-market basket optimization ("split this list across nearest markets to save R$X")
-- Price-drop alerts on favorited products
-- Ad-free experience
-- Personal inflation index (basket-level IPCA equivalent)
-- Receipt export (CSV/JSON)
-- Priority support
-- Exclusive badge ("Apoiador")
+#### Built feature → tier matrix (as of 2026-05-01)
 
-**Why this works:** Heavy users (people grocery-shopping weekly for a family)
-hit the 5-receipt cap in a week. The Pro features (predictions, alerts,
-optimization) directly translate to money saved — the pitch writes itself.
+This maps what's *already shipped* to where it should live. Anything in the
+"Future" column is on the roadmap but not built yet; columns are aspirational.
 
-**Implementation needed:**
-- `User.subscriptionTier` (FREE/PRO) + `Subscription` entity
-- Receipt upload counter middleware (FREE check)
-- History range gate at query layer
-- Feature flags table (so we can roll Pro features out gradually)
-- Payment gateway (Stripe Brasil or Pagar.me — Pix-friendly)
-- Push notification system for price-drop alerts (Phase 3+)
+| Capability | FREE | PRO | Notes |
+|---|---|---|---|
+| Submit NFC-e receipt | ✅ (5/month) | ✅ unlimited | Counter middleware, easy gate. Heavy users hit 5 in a week. |
+| Receipt history | last **90 days** | unlimited | Query-layer gate on `issuedAt`. Cheap to implement, painful to discover (user opens app, sees their old data is gone). |
+| Spend dashboard `/insights/spend` | current month only | full range | Same gate as history. |
+| Top markets / categories | top 3 | top 10+ | Hard cap on `?limit` for FREE. |
+| Price history per product | current month | full | Same gate. |
+| Reference price (community) | ✅ | ✅ | Collaborative read — keep open to drive panel value perception. |
+| Best markets ranking | top 3 nearby | top 10 + watchlist + radius filter | Watchlist is FREE for first 3 markets, unlimited for PRO. |
+| Watched markets | up to **3** pinned | unlimited | Concrete, easy gate, real upgrade pressure for power users. |
+| Community promos (`/price-index/promos`) | last 7 days | full lookback + push | Same data, different freshness window. |
+| Personal promo detection | ✅ on confirm | ✅ on confirm | Free — it's the magic-moment hook on every receipt. |
+| Personal promo notifications | in-app only | push + email | The "alert me when my common stuff drops" loop. |
+| Consumption predictions (`/consumption/predictions`) | view-only | view + push when "RUNNING_LOW" | Predictions are visible, the *push* is paid. |
+| Suggested shopping list | view-only | view + basket optimization across markets | Optimization is the hard PRO sell — turns a list into "go to market A for these, B for those, save R$Y". |
+| Auto-derived preferences (`/preferences`) | view-only | view + manual override (AVOID/MUST_HAVE) | Auto-derivation for free, manual control paid. AVOID specifically can't be auto-derived → natural gate. |
+| Household sharing | up to **2 users** | up to 6 (Family plan, see §5) | Need a member-count gate at household join. |
+| Notification preferences | per-type channel choice | + custom alert rules per product | "Alert me when leite Italac < R$6 anywhere within 5km" — power feature. |
+| Data export (LGPD) | ✅ | ✅ | LGPD-mandated, never gated. |
+| Account deletion | ✅ | ✅ | LGPD-mandated. |
+| Ads on dashboards | shown | hidden | See §4. |
+| Personal inflation index | — | ✅ | Compute basket-level IPCA equivalent. Real-time, beats government numbers. Differentiator. |
+| Recipe-based shopping | — | ✅ | Input recipes, get optimized list per recipe. Future feature. |
+| CSV/Parquet export of own data | — | ✅ | Power users + tax / accounting use case. |
+
+**The PRO pitch in one sentence:** "Pay R$9.90/mo to get unlimited history,
+push alerts when your usual stuff is on sale, automatic shopping lists optimized
+across markets, and basket-level inflation tracking."
+
+**Why these gates work for grocery shoppers specifically:**
+- A weekly grocery shopper hits the 5-receipt cap in week 1 → forced to choose.
+- A new user signs up, scans a receipt, sees "you usually pay R$28 for this, you
+  paid R$22 today — save R$6/mo on average if you keep coming here" → magic
+  moment. That stays free; everything that compounds it is paid.
+- The "alert me when X drops" feature is exactly the loop that gets users to
+  reopen the app — and it's also the most friction-y to wire (FCM, email, rules
+  engine), so paywalling it has good unit economics.
+
+#### Implementation needed
+- `User.subscriptionTier` (FREE/PRO) — already on entity, *not enforced anywhere yet*.
+- Single `SubscriptionGateService` — never inline `if (user.tier != PRO)` in
+  controllers (per CLAUDE.md). Service gives back `Allowed | Blocked(reason, upgradeUrl)`.
+- Receipt upload counter — count by month per user.
+- Query-layer date-range cap — PRO bypasses, FREE truncates.
+- Watched-markets gate — `WatchedMarketService.watch` checks count.
+- Push-notification gate — `NotificationService` reads tier before dispatching
+  push for PROMO_PERSONAL / PROMO_COMMUNITY / RUNNING_LOW.
+- Stripe Brasil or Pagar.me + Pix integration.
+- Subscription-management page + PUT `/users/me/subscription`.
+- Feature-flag service so we can A/B individual gates.
+
+#### Gating sequence (which paywalls to ship first)
+1. **Watched markets cap** (3 free) — easiest gate, immediately visible, low risk.
+2. **History window** (90 days free) — wide impact, simple query change.
+3. **Push notifications** (PRO only) — high value, requires FCM live first.
+4. **Basket optimization** (PRO only) — hard to build, highest perceived value.
+5. **Manual preference override** (PRO only) — depends on Phase 2.6 completion.
+
+Don't ship all five at once. Each gate is an A/B; measure conversion before
+adding the next.
 
 ---
 
