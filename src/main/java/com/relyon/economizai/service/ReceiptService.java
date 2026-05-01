@@ -15,6 +15,7 @@ import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.repository.ReceiptRepository;
+import com.relyon.economizai.config.MdcContextFilter;
 import com.relyon.economizai.service.canonicalization.CanonicalizationService;
 import com.relyon.economizai.service.sefaz.ChaveAcessoParser;
 import com.relyon.economizai.service.sefaz.ParsedReceipt;
@@ -23,6 +24,7 @@ import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -49,15 +51,18 @@ public class ReceiptService {
     public ReceiptResponse submit(User user, SubmitReceiptRequest request) {
         var qrPayload = request.qrPayload();
         var chave = ChaveAcessoParser.extractChave(qrPayload);
+        log.info("submit chave={}", chave);
 
         if (receiptRepository.existsByChaveAcesso(chave)) {
+            log.info("submit rejected: chave {} already ingested", chave);
             throw new ReceiptAlreadyIngestedException(chave);
         }
 
         var parsed = sefazIngestionService.ingest(qrPayload);
         var receipt = persistParsed(user, qrPayload, parsed);
-        log.info("Receipt {} ingested for user {} with {} items (status PENDING_CONFIRMATION)",
-                receipt.getId(), user.getEmail(), receipt.getItems().size());
+        MDC.put(MdcContextFilter.RECEIPT_ID, abbrev(receipt.getId()));
+        log.info("submit ok status=PENDING_CONFIRMATION items={} total={} market='{}'",
+                receipt.getItems().size(), receipt.getTotalAmount(), receipt.getMarketName());
         return ReceiptResponse.from(receipt);
     }
 
@@ -106,28 +111,33 @@ public class ReceiptService {
 
     @Transactional
     public ReceiptResponse confirm(User user, UUID receiptId) {
+        MDC.put(MdcContextFilter.RECEIPT_ID, abbrev(receiptId));
+        log.info("confirm started");
         var receipt = loadOwned(user, receiptId);
         requirePending(receipt);
         receipt.setStatus(ReceiptStatus.CONFIRMED);
         receipt.setConfirmedAt(LocalDateTime.now());
         canonicalizationService.canonicalize(receipt);
         var saved = receiptRepository.save(receipt);
-        log.info("Receipt {} confirmed by user {}", saved.getId(), user.getEmail());
+        log.info("confirm ok status=CONFIRMED");
         return ReceiptResponse.from(saved);
     }
 
     @Transactional
     public ReceiptResponse reject(User user, UUID receiptId) {
+        MDC.put(MdcContextFilter.RECEIPT_ID, abbrev(receiptId));
         var receipt = loadOwned(user, receiptId);
         requirePending(receipt);
         receipt.setStatus(ReceiptStatus.REJECTED);
         var saved = receiptRepository.save(receipt);
-        log.info("Receipt {} rejected by user {}", saved.getId(), user.getEmail());
+        log.info("reject ok status=REJECTED");
         return ReceiptResponse.from(saved);
     }
 
     @Transactional
     public ReceiptResponse updateItem(User user, UUID receiptId, UUID itemId, UpdateReceiptItemRequest request) {
+        MDC.put(MdcContextFilter.RECEIPT_ID, abbrev(receiptId));
+        MDC.put(MdcContextFilter.ITEM_ID, abbrev(itemId));
         var receipt = loadOwned(user, receiptId);
         requirePending(receipt);
         var item = receipt.getItems().stream()
@@ -136,8 +146,13 @@ public class ReceiptService {
                 .orElseThrow(ReceiptItemNotFoundException::new);
         applyUpdate(item, request);
         receiptItemRepository.save(item);
-        log.debug("Receipt {} item {} updated", receipt.getId(), itemId);
+        log.info("item.updated description='{}' qty={} totalPrice={}",
+                item.getRawDescription(), item.getQuantity(), item.getTotalPrice());
         return ReceiptResponse.from(receipt);
+    }
+
+    private static String abbrev(UUID id) {
+        return id == null ? "" : id.toString().substring(0, 8);
     }
 
     private Receipt loadOwned(User user, UUID receiptId) {

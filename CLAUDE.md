@@ -34,6 +34,8 @@ GitHub repo: `economiz.AI` (https://github.com/XandiVieira/economiz.AI.git)
 - Every feature must have relevant log entries (info for business events, debug for flow, warn/error for failures)
 - Use parameterized messages: `log.info("Receipt {} parsed for user {} with {} items", receiptId, userId, itemCount)`
 - Never log raw CPF, full receipt access keys, or JWTs — mask if needed
+- **MDC correlation:** every request log line carries `req=<8-char>`, `user=<email>`, plus `rcpt=<8-char>` and `item=<8-char>` when the flow touches a receipt or item. To trace one receipt end-to-end, grep by `rcpt=<id>`. Set MDC via `MDC.put(MdcContextFilter.RECEIPT_ID, ...)` etc. — `MdcContextFilter` clears it at request end.
+- **One INFO line per decision, not per loop iteration.** Use the format `<event>.<outcome> key1=value1 key2=value2`. Examples: `item.created_from_ean`, `item.matched_by_alias`, `item.unmatched`, `submit ok`, `confirm ok`. Aggregates (`canonicalize done matched=X created=Y`) come at the end as a separate INFO.
 
 ### Testing
 - All new code must be covered by relevant unit tests

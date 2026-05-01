@@ -39,5 +39,9 @@ springdoc:
 
 logging:
   level:
-    com.relyon.economizai: DEBUG
+    com.relyon.economizai: INFO
     org.springframework.security: WARN
+  pattern:
+    # MDC tags in brackets: requestId user receipt item. Empty when not in scope.
+    # To deep-debug a flow: filter by receipt=<8-char-id> in your log viewer.
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [req=%X{requestId:-} user=%X{userId:-} rcpt=%X{receiptId:-} item=%X{itemId:-}] %logger{30} - %msg%n"
