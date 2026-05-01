@@ -1,6 +1,7 @@
 package com.relyon.economizai.dto.response;
 
 import com.relyon.economizai.model.Product;
+import com.relyon.economizai.model.enums.CategorizationSource;
 import com.relyon.economizai.model.enums.ProductCategory;
 
 import java.math.BigDecimal;
@@ -15,7 +16,8 @@ public record ProductResponse(
         ProductCategory category,
         String unit,
         BigDecimal packSize,
-        String packUnit
+        String packUnit,
+        CategorizationSource categorizationSource
 ) {
     public static ProductResponse from(Product product) {
         return new ProductResponse(
@@ -27,7 +29,8 @@ public record ProductResponse(
                 product.getCategory(),
                 product.getUnit(),
                 product.getPackSize(),
-                product.getPackUnit()
+                product.getPackUnit(),
+                product.getCategorizationSource()
         );
     }
 }

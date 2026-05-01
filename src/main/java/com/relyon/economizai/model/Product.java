@@ -1,5 +1,6 @@
 package com.relyon.economizai.model;
 
+import com.relyon.economizai.model.enums.CategorizationSource;
 import com.relyon.economizai.model.enums.ProductCategory;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -47,4 +48,9 @@ public class Product extends BaseEntity {
 
     @Column(name = "pack_unit", length = 10)
     private String packUnit;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "categorization_source", nullable = false, length = 30)
+    @lombok.Builder.Default
+    private CategorizationSource categorizationSource = CategorizationSource.NONE;
 }

@@ -298,6 +298,172 @@ Portuguese-first, Render deployment).
 
 ---
 
+## Extraction Pipeline Reference
+
+This is the **single source of truth** for how a raw NFC-e item description
+becomes structured data (genericName, brand, packSize, packUnit, category).
+Read this section to understand the runtime behavior without opening
+source code.
+
+### What gets extracted
+
+For every new `Product` (one is created the first time we see a unique
+EAN, or via `POST /products`):
+
+| Field | Source | Example |
+|---|---|---|
+| `normalizedName` | raw NFC-e description, untouched | `ARROZ TIO J TP1 5KG` |
+| `genericName` | dictionary or ML | `Arroz` |
+| `brand` | brand registry CSV | `Tio João` |
+| `packSize` + `packUnit` | regex on description | `5`, `KG` |
+| `category` | dictionary, learned dict, or ML | `GROCERIES` |
+| `categorizationSource` | which layer set the category | `DICTIONARY` |
+| `ean` | from the receipt | `7891234567890` |
+
+### The cascade (in order, per new Product)
+
+```
+raw description: "ARROZ TIO J TP1 5KG"
+        │
+        ▼
+┌───────────────────────────────────┐
+│ 1. PackSizeExtractor (regex)       │  packSize=5, packUnit=KG
+│    always runs                     │
+└───────────────────────────────────┘
+        │
+        ▼
+┌───────────────────────────────────┐
+│ 2. BrandExtractor (registry)       │  brand="Tio João"
+│    always runs                     │
+└───────────────────────────────────┘
+        │
+        ▼
+┌───────────────────────────────────┐
+│ 3. DictionaryClassifier            │  if hit: genericName + category
+│    a) curated CSV (highest)        │  source = DICTIONARY or
+│    b) learned dictionary (auto)    │           LEARNED_DICTIONARY
+└───────────────────────────────────┘
+        │ (if dict missed any field)
+        ▼
+┌───────────────────────────────────┐
+│ 4. MlClassifierService (Naive Bayes)│ if confidence ≥ 0.75:
+│    only fires if dict missed AND   │   set field
+│    classifier is ready             │   source = ML
+└───────────────────────────────────┘
+        │ (if all layers missed)
+        ▼
+┌───────────────────────────────────┐
+│ Product saved with field=null      │  shows up in
+│ source=NONE                        │  /products/unmatched
+└───────────────────────────────────┘
+```
+
+**Extraction runs ONCE per Product** (when the Product is first created).
+Subsequent receipts with the same EAN just link to the existing Product —
+no extraction is re-run.
+
+### `categorizationSource` enum (audit trail)
+
+Stored on every `Product`. Tells you exactly how the category got there:
+
+| Value | Set by |
+|---|---|
+| `NONE` | Nothing extracted; needs manual review |
+| `DICTIONARY` | Hit on `seed/product-dictionary.csv` (curated by humans) |
+| `LEARNED_DICTIONARY` | Hit on auto-promoted entry (started life as ML) |
+| `ML` | Naive Bayes prediction with confidence ≥ threshold |
+| `USER` | Manual `PATCH /products/{id}` |
+
+The pipeline NEVER trains on `ML` rows — only `DICTIONARY`,
+`LEARNED_DICTIONARY`, and `USER` are trusted training data. This prevents
+self-reinforcement.
+
+### Where data lives
+
+| What | Where |
+|---|---|
+| Curated dictionary | `src/main/resources/seed/product-dictionary.csv` (in repo, edit + redeploy) |
+| Brand registry | `src/main/resources/seed/brand-registry.csv` (in repo, edit + redeploy) |
+| Learned dictionary | `learned_dictionary` table in Postgres (managed by AutoPromotionService) |
+| ML training data | derived from `products` table at retrain time (in-memory only) |
+| Trained ML models | in-memory only on the running JVM (re-trained on startup + weekly) |
+| Per-Product source | `products.categorization_source` column |
+
+### Schedules + manual triggers
+
+| Operation | Schedule | Manual trigger | Notes |
+|---|---|---|---|
+| ML retrain | weekly + on app startup | `POST /api/v1/categorizer/retrain` | needs ≥30 trusted training examples to actually train; otherwise stays "not ready" |
+| Auto-promote ML → learned dict | daily + on app startup | `POST /api/v1/categorizer/auto-promote` | promotes tokens with ≥30 ML samples + ≥90% category agreement + 0 user overrides |
+| Status check | n/a | `GET /api/v1/categorizer/status` | shows ready, lastTrainedAt, confidenceThreshold |
+
+### How to read the logs to verify the cascade
+
+Logs use MDC tags `[req=… user=… rcpt=… item=…]`. Filter by `rcpt=<id>` or
+`item=<id>` in your log viewer to see one receipt's full story.
+
+Per-item logs from `CanonicalizationService`:
+
+```
+item.matched_by_ean   ean=… product=…                      (existing product reused)
+item.matched_by_alias product=… normalized='…'             (alias linked)
+item.created_from_ean ean=… product=… extracted={…}        (NEW product, extraction ran)
+item.unmatched description='…' (no EAN, no alias)          (review queue)
+```
+
+Per-Product extraction details (when ML fires):
+
+```
+extract.ml.category.hit            confidence=0.87 predicted=GROCERIES description='…'
+extract.ml.category.below_threshold confidence=0.42 predicted=… description='…'   (DEBUG)
+extract.ml.genericName.hit         confidence=0.81 predicted='Arroz' description='…'
+```
+
+ML training lifecycle:
+
+```
+ml.retrain.skipped reason=insufficient-data trustedProducts=17 categoryExamples=15 minRequired=30
+ml.retrain.scheduled trigger
+ml.retrain.done categoryExamples=312 categoryLabels=8 vocab=4521 elapsedMs=84
+```
+
+Auto-promotion lifecycle:
+
+```
+auto_promote.scheduled trigger
+auto_promote.promoted token='racao' category=OTHER genericName='Ração' samples=42 agreement=0.95
+auto_promote.done PromotionOutcome[promoted=3, skippedDueToHuman=1, skippedDueToAgreement=2, skippedDueToSamples=18, learnedTotal=3]
+```
+
+### Tuning knobs (env vars)
+
+| Var | Default | Effect |
+|---|---|---|
+| `economizai.ml.confidence-threshold` | `0.75` | Below this, ML predictions are ignored (kept null) |
+| `economizai.ml.retrain-interval-ms` | `604800000` (7 days) | How often the ML retrains on schedule |
+| `economizai.ml.auto-promote-interval-ms` | `86400000` (1 day) | How often auto-promotion scans Products |
+
+Bump confidence higher to be more conservative (more items go to review,
+fewer auto-categorizations). Lower it to be more aggressive (more
+auto-categorizations, more risk of wrong categories).
+
+### What to do when the cascade gets something wrong
+
+1. **Wrong category on one product** → `PATCH /products/{id}` with the
+   correct category. Source becomes `USER`. Next ML retrain treats this
+   as ground truth and learns from it.
+2. **Wrong category on many products with same description token** → the
+   user PATCH on any of them blocks auto-promotion of that token (per
+   2.5c rules). Eventually the ML retrain (which uses USER as truth)
+   adjusts its predictions for similar items.
+3. **Missing dictionary entry that you'd like to add** → edit
+   `src/main/resources/seed/product-dictionary.csv`, redeploy. New
+   inferences immediately use it.
+4. **Missing brand** → same, edit `seed/brand-registry.csv`, redeploy.
+5. **Stale learned-dictionary entry** → `DELETE` the row in
+   `learned_dictionary` table; will be re-evaluated on next promotion
+   pass (and re-promoted only if criteria still hold).
+
 ## Suggested Additions (Beyond the Spec)
 
 These came up while structuring the project — open for discussion:

@@ -55,15 +55,21 @@ public class ProductService {
             throw new EanConflictException(request.ean());
         }
         var extracted = productExtractor.extract(request.normalizedName());
+        var category = request.category() != null ? request.category() : extracted.category();
+        var source = request.category() != null
+                ? com.relyon.economizai.model.enums.CategorizationSource.USER
+                : (category != null ? extracted.categorizationSource()
+                                    : com.relyon.economizai.model.enums.CategorizationSource.NONE);
         var product = productRepository.save(Product.builder()
                 .ean(blankToNull(request.ean()))
                 .normalizedName(request.normalizedName())
                 .genericName(firstNonBlank(request.genericName(), extracted.genericName()))
                 .brand(firstNonBlank(request.brand(), extracted.brand()))
-                .category(request.category() != null ? request.category() : extracted.category())
+                .category(category)
                 .unit(blankToNull(request.unit()))
                 .packSize(request.packSize() != null ? request.packSize() : extracted.packSize())
                 .packUnit(firstNonBlank(request.packUnit(), extracted.packUnit()))
+                .categorizationSource(source)
                 .build());
         log.info("Product {} created (ean={}, name='{}')", product.getId(), product.getEan(), product.getNormalizedName());
         if (product.getEan() != null) {
@@ -83,8 +89,12 @@ public class ProductService {
         product.setUnit(blankToNull(request.unit()));
         product.setPackSize(request.packSize());
         product.setPackUnit(blankToNull(request.packUnit()));
+        // any manual update (PATCH) becomes the highest-trust signal — USER overrides any prior source
+        product.setCategorizationSource(request.category() != null
+                ? com.relyon.economizai.model.enums.CategorizationSource.USER
+                : com.relyon.economizai.model.enums.CategorizationSource.NONE);
         var saved = productRepository.save(product);
-        log.info("Product {} updated", saved.getId());
+        log.info("Product {} updated source=USER", saved.getId());
         return ProductResponse.from(saved);
     }
 

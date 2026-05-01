@@ -19,7 +19,9 @@ class ProductExtractorTest {
         brandExtractor.load();
         var dictionaryClassifier = new DictionaryClassifier();
         dictionaryClassifier.load();
-        extractor = new ProductExtractor(brandExtractor, dictionaryClassifier);
+        var mlClassifier = org.mockito.Mockito.mock(com.relyon.economizai.service.extraction.ml.MlClassifierService.class);
+        org.mockito.Mockito.when(mlClassifier.isReady()).thenReturn(false);
+        extractor = new ProductExtractor(brandExtractor, dictionaryClassifier, mlClassifier);
     }
 
     @Test

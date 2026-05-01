@@ -61,7 +61,8 @@ class ProductControllerTest {
 
     private ProductResponse sampleProduct(UUID id) {
         return new ProductResponse(id, "789", "Arroz Tio Joao", "Arroz", "Tio João",
-                ProductCategory.GROCERIES, "UN", new java.math.BigDecimal("5"), "KG");
+                ProductCategory.GROCERIES, "UN", new java.math.BigDecimal("5"), "KG",
+                com.relyon.economizai.model.enums.CategorizationSource.DICTIONARY);
     }
 
     @Test

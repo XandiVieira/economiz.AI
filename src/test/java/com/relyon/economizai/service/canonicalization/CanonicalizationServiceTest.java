@@ -77,7 +77,8 @@ class CanonicalizationServiceTest {
         when(productExtractor.extract(any())).thenReturn(
                 new com.relyon.economizai.service.extraction.ProductExtraction(
                         "Leite", null, new java.math.BigDecimal("1"), "L",
-                        com.relyon.economizai.model.enums.ProductCategory.MEAT_DAIRY));
+                        com.relyon.economizai.model.enums.ProductCategory.MEAT_DAIRY,
+                        com.relyon.economizai.model.enums.CategorizationSource.DICTIONARY));
         when(productRepository.findByEan("123")).thenReturn(Optional.empty());
         when(productRepository.save(any(Product.class))).thenAnswer(inv -> {
             var p = inv.<Product>getArgument(0);

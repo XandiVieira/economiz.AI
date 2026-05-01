@@ -98,6 +98,7 @@ public class CanonicalizationService {
                 .category(extraction.category())
                 .packSize(extraction.packSize())
                 .packUnit(extraction.packUnit())
+                .categorizationSource(extraction.categorizationSource())
                 .build();
     }
 
