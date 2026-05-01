@@ -24,6 +24,7 @@ public class CollaborativeProperties {
         private int minObservationsForCommunityPromo = 10;
         private int communityPromoThresholdPct = 15;
         private int lookbackDays = 90;
+        private int communityPromoRecentWindowDays = 7;
 
         public boolean isEnabled() { return enabled; }
         public void setEnabled(boolean enabled) { this.enabled = enabled; }
@@ -37,6 +38,8 @@ public class CollaborativeProperties {
         public void setCommunityPromoThresholdPct(int v) { this.communityPromoThresholdPct = v; }
         public int getLookbackDays() { return lookbackDays; }
         public void setLookbackDays(int v) { this.lookbackDays = v; }
+        public int getCommunityPromoRecentWindowDays() { return communityPromoRecentWindowDays; }
+        public void setCommunityPromoRecentWindowDays(int v) { this.communityPromoRecentWindowDays = v; }
     }
 
     public static class PersonalPromo {
@@ -56,13 +59,9 @@ public class CollaborativeProperties {
      */
     public static class Consumption {
         private boolean enabled = true;
-        /** Need this many purchases of a product before we attempt to predict its next purchase. */
         private int minPurchasesForPrediction = 3;
-        /** Lookback window in days for computing intervals. */
         private int historyLookbackDays = 365;
-        /** A product is "running low" when ETA-to-runout falls below this many days. */
         private int runningLowThresholdDays = 7;
-        /** A product is "ran out" when ETA-to-runout has already passed by this many days. */
         private int ranOutGraceDays = 0;
 
         public boolean isEnabled() { return enabled; }

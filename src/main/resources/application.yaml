@@ -46,6 +46,7 @@ economizai:
     min-observations-per-product-market: 5     # don't show reference price for (product, market) until enough samples
     min-observations-for-community-promo: 10   # don't flag a community promo unless this much baseline exists
     community-promo-threshold-pct: 15          # current price < (median - X%) → community promo
+    community-promo-recent-window-days: 7      # last N days = "recent" sample; older rows are baseline
     lookback-days: 90                          # observations older than this are excluded from reference + promo calcs
   personal-promo:
     threshold-pct: 10                          # personal promo if price < (user's own median - X%)

@@ -44,8 +44,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class CommunityPromoService {
 
-    private static final int RECENT_WINDOW_DAYS = 7;
-
     private final PriceObservationRepository observationRepository;
     private final PriceObservationAuditRepository auditRepository;
     private final CollaborativeProperties properties;
@@ -80,7 +78,7 @@ public class CommunityPromoService {
                         Collectors.groupingBy(PriceObservation::getMarketCnpj)));
 
         var promos = new ArrayList<CommunityPromo>();
-        var recentCutoff = LocalDateTime.now().minusDays(RECENT_WINDOW_DAYS);
+        var recentCutoff = LocalDateTime.now().minusDays(properties.getCollaborative().getCommunityPromoRecentWindowDays());
 
         for (var productEntry : byProductMarket.entrySet()) {
             var productId = productEntry.getKey();

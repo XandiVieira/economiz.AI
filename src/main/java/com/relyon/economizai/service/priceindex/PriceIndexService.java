@@ -149,10 +149,8 @@ public class PriceIndexService {
                     if (userLatitude != null && userLongitude != null && location != null && location.hasCoordinates()) {
                         distanceKm = DistanceCalculator.kmBetween(
                                 userLatitude, userLongitude, location.getLatitude(), location.getLongitude());
-                        // watched markets bypass the radius filter
                         if (radiusKm != null && distanceKm > radiusKm && !isWatched) return null;
                     } else if (radiusKm != null && userLatitude != null && !isWatched) {
-                        // user wanted a radius filter but we don't have this market's coords yet → exclude
                         return null;
                     }
                     var prices = rows.stream().map(PriceObservation::getUnitPrice).toList();

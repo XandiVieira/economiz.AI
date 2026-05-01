@@ -10,6 +10,7 @@ import com.relyon.economizai.service.canonicalization.DescriptionNormalizer;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,14 +25,14 @@ import java.util.Map;
  * Auto-promotes stable ML predictions into the learned-dictionary so the
  * faster, deterministic dictionary path catches them next time.
  *
- * <p>Promotion criteria (all must hold for a token):
+ * <p>Promotion criteria (all must hold for a token, thresholds tunable via
+ * {@code economizai.ml.auto-promote.*}):
  * <ul>
- *   <li>≥ {@value #MIN_SAMPLES} ML-categorized Products contain the token
- *       in their normalizedName</li>
- *   <li>≥ {@value #MIN_AGREEMENT} share of those Products have the same
+ *   <li>at least <i>min-samples</i> ML-categorized Products contain the token</li>
+ *   <li>at least <i>min-agreement</i> share of those Products share the same
  *       category as the majority class</li>
- *   <li>Zero USER-corrected Products contain the token (any human override
- *       blocks promotion — we trust humans over the ML)</li>
+ *   <li>zero USER-corrected Products contain the token — any human override
+ *       blocks promotion</li>
  * </ul>
  *
  * <p>Tokens are 1- to 3-word phrases extracted from each Product's
@@ -47,13 +48,17 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AutoPromotionService {
 
-    static final int MIN_SAMPLES = 30;
-    static final double MIN_AGREEMENT = 0.90;
     private static final int MAX_PHRASE_TOKENS = 3;
 
     private final ProductRepository productRepository;
     private final LearnedDictionaryRepository learnedRepository;
     private final DictionaryClassifier dictionaryClassifier;
+
+    @Value("${economizai.ml.auto-promote.min-samples:30}")
+    private int minSamples;
+
+    @Value("${economizai.ml.auto-promote.min-agreement:0.90}")
+    private double minAgreement;
 
     @PostConstruct
     void loadOnStartup() {
@@ -99,16 +104,16 @@ public class AutoPromotionService {
             var token = entry.getKey();
             var stats = entry.getValue();
             if (stats.userOverrides > 0) {
-                if (stats.mlSamples >= MIN_SAMPLES) skippedHuman++;
+                if (stats.mlSamples >= minSamples) skippedHuman++;
                 continue;
             }
-            if (stats.mlSamples < MIN_SAMPLES) {
+            if (stats.mlSamples < minSamples) {
                 skippedSamples++;
                 continue;
             }
             var topCategory = stats.topCategory();
             var agreement = (double) stats.categoryCounts.get(topCategory) / stats.mlSamples;
-            if (agreement < MIN_AGREEMENT) {
+            if (agreement < minAgreement) {
                 skippedAgreement++;
                 continue;
             }

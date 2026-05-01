@@ -6,11 +6,13 @@ import com.relyon.economizai.model.enums.CategorizationSource;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.repository.LearnedDictionaryRepository;
 import com.relyon.economizai.repository.ProductRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Optional;
@@ -32,6 +34,12 @@ class AutoPromotionServiceTest {
     @Mock private DictionaryClassifier dictionaryClassifier;
 
     @InjectMocks private AutoPromotionService service;
+
+    @BeforeEach
+    void seedThresholds() {
+        ReflectionTestUtils.setField(service, "minSamples", 30);
+        ReflectionTestUtils.setField(service, "minAgreement", 0.90);
+    }
 
     private Product mlProduct(String name, ProductCategory cat, String genericName) {
         return Product.builder()
