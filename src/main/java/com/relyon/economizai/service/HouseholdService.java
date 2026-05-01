@@ -8,6 +8,7 @@ import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.repository.HouseholdRepository;
 import com.relyon.economizai.repository.UserRepository;
+import com.relyon.economizai.service.privacy.LogMasker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -41,7 +42,7 @@ public class HouseholdService {
     @Transactional(readOnly = true)
     public HouseholdResponse getMine(User user) {
         var household = householdRepository.findById(user.getHousehold().getId())
-                .orElseThrow(() -> new IllegalStateException("Household missing for user " + user.getEmail()));
+                .orElseThrow(() -> new IllegalStateException("Household missing for user " + LogMasker.email(user.getEmail())));
         var members = userRepository.findAllByHouseholdId(household.getId());
         return HouseholdResponse.from(household, members);
     }
@@ -59,7 +60,7 @@ public class HouseholdService {
         var previous = user.getHousehold();
         user.setHousehold(target);
         userRepository.save(user);
-        log.info("User {} joined household {} (left {})", user.getEmail(), target.getId(), previous.getId());
+        log.info("User {} joined household {} (left {})", LogMasker.email(user.getEmail()), target.getId(), previous.getId());
 
         if (userRepository.countByHouseholdId(previous.getId()) == 0) {
             householdRepository.delete(previous);
@@ -76,7 +77,7 @@ public class HouseholdService {
         var fresh = createSoloHousehold();
         user.setHousehold(fresh);
         userRepository.save(user);
-        log.info("User {} left household {} for new solo household {}", user.getEmail(), previous.getId(), fresh.getId());
+        log.info("User {} left household {} for new solo household {}", LogMasker.email(user.getEmail()), previous.getId(), fresh.getId());
 
         if (userRepository.countByHouseholdId(previous.getId()) == 0) {
             householdRepository.delete(previous);

@@ -1,6 +1,7 @@
 package com.relyon.economizai.service.notifications;
 
 import com.relyon.economizai.model.enums.NotificationChannel;
+import com.relyon.economizai.service.privacy.LogMasker;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -39,9 +40,9 @@ public class PushDispatcher implements NotificationDispatcher {
             return DispatchResult.failed("user has no push device token registered");
         }
         // TODO(FCM): wire firebase-admin and call FirebaseMessaging.send(...)
-        log.info("notification.push.stub user={} type={} title='{}' tokenPrefix='{}…'",
-                payload.user().getEmail(), payload.type(), payload.title(),
-                token.substring(0, Math.min(8, token.length())));
+        log.info("notification.push.stub user={} type={} title='{}' token={}",
+                LogMasker.email(payload.user().getEmail()), payload.type(), payload.title(),
+                LogMasker.token(token));
         return DispatchResult.ok();
     }
 }

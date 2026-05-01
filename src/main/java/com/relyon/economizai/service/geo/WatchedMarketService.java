@@ -8,6 +8,7 @@ import com.relyon.economizai.model.UserWatchedMarket;
 import com.relyon.economizai.repository.MarketLocationRepository;
 import com.relyon.economizai.repository.ReceiptRepository;
 import com.relyon.economizai.repository.UserWatchedMarketRepository;
+import com.relyon.economizai.service.privacy.LogMasker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -129,7 +130,7 @@ public class WatchedMarketService {
                     .user(user)
                     .marketCnpj(cnpj)
                     .build());
-            log.info("watched_market.added user={} cnpj={}", user.getEmail(), cnpj);
+            log.info("watched_market.added user={} cnpj={}", LogMasker.email(user.getEmail()), cnpj);
         }
         var visited = receiptRepository.findDistinctCnpjsByHousehold(user.getHousehold().getId()).contains(cnpj);
         return MarketResponse.from(location, distanceFromHome(user, location), visited, true);
@@ -138,7 +139,7 @@ public class WatchedMarketService {
     @Transactional
     public void unwatch(User user, String cnpj) {
         watchedRepository.deleteByUserIdAndMarketCnpj(user.getId(), cnpj);
-        log.info("watched_market.removed user={} cnpj={}", user.getEmail(), cnpj);
+        log.info("watched_market.removed user={} cnpj={}", LogMasker.email(user.getEmail()), cnpj);
     }
 
     private Double distanceFromHome(User user, MarketLocation location) {

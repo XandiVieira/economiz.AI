@@ -1,6 +1,7 @@
 package com.relyon.economizai.service.notifications;
 
 import com.relyon.economizai.model.enums.NotificationChannel;
+import com.relyon.economizai.service.privacy.LogMasker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -45,11 +46,11 @@ public class EmailDispatcher implements NotificationDispatcher {
             message.setText(payload.body());
             mailSender.send(message);
             log.info("notification.email.sent to={} type={} title='{}'",
-                    payload.user().getEmail(), payload.type(), payload.title());
+                    LogMasker.email(payload.user().getEmail()), payload.type(), payload.title());
             return DispatchResult.ok();
         } catch (Exception ex) {
             log.warn("notification.email.failed to={} {}: {}",
-                    payload.user().getEmail(), ex.getClass().getSimpleName(), ex.getMessage());
+                    LogMasker.email(payload.user().getEmail()), ex.getClass().getSimpleName(), ex.getMessage());
             return DispatchResult.failed(ex.getClass().getSimpleName() + ": " + ex.getMessage());
         }
     }

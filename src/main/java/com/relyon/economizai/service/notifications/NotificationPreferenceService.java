@@ -7,6 +7,7 @@ import com.relyon.economizai.model.NotificationPreference;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.repository.NotificationPreferenceRepository;
 import com.relyon.economizai.repository.UserRepository;
+import com.relyon.economizai.service.privacy.LogMasker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -39,7 +40,7 @@ public class NotificationPreferenceService {
             preference.setChannel(entry.channel());
             preferenceRepository.save(preference);
         }
-        log.info("notification.preferences.updated user={} count={}", user.getEmail(), request.preferences().size());
+        log.info("notification.preferences.updated user={} count={}", LogMasker.email(user.getEmail()), request.preferences().size());
         return list(user);
     }
 
@@ -49,6 +50,6 @@ public class NotificationPreferenceService {
         user.setPushDeviceToken(token == null || token.isBlank() ? null : token);
         user.setPushTokenUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
-        log.info("push_token.updated user={} hasToken={}", user.getEmail(), user.getPushDeviceToken() != null);
+        log.info("push_token.updated user={} hasToken={}", LogMasker.email(user.getEmail()), user.getPushDeviceToken() != null);
     }
 }

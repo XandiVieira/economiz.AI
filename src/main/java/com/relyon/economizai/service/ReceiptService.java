@@ -23,6 +23,7 @@ import com.relyon.economizai.service.geo.MarketLocationService;
 import com.relyon.economizai.service.notifications.NotificationPayload;
 import com.relyon.economizai.service.notifications.NotificationService;
 import com.relyon.economizai.service.priceindex.PriceIndexService;
+import com.relyon.economizai.service.privacy.LogMasker;
 import com.relyon.economizai.service.priceindex.PromoDetector;
 import com.relyon.economizai.service.sefaz.ChaveAcessoParser;
 import com.relyon.economizai.service.sefaz.ParsedReceipt;
@@ -64,10 +65,10 @@ public class ReceiptService {
     public ReceiptResponse submit(User user, SubmitReceiptRequest request) {
         var qrPayload = request.qrPayload();
         var chave = ChaveAcessoParser.extractChave(qrPayload);
-        log.info("submit chave={}", chave);
+        log.info("submit chave={}", LogMasker.chave(chave));
 
         if (receiptRepository.existsByChaveAcesso(chave)) {
-            log.info("submit rejected: chave {} already ingested", chave);
+            log.info("submit rejected: chave {} already ingested", LogMasker.chave(chave));
             throw new ReceiptAlreadyIngestedException(chave);
         }
 
