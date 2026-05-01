@@ -31,6 +31,7 @@ public class UserController {
 
     private final UserService userService;
     private final LocalizedMessageService messageService;
+    private final com.relyon.economizai.service.notifications.NotificationPreferenceService notificationPreferenceService;
 
     @GetMapping("/me")
     public ResponseEntity<UserResponse> getProfile(@AuthenticationPrincipal User user) {
@@ -54,6 +55,32 @@ public class UserController {
     public ResponseEntity<UserResponse> updateContribution(@AuthenticationPrincipal User user,
                                                            @Valid @RequestBody UpdateContributionRequest request) {
         return ResponseEntity.ok(userService.updateContribution(user, request));
+    }
+
+    @PatchMapping("/me/location")
+    public ResponseEntity<UserResponse> updateHomeLocation(@AuthenticationPrincipal User user,
+                                                           @Valid @RequestBody com.relyon.economizai.dto.request.UpdateHomeLocationRequest request) {
+        return ResponseEntity.ok(userService.updateHomeLocation(user, request));
+    }
+
+    @PatchMapping("/me/push-token")
+    public ResponseEntity<java.util.Map<String, String>> updatePushToken(@AuthenticationPrincipal User user,
+                                                                         @Valid @RequestBody com.relyon.economizai.dto.request.UpdatePushTokenRequest request) {
+        notificationPreferenceService.updatePushToken(user, request);
+        return ResponseEntity.ok(java.util.Map.of("status", "ok"));
+    }
+
+    @GetMapping("/me/notification-preferences")
+    public ResponseEntity<java.util.List<com.relyon.economizai.dto.response.NotificationPreferenceResponse>> notificationPreferences(
+            @AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(notificationPreferenceService.list(user));
+    }
+
+    @org.springframework.web.bind.annotation.PutMapping("/me/notification-preferences")
+    public ResponseEntity<java.util.List<com.relyon.economizai.dto.response.NotificationPreferenceResponse>> updateNotificationPreferences(
+            @AuthenticationPrincipal User user,
+            @Valid @RequestBody com.relyon.economizai.dto.request.UpdateNotificationPreferencesRequest request) {
+        return ResponseEntity.ok(notificationPreferenceService.update(user, request));
     }
 
     @GetMapping("/me/export")

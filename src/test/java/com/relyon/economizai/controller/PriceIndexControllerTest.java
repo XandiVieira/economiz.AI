@@ -76,9 +76,11 @@ class PriceIndexControllerTest {
     @Test
     void bestMarkets_returnsRanking() throws Exception {
         var pid = UUID.randomUUID();
-        when(priceIndexService.bestMarkets(any(), anyInt())).thenReturn(List.of(
+        when(priceIndexService.bestMarkets(any(), anyInt(),
+                org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull())).thenReturn(List.of(
                 new PriceIndexService.MarketPriceRow("93015006005182", "93015006", "Mercado X",
-                        new BigDecimal("10"), new BigDecimal("9"), 5, 3L)
+                        new BigDecimal("10"), new BigDecimal("9"), 5, 3L, null)
         ));
 
         mockMvc.perform(get("/api/v1/price-index/products/" + pid + "/best-markets")
@@ -90,11 +92,13 @@ class PriceIndexControllerTest {
 
     @Test
     void promos_returnsCurrentPromos() throws Exception {
-        when(communityPromoService.detectAll()).thenReturn(List.of(
+        when(communityPromoService.detectAll(org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull()))
+                .thenReturn(List.of(
                 new CommunityPromoService.CommunityPromo(UUID.randomUUID(), "Arroz",
                         "93015006005182", "93015006", "Mercado X",
                         new BigDecimal("22"), new BigDecimal("28"), new BigDecimal("21.43"),
-                        5, 3L)
+                        5, 3L, null)
         ));
 
         mockMvc.perform(get("/api/v1/price-index/promos")

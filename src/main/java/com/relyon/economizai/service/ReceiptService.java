@@ -51,6 +51,8 @@ public class ReceiptService {
     private final CanonicalizationService canonicalizationService;
     private final PriceIndexService priceIndexService;
     private final PromoDetector promoDetector;
+    private final com.relyon.economizai.service.geo.MarketLocationService marketLocationService;
+    private final com.relyon.economizai.service.notifications.NotificationService notificationService;
 
     @Transactional
     public ReceiptResponse submit(User user, SubmitReceiptRequest request) {
@@ -125,9 +127,32 @@ public class ReceiptService {
         canonicalizationService.canonicalize(receipt);
         var personalPromos = promoDetector.detectPersonalPromos(receipt);
         priceIndexService.recordContributions(receipt);
+        marketLocationService.registerMarketFromReceipt(receipt);
+        notifyPersonalPromos(user, receipt, personalPromos);
         var saved = receiptRepository.save(receipt);
         log.info("confirm ok status=CONFIRMED personalPromos={}", personalPromos.size());
         return new ConfirmReceiptResponse(ReceiptResponse.from(saved), personalPromos);
+    }
+
+    private void notifyPersonalPromos(User user, Receipt receipt,
+                                      java.util.List<com.relyon.economizai.service.priceindex.PromoDetector.PersonalPromo> promos) {
+        for (var promo : promos) {
+            var title = "Você economizou em " + promo.productName();
+            var body = String.format("No %s você pagou R$ %s no %s — %s%% abaixo do que normalmente paga.",
+                    promo.productName(), promo.paidPrice(), receipt.getMarketName(), promo.savingsPct());
+            notificationService.notify(new com.relyon.economizai.service.notifications.NotificationPayload(
+                    user,
+                    com.relyon.economizai.model.enums.NotificationType.PROMO_PERSONAL,
+                    title, body,
+                    java.util.Map.of(
+                            "receiptId", receipt.getId().toString(),
+                            "productId", promo.productId().toString(),
+                            "savingsPct", promo.savingsPct(),
+                            "paidPrice", promo.paidPrice(),
+                            "historicalMedian", promo.historicalMedian()
+                    )
+            ));
+        }
     }
 
     @Transactional

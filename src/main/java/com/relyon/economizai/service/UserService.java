@@ -114,6 +114,17 @@ public class UserService {
         return UserResponse.from(saved);
     }
 
+    @Transactional
+    public UserResponse updateHomeLocation(User user,
+                                           com.relyon.economizai.dto.request.UpdateHomeLocationRequest request) {
+        user.setHomeLatitude(request.latitude());
+        user.setHomeLongitude(request.longitude());
+        user.setHomeSetAt(LocalDateTime.now());
+        var saved = userRepository.save(user);
+        log.info("User {} home location set ({}, {})", saved.getEmail(), saved.getHomeLatitude(), saved.getHomeLongitude());
+        return UserResponse.from(saved);
+    }
+
     @Transactional(readOnly = true)
     public UserDataExportResponse exportData(User user) {
         var household = householdRepository.findById(user.getHousehold().getId())

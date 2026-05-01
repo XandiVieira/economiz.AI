@@ -38,6 +38,7 @@ class PriceIndexServiceTest {
 
     @Mock private PriceObservationRepository observationRepository;
     @Mock private PriceObservationAuditRepository auditRepository;
+    @Mock private com.relyon.economizai.service.geo.MarketLocationService marketLocationService;
 
     private CollaborativeProperties properties;
     private PriceIndexService service;
@@ -45,7 +46,7 @@ class PriceIndexServiceTest {
     @BeforeEach
     void setUp() {
         properties = new CollaborativeProperties();
-        service = new PriceIndexService(observationRepository, auditRepository, properties);
+        service = new PriceIndexService(observationRepository, auditRepository, properties, marketLocationService);
     }
 
     private Receipt buildConfirmedReceipt(boolean optIn, ReceiptItem... items) {
@@ -209,8 +210,9 @@ class PriceIndexServiceTest {
         when(observationRepository.findRecentByProduct(eq(productId), any())).thenReturn(observations);
         when(auditRepository.countDistinctHouseholdsForProductMarket(eq(productId), eq("AAAAAAAA000111"), any())).thenReturn(3L);
         when(auditRepository.countDistinctHouseholdsForProductMarket(eq(productId), eq("BBBBBBBB000111"), any())).thenReturn(1L);
+        when(marketLocationService.findByCnpjs(any())).thenReturn(java.util.Map.of());
 
-        var rows = service.bestMarkets(productId, 10);
+        var rows = service.bestMarkets(productId, 10, null, null, null);
 
         assertEquals(1, rows.size(), "k-anon must hide market B");
         assertEquals("AAAAAAAA000111", rows.get(0).cnpj());

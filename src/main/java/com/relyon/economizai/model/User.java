@@ -72,6 +72,21 @@ public class User extends BaseEntity implements UserDetails {
     @Column(name = "accepted_legal_at", nullable = false)
     private java.time.LocalDateTime acceptedLegalAt;
 
+    @Column(name = "home_latitude", precision = 10, scale = 7)
+    private java.math.BigDecimal homeLatitude;
+
+    @Column(name = "home_longitude", precision = 10, scale = 7)
+    private java.math.BigDecimal homeLongitude;
+
+    @Column(name = "home_set_at")
+    private java.time.LocalDateTime homeSetAt;
+
+    @Column(name = "push_device_token", length = 500)
+    private String pushDeviceToken;
+
+    @Column(name = "push_token_updated_at")
+    private java.time.LocalDateTime pushTokenUpdatedAt;
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));

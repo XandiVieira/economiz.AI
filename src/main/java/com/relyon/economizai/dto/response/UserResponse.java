@@ -4,6 +4,7 @@ import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.Role;
 import com.relyon.economizai.model.enums.SubscriptionTier;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -14,6 +15,8 @@ public record UserResponse(
         Role role,
         SubscriptionTier subscriptionTier,
         boolean contributionOptIn,
+        BigDecimal homeLatitude,
+        BigDecimal homeLongitude,
         LocalDateTime createdAt
 ) {
     public static UserResponse from(User user) {
@@ -24,6 +27,8 @@ public record UserResponse(
                 user.getRole(),
                 user.getSubscriptionTier(),
                 user.isContributionOptIn(),
+                user.getHomeLatitude(),
+                user.getHomeLongitude(),
                 user.getCreatedAt()
         );
     }

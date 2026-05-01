@@ -1,10 +1,12 @@
 package com.relyon.economizai.controller;
 
+import com.relyon.economizai.model.User;
 import com.relyon.economizai.service.priceindex.CommunityPromoService;
 import com.relyon.economizai.service.priceindex.PriceIndexService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -19,6 +21,11 @@ import java.util.UUID;
  * k-anonymity and minimum-sample thresholds (configured via
  * <code>economizai.collaborative.*</code>) — they return empty results
  * rather than partial / re-identifiable data when volume is insufficient.
+ *
+ * <p>Distance filtering: pass {@code radiusKm} to limit markets to within
+ * X km of the authenticated user's home location. Markets without a known
+ * geolocation are excluded when {@code radiusKm} is set; without it,
+ * {@code distanceKm} is just an extra field for the client.
  */
 @RestController
 @RequestMapping("/api/v1/price-index")
@@ -29,32 +36,27 @@ public class PriceIndexController {
     private final PriceIndexService priceIndexService;
     private final CommunityPromoService communityPromoService;
 
-    /**
-     * Reference price for one product at one market over the configured
-     * lookback window. Returns {@code hasData=false} when sparse.
-     */
     @GetMapping("/products/{productId}/markets/{marketCnpj}/reference")
     public ResponseEntity<PriceIndexService.ReferencePrice> reference(@PathVariable UUID productId,
                                                                      @PathVariable String marketCnpj) {
         return ResponseEntity.ok(priceIndexService.referencePrice(productId, marketCnpj));
     }
 
-    /**
-     * Cheapest markets for a given product, ranked by median price.
-     * Each market entry is independently k-anon checked.
-     */
     @GetMapping("/products/{productId}/best-markets")
-    public ResponseEntity<List<PriceIndexService.MarketPriceRow>> bestMarkets(@PathVariable UUID productId,
-                                                                              @RequestParam(defaultValue = "10") int limit) {
-        return ResponseEntity.ok(priceIndexService.bestMarkets(productId, limit));
+    public ResponseEntity<List<PriceIndexService.MarketPriceRow>> bestMarkets(
+            @AuthenticationPrincipal User user,
+            @PathVariable UUID productId,
+            @RequestParam(defaultValue = "10") int limit,
+            @RequestParam(required = false) Double radiusKm) {
+        return ResponseEntity.ok(priceIndexService.bestMarkets(productId, limit,
+                user.getHomeLatitude(), user.getHomeLongitude(), radiusKm));
     }
 
-    /**
-     * Currently-active community promos (recent median significantly below
-     * baseline), across all products + markets the system has visibility on.
-     */
     @GetMapping("/promos")
-    public ResponseEntity<List<CommunityPromoService.CommunityPromo>> currentPromos() {
-        return ResponseEntity.ok(communityPromoService.detectAll());
+    public ResponseEntity<List<CommunityPromoService.CommunityPromo>> currentPromos(
+            @AuthenticationPrincipal User user,
+            @RequestParam(required = false) Double radiusKm) {
+        return ResponseEntity.ok(communityPromoService.detectAll(
+                user.getHomeLatitude(), user.getHomeLongitude(), radiusKm));
     }
 }

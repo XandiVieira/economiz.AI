@@ -59,6 +59,9 @@ class UserControllerTest {
     @MockitoBean
     private LocalizedMessageService localizedMessageService;
 
+    @MockitoBean
+    private com.relyon.economizai.service.notifications.NotificationPreferenceService notificationPreferenceService;
+
     private User buildUser() {
         var user = User.builder()
                 .id(UUID.randomUUID())
@@ -83,6 +86,8 @@ class UserControllerTest {
                 user.getRole(),
                 user.getSubscriptionTier(),
                 user.isContributionOptIn(),
+                user.getHomeLatitude(),
+                user.getHomeLongitude(),
                 user.getCreatedAt()
         );
     }
@@ -166,7 +171,7 @@ class UserControllerTest {
         var user = buildUser();
         var request = new com.relyon.economizai.dto.request.UpdateContributionRequest(false);
         var response = new UserResponse(user.getId(), user.getName(), user.getEmail(),
-                user.getRole(), user.getSubscriptionTier(), false, user.getCreatedAt());
+                user.getRole(), user.getSubscriptionTier(), false, null, null, user.getCreatedAt());
         org.mockito.Mockito.when(userService.updateContribution(any(User.class),
                 any(com.relyon.economizai.dto.request.UpdateContributionRequest.class)))
                 .thenReturn(response);
@@ -183,7 +188,7 @@ class UserControllerTest {
     void exportData_returns200WithJson() throws Exception {
         var user = buildUser();
         var ur = new UserResponse(user.getId(), user.getName(), user.getEmail(),
-                user.getRole(), user.getSubscriptionTier(), true, user.getCreatedAt());
+                user.getRole(), user.getSubscriptionTier(), true, null, null, user.getCreatedAt());
         var hr = new com.relyon.economizai.dto.response.HouseholdResponse(
                 java.util.UUID.randomUUID(), "ABC123",
                 java.util.List.of(new com.relyon.economizai.dto.response.HouseholdResponse.HouseholdMember(

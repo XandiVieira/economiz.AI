@@ -139,6 +139,54 @@
           "response": []
         },
         {
+          "name": "Set home location (lat/lng)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Accept-Language", "value": "pt"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/v1/users/me/location", "host": ["{{baseUrl}}"], "path": ["api","v1","users","me","location"]},
+            "body": {"mode": "raw", "raw": "{\n  \"latitude\": -30.0277,\n  \"longitude\": -51.2287\n}"}
+          },
+          "response": []
+        },
+        {
+          "name": "Set push device token (FCM)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Accept-Language", "value": "pt"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/v1/users/me/push-token", "host": ["{{baseUrl}}"], "path": ["api","v1","users","me","push-token"]},
+            "body": {"mode": "raw", "raw": "{\n  \"pushDeviceToken\": \"fcm-fake-token-from-mobile-app\"\n}"}
+          },
+          "response": []
+        },
+        {
+          "name": "Get notification preferences",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/users/me/notification-preferences", "host": ["{{baseUrl}}"], "path": ["api","v1","users","me","notification-preferences"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Update notification preferences",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Accept-Language", "value": "pt"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/v1/users/me/notification-preferences", "host": ["{{baseUrl}}"], "path": ["api","v1","users","me","notification-preferences"]},
+            "body": {"mode": "raw", "raw": "{\n  \"preferences\": [\n    {\"type\": \"PROMO_PERSONAL\", \"channel\": \"PUSH\"},\n    {\"type\": \"PROMO_COMMUNITY\", \"channel\": \"EMAIL\"},\n    {\"type\": \"STOCKOUT\", \"channel\": \"NONE\"}\n  ]\n}"}
+          },
+          "response": []
+        },
+        {
           "name": "Update collaborative contribution (LGPD opt-in/out)",
           "request": {
             "method": "PATCH",

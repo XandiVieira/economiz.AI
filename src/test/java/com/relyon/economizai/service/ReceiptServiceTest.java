@@ -49,6 +49,7 @@ class ReceiptServiceTest {
     @Mock private CanonicalizationService canonicalizationService;
     @Mock private com.relyon.economizai.service.priceindex.PriceIndexService priceIndexService;
     @Mock private com.relyon.economizai.service.priceindex.PromoDetector promoDetector;
+    @Mock private com.relyon.economizai.service.geo.MarketLocationService marketLocationService;
 
     @InjectMocks private ReceiptService receiptService;
 

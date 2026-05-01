@@ -34,10 +34,12 @@ class CommunityPromoServiceTest {
     private final UUID productId = UUID.randomUUID();
     private final String marketCnpj = "93015006005182";
 
+    @org.mockito.Mock private com.relyon.economizai.service.geo.MarketLocationService marketLocationService;
+
     @BeforeEach
     void setUp() {
         properties = new CollaborativeProperties();
-        service = new CommunityPromoService(observationRepository, auditRepository, properties);
+        service = new CommunityPromoService(observationRepository, auditRepository, properties, marketLocationService);
     }
 
     private PriceObservation obs(BigDecimal price, LocalDateTime observedAt) {

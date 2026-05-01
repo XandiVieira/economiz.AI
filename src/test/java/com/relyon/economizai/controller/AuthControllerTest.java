@@ -60,6 +60,8 @@ class AuthControllerTest {
                 Role.USER,
                 SubscriptionTier.FREE,
                 true,
+                null,
+                null,
                 LocalDateTime.now()
         );
     }

@@ -45,14 +45,27 @@ public class CommunityPromoService {
     private final PriceObservationRepository observationRepository;
     private final PriceObservationAuditRepository auditRepository;
     private final CollaborativeProperties properties;
+    private final com.relyon.economizai.service.geo.MarketLocationService marketLocationService;
+
+    /** Backwards-compat overload used by tests + scheduled jobs (no distance filter). */
+    public List<CommunityPromo> detectAll() {
+        return detectAll(null, null, null);
+    }
 
     @Transactional(readOnly = true)
-    public List<CommunityPromo> detectAll() {
+    public List<CommunityPromo> detectAll(java.math.BigDecimal userLatitude,
+                                          java.math.BigDecimal userLongitude,
+                                          Double radiusKm) {
         if (!properties.getCollaborative().isEnabled()) return List.of();
 
         var since = LocalDateTime.now().minusDays(properties.getCollaborative().getLookbackDays());
         var observations = observationRepository.findRecent(since);
         if (observations.isEmpty()) return List.of();
+
+        var locations = (userLatitude != null && userLongitude != null)
+                ? marketLocationService.findByCnpjs(observations.stream()
+                        .map(PriceObservation::getMarketCnpj).distinct().toList())
+                : java.util.Map.<String, com.relyon.economizai.model.MarketLocation>of();
 
         // Group by (productId, marketCnpj)
         Map<UUID, Map<String, List<PriceObservation>>> byProductMarket = observations.stream()
@@ -72,6 +85,18 @@ public class CommunityPromoService {
 
                 var distinctHouseholds = auditRepository.countDistinctHouseholdsForProductMarket(productId, marketCnpj, since);
                 if (distinctHouseholds < properties.getCollaborative().getMinHouseholdsForPublic()) continue;
+
+                Double distanceKm = null;
+                if (userLatitude != null && userLongitude != null) {
+                    var location = locations.get(marketCnpj);
+                    if (location == null || !location.hasCoordinates()) {
+                        if (radiusKm != null) continue; // user wants radius filter but no coords
+                    } else {
+                        distanceKm = com.relyon.economizai.service.geo.DistanceCalculator.kmBetween(
+                                userLatitude, userLongitude, location.getLatitude(), location.getLongitude());
+                        if (radiusKm != null && distanceKm > radiusKm) continue;
+                    }
+                }
 
                 var recentPrices = rows.stream()
                         .filter(po -> po.getObservedAt().isAfter(recentCutoff))
@@ -104,7 +129,8 @@ public class CommunityPromoService {
                             baselineMedian,
                             dropPct,
                             recentPrices.size(),
-                            distinctHouseholds
+                            distinctHouseholds,
+                            distanceKm
                     );
                     promos.add(promo);
                     log.info("community_promo.detected product={} market={} recent={} baseline={} dropPct={} samples={} households={}",
@@ -126,6 +152,7 @@ public class CommunityPromoService {
             BigDecimal baselineMedianPrice,
             BigDecimal dropPct,
             int recentSampleCount,
-            long distinctHouseholds
+            long distinctHouseholds,
+            Double distanceKm
     ) {}
 }

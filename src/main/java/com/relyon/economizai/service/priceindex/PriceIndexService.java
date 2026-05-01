@@ -47,6 +47,7 @@ public class PriceIndexService {
     private final PriceObservationRepository observationRepository;
     private final PriceObservationAuditRepository auditRepository;
     private final CollaborativeProperties properties;
+    private final com.relyon.economizai.service.geo.MarketLocationService marketLocationService;
 
     @Transactional
     public int recordContributions(Receipt receipt) {
@@ -116,24 +117,37 @@ public class PriceIndexService {
     }
 
     @Transactional(readOnly = true)
-    public List<MarketPriceRow> bestMarkets(UUID productId, int limit) {
+    public List<MarketPriceRow> bestMarkets(UUID productId, int limit,
+                                            BigDecimal userLatitude, BigDecimal userLongitude, Double radiusKm) {
         if (!properties.getCollaborative().isEnabled()) return List.of();
         var since = LocalDateTime.now().minusDays(properties.getCollaborative().getLookbackDays());
         var observations = observationRepository.findRecentByProduct(productId, since);
         if (observations.isEmpty()) return List.of();
 
-        return observations.stream()
-                .collect(java.util.stream.Collectors.groupingBy(PriceObservation::getMarketCnpj))
-                .entrySet().stream()
+        var byMarket = observations.stream()
+                .collect(java.util.stream.Collectors.groupingBy(PriceObservation::getMarketCnpj));
+        var locations = marketLocationService.findByCnpjs(new java.util.ArrayList<>(byMarket.keySet()));
+
+        return byMarket.entrySet().stream()
                 .map(entry -> {
                     var cnpj = entry.getKey();
                     var rows = entry.getValue();
                     if (rows.size() < properties.getCollaborative().getMinObservationsPerProductMarket()) return null;
                     var distinct = auditRepository.countDistinctHouseholdsForProductMarket(productId, cnpj, since);
                     if (distinct < properties.getCollaborative().getMinHouseholdsForPublic()) return null;
+                    var location = locations.get(cnpj);
+                    Double distanceKm = null;
+                    if (userLatitude != null && userLongitude != null && location != null && location.hasCoordinates()) {
+                        distanceKm = com.relyon.economizai.service.geo.DistanceCalculator.kmBetween(
+                                userLatitude, userLongitude, location.getLatitude(), location.getLongitude());
+                        if (radiusKm != null && distanceKm > radiusKm) return null;
+                    } else if (radiusKm != null && userLatitude != null) {
+                        // user wanted a radius filter but we don't have this market's coords yet → exclude
+                        return null;
+                    }
                     var prices = rows.stream().map(PriceObservation::getUnitPrice).toList();
                     return new MarketPriceRow(cnpj, cnpjRoot(cnpj), rows.get(0).getMarketName(),
-                            median(prices), min(prices), rows.size(), distinct);
+                            median(prices), min(prices), rows.size(), distinct, distanceKm);
                 })
                 .filter(java.util.Objects::nonNull)
                 .sorted(Comparator.comparing(MarketPriceRow::medianPrice))
@@ -159,7 +173,7 @@ public class PriceIndexService {
         return values.stream().max(BigDecimal::compareTo).orElse(null);
     }
 
-    static String cnpjRoot(String cnpj) {
+    public static String cnpjRoot(String cnpj) {
         if (cnpj == null || cnpj.length() < 8) return cnpj;
         return cnpj.substring(0, 8);
     }
@@ -174,5 +188,6 @@ public class PriceIndexService {
 
     public record MarketPriceRow(String cnpj, String cnpjRoot, String marketName,
                                  BigDecimal medianPrice, BigDecimal minPrice,
-                                 int sampleCount, long distinctHouseholds) {}
+                                 int sampleCount, long distinctHouseholds,
+                                 Double distanceKm) {}
 }

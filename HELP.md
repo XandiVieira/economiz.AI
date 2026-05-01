@@ -280,8 +280,23 @@ placeholder):
   (Zaffari Hipica vs Zaffari Centro vs all Zaffari).
 - 🟡 Outlier filter — column exists (`is_outlier`); flagging logic
   deferred until we have enough volume to validate the math.
-- ❌ Geolocation / distance-based filtering — next session.
-- ❌ Notifications when a promo matches user history — next session.
+- ✅ Geolocation / distance-based filtering — Phase 5a (V11 migration).
+  User has `homeLatitude/Longitude` set via `PATCH /users/me/location`.
+  Markets registered in `market_locations` table on receipt confirm,
+  geocoded asynchronously by `MarketLocationService` via Nominatim
+  (1 req/sec rate-limited, 3 retries max). `bestMarkets` and `promos`
+  accept `radiusKm` query param to filter to within X km of user's home.
+- ✅ Notifications + per-user channel preferences — Phase 5b
+  (V12 migration). EmailDispatcher (SMTP via Spring Boot Mail, gated by
+  `economizai.notifications.email.enabled`) + PushDispatcher (V1 stub
+  that logs FCM payload — wire `firebase-admin` SDK to ship real push).
+  `NotificationPreference` per (user, type) chooses channel; default is
+  PUSH if user has registered a `pushDeviceToken`, else EMAIL.
+  Personal promos detected on receipt confirm dispatch immediately via
+  `NotificationService` and the result is logged to the `notifications`
+  table (delivered/failed + reason).
+  Endpoints: `PATCH /users/me/push-token`,
+  `GET/PUT /users/me/notification-preferences`.
 
 **Volume-gate env vars** (so features stay quiet until data is real):
 
