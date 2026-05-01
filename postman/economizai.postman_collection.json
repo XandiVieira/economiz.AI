@@ -568,6 +568,30 @@
       ]
     },
     {
+      "name": "Consumption (Phase 3)",
+      "description": "Predictive purchase intelligence per household — when products will run out, suggested shopping list. Volume-gated: products with fewer than 3 prior purchases are silently skipped.",
+      "item": [
+        {
+          "name": "Predictions per product",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/consumption/predictions", "host": ["{{baseUrl}}"], "path": ["api","v1","consumption","predictions"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Suggested shopping list",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/consumption/suggested-list", "host": ["{{baseUrl}}"], "path": ["api","v1","consumption","suggested-list"]}
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "E2E Flow",
       "description": "Sequential test suite — run top to bottom. Each step seeds variables for the next. Steps 9+ require a real NFC-e QR payload in the {{qrPayload}} collection variable; otherwise they will report parsing/fetch errors but won't break the auth/household flow.",
       "item": [
@@ -1221,7 +1245,41 @@
           ]
         },
         {
-          "name": "34. LGPD: delete my account (idempotent terminator)",
+          "name": "34. Consumption predictions",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/consumption/predictions", "host": ["{{baseUrl}}"], "path": ["api","v1","consumption","predictions"]}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Returns an array (often empty until 3+ purchases per product)', function () { pm.expect(pm.response.json()).to.be.an('array'); });"
+            ]}}
+          ]
+        },
+        {
+          "name": "35. Suggested shopping list",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/consumption/suggested-list", "host": ["{{baseUrl}}"], "path": ["api","v1","consumption","suggested-list"]}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+              "var d = pm.response.json();",
+              "pm.test('Has items array + generatedAt', function () {",
+              "    pm.expect(d.items).to.be.an('array');",
+              "    pm.expect(d.generatedAt).to.be.a('string');",
+              "});"
+            ]}}
+          ]
+        },
+        {
+          "name": "36. LGPD: delete my account (idempotent terminator)",
           "request": {
             "method": "DELETE",
             "header": [{"key": "Accept-Language", "value": "pt"}],

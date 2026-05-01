@@ -236,17 +236,40 @@ placeholder):
 - Consumption rate model per person (4-person family eats 3.5x what a
   couple eats — not exactly 2x).
 
-### Phase 3 — Consumption Intelligence (E4)
+### Phase 3 — Consumption Intelligence (E4) — shipped
 
 **Goal:** App tells the user what to buy next, where, and when.
 
-- Purchase-cadence model per (user, product) — simple linear estimate from last N purchases
-- Stock-out predictions endpoint
-- Suggested shopping list generation
-- "Best market for this item near me" — requires market geocoding + the price index
-- Basket optimization: given a shopping list, suggest split across nearby markets
-- **Recommendations are filtered through the Phase 2.6 preference model**
-  (right-sized pack, preferred brand) when available.
+- ✅ Purchase-cadence model per (household, product). Simple mean of
+  intervals between unique purchase dates over the last
+  `economizai.consumption.history-lookback-days` (default 365).
+- ✅ Stock-out / running-low classification with three states
+  (`RAN_OUT`, `RUNNING_LOW`, `OK`). Threshold configurable via
+  `economizai.consumption.running-low-threshold-days` (default 7).
+- ✅ Confidence label (`LOW` / `MEDIUM` / `HIGH`) so the FE can
+  down-weight noisy estimates.
+- ✅ Endpoints under `/api/v1/consumption`:
+  - `GET /predictions` — per-product prediction list, soonest first.
+  - `GET /suggested-list` — union of `RAN_OUT` + `RUNNING_LOW`.
+- ✅ Volume-gated: products with fewer than
+  `economizai.consumption.min-purchases-for-prediction` purchases
+  (default 3) are silently skipped — we don't surface low-confidence
+  noise.
+- 🟡 Basket optimization (split a list across nearby markets) — deferred
+  until we have enough cross-market price coverage to make it
+  meaningful.
+- 🟡 Phase 2.6 preference filter (right-sized pack, preferred brand)
+  — deferred until pack-preference data exists per household.
+
+**Volume-gate env vars:**
+
+| Var | Default | What it gates |
+|---|---|---|
+| `economizai.consumption.enabled` | `true` | Master switch |
+| `economizai.consumption.min-purchases-for-prediction` | `3` | Need this many prior purchases of a product before predicting |
+| `economizai.consumption.history-lookback-days` | `365` | Window for interval calculation |
+| `economizai.consumption.running-low-threshold-days` | `7` | Days-until-runout that triggers `RUNNING_LOW` |
+| `economizai.consumption.ran-out-grace-days` | `0` | Tolerance before flipping to `RAN_OUT` |
 
 ### Phase 5c — Watched Markets (shipped)
 

@@ -30,4 +30,17 @@ public interface ReceiptItemRepository extends JpaRepository<ReceiptItem, UUID> 
     int linkByEan(@Param("product") Product product, @Param("ean") String ean);
 
     List<ReceiptItem> findAllByProductIdOrderByReceiptIssuedAtAsc(UUID productId);
+
+    /** All confirmed purchases of any product by this household, oldest first.
+     *  Joins receipt + product so callers can build per-product histories without N+1. */
+    @Query("""
+        SELECT ri FROM ReceiptItem ri
+        JOIN FETCH ri.receipt r
+        JOIN FETCH ri.product p
+        WHERE r.household.id = :householdId
+          AND r.status = 'CONFIRMED'
+          AND ri.product IS NOT NULL
+        ORDER BY r.issuedAt ASC, ri.lineNumber ASC
+    """)
+    List<ReceiptItem> findConfirmedHistoryForHousehold(@Param("householdId") UUID householdId);
 }
