@@ -3,13 +3,21 @@ package com.relyon.economizai.service;
 import com.relyon.economizai.dto.request.ChangePasswordRequest;
 import com.relyon.economizai.dto.request.LoginRequest;
 import com.relyon.economizai.dto.request.RegisterRequest;
+import com.relyon.economizai.dto.request.UpdateContributionRequest;
 import com.relyon.economizai.dto.request.UpdateUserRequest;
 import com.relyon.economizai.dto.response.AuthResponse;
+import com.relyon.economizai.dto.response.HouseholdResponse;
+import com.relyon.economizai.dto.response.ReceiptResponse;
+import com.relyon.economizai.dto.response.UserDataExportResponse;
 import com.relyon.economizai.dto.response.UserResponse;
 import com.relyon.economizai.exception.EmailAlreadyExistsException;
 import com.relyon.economizai.exception.InvalidCredentialsException;
 import com.relyon.economizai.exception.InvalidCurrentPasswordException;
+import com.relyon.economizai.exception.InvalidLegalVersionException;
+import com.relyon.economizai.legal.LegalDocuments;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.repository.HouseholdRepository;
+import com.relyon.economizai.repository.ReceiptRepository;
 import com.relyon.economizai.repository.UserRepository;
 import com.relyon.economizai.security.JwtService;
 import lombok.RequiredArgsConstructor;
@@ -18,12 +26,16 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserService {
 
     private final UserRepository userRepository;
+    private final HouseholdRepository householdRepository;
+    private final ReceiptRepository receiptRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final HouseholdService householdService;
@@ -33,6 +45,14 @@ public class UserService {
         if (userRepository.existsByEmail(request.email())) {
             throw new EmailAlreadyExistsException(request.email());
         }
+        if (!LegalDocuments.CURRENT_TERMS_VERSION.equals(request.acceptedTermsVersion())) {
+            throw new InvalidLegalVersionException("terms",
+                    request.acceptedTermsVersion(), LegalDocuments.CURRENT_TERMS_VERSION);
+        }
+        if (!LegalDocuments.CURRENT_PRIVACY_VERSION.equals(request.acceptedPrivacyVersion())) {
+            throw new InvalidLegalVersionException("privacy-policy",
+                    request.acceptedPrivacyVersion(), LegalDocuments.CURRENT_PRIVACY_VERSION);
+        }
 
         var household = householdService.createSoloHousehold();
         var user = User.builder()
@@ -40,11 +60,16 @@ public class UserService {
                 .email(request.email())
                 .password(passwordEncoder.encode(request.password()))
                 .household(household)
+                .acceptedTermsVersion(request.acceptedTermsVersion())
+                .acceptedPrivacyVersion(request.acceptedPrivacyVersion())
+                .acceptedLegalAt(LocalDateTime.now())
                 .build();
 
         var savedUser = userRepository.save(user);
         var token = jwtService.generateToken(savedUser);
-        log.info("New user registered: {} (household {})", savedUser.getEmail(), household.getId());
+        log.info("New user registered: {} (household {}, terms v{}, privacy v{})",
+                savedUser.getEmail(), household.getId(),
+                savedUser.getAcceptedTermsVersion(), savedUser.getAcceptedPrivacyVersion());
         return new AuthResponse(token, UserResponse.from(savedUser));
     }
 
@@ -79,5 +104,42 @@ public class UserService {
         user.setPassword(passwordEncoder.encode(request.newPassword()));
         userRepository.save(user);
         log.info("User {} changed password", user.getEmail());
+    }
+
+    @Transactional
+    public UserResponse updateContribution(User user, UpdateContributionRequest request) {
+        user.setContributionOptIn(request.contributionOptIn());
+        var saved = userRepository.save(user);
+        log.info("User {} contributionOptIn={}", saved.getEmail(), saved.isContributionOptIn());
+        return UserResponse.from(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public UserDataExportResponse exportData(User user) {
+        var household = householdRepository.findById(user.getHousehold().getId())
+                .orElseThrow(() -> new IllegalStateException("Household missing for user " + user.getEmail()));
+        var members = userRepository.findAllByHouseholdId(household.getId());
+        var receipts = receiptRepository
+                .findAll((root, query, cb) -> cb.equal(root.get("user").get("id"), user.getId())).stream()
+                .map(ReceiptResponse::from)
+                .toList();
+        log.info("Data export for user {}: {} receipts", user.getEmail(), receipts.size());
+        return new UserDataExportResponse(
+                UserResponse.from(user),
+                HouseholdResponse.from(household, members),
+                receipts,
+                LocalDateTime.now()
+        );
+    }
+
+    @Transactional
+    public void deleteAccount(User user) {
+        var householdId = user.getHousehold().getId();
+        userRepository.delete(user);
+        log.info("User account deleted: {}", user.getEmail());
+        if (userRepository.countByHouseholdId(householdId) == 0) {
+            householdRepository.deleteById(householdId);
+            log.info("Household {} deleted (no members left after user deletion)", householdId);
+        }
     }
 }

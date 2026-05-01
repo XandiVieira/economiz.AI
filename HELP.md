@@ -259,6 +259,29 @@ placeholder):
 - Public reference-price endpoint per product
 - "Promo detector": flag prices significantly below the rolling median for that market
 
+### Phase 4.5 — LGPD compliance baseline (shipped)
+
+**Goal:** minimum infrastructure for the app to legally collect personal data
+from real Brazilian users.
+
+- `User.acceptedTermsVersion` + `acceptedPrivacyVersion` + `acceptedLegalAt`
+  required at registration. New `RegisterRequest` rejects unknown versions.
+- `GET /api/v1/legal/terms` and `GET /api/v1/legal/privacy-policy` (public)
+  serve the current markdown versions of both documents.
+- LGPD rights endpoints on `/api/v1/users/me`:
+  - `PATCH /me/contribution` — opt in/out of the collaborative price index
+  - `GET /me/export` — full data export (user + household + receipts as JSON)
+  - `DELETE /me` — hard delete of the user; receipts cascade-deleted via
+    V6 migration; household removed if no members remain
+- pt + en i18n for the new error/success messages.
+- Stub markdown documents under `src/main/resources/legal/` marked as
+  v1.0 — must be reviewed by a Brazilian privacy lawyer before any
+  public launch.
+
+The collaborative price index itself (Phase 4) hasn't shipped yet — when it
+does, it must respect `User.contributionOptIn` and never write rows that
+include a user identifier in the public table.
+
 ### Phase 5 — Monetization (parallel from Phase 2 onward)
 
 See `MONETIZATION.md` for the full strategy. High-level:

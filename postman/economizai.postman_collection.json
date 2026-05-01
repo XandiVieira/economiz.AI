@@ -28,6 +28,32 @@
   ],
   "item": [
     {
+      "name": "Legal",
+      "description": "Public endpoints — no auth needed.",
+      "item": [
+        {
+          "name": "Get current Terms of Use",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/legal/terms", "host": ["{{baseUrl}}"], "path": ["api","v1","legal","terms"]},
+            "auth": {"type": "noauth"}
+          },
+          "response": []
+        },
+        {
+          "name": "Get current Privacy Policy",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/legal/privacy-policy", "host": ["{{baseUrl}}"], "path": ["api","v1","legal","privacy-policy"]},
+            "auth": {"type": "noauth"}
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Auth",
       "item": [
         {
@@ -40,7 +66,7 @@
             ],
             "url": {"raw": "{{baseUrl}}/api/v1/auth/register", "host": ["{{baseUrl}}"], "path": ["api","v1","auth","register"]},
             "auth": {"type": "noauth"},
-            "body": {"mode": "raw", "raw": "{\n  \"name\": \"Demo User\",\n  \"email\": \"demo@example.com\",\n  \"password\": \"password123\"\n}"}
+            "body": {"mode": "raw", "raw": "{\n  \"name\": \"Demo User\",\n  \"email\": \"demo@example.com\",\n  \"password\": \"password123\",\n  \"acceptedTermsVersion\": \"1.0\",\n  \"acceptedPrivacyVersion\": \"1.0\"\n}"}
           },
           "response": [],
           "event": [
@@ -109,6 +135,37 @@
             ],
             "url": {"raw": "{{baseUrl}}/api/v1/users/me/password", "host": ["{{baseUrl}}"], "path": ["api","v1","users","me","password"]},
             "body": {"mode": "raw", "raw": "{\n  \"currentPassword\": \"password123\",\n  \"newPassword\": \"newPassword123\"\n}"}
+          },
+          "response": []
+        },
+        {
+          "name": "Update collaborative contribution (LGPD opt-in/out)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Accept-Language", "value": "pt"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/v1/users/me/contribution", "host": ["{{baseUrl}}"], "path": ["api","v1","users","me","contribution"]},
+            "body": {"mode": "raw", "raw": "{\n  \"contributionOptIn\": false\n}"}
+          },
+          "response": []
+        },
+        {
+          "name": "Export my data (LGPD Art. 18 V)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/users/me/export", "host": ["{{baseUrl}}"], "path": ["api","v1","users","me","export"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Delete my account (LGPD Art. 18 VI)",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/users/me", "host": ["{{baseUrl}}"], "path": ["api","v1","users","me"]}
           },
           "response": []
         }
@@ -357,14 +414,14 @@
             ],
             "url": {"raw": "{{baseUrl}}/api/v1/auth/register", "host": ["{{baseUrl}}"], "path": ["api","v1","auth","register"]},
             "auth": {"type": "noauth"},
-            "body": {"mode": "raw", "raw": "{\n  \"name\": \"E2E Test User\",\n  \"email\": \"e2e@test.com\",\n  \"password\": \"password123\"\n}"}
+            "body": {"mode": "raw", "raw": "{\n  \"name\": \"E2E Test User\",\n  \"email\": \"e2e@test.com\",\n  \"password\": \"password123\",\n  \"acceptedTermsVersion\": \"1.0\",\n  \"acceptedPrivacyVersion\": \"1.0\"\n}"}
           },
           "response": [],
           "event": [
             {"listen": "prerequest", "script": {"type": "text/javascript", "exec": [
               "var email = 'e2e-' + Date.now() + '@test.com';",
               "pm.collectionVariables.set('e2eEmail', email);",
-              "pm.request.body.raw = JSON.stringify({ name: 'E2E Test User', email: email, password: 'password123' });"
+              "pm.request.body.raw = JSON.stringify({ name: 'E2E Test User', email: email, password: 'password123', acceptedTermsVersion: '1.0', acceptedPrivacyVersion: '1.0' });"
             ]}},
             {"listen": "test", "script": {"type": "text/javascript", "exec": [
               "pm.test('Register returns 201', function () { pm.response.to.have.status(201); });",

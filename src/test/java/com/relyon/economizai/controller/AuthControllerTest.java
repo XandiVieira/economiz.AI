@@ -66,7 +66,7 @@ class AuthControllerTest {
 
     @Test
     void register_shouldReturn201WithToken() throws Exception {
-        var request = new RegisterRequest("John", "john@test.com", "password123");
+        var request = new RegisterRequest("John", "john@test.com", "password123", "1.0", "1.0");
         var response = new AuthResponse("jwt-token", sampleUserResponse());
         when(userService.register(any(RegisterRequest.class))).thenReturn(response);
 
@@ -81,7 +81,7 @@ class AuthControllerTest {
 
     @Test
     void register_shouldReturn409WhenEmailExists() throws Exception {
-        var request = new RegisterRequest("John", "john@test.com", "password123");
+        var request = new RegisterRequest("John", "john@test.com", "password123", "1.0", "1.0");
         when(userService.register(any(RegisterRequest.class)))
                 .thenThrow(new EmailAlreadyExistsException("john@test.com"));
 
@@ -93,7 +93,7 @@ class AuthControllerTest {
 
     @Test
     void register_shouldReturn400ForInvalidInput() throws Exception {
-        var request = new RegisterRequest("", "not-an-email", "short");
+        var request = new RegisterRequest("", "not-an-email", "short", "", "");
 
         mockMvc.perform(post("/api/v1/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)

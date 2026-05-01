@@ -38,7 +38,10 @@ class InsightsRepositoryTest {
         household = householdRepository.save(Household.builder().inviteCode("TEST01").build());
         var user = userRepository.save(User.builder()
                 .name("Tester").email("test@test.com").password("x")
-                .household(household).build());
+                .household(household)
+                .acceptedTermsVersion("1.0").acceptedPrivacyVersion("1.0")
+                .acceptedLegalAt(LocalDateTime.of(2026, 1, 1, 0, 0))
+                .build());
 
         var groceries = productRepository.save(Product.builder()
                 .ean("789").normalizedName("Arroz").category(ProductCategory.GROCERIES).build());

@@ -63,6 +63,15 @@ public class User extends BaseEntity implements UserDetails {
     @JoinColumn(name = "household_id", nullable = false)
     private Household household;
 
+    @Column(name = "accepted_terms_version", nullable = false, length = 20)
+    private String acceptedTermsVersion;
+
+    @Column(name = "accepted_privacy_version", nullable = false, length = 20)
+    private String acceptedPrivacyVersion;
+
+    @Column(name = "accepted_legal_at", nullable = false)
+    private java.time.LocalDateTime acceptedLegalAt;
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));

@@ -39,6 +39,12 @@ class UserServiceTest {
     private UserRepository userRepository;
 
     @Mock
+    private com.relyon.economizai.repository.HouseholdRepository householdRepository;
+
+    @Mock
+    private com.relyon.economizai.repository.ReceiptRepository receiptRepository;
+
+    @Mock
     private PasswordEncoder passwordEncoder;
 
     @Mock
@@ -62,6 +68,9 @@ class UserServiceTest {
                 .contributionOptIn(true)
                 .active(true)
                 .household(household)
+                .acceptedTermsVersion("1.0")
+                .acceptedPrivacyVersion("1.0")
+                .acceptedLegalAt(LocalDateTime.now())
                 .build();
         user.setCreatedAt(LocalDateTime.now());
         user.setUpdatedAt(LocalDateTime.now());
@@ -70,7 +79,7 @@ class UserServiceTest {
 
     @Test
     void register_shouldCreateUserAndReturnToken() {
-        var request = new RegisterRequest("John", "john@test.com", "password123");
+        var request = new RegisterRequest("John", "john@test.com", "password123", "1.0", "1.0");
         var household = Household.builder().id(UUID.randomUUID()).inviteCode("ABC123").build();
         when(userRepository.existsByEmail("john@test.com")).thenReturn(false);
         when(householdService.createSoloHousehold()).thenReturn(household);
@@ -96,7 +105,7 @@ class UserServiceTest {
 
     @Test
     void register_shouldThrowWhenEmailExists() {
-        var request = new RegisterRequest("John", "john@test.com", "password123");
+        var request = new RegisterRequest("John", "john@test.com", "password123", "1.0", "1.0");
         when(userRepository.existsByEmail("john@test.com")).thenReturn(true);
 
         assertThrows(EmailAlreadyExistsException.class, () -> userService.register(request));
@@ -181,5 +190,75 @@ class UserServiceTest {
 
         assertThrows(InvalidCurrentPasswordException.class, () -> userService.changePassword(user, request));
         verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void register_shouldRejectStaleTermsVersion() {
+        var request = new RegisterRequest("John", "john@test.com", "password123", "0.9", "1.0");
+        when(userRepository.existsByEmail("john@test.com")).thenReturn(false);
+
+        assertThrows(com.relyon.economizai.exception.InvalidLegalVersionException.class,
+                () -> userService.register(request));
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void register_shouldRejectStalePrivacyVersion() {
+        var request = new RegisterRequest("John", "john@test.com", "password123", "1.0", "0.9");
+        when(userRepository.existsByEmail("john@test.com")).thenReturn(false);
+
+        assertThrows(com.relyon.economizai.exception.InvalidLegalVersionException.class,
+                () -> userService.register(request));
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void updateContribution_togglesOptInFlag() {
+        var user = buildUser();
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var response = userService.updateContribution(user,
+                new com.relyon.economizai.dto.request.UpdateContributionRequest(false));
+
+        assertEquals(false, response.contributionOptIn());
+        assertEquals(false, user.isContributionOptIn());
+    }
+
+    @Test
+    void deleteAccount_removesUserAndEmptyHousehold() {
+        var user = buildUser();
+        when(userRepository.countByHouseholdId(user.getHousehold().getId())).thenReturn(0L);
+
+        userService.deleteAccount(user);
+
+        verify(userRepository).delete(user);
+        verify(householdRepository).deleteById(user.getHousehold().getId());
+    }
+
+    @Test
+    void deleteAccount_keepsHouseholdWithRemainingMembers() {
+        var user = buildUser();
+        when(userRepository.countByHouseholdId(user.getHousehold().getId())).thenReturn(2L);
+
+        userService.deleteAccount(user);
+
+        verify(userRepository).delete(user);
+        verify(householdRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void exportData_returnsUserHouseholdAndReceipts() {
+        var user = buildUser();
+        when(householdRepository.findById(user.getHousehold().getId())).thenReturn(java.util.Optional.of(user.getHousehold()));
+        when(userRepository.findAllByHouseholdId(user.getHousehold().getId())).thenReturn(java.util.List.of(user));
+        when(receiptRepository.findAll(org.mockito.ArgumentMatchers.<org.springframework.data.jpa.domain.Specification<com.relyon.economizai.model.Receipt>>any()))
+                .thenReturn(java.util.List.of());
+
+        var response = userService.exportData(user);
+
+        assertNotNull(response.user());
+        assertNotNull(response.household());
+        assertEquals(0, response.receipts().size());
+        assertNotNull(response.exportedAt());
     }
 }

@@ -30,7 +30,9 @@ import java.util.UUID;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -157,5 +159,57 @@ class UserControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void updateContribution_returns200() throws Exception {
+        var user = buildUser();
+        var request = new com.relyon.economizai.dto.request.UpdateContributionRequest(false);
+        var response = new UserResponse(user.getId(), user.getName(), user.getEmail(),
+                user.getRole(), user.getSubscriptionTier(), false, user.getCreatedAt());
+        org.mockito.Mockito.when(userService.updateContribution(any(User.class),
+                any(com.relyon.economizai.dto.request.UpdateContributionRequest.class)))
+                .thenReturn(response);
+
+        mockMvc.perform(patch("/api/v1/users/me/contribution")
+                        .with(SecurityMockMvcRequestPostProcessors.user(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.contributionOptIn").value(false));
+    }
+
+    @Test
+    void exportData_returns200WithJson() throws Exception {
+        var user = buildUser();
+        var ur = new UserResponse(user.getId(), user.getName(), user.getEmail(),
+                user.getRole(), user.getSubscriptionTier(), true, user.getCreatedAt());
+        var hr = new com.relyon.economizai.dto.response.HouseholdResponse(
+                java.util.UUID.randomUUID(), "ABC123",
+                java.util.List.of(new com.relyon.economizai.dto.response.HouseholdResponse.HouseholdMember(
+                        user.getId(), user.getName(), user.getEmail())),
+                LocalDateTime.now());
+        var export = new com.relyon.economizai.dto.response.UserDataExportResponse(
+                ur, hr, java.util.List.of(), LocalDateTime.now());
+        org.mockito.Mockito.when(userService.exportData(any(User.class))).thenReturn(export);
+
+        mockMvc.perform(get("/api/v1/users/me/export")
+                        .with(SecurityMockMvcRequestPostProcessors.user(user)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.user.email").value(user.getEmail()))
+                .andExpect(jsonPath("$.household.inviteCode").value("ABC123"))
+                .andExpect(jsonPath("$.receipts").isArray());
+    }
+
+    @Test
+    void deleteAccount_returns200() throws Exception {
+        var user = buildUser();
+        org.mockito.Mockito.when(localizedMessageService.translate("user.account.deleted"))
+                .thenReturn("Conta excluida.");
+
+        mockMvc.perform(delete("/api/v1/users/me")
+                        .with(SecurityMockMvcRequestPostProcessors.user(user)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Conta excluida."));
     }
 }

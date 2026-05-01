@@ -46,7 +46,7 @@ public class GlobalExceptionHandler {
         return respond(ex, HttpStatus.NOT_FOUND, "Entity not found");
     }
 
-    @ExceptionHandler({InvalidInviteCodeException.class, InvalidQrPayloadException.class, UnsupportedStateException.class, ReceiptParseException.class, ReceiptNotEditableException.class, AlreadyInHouseholdException.class})
+    @ExceptionHandler({InvalidInviteCodeException.class, InvalidQrPayloadException.class, UnsupportedStateException.class, ReceiptParseException.class, ReceiptNotEditableException.class, AlreadyInHouseholdException.class, InvalidLegalVersionException.class})
     public ResponseEntity<ErrorResponse> handleBadRequest(DomainException ex) {
         return respond(ex, HttpStatus.BAD_REQUEST, "Bad request");
     }
