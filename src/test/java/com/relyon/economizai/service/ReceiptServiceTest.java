@@ -47,6 +47,8 @@ class ReceiptServiceTest {
     @Mock private ReceiptItemRepository receiptItemRepository;
     @Mock private SefazIngestionService sefazIngestionService;
     @Mock private CanonicalizationService canonicalizationService;
+    @Mock private com.relyon.economizai.service.priceindex.PriceIndexService priceIndexService;
+    @Mock private com.relyon.economizai.service.priceindex.PromoDetector promoDetector;
 
     @InjectMocks private ReceiptService receiptService;
 
@@ -144,11 +146,13 @@ class ReceiptServiceTest {
         var receipt = persistedReceipt(user, ReceiptStatus.PENDING_CONFIRMATION);
         when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
         when(receiptRepository.save(receipt)).thenReturn(receipt);
+        when(promoDetector.detectPersonalPromos(receipt)).thenReturn(java.util.List.of());
 
         var response = receiptService.confirm(user, receipt.getId());
 
-        assertEquals(ReceiptStatus.CONFIRMED, response.status());
-        assertNotNull(response.confirmedAt());
+        assertEquals(ReceiptStatus.CONFIRMED, response.receipt().status());
+        assertNotNull(response.receipt().confirmedAt());
+        assertEquals(0, response.personalPromos().size());
     }
 
     @Test

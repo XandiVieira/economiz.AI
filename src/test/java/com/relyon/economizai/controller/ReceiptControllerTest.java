@@ -196,15 +196,18 @@ class ReceiptControllerTest {
     }
 
     @Test
-    void confirm_returnsConfirmedReceipt() throws Exception {
+    void confirm_returnsConfirmedReceiptWithPromos() throws Exception {
         var user = buildUser();
         var id = UUID.randomUUID();
-        when(receiptService.confirm(any(User.class), eq(id))).thenReturn(sampleReceipt(ReceiptStatus.CONFIRMED));
+        var confirmResponse = new com.relyon.economizai.dto.response.ConfirmReceiptResponse(
+                sampleReceipt(ReceiptStatus.CONFIRMED), java.util.List.of());
+        when(receiptService.confirm(any(User.class), eq(id))).thenReturn(confirmResponse);
 
         mockMvc.perform(post("/api/v1/receipts/" + id + "/confirm")
                         .with(SecurityMockMvcRequestPostProcessors.user(user)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("CONFIRMED"));
+                .andExpect(jsonPath("$.receipt.status").value("CONFIRMED"))
+                .andExpect(jsonPath("$.personalPromos").isArray());
     }
 
     @Test

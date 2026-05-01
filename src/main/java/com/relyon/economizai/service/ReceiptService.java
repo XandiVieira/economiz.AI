@@ -2,6 +2,7 @@ package com.relyon.economizai.service;
 
 import com.relyon.economizai.dto.request.SubmitReceiptRequest;
 import com.relyon.economizai.dto.request.UpdateReceiptItemRequest;
+import com.relyon.economizai.dto.response.ConfirmReceiptResponse;
 import com.relyon.economizai.dto.response.ReceiptResponse;
 import com.relyon.economizai.dto.response.ReceiptSummaryResponse;
 import com.relyon.economizai.exception.ReceiptAlreadyIngestedException;
@@ -17,6 +18,8 @@ import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.repository.ReceiptRepository;
 import com.relyon.economizai.config.MdcContextFilter;
 import com.relyon.economizai.service.canonicalization.CanonicalizationService;
+import com.relyon.economizai.service.priceindex.PriceIndexService;
+import com.relyon.economizai.service.priceindex.PromoDetector;
 import com.relyon.economizai.service.sefaz.ChaveAcessoParser;
 import com.relyon.economizai.service.sefaz.ParsedReceipt;
 import com.relyon.economizai.service.sefaz.SefazIngestionService;
@@ -46,6 +49,8 @@ public class ReceiptService {
     private final ReceiptItemRepository receiptItemRepository;
     private final SefazIngestionService sefazIngestionService;
     private final CanonicalizationService canonicalizationService;
+    private final PriceIndexService priceIndexService;
+    private final PromoDetector promoDetector;
 
     @Transactional
     public ReceiptResponse submit(User user, SubmitReceiptRequest request) {
@@ -110,7 +115,7 @@ public class ReceiptService {
     }
 
     @Transactional
-    public ReceiptResponse confirm(User user, UUID receiptId) {
+    public ConfirmReceiptResponse confirm(User user, UUID receiptId) {
         MDC.put(MdcContextFilter.RECEIPT_ID, abbrev(receiptId));
         log.info("confirm started");
         var receipt = loadOwned(user, receiptId);
@@ -118,9 +123,11 @@ public class ReceiptService {
         receipt.setStatus(ReceiptStatus.CONFIRMED);
         receipt.setConfirmedAt(LocalDateTime.now());
         canonicalizationService.canonicalize(receipt);
+        var personalPromos = promoDetector.detectPersonalPromos(receipt);
+        priceIndexService.recordContributions(receipt);
         var saved = receiptRepository.save(receipt);
-        log.info("confirm ok status=CONFIRMED");
-        return ReceiptResponse.from(saved);
+        log.info("confirm ok status=CONFIRMED personalPromos={}", personalPromos.size());
+        return new ConfirmReceiptResponse(ReceiptResponse.from(saved), personalPromos);
     }
 
     @Transactional

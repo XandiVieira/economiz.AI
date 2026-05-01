@@ -248,16 +248,53 @@ placeholder):
 - **Recommendations are filtered through the Phase 2.6 preference model**
   (right-sized pack, preferred brand) when available.
 
-### Phase 4 — Collaborative Price Index (E5)
+### Phase 4 — Collaborative Price Index (E5) — shipped
 
 **Goal:** Anonymized contributions power shared price intelligence.
 
-- PriceObservation entity + write path from confirmed receipts
-- Opt-in/out contribution toggle on user profile
-- k-anonymity-guarded aggregate queries
-- Outlier filter on ingestion
-- Public reference-price endpoint per product
-- "Promo detector": flag prices significantly below the rolling median for that market
+- ✅ `PriceObservation` table (no user_id; LGPD-anonymized) + private
+  `PriceObservationAudit` for k-anon counting and right-to-deletion.
+  V10 migration.
+- ✅ Write path runs on `POST /receipts/{id}/confirm`. Skipped when
+  `User.contributionOptIn = false` or master switch
+  `economizai.collaborative.enabled` is off.
+- ✅ K-anonymity-guarded queries — return empty when fewer than
+  `min-households-for-public` distinct households contributed.
+- ✅ Public endpoints under `/api/v1/price-index`:
+  - `GET /products/{id}/markets/{cnpj}/reference` — median + min + max
+    + sample size + distinct-household count for that pair.
+  - `GET /products/{id}/best-markets?limit=10` — markets ranked by
+    median price, k-anon checked per row.
+  - `GET /promos` — current community promos (recent median X% below
+    baseline).
+- ✅ **Personal promo detector** runs on every confirm. Compares paid
+  unit price vs the user's own historical median; threshold and
+  baseline-size configurable via `economizai.personal-promo.*`.
+  `POST /receipts/{id}/confirm` now returns
+  `{ receipt: ReceiptResponse, personalPromos: [...] }`.
+- ✅ **Community promo detector** in `CommunityPromoService.detectAll()`
+  — recent (last 7 days) median vs baseline (8-90 days) per
+  (product, market). Returned by `GET /price-index/promos`.
+- ✅ `market_cnpj_root` column (first 8 digits of CNPJ) preserved on
+  every observation so future queries can aggregate per chain
+  (Zaffari Hipica vs Zaffari Centro vs all Zaffari).
+- 🟡 Outlier filter — column exists (`is_outlier`); flagging logic
+  deferred until we have enough volume to validate the math.
+- ❌ Geolocation / distance-based filtering — next session.
+- ❌ Notifications when a promo matches user history — next session.
+
+**Volume-gate env vars** (so features stay quiet until data is real):
+
+| Var | Default | What it gates |
+|---|---|---|
+| `economizai.collaborative.enabled` | `true` | Master switch — turn off to disable all reads/writes |
+| `economizai.collaborative.min-households-for-public` | `3` | K-anon: queries return empty until N distinct households contributed |
+| `economizai.collaborative.min-observations-per-product-market` | `5` | Reference price hidden until enough samples |
+| `economizai.collaborative.min-observations-for-community-promo` | `10` | Community promo not flagged until baseline is solid |
+| `economizai.collaborative.community-promo-threshold-pct` | `15` | Recent median must be X% below baseline |
+| `economizai.collaborative.lookback-days` | `90` | Window for "recent" data |
+| `economizai.personal-promo.threshold-pct` | `10` | Personal promo if price < median - X% |
+| `economizai.personal-promo.min-purchases-for-baseline` | `3` | Need this many prior buys to call a personal promo |
 
 ### Phase 4.5 — LGPD compliance baseline (shipped)
 
