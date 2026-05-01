@@ -4,6 +4,7 @@ import com.relyon.economizai.dto.request.ChangePasswordRequest;
 import com.relyon.economizai.dto.request.LoginRequest;
 import com.relyon.economizai.dto.request.RegisterRequest;
 import com.relyon.economizai.dto.request.UpdateContributionRequest;
+import com.relyon.economizai.dto.request.UpdateHomeLocationRequest;
 import com.relyon.economizai.dto.request.UpdateUserRequest;
 import com.relyon.economizai.dto.response.AuthResponse;
 import com.relyon.economizai.dto.response.HouseholdResponse;
@@ -115,8 +116,7 @@ public class UserService {
     }
 
     @Transactional
-    public UserResponse updateHomeLocation(User user,
-                                           com.relyon.economizai.dto.request.UpdateHomeLocationRequest request) {
+    public UserResponse updateHomeLocation(User user, UpdateHomeLocationRequest request) {
         user.setHomeLatitude(request.latitude());
         user.setHomeLongitude(request.longitude());
         user.setHomeSetAt(LocalDateTime.now());

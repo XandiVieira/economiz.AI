@@ -9,15 +9,19 @@ import com.relyon.economizai.exception.ReceiptAlreadyIngestedException;
 import com.relyon.economizai.exception.ReceiptItemNotFoundException;
 import com.relyon.economizai.exception.ReceiptNotEditableException;
 import com.relyon.economizai.exception.ReceiptNotFoundException;
+import com.relyon.economizai.config.MdcContextFilter;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.NotificationType;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.repository.ReceiptRepository;
-import com.relyon.economizai.config.MdcContextFilter;
 import com.relyon.economizai.service.canonicalization.CanonicalizationService;
+import com.relyon.economizai.service.geo.MarketLocationService;
+import com.relyon.economizai.service.notifications.NotificationPayload;
+import com.relyon.economizai.service.notifications.NotificationService;
 import com.relyon.economizai.service.priceindex.PriceIndexService;
 import com.relyon.economizai.service.priceindex.PromoDetector;
 import com.relyon.economizai.service.sefaz.ChaveAcessoParser;
@@ -37,6 +41,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -51,8 +57,8 @@ public class ReceiptService {
     private final CanonicalizationService canonicalizationService;
     private final PriceIndexService priceIndexService;
     private final PromoDetector promoDetector;
-    private final com.relyon.economizai.service.geo.MarketLocationService marketLocationService;
-    private final com.relyon.economizai.service.notifications.NotificationService notificationService;
+    private final MarketLocationService marketLocationService;
+    private final NotificationService notificationService;
 
     @Transactional
     public ReceiptResponse submit(User user, SubmitReceiptRequest request) {
@@ -90,7 +96,7 @@ public class ReceiptService {
                 .map(ReceiptSummaryResponse::from);
     }
 
-    private Specification<com.relyon.economizai.model.Receipt> filtered(UUID householdId,
+    private Specification<Receipt> filtered(UUID householdId,
                                                                         LocalDateTime from,
                                                                         LocalDateTime to,
                                                                         String cnpj,
@@ -134,17 +140,16 @@ public class ReceiptService {
         return new ConfirmReceiptResponse(ReceiptResponse.from(saved), personalPromos);
     }
 
-    private void notifyPersonalPromos(User user, Receipt receipt,
-                                      java.util.List<com.relyon.economizai.service.priceindex.PromoDetector.PersonalPromo> promos) {
+    private void notifyPersonalPromos(User user, Receipt receipt, List<PromoDetector.PersonalPromo> promos) {
         for (var promo : promos) {
             var title = "Você economizou em " + promo.productName();
             var body = String.format("No %s você pagou R$ %s no %s — %s%% abaixo do que normalmente paga.",
                     promo.productName(), promo.paidPrice(), receipt.getMarketName(), promo.savingsPct());
-            notificationService.notify(new com.relyon.economizai.service.notifications.NotificationPayload(
+            notificationService.notify(new NotificationPayload(
                     user,
-                    com.relyon.economizai.model.enums.NotificationType.PROMO_PERSONAL,
+                    NotificationType.PROMO_PERSONAL,
                     title, body,
-                    java.util.Map.of(
+                    Map.of(
                             "receiptId", receipt.getId().toString(),
                             "productId", promo.productId().toString(),
                             "savingsPct", promo.savingsPct(),

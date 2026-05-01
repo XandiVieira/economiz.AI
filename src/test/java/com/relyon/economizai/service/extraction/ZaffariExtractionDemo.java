@@ -1,7 +1,9 @@
 package com.relyon.economizai.service.extraction;
 
+import com.relyon.economizai.service.extraction.ml.MlClassifierService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.util.List;
 
@@ -33,8 +35,8 @@ class ZaffariExtractionDemo {
         brandExtractor.load();
         var dictionaryClassifier = new DictionaryClassifier();
         dictionaryClassifier.load();
-        var mlClassifier = org.mockito.Mockito.mock(com.relyon.economizai.service.extraction.ml.MlClassifierService.class);
-        org.mockito.Mockito.when(mlClassifier.isReady()).thenReturn(false);
+        var mlClassifier = Mockito.mock(MlClassifierService.class);
+        Mockito.when(mlClassifier.isReady()).thenReturn(false);
         extractor = new ProductExtractor(brandExtractor, dictionaryClassifier, mlClassifier);
     }
 

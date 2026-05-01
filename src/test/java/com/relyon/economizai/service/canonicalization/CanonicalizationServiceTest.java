@@ -6,8 +6,12 @@ import com.relyon.economizai.model.ProductAlias;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.CategorizationSource;
+import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.repository.ProductAliasRepository;
 import com.relyon.economizai.repository.ProductRepository;
+import com.relyon.economizai.service.extraction.ProductExtraction;
+import com.relyon.economizai.service.extraction.ProductExtractor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -32,7 +36,7 @@ class CanonicalizationServiceTest {
 
     @Mock private ProductRepository productRepository;
     @Mock private ProductAliasRepository aliasRepository;
-    @Mock private com.relyon.economizai.service.extraction.ProductExtractor productExtractor;
+    @Mock private ProductExtractor productExtractor;
 
     @InjectMocks private CanonicalizationService service;
 
@@ -75,10 +79,8 @@ class CanonicalizationServiceTest {
     void createsNewProductWhenEanIsUnknown() {
         var receipt = buildReceipt(item("LEITE INTEGRAL 1L", "123"));
         when(productExtractor.extract(any())).thenReturn(
-                new com.relyon.economizai.service.extraction.ProductExtraction(
-                        "Leite", null, new java.math.BigDecimal("1"), "L",
-                        com.relyon.economizai.model.enums.ProductCategory.MEAT_DAIRY,
-                        com.relyon.economizai.model.enums.CategorizationSource.DICTIONARY));
+                new ProductExtraction("Leite", null, new BigDecimal("1"), "L",
+                        ProductCategory.MEAT_DAIRY, CategorizationSource.DICTIONARY));
         when(productRepository.findByEan("123")).thenReturn(Optional.empty());
         when(productRepository.save(any(Product.class))).thenAnswer(inv -> {
             var p = inv.<Product>getArgument(0);
@@ -95,7 +97,7 @@ class CanonicalizationServiceTest {
         assertEquals("123", product.getEan());
         assertEquals("Leite", product.getGenericName());
         assertEquals("L", product.getPackUnit());
-        assertEquals(com.relyon.economizai.model.enums.ProductCategory.MEAT_DAIRY, product.getCategory());
+        assertEquals(ProductCategory.MEAT_DAIRY, product.getCategory());
     }
 
     @Test

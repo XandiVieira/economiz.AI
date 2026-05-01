@@ -14,7 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Manages MarketLocation rows: registers a market entry the first time
@@ -94,7 +94,7 @@ public class MarketLocationService {
     public Map<String, MarketLocation> findByCnpjs(List<String> cnpjs) {
         if (cnpjs == null || cnpjs.isEmpty()) return Map.of();
         return repository.findAllByCnpjIn(cnpjs).stream()
-                .collect(java.util.stream.Collectors.toMap(MarketLocation::getCnpj, m -> m));
+                .collect(Collectors.toMap(MarketLocation::getCnpj, m -> m));
     }
 
     private String buildGeocodeQuery(MarketLocation market) {

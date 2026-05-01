@@ -12,6 +12,7 @@ import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.ProductAlias;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.CategorizationSource;
 import com.relyon.economizai.repository.ProductAliasRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.repository.ReceiptItemRepository;
@@ -57,9 +58,9 @@ public class ProductService {
         var extracted = productExtractor.extract(request.normalizedName());
         var category = request.category() != null ? request.category() : extracted.category();
         var source = request.category() != null
-                ? com.relyon.economizai.model.enums.CategorizationSource.USER
+                ? CategorizationSource.USER
                 : (category != null ? extracted.categorizationSource()
-                                    : com.relyon.economizai.model.enums.CategorizationSource.NONE);
+                                    : CategorizationSource.NONE);
         var product = productRepository.save(Product.builder()
                 .ean(blankToNull(request.ean()))
                 .normalizedName(request.normalizedName())
@@ -91,8 +92,8 @@ public class ProductService {
         product.setPackUnit(blankToNull(request.packUnit()));
         // any manual update (PATCH) becomes the highest-trust signal — USER overrides any prior source
         product.setCategorizationSource(request.category() != null
-                ? com.relyon.economizai.model.enums.CategorizationSource.USER
-                : com.relyon.economizai.model.enums.CategorizationSource.NONE);
+                ? CategorizationSource.USER
+                : CategorizationSource.NONE);
         var saved = productRepository.save(product);
         log.info("Product {} updated source=USER", saved.getId());
         return ProductResponse.from(saved);

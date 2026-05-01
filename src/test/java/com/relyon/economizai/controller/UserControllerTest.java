@@ -3,7 +3,10 @@ package com.relyon.economizai.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.relyon.economizai.config.SecurityConfig;
 import com.relyon.economizai.dto.request.ChangePasswordRequest;
+import com.relyon.economizai.dto.request.UpdateContributionRequest;
 import com.relyon.economizai.dto.request.UpdateUserRequest;
+import com.relyon.economizai.dto.response.HouseholdResponse;
+import com.relyon.economizai.dto.response.UserDataExportResponse;
 import com.relyon.economizai.dto.response.UserResponse;
 import com.relyon.economizai.exception.InvalidCurrentPasswordException;
 import com.relyon.economizai.model.User;
@@ -12,6 +15,7 @@ import com.relyon.economizai.model.enums.SubscriptionTier;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.LocalizedMessageService;
 import com.relyon.economizai.service.UserService;
+import com.relyon.economizai.service.notifications.NotificationPreferenceService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -25,6 +29,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -60,7 +65,7 @@ class UserControllerTest {
     private LocalizedMessageService localizedMessageService;
 
     @MockitoBean
-    private com.relyon.economizai.service.notifications.NotificationPreferenceService notificationPreferenceService;
+    private NotificationPreferenceService notificationPreferenceService;
 
     private User buildUser() {
         var user = User.builder()
@@ -169,11 +174,10 @@ class UserControllerTest {
     @Test
     void updateContribution_returns200() throws Exception {
         var user = buildUser();
-        var request = new com.relyon.economizai.dto.request.UpdateContributionRequest(false);
+        var request = new UpdateContributionRequest(false);
         var response = new UserResponse(user.getId(), user.getName(), user.getEmail(),
                 user.getRole(), user.getSubscriptionTier(), false, null, null, user.getCreatedAt());
-        org.mockito.Mockito.when(userService.updateContribution(any(User.class),
-                any(com.relyon.economizai.dto.request.UpdateContributionRequest.class)))
+        when(userService.updateContribution(any(User.class), any(UpdateContributionRequest.class)))
                 .thenReturn(response);
 
         mockMvc.perform(patch("/api/v1/users/me/contribution")
@@ -189,14 +193,12 @@ class UserControllerTest {
         var user = buildUser();
         var ur = new UserResponse(user.getId(), user.getName(), user.getEmail(),
                 user.getRole(), user.getSubscriptionTier(), true, null, null, user.getCreatedAt());
-        var hr = new com.relyon.economizai.dto.response.HouseholdResponse(
-                java.util.UUID.randomUUID(), "ABC123",
-                java.util.List.of(new com.relyon.economizai.dto.response.HouseholdResponse.HouseholdMember(
-                        user.getId(), user.getName(), user.getEmail())),
+        var hr = new HouseholdResponse(
+                UUID.randomUUID(), "ABC123",
+                List.of(new HouseholdResponse.HouseholdMember(user.getId(), user.getName(), user.getEmail())),
                 LocalDateTime.now());
-        var export = new com.relyon.economizai.dto.response.UserDataExportResponse(
-                ur, hr, java.util.List.of(), LocalDateTime.now());
-        org.mockito.Mockito.when(userService.exportData(any(User.class))).thenReturn(export);
+        var export = new UserDataExportResponse(ur, hr, List.of(), LocalDateTime.now());
+        when(userService.exportData(any(User.class))).thenReturn(export);
 
         mockMvc.perform(get("/api/v1/users/me/export")
                         .with(SecurityMockMvcRequestPostProcessors.user(user)))

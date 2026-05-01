@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.relyon.economizai.config.SecurityConfig;
 import com.relyon.economizai.dto.request.SubmitReceiptRequest;
 import com.relyon.economizai.dto.request.UpdateReceiptItemRequest;
+import com.relyon.economizai.dto.response.ConfirmReceiptResponse;
 import com.relyon.economizai.dto.response.ReceiptItemResponse;
 import com.relyon.economizai.dto.response.ReceiptResponse;
 import com.relyon.economizai.dto.response.ReceiptSummaryResponse;
@@ -199,8 +200,8 @@ class ReceiptControllerTest {
     void confirm_returnsConfirmedReceiptWithPromos() throws Exception {
         var user = buildUser();
         var id = UUID.randomUUID();
-        var confirmResponse = new com.relyon.economizai.dto.response.ConfirmReceiptResponse(
-                sampleReceipt(ReceiptStatus.CONFIRMED), java.util.List.of());
+        var confirmResponse = new ConfirmReceiptResponse(
+                sampleReceipt(ReceiptStatus.CONFIRMED), List.of());
         when(receiptService.confirm(any(User.class), eq(id))).thenReturn(confirmResponse);
 
         mockMvc.perform(post("/api/v1/receipts/" + id + "/confirm")

@@ -15,6 +15,9 @@ import com.relyon.economizai.model.enums.UnidadeFederativa;
 import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.repository.ReceiptRepository;
 import com.relyon.economizai.service.canonicalization.CanonicalizationService;
+import com.relyon.economizai.service.geo.MarketLocationService;
+import com.relyon.economizai.service.priceindex.PriceIndexService;
+import com.relyon.economizai.service.priceindex.PromoDetector;
 import com.relyon.economizai.service.sefaz.ParsedReceipt;
 import com.relyon.economizai.service.sefaz.ParsedReceiptItem;
 import com.relyon.economizai.service.sefaz.SefazIngestionService;
@@ -47,9 +50,9 @@ class ReceiptServiceTest {
     @Mock private ReceiptItemRepository receiptItemRepository;
     @Mock private SefazIngestionService sefazIngestionService;
     @Mock private CanonicalizationService canonicalizationService;
-    @Mock private com.relyon.economizai.service.priceindex.PriceIndexService priceIndexService;
-    @Mock private com.relyon.economizai.service.priceindex.PromoDetector promoDetector;
-    @Mock private com.relyon.economizai.service.geo.MarketLocationService marketLocationService;
+    @Mock private PriceIndexService priceIndexService;
+    @Mock private PromoDetector promoDetector;
+    @Mock private MarketLocationService marketLocationService;
 
     @InjectMocks private ReceiptService receiptService;
 

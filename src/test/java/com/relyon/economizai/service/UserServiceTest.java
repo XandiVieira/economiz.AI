@@ -3,14 +3,19 @@ package com.relyon.economizai.service;
 import com.relyon.economizai.dto.request.ChangePasswordRequest;
 import com.relyon.economizai.dto.request.LoginRequest;
 import com.relyon.economizai.dto.request.RegisterRequest;
+import com.relyon.economizai.dto.request.UpdateContributionRequest;
 import com.relyon.economizai.dto.request.UpdateUserRequest;
 import com.relyon.economizai.exception.EmailAlreadyExistsException;
 import com.relyon.economizai.exception.InvalidCredentialsException;
 import com.relyon.economizai.exception.InvalidCurrentPasswordException;
+import com.relyon.economizai.exception.InvalidLegalVersionException;
 import com.relyon.economizai.model.Household;
+import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.Role;
 import com.relyon.economizai.model.enums.SubscriptionTier;
+import com.relyon.economizai.repository.HouseholdRepository;
+import com.relyon.economizai.repository.ReceiptRepository;
 import com.relyon.economizai.repository.UserRepository;
 import com.relyon.economizai.security.JwtService;
 import org.junit.jupiter.api.Test;
@@ -21,6 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -39,10 +45,10 @@ class UserServiceTest {
     private UserRepository userRepository;
 
     @Mock
-    private com.relyon.economizai.repository.HouseholdRepository householdRepository;
+    private HouseholdRepository householdRepository;
 
     @Mock
-    private com.relyon.economizai.repository.ReceiptRepository receiptRepository;
+    private ReceiptRepository receiptRepository;
 
     @Mock
     private PasswordEncoder passwordEncoder;
@@ -197,7 +203,7 @@ class UserServiceTest {
         var request = new RegisterRequest("John", "john@test.com", "password123", "0.9", "1.0");
         when(userRepository.existsByEmail("john@test.com")).thenReturn(false);
 
-        assertThrows(com.relyon.economizai.exception.InvalidLegalVersionException.class,
+        assertThrows(InvalidLegalVersionException.class,
                 () -> userService.register(request));
         verify(userRepository, never()).save(any());
     }
@@ -207,7 +213,7 @@ class UserServiceTest {
         var request = new RegisterRequest("John", "john@test.com", "password123", "1.0", "0.9");
         when(userRepository.existsByEmail("john@test.com")).thenReturn(false);
 
-        assertThrows(com.relyon.economizai.exception.InvalidLegalVersionException.class,
+        assertThrows(InvalidLegalVersionException.class,
                 () -> userService.register(request));
         verify(userRepository, never()).save(any());
     }
@@ -217,8 +223,7 @@ class UserServiceTest {
         var user = buildUser();
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        var response = userService.updateContribution(user,
-                new com.relyon.economizai.dto.request.UpdateContributionRequest(false));
+        var response = userService.updateContribution(user, new UpdateContributionRequest(false));
 
         assertEquals(false, response.contributionOptIn());
         assertEquals(false, user.isContributionOptIn());
@@ -249,10 +254,10 @@ class UserServiceTest {
     @Test
     void exportData_returnsUserHouseholdAndReceipts() {
         var user = buildUser();
-        when(householdRepository.findById(user.getHousehold().getId())).thenReturn(java.util.Optional.of(user.getHousehold()));
-        when(userRepository.findAllByHouseholdId(user.getHousehold().getId())).thenReturn(java.util.List.of(user));
-        when(receiptRepository.findAll(org.mockito.ArgumentMatchers.<org.springframework.data.jpa.domain.Specification<com.relyon.economizai.model.Receipt>>any()))
-                .thenReturn(java.util.List.of());
+        when(householdRepository.findById(user.getHousehold().getId())).thenReturn(Optional.of(user.getHousehold()));
+        when(userRepository.findAllByHouseholdId(user.getHousehold().getId())).thenReturn(List.of(user));
+        when(receiptRepository.findAll(org.mockito.ArgumentMatchers.<org.springframework.data.jpa.domain.Specification<Receipt>>any()))
+                .thenReturn(List.of());
 
         var response = userService.exportData(user);
 

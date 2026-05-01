@@ -15,6 +15,8 @@ import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.repository.ProductAliasRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.repository.ReceiptItemRepository;
+import com.relyon.economizai.service.extraction.ProductExtraction;
+import com.relyon.economizai.service.extraction.ProductExtractor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -41,7 +43,7 @@ class ProductServiceTest {
     @Mock private ProductRepository productRepository;
     @Mock private ProductAliasRepository aliasRepository;
     @Mock private ReceiptItemRepository receiptItemRepository;
-    @Mock private com.relyon.economizai.service.extraction.ProductExtractor productExtractor;
+    @Mock private ProductExtractor productExtractor;
 
     @InjectMocks private ProductService productService;
 
@@ -66,7 +68,7 @@ class ProductServiceTest {
     @Test
     void createProduct_savesAndBackfillsByEan() {
         var request = new CreateProductRequest("789", "Arroz Tio Joao", null, "Tio Joao", ProductCategory.GROCERIES, "UN", null, null);
-        when(productExtractor.extract(any())).thenReturn(com.relyon.economizai.service.extraction.ProductExtraction.EMPTY);
+        when(productExtractor.extract(any())).thenReturn(ProductExtraction.EMPTY);
         when(productRepository.findByEan("789")).thenReturn(Optional.empty());
         when(productRepository.save(any(Product.class))).thenAnswer(inv -> {
             var p = inv.<Product>getArgument(0);

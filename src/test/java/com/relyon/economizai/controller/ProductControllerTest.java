@@ -11,6 +11,7 @@ import com.relyon.economizai.exception.ProductAliasConflictException;
 import com.relyon.economizai.exception.ProductNotFoundException;
 import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.CategorizationSource;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.LocalizedMessageService;
@@ -61,8 +62,8 @@ class ProductControllerTest {
 
     private ProductResponse sampleProduct(UUID id) {
         return new ProductResponse(id, "789", "Arroz Tio Joao", "Arroz", "Tio João",
-                ProductCategory.GROCERIES, "UN", new java.math.BigDecimal("5"), "KG",
-                com.relyon.economizai.model.enums.CategorizationSource.DICTIONARY);
+                ProductCategory.GROCERIES, "UN", new BigDecimal("5"), "KG",
+                CategorizationSource.DICTIONARY);
     }
 
     @Test

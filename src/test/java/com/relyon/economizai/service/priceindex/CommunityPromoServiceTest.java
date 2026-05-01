@@ -5,6 +5,7 @@ import com.relyon.economizai.model.PriceObservation;
 import com.relyon.economizai.model.Product;
 import com.relyon.economizai.repository.PriceObservationAuditRepository;
 import com.relyon.economizai.repository.PriceObservationRepository;
+import com.relyon.economizai.service.geo.MarketLocationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,7 +35,7 @@ class CommunityPromoServiceTest {
     private final UUID productId = UUID.randomUUID();
     private final String marketCnpj = "93015006005182";
 
-    @org.mockito.Mock private com.relyon.economizai.service.geo.MarketLocationService marketLocationService;
+    @Mock private MarketLocationService marketLocationService;
 
     @BeforeEach
     void setUp() {
