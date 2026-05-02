@@ -27,6 +27,7 @@ import com.relyon.economizai.service.priceindex.PriceIndexService;
 import com.relyon.economizai.service.privacy.LogMasker;
 import com.relyon.economizai.service.priceindex.PromoDetector;
 import com.relyon.economizai.service.sefaz.ChaveAcessoParser;
+import com.relyon.economizai.service.sefaz.FailedParseRecorder;
 import com.relyon.economizai.service.sefaz.ParsedReceipt;
 import com.relyon.economizai.service.sefaz.SefazIngestionService;
 import jakarta.persistence.criteria.JoinType;
@@ -56,6 +57,7 @@ public class ReceiptService {
     private final ReceiptRepository receiptRepository;
     private final ReceiptItemRepository receiptItemRepository;
     private final SefazIngestionService sefazIngestionService;
+    private final FailedParseRecorder failedParseRecorder;
     private final CanonicalizationService canonicalizationService;
     private final PriceIndexService priceIndexService;
     private final PromoDetector promoDetector;
@@ -78,7 +80,10 @@ public class ReceiptService {
         try {
             parsed = sefazIngestionService.parse(fetched);
         } catch (ReceiptParseException ex) {
-            persistFailedParse(user, qrPayload, fetched, ex);
+            // Record in a separate transaction (REQUIRES_NEW on the recorder
+            // bean) so the row survives this method's @Transactional rollback
+            // when we rethrow.
+            failedParseRecorder.record(user, qrPayload, fetched, ex);
             throw ex;
         }
         var receipt = persistParsed(user, qrPayload, parsed);
@@ -86,25 +91,6 @@ public class ReceiptService {
         log.info("submit ok status=PENDING_CONFIRMATION items={} total={} market='{}'",
                 receipt.getItems().size(), receipt.getTotalAmount(), receipt.getMarketName());
         return ReceiptResponse.from(receipt);
-    }
-
-    private void persistFailedParse(User user, String qrPayload,
-                                    SefazIngestionService.FetchedDocument fetched,
-                                    ReceiptParseException ex) {
-        var failed = Receipt.builder()
-                .user(user)
-                .household(user.getHousehold())
-                .chaveAcesso(fetched.chave())
-                .uf(fetched.uf())
-                .qrPayload(qrPayload)
-                .sourceUrl(fetched.sourceUrl())
-                .rawHtml(fetched.html())
-                .status(ReceiptStatus.FAILED_PARSE)
-                .parseErrorReason(ex.getMessageKey() + ":" + String.join(",", ex.getArguments()))
-                .build();
-        receiptRepository.save(failed);
-        log.warn("submit parse-failed chave={} reason={} (raw HTML kept for review)",
-                LogMasker.chave(fetched.chave()), ex.getMessageKey());
     }
 
     @Transactional(readOnly = true)
@@ -132,6 +118,10 @@ public class ReceiptService {
         return (root, query, cb) -> {
             var predicates = new ArrayList<Predicate>();
             predicates.add(cb.equal(root.get("household").get("id"), householdId));
+            // FAILED_PARSE rows are kept for ops review (PRO-43) but hidden from
+            // the user history — the user didn't actually buy anything from a
+            // failed scan, so it would just be noise in their "compras" list.
+            predicates.add(cb.notEqual(root.get("status"), ReceiptStatus.FAILED_PARSE));
             if (from != null) predicates.add(cb.greaterThanOrEqualTo(root.get("issuedAt"), from));
             if (to != null) predicates.add(cb.lessThanOrEqualTo(root.get("issuedAt"), to));
             if (cnpj != null) predicates.add(cb.equal(root.get("cnpjEmitente"), cnpj));
