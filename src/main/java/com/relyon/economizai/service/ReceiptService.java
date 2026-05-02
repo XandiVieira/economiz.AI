@@ -1,5 +1,6 @@
 package com.relyon.economizai.service;
 
+import com.relyon.economizai.dto.request.AddReceiptItemRequest;
 import com.relyon.economizai.dto.request.ConfirmReceiptRequest;
 import com.relyon.economizai.dto.request.SubmitReceiptRequest;
 import com.relyon.economizai.dto.request.UpdateReceiptItemRequest;
@@ -238,6 +239,38 @@ public class ReceiptService {
         householdProductAliasService.rememberFromItem(receipt.getHousehold(), item);
         log.info("item.updated description='{}' qty={} totalPrice={}",
                 item.getRawDescription(), item.getQuantity(), item.getTotalPrice());
+        return ReceiptResponse.from(receipt);
+    }
+
+    /**
+     * Add a missing item to a PENDING_CONFIRMATION receipt. Use case: SVRS
+     * parser missed a line. Position appended to the end of the existing
+     * items list.
+     */
+    @Transactional
+    public ReceiptResponse addItem(User user, UUID receiptId, AddReceiptItemRequest request) {
+        MDC.put(MdcContextFilter.RECEIPT_ID, abbrev(receiptId));
+        var receipt = loadOwned(user, receiptId);
+        requirePending(receipt);
+        var nextLine = receipt.getItems().stream()
+                .map(ReceiptItem::getLineNumber)
+                .filter(n -> n != null)
+                .max(Integer::compareTo)
+                .orElse(0) + 1;
+        var item = ReceiptItem.builder()
+                .lineNumber(nextLine)
+                .rawDescription(request.rawDescription())
+                .friendlyDescription(request.friendlyDescription())
+                .ean(request.ean())
+                .quantity(request.quantity())
+                .unit(request.unit())
+                .unitPrice(request.unitPrice())
+                .totalPrice(request.totalPrice())
+                .build();
+        receipt.addItem(item);
+        receiptItemRepository.save(item);
+        log.info("item.added line={} description='{}' qty={} totalPrice={}",
+                nextLine, item.getRawDescription(), item.getQuantity(), item.getTotalPrice());
         return ReceiptResponse.from(receipt);
     }
 

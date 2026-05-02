@@ -66,6 +66,12 @@
 			<artifactId>spring-boot-starter-mail</artifactId>
 		</dependency>
 
+		<!-- Health endpoint (used by the keep-alive cron + uptime monitors) -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
+
 		<!-- Auth (JWT) -->
 		<dependency>
 			<groupId>io.jsonwebtoken</groupId>

@@ -1,5 +1,6 @@
 package com.relyon.economizai.controller;
 
+import com.relyon.economizai.dto.request.AddReceiptItemRequest;
 import com.relyon.economizai.dto.request.ConfirmReceiptRequest;
 import com.relyon.economizai.dto.request.SubmitReceiptRequest;
 import com.relyon.economizai.dto.request.UpdateReceiptItemRequest;
@@ -69,6 +70,13 @@ public class ReceiptController {
                                                       @PathVariable UUID itemId,
                                                       @Valid @RequestBody UpdateReceiptItemRequest request) {
         return ResponseEntity.ok(receiptService.updateItem(user, id, itemId, request));
+    }
+
+    @PostMapping("/{id}/items")
+    public ResponseEntity<ReceiptResponse> addItem(@AuthenticationPrincipal User user,
+                                                   @PathVariable UUID id,
+                                                   @Valid @RequestBody AddReceiptItemRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(receiptService.addItem(user, id, request));
     }
 
     @PostMapping("/{id}/confirm")

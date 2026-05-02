@@ -12,6 +12,7 @@ import com.relyon.economizai.dto.response.UserResponse;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.service.LocalizedMessageService;
 import com.relyon.economizai.service.UserService;
+import com.relyon.economizai.service.auth.EmailVerificationService;
 import com.relyon.economizai.service.notifications.NotificationPreferenceService;
 import com.relyon.economizai.service.profile.ProfilePictureService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -44,6 +45,7 @@ public class UserController {
     private final LocalizedMessageService messageService;
     private final NotificationPreferenceService notificationPreferenceService;
     private final ProfilePictureService profilePictureService;
+    private final EmailVerificationService emailVerificationService;
 
     @GetMapping("/me")
     public ResponseEntity<UserResponse> getProfile(@AuthenticationPrincipal User user) {
@@ -124,6 +126,12 @@ public class UserController {
     @DeleteMapping("/me/profile-picture")
     public ResponseEntity<Void> deleteProfilePicture(@AuthenticationPrincipal User user) {
         profilePictureService.delete(user);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/me/email-verification/resend")
+    public ResponseEntity<Void> resendEmailVerification(@AuthenticationPrincipal User user) {
+        emailVerificationService.resend(user);
         return ResponseEntity.noContent().build();
     }
 }

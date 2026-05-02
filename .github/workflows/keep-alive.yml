@@ -24,11 +24,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - name: Ping legal/terms (public, lightweight, no DB hit)
+      - name: Ping /actuator/health (public, lightweight)
         run: |
           for attempt in 1 2 3; do
             code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
-              "https://economiz-ai.onrender.com/api/v1/legal/terms")
+              "https://economiz-ai.onrender.com/actuator/health")
             echo "attempt $attempt → HTTP $code"
             if [ "$code" = "200" ]; then exit 0; fi
             sleep 15

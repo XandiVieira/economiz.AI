@@ -96,6 +96,13 @@ public class User extends BaseEntity implements UserDetails {
     @Column(name = "profile_picture_uploaded_at")
     private java.time.LocalDateTime profilePictureUploadedAt;
 
+    @Column(name = "email_verified", nullable = false)
+    @Builder.Default
+    private boolean emailVerified = false;
+
+    @Column(name = "email_verified_at")
+    private java.time.LocalDateTime emailVerifiedAt;
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));

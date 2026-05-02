@@ -13,6 +13,8 @@ import com.relyon.economizai.model.enums.SubscriptionTier;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.LocalizedMessageService;
 import com.relyon.economizai.service.UserService;
+import com.relyon.economizai.service.auth.EmailVerificationService;
+import com.relyon.economizai.service.auth.PasswordResetService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -51,6 +53,12 @@ class AuthControllerTest {
 
     @MockitoBean
     private LocalizedMessageService localizedMessageService;
+
+    @MockitoBean
+    private PasswordResetService passwordResetService;
+
+    @MockitoBean
+    private EmailVerificationService emailVerificationService;
 
     private UserResponse sampleUserResponse() {
         return new UserResponse(

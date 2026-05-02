@@ -79,10 +79,22 @@ economizai:
   profile-picture:
     local-dir: ${PROFILE_PICTURE_DIR:/tmp/economizai/profile-pics}   # dev: local disk. prod: see DEV_NOTES.md
     max-size-mb: 5
+  auth:
+    frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:3000}    # used in password-reset + email-verification links
 
 springdoc:
   swagger-ui:
     path: /swagger-ui
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health      # only health is public; the rest stay off
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: never    # don't leak DB/disk internals to anyone hitting /actuator/health
 
 logging:
   level:
