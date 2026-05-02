@@ -80,6 +80,7 @@ public interface InsightsRepository extends JpaRepository<Receipt, UUID> {
 
     @Query("""
         SELECT r.issuedAt AS issuedAt,
+               r.cnpjEmitente AS cnpj,
                r.marketName AS marketName,
                ri.unitPrice AS unitPrice,
                ri.quantity AS quantity
@@ -96,4 +97,21 @@ public interface InsightsRepository extends JpaRepository<Receipt, UUID> {
                                           @Param("productId") UUID productId,
                                           @Param("from") LocalDateTime from,
                                           @Param("to") LocalDateTime to);
+
+    @Query("""
+        SELECT EXTRACT(YEAR FROM r.issuedAt) AS year,
+               EXTRACT(WEEK FROM r.issuedAt) AS week,
+               COALESCE(SUM(r.totalAmount), 0) AS total,
+               COUNT(r) AS receiptCount
+        FROM Receipt r
+        WHERE r.household.id = :householdId
+          AND r.status = com.relyon.economizai.model.enums.ReceiptStatus.CONFIRMED
+          AND r.issuedAt >= :from
+          AND r.issuedAt <= :to
+        GROUP BY EXTRACT(YEAR FROM r.issuedAt), EXTRACT(WEEK FROM r.issuedAt)
+        ORDER BY year ASC, week ASC
+    """)
+    List<Object[]> spendByWeek(@Param("householdId") UUID householdId,
+                               @Param("from") LocalDateTime from,
+                               @Param("to") LocalDateTime to);
 }

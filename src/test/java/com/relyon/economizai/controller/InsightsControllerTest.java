@@ -53,6 +53,7 @@ class InsightsControllerTest {
         var response = new SpendInsightsResponse(
                 null, null, new BigDecimal("250.50"),
                 List.of(new SpendInsightsResponse.MonthBucket(2026, 4, new BigDecimal("250.50"), 3L)),
+                List.of(new SpendInsightsResponse.WeekBucket(2026, 17, new BigDecimal("250.50"), 3L)),
                 List.of(new SpendInsightsResponse.MarketBucket("12345678000190", "Mercado X", new BigDecimal("250.50"), 3L)),
                 List.of(new SpendInsightsResponse.CategoryBucket(ProductCategory.GROCERIES, new BigDecimal("100.00"), 5L))
         );
@@ -96,7 +97,8 @@ class InsightsControllerTest {
         var user = buildUser();
         var productId = UUID.randomUUID();
         var response = new PriceHistoryResponse(productId, "Arroz Tio Joao",
-                List.of(new PriceHistoryResponse.PricePoint(LocalDateTime.now(), "Mercado X", new BigDecimal("28.90"), new BigDecimal("2"))));
+                List.of(new PriceHistoryResponse.PricePoint(LocalDateTime.now(), "12345678000190",
+                        "Mercado X", new BigDecimal("28.90"), new BigDecimal("2"))));
         when(insightsService.priceHistory(any(User.class), eq(productId), any(), any())).thenReturn(response);
 
         mockMvc.perform(get("/api/v1/insights/products/" + productId + "/price-history")

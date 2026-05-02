@@ -12,6 +12,7 @@ public record PriceHistoryResponse(
 ) {
     public record PricePoint(
             LocalDateTime issuedAt,
+            String marketCnpj,
             String marketName,
             BigDecimal unitPrice,
             BigDecimal quantity

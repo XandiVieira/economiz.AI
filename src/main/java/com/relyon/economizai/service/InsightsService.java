@@ -41,6 +41,13 @@ public class InsightsService {
                         toBigDecimal(row[2]),
                         ((Number) row[3]).longValue()))
                 .toList();
+        var byWeek = insightsRepository.spendByWeek(householdId, fromBound, toBound).stream()
+                .map(row -> new SpendInsightsResponse.WeekBucket(
+                        ((Number) row[0]).intValue(),
+                        ((Number) row[1]).intValue(),
+                        toBigDecimal(row[2]),
+                        ((Number) row[3]).longValue()))
+                .toList();
         var byMarket = insightsRepository.spendByMarket(householdId, fromBound, toBound).stream()
                 .map(row -> new SpendInsightsResponse.MarketBucket(
                         (String) row[0],
@@ -55,7 +62,7 @@ public class InsightsService {
                         ((Number) row[2]).longValue()))
                 .toList();
         log.debug("Spend insights for household {} (from={}, to={}): total={}", householdId, from, to, total);
-        return new SpendInsightsResponse(from, to, total, byMonth, byMarket, byCategory);
+        return new SpendInsightsResponse(from, to, total, byMonth, byWeek, byMarket, byCategory);
     }
 
     @Transactional(readOnly = true)
@@ -78,8 +85,9 @@ public class InsightsService {
                 .map(row -> new PriceHistoryResponse.PricePoint(
                         (LocalDateTime) row[0],
                         (String) row[1],
-                        toBigDecimal(row[2]),
-                        toBigDecimal(row[3])))
+                        (String) row[2],
+                        toBigDecimal(row[3]),
+                        toBigDecimal(row[4])))
                 .toList();
         return new PriceHistoryResponse(product.getId(), product.getNormalizedName(), points);
     }

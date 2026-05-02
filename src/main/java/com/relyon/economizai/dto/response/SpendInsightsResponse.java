@@ -11,10 +11,12 @@ public record SpendInsightsResponse(
         LocalDateTime to,
         BigDecimal total,
         List<MonthBucket> byMonth,
+        List<WeekBucket> byWeek,
         List<MarketBucket> byMarket,
         List<CategoryBucket> byCategory
 ) {
     public record MonthBucket(int year, int month, BigDecimal total, long receiptCount) {}
+    public record WeekBucket(int year, int week, BigDecimal total, long receiptCount) {}
     public record MarketBucket(String cnpj, String marketName, BigDecimal total, long receiptCount) {}
     public record CategoryBucket(ProductCategory category, BigDecimal total, long itemCount) {}
 }
