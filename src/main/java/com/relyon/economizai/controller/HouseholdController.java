@@ -9,11 +9,15 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/households")
@@ -37,5 +41,16 @@ public class HouseholdController {
     @PostMapping("/leave")
     public ResponseEntity<HouseholdResponse> leave(@AuthenticationPrincipal User user) {
         return ResponseEntity.ok(householdService.leave(user));
+    }
+
+    @PostMapping("/me/invite-code/regenerate")
+    public ResponseEntity<HouseholdResponse> regenerateInviteCode(@AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(householdService.regenerateInviteCode(user));
+    }
+
+    @DeleteMapping("/me/members/{memberId}")
+    public ResponseEntity<HouseholdResponse> removeMember(@AuthenticationPrincipal User user,
+                                                          @PathVariable UUID memberId) {
+        return ResponseEntity.ok(householdService.removeMember(user, memberId));
     }
 }

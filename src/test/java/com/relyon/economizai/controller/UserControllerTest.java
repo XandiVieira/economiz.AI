@@ -194,7 +194,7 @@ class UserControllerTest {
         var ur = new UserResponse(user.getId(), user.getName(), user.getEmail(),
                 user.getRole(), user.getSubscriptionTier(), true, null, null, user.getCreatedAt());
         var hr = new HouseholdResponse(
-                UUID.randomUUID(), "ABC123",
+                UUID.randomUUID(), "ABC123", LocalDateTime.now().plusHours(48),
                 List.of(new HouseholdResponse.HouseholdMember(user.getId(), user.getName(), user.getEmail())),
                 LocalDateTime.now());
         var export = new UserDataExportResponse(ur, hr, List.of(), LocalDateTime.now());

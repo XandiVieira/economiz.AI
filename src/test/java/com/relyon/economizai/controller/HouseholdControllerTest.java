@@ -70,6 +70,7 @@ class HouseholdControllerTest {
         return new HouseholdResponse(
                 UUID.randomUUID(),
                 "ABC123",
+                LocalDateTime.now().plusHours(48),
                 List.of(new HouseholdResponse.HouseholdMember(UUID.randomUUID(), "John", "john@test.com")),
                 LocalDateTime.now()
         );
