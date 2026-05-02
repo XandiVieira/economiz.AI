@@ -9,6 +9,11 @@ vision, architecture, and roadmap; `MONETIZATION.md` for revenue strategy.
 
 GitHub repo: `economiz.AI` (https://github.com/XandiVieira/economiz.AI.git)
 
+## Communication Style
+- Keep responses SHORT and concise. Avoid verbose explanations, code dumps, or excessive context.
+- When drafting team messages or Slack/PR comments, default to brief and direct — the user will ask for more detail if needed.
+- For explanations, omit code snippets and IDs unless explicitly requested.
+
 ## Tech Stack
 - Java 21, Spring Boot 4.0.6, Maven
 - PostgreSQL
@@ -78,6 +83,10 @@ GitHub repo: `economiz.AI` (https://github.com/XandiVieira/economiz.AI.git)
 - New paywalls go through a single gating service — never inline `if (user.tier != PRO)` in controllers
 - See `MONETIZATION.md` for the tier matrix
 
+### Project Conventions
+- Primary language is Java (Spring Boot). Follow existing patterns in the codebase — do not remove old methods or deviate from established patterns without explicit approval.
+- Make minimal changes for migrations/refactors; preserve existing method signatures unless asked otherwise.
+
 ### Git & Commits
 - **Atomic commits** — each commit should represent one logical change (one feature, one fix, one refactor)
 - Do not bundle unrelated changes in the same commit
@@ -87,9 +96,21 @@ GitHub repo: `economiz.AI` (https://github.com/XandiVieira/economiz.AI.git)
 - Remote: `https://github.com/XandiVieira/economiz.AI.git`
 - Never touch the global git config
 
+## Git Workflow
+- Before reviewing or analyzing a branch, ALWAYS run `git fetch` and confirm with the user which branch to work on if there's any ambiguity.
+- Do NOT propose code fixes when the user is asking for understanding/diagnosis only — wait for explicit fix request.
+- When the user says "revert", confirm exactly what state they want before acting.
+
+## Diagnosis Before Fixes
+- When investigating bugs, identify root cause first. Do not propose workarounds (e.g., cleanup scripts, defensive checks) until root cause is confirmed.
+- Ask before making code edits during investigation sessions.
+
 ## Project Documentation
 - `HELP.md` is the project development log — vision, architecture, phased roadmap, session log. Update on significant progress, decisions, or architectural changes.
 - `MONETIZATION.md` is the living revenue strategy. Update when pricing, tiers, or B2B plans evolve.
+- `API.md` is the FE-facing endpoint walk-through. Update when endpoints/payloads change.
+- `CHANGELOG.md` is the FE-facing **diary** of meaningful changes — new endpoints, response-shape changes, behavior changes the FE needs to know about. **Newest entry always at the top.** Add an entry on every meaningful change (a feature shipped, a contract change, a bug the FE was likely tripping on). NOT every commit — only the user-visible / FE-visible deltas. Date stamp every entry. This is read by the FE's tooling to understand "what changed since I last looked."
+- `DEV_NOTES.md` lists shortcuts/hacks that are fine for dev but must be revisited before prod (local-disk storage, stub services, weak secrets, etc). Add an entry whenever you ship a "good enough for dev" choice with a known prod gap.
 
 ## Build & Run
 ```bash
