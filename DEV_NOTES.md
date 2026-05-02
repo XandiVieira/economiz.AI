@@ -24,11 +24,13 @@ mirror entries here.
 - **Why NOT OK for prod**: users won't get push notifications. PROMO_PERSONAL alerts are dead weight.
 - **Fix before prod**: add `firebase-admin` Maven dep, drop service-account JSON in env (or as Render secret file), replace the `// TODO(FCM)` block in `PushDispatcher`. ~1 hr.
 
-### SMTP email = disabled
-- **Now**: `EmailDispatcher` is `@ConditionalOnProperty(NOTIFICATIONS_EMAIL_ENABLED=true)`. Defaults to false → bean doesn't load → email channel falls back to PUSH or NONE.
-- **Why OK for dev**: no SMTP creds required.
-- **Why NOT OK for prod**: users who chose EMAIL channel get nothing.
-- **Fix before prod**: SMTP creds in env (Render → SMTP_HOST/PORT/USERNAME/PASSWORD), flip `NOTIFICATIONS_EMAIL_ENABLED=true`. Recommend SES, Mailgun, or Postmark — Gmail SMTP rate-limits hard. ~30 min.
+### SMTP email = disabled (impacts notifications + auth flows)
+- **Now**: two paths consume SMTP:
+  1. `EmailDispatcher` (notification channel) — `@ConditionalOnProperty(NOTIFICATIONS_EMAIL_ENABLED=true)`, defaults off, falls back to PUSH/NONE when off.
+  2. `AuthEmailSender` (password reset + email verification) — always loaded; if SMTP isn't configured, **logs the link with `[DEV-MODE]` prefix** instead of sending. The reset/verify endpoints still return 204, so the FE flow works in dev — the developer copies the token from server logs.
+- **Why OK for dev**: no SMTP creds, FE end-to-end testing still works (manually grab the link).
+- **Why NOT OK for prod**: real users won't see a `[DEV-MODE]` log line. They get NO password-reset / verification email at all.
+- **Fix before prod**: set SMTP creds in env (Render → `SMTP_HOST/PORT/USERNAME/PASSWORD`) and flip `NOTIFICATIONS_EMAIL_ENABLED=true`. Recommend SES, Mailgun, or Postmark — Gmail SMTP rate-limits hard. ~30 min.
 
 ---
 
@@ -79,9 +81,9 @@ mirror entries here.
 
 ## Monitoring / ops
 
-### No `/health` or `/metrics` endpoint
-- **Now**: keep-alive cron pings `/api/v1/legal/terms` (a real public endpoint that hits no DB). Uptime monitors would also use this.
-- **Fix before serious ops**: add Spring Boot Actuator with `/actuator/health` (and maybe `/actuator/prometheus` for metrics). One Maven dep + one config block. ~20 min.
+### No `/metrics` endpoint
+- **Now**: Spring Boot Actuator is in, but only `/actuator/health` is exposed. No `/actuator/prometheus` for metrics scraping.
+- **Fix before serious ops**: change `management.endpoints.web.exposure.include` to add `prometheus` (and maybe `info`), wire to a Grafana/Prometheus endpoint. ~20 min.
 
 ### Logs go to stdout only — no aggregation
 - **Now**: Render captures stdout. Searchable in their dashboard but no retention beyond the free-tier window.

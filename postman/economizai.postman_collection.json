@@ -97,6 +97,39 @@
               "if (data.token) pm.collectionVariables.set('token', data.token);"
             ]}}
           ]
+        },
+        {
+          "name": "Forgot password (always 204, no enumeration)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/auth/forgot-password", "host": ["{{baseUrl}}"], "path": ["api","v1","auth","forgot-password"]},
+            "auth": {"type": "noauth"},
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"demo@example.com\"\n}"}
+          },
+          "response": []
+        },
+        {
+          "name": "Reset password (consume token from email or [DEV-MODE] log)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/auth/reset-password", "host": ["{{baseUrl}}"], "path": ["api","v1","auth","reset-password"]},
+            "auth": {"type": "noauth"},
+            "body": {"mode": "raw", "raw": "{\n  \"token\": \"PASTE_TOKEN_HERE\",\n  \"newPassword\": \"newPassword123\"\n}"}
+          },
+          "response": []
+        },
+        {
+          "name": "Verify email (consume token from email or [DEV-MODE] log)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/auth/verify-email", "host": ["{{baseUrl}}"], "path": ["api","v1","auth","verify-email"]},
+            "auth": {"type": "noauth"},
+            "body": {"mode": "raw", "raw": "{\n  \"token\": \"PASTE_TOKEN_HERE\"\n}"}
+          },
+          "response": []
         }
       ]
     },
@@ -242,6 +275,15 @@
           "response": []
         },
         {
+          "name": "Resend email-verification token",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/users/me/email-verification/resend", "host": ["{{baseUrl}}"], "path": ["api","v1","users","me","email-verification","resend"]}
+          },
+          "response": []
+        },
+        {
           "name": "Delete my account (LGPD Art. 18 VI)",
           "request": {
             "method": "DELETE",
@@ -340,6 +382,19 @@
             "method": "GET",
             "header": [{"key": "Accept-Language", "value": "pt"}],
             "url": {"raw": "{{baseUrl}}/api/v1/receipts/{{e2eReceiptId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","receipts","{{e2eReceiptId}}"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Add a missing item (PENDING_CONFIRMATION only)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Accept-Language", "value": "pt"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/v1/receipts/{{e2eReceiptId}}/items", "host": ["{{baseUrl}}"], "path": ["api","v1","receipts","{{e2eReceiptId}}","items"]},
+            "body": {"mode": "raw", "raw": "{\n  \"rawDescription\": \"ITEM QUE A SEFAZ ESQUECEU\",\n  \"quantity\": 1,\n  \"unit\": \"UN\",\n  \"unitPrice\": 5.00,\n  \"totalPrice\": 5.00\n}"}
           },
           "response": []
         },
@@ -710,6 +765,144 @@
             "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Accept-Language", "value": "pt"}],
             "url": {"raw": "{{baseUrl}}/api/v1/shopping-list/optimize", "host": ["{{baseUrl}}"], "path": ["api","v1","shopping-list","optimize"]},
             "body": {"mode": "raw", "raw": "{\n  \"items\": [\n    { \"productId\": \"{{e2eProductId}}\", \"quantity\": 1 }\n  ]\n}"}
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Shopping lists (persistent)",
+      "description": "Real per-household shopping lists — build, edit, check off as you shop. Items can reference a canonical Product OR be free text.",
+      "item": [
+        {
+          "name": "List my household's shopping lists",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/shopping-lists", "host": ["{{baseUrl}}"], "path": ["api","v1","shopping-lists"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Create a shopping list",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/shopping-lists", "host": ["{{baseUrl}}"], "path": ["api","v1","shopping-lists"]},
+            "body": {"mode": "raw", "raw": "{\n  \"name\": \"Compra da semana\",\n  \"items\": [\n    { \"freeText\": \"papel higiênico\", \"quantity\": 1 }\n  ]\n}"}
+          },
+          "response": []
+        },
+        {
+          "name": "Get one (with items)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/shopping-lists/{{e2eShoppingListId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","shopping-lists","{{e2eShoppingListId}}"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Rename",
+          "request": {
+            "method": "PATCH",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/shopping-lists/{{e2eShoppingListId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","shopping-lists","{{e2eShoppingListId}}"]},
+            "body": {"mode": "raw", "raw": "{\n  \"name\": \"Nome novo\"\n}"}
+          },
+          "response": []
+        },
+        {
+          "name": "Delete",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/shopping-lists/{{e2eShoppingListId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","shopping-lists","{{e2eShoppingListId}}"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Add item",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/shopping-lists/{{e2eShoppingListId}}/items", "host": ["{{baseUrl}}"], "path": ["api","v1","shopping-lists","{{e2eShoppingListId}}","items"]},
+            "body": {"mode": "raw", "raw": "{\n  \"productId\": \"{{e2eProductId}}\",\n  \"quantity\": 2\n}"}
+          },
+          "response": []
+        },
+        {
+          "name": "Toggle item checked",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/shopping-lists/{{e2eShoppingListId}}/items/{{e2eShoppingListItemId}}/toggle", "host": ["{{baseUrl}}"], "path": ["api","v1","shopping-lists","{{e2eShoppingListId}}","items","{{e2eShoppingListItemId}}","toggle"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Remove item",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/shopping-lists/{{e2eShoppingListId}}/items/{{e2eShoppingListItemId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","shopping-lists","{{e2eShoppingListId}}","items","{{e2eShoppingListItemId}}"]}
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Notifications (inbox)",
+      "description": "User-facing inbox for notifications generated by the app (promo alerts, etc).",
+      "item": [
+        {
+          "name": "List notifications (paginated)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/notifications?page=0&size=20", "host": ["{{baseUrl}}"], "path": ["api","v1","notifications"], "query": [{"key": "page", "value": "0"}, {"key": "size", "value": "20"}]}
+          },
+          "response": []
+        },
+        {
+          "name": "Unread count (badge)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/notifications/unread-count", "host": ["{{baseUrl}}"], "path": ["api","v1","notifications","unread-count"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Mark one read",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/notifications/{{e2eNotificationId}}/read", "host": ["{{baseUrl}}"], "path": ["api","v1","notifications","{{e2eNotificationId}}","read"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Mark all read",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/notifications/mark-all-read", "host": ["{{baseUrl}}"], "path": ["api","v1","notifications","mark-all-read"]}
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "description": "App-open snapshot — bundles spend + recent receipts + suggested list + community promos + unread count.",
+      "item": [
+        {
+          "name": "Get dashboard",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/dashboard", "host": ["{{baseUrl}}"], "path": ["api","v1","dashboard"]}
           },
           "response": []
         }

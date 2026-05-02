@@ -18,6 +18,28 @@ error messages; default is `pt`, fall back to `en` is supported.
 
 ---
 
+## 0. App-open snapshot (use this on the home screen)
+
+```
+GET /api/v1/dashboard
+```
+
+Single round-trip returns:
+- `currentMonth` — `{ year, month, total, receiptCount, averageTicket }`
+- `recentReceipts` — last 5 confirmed receipts (newest first)
+- `suggestedShoppingList` — top 5 RAN_OUT/RUNNING_LOW items
+- `communityPromosNearby` — top 5 community promos (radius-aware, watched markets bypass)
+- `unreadNotificationCount` — bell-badge value
+- `generatedAt` — server timestamp
+
+Each section silently degrades to empty/zero when there's nothing to show. Use this instead of fan-out calls on cold start (saves you ~5×30s on Render free tier).
+
+```
+GET /actuator/health   → public, returns `{"status":"UP"}` — for uptime monitors
+```
+
+---
+
 ## 1. Auth + onboarding
 
 ### Register
@@ -76,6 +98,21 @@ DELETE /api/v1/users/me/profile-picture
 ```
 
 **Profile picture**: standard multipart upload. The response is JSON `{ "status": "ok" }` on success. GET returns the raw image bytes — set the `<img src>` directly to the URL with the `Authorization` header in your fetch wrapper, or fetch + blob-URL it. Storage is local-disk in dev (ephemeral on Render free tier — see `DEV_NOTES.md` for the prod plan); the API contract won't change when we swap backends.
+
+### Password reset + email verification
+
+```
+POST /api/v1/auth/forgot-password    { "email": "..." }                       → 204
+POST /api/v1/auth/reset-password     { "token": "...", "newPassword": "..." } → 204
+POST /api/v1/auth/verify-email       { "token": "..." }                       → 204
+POST /api/v1/users/me/email-verification/resend                               → 204
+```
+
+`forgot-password` always returns 204 — even when the email isn't registered, to avoid leaking valid addresses. `reset-password` and `verify-email` return 400 on stale/used tokens.
+
+**Dev mode**: when SMTP isn't configured (current Render setup), the link is logged with a `[DEV-MODE]` prefix in the server logs instead of being emailed. The endpoints still return 204, so the flow works for FE testing — grab the token from logs.
+
+`UserResponse` now includes `emailVerified` + `emailVerifiedAt`. You can gate features behind `emailVerified === true` if you want.
 
 ---
 
@@ -139,7 +176,8 @@ They can:
 
 ```
 GET    /api/v1/receipts/{id}                         → full receipt with items
-PATCH  /api/v1/receipts/{id}/items/{itemId}          → fix typos / qty / toggle excluded
+PATCH  /api/v1/receipts/{id}/items/{itemId}          → fix typos / qty / toggle excluded / set friendlyDescription
+POST   /api/v1/receipts/{id}/items                   → add a missing item (PENDING_CONFIRMATION only)
 POST   /api/v1/receipts/{id}/confirm                 → commit. Optional body { excludedItemIds: [uuid, ...] }
                                                         Returns { receipt, personalPromos: [...] }
 POST   /api/v1/receipts/{id}/reject                  → discard. Receipt stays as REJECTED in history.
@@ -377,6 +415,44 @@ the household has 5+ confirmed purchases of a given generic.
 `brandStrength`: `PREFERRED` (top brand 60–85% share) or `MUST_HAVE` (>85%). FE
 can render as a soft hint ("você costuma comprar Italac") or a hard filter on
 suggested-list views.
+
+---
+
+## 10b. Notifications inbox
+
+```
+GET  /api/v1/notifications?page=0&size=20    → paginated list, newest first
+GET  /api/v1/notifications/unread-count      → { "unread": N }
+POST /api/v1/notifications/{id}/read         → mark single as read
+POST /api/v1/notifications/mark-all-read     → { "marked": N }
+```
+
+Each `NotificationResponse` carries `payload` — the JSON we attached when we generated the notification (`receiptId`, `productId`, `savingsPct`, etc) so cards can deep-link.
+
+---
+
+## 10c. Persistent shopping lists
+
+For one-shot ad-hoc optimization, see §9. For build-edit-shop workflows, use these:
+
+```
+GET    /api/v1/shopping-lists                                          → list (newest first)
+POST   /api/v1/shopping-lists                                          → create
+       { "name": "...", "items"?: [ { "productId"? | "freeText"?, "quantity"? } ] }
+GET    /api/v1/shopping-lists/{id}                                     → detail with items
+PATCH  /api/v1/shopping-lists/{id}                                     → rename
+       { "name": "..." }
+DELETE /api/v1/shopping-lists/{id}                                     → delete (cascades items)
+
+POST   /api/v1/shopping-lists/{id}/items                               → add item
+       { "productId"? | "freeText"?, "quantity"? }
+POST   /api/v1/shopping-lists/{id}/items/{itemId}/toggle               → toggle checked
+DELETE /api/v1/shopping-lists/{id}/items/{itemId}                      → remove item
+```
+
+Each item is **either** linked to a canonical `Product` (auto-suggestion-friendly) **or** free text — the request must include exactly one. Free-text entries can be upgraded later by replacing the row with a productId-bound one.
+
+`ShoppingListResponse.items[*].displayName` is the resolved label — `productName` if linked, else `freeText`.
 
 ---
 

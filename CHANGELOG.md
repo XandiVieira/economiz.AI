@@ -10,6 +10,47 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-05-02 (later — gap-closing batch)
+
+### `GET /api/v1/dashboard` — bundled app-open snapshot
+- One round-trip returns: current-month spend snapshot (total + count + ticket médio), last 5 confirmed receipts, top 5 suggested-list items, top 5 community promos in your area (watched markets bypass radius), unread notification count.
+- Each section silently degrades to empty/zero — no errors. Use this on the home screen instead of fan-out calls.
+
+### Notifications inbox endpoints
+- **New: `GET /api/v1/notifications`** — paginated, newest first.
+- **New: `GET /api/v1/notifications/unread-count`** — `{ "unread": N }` for the bell badge.
+- **New: `POST /api/v1/notifications/{id}/read`** — mark single as read.
+- **New: `POST /api/v1/notifications/mark-all-read`** — `{ "marked": N }`.
+- `NotificationResponse` includes `payload` (the same JSON we passed at dispatch time) so cards can deep-link to the related receipt/product.
+
+### Add missing items to a receipt before confirming
+- **New: `POST /api/v1/receipts/{id}/items`** — for cases when SVRS missed a line. Only works on `PENDING_CONFIRMATION` receipts. Auto-assigns next position. Same body shape as the PATCH (minus the immutable rawDescription edits).
+
+### `/actuator/health` is now public
+- Spring Boot Actuator wired in; only `/actuator/health` is exposed publicly. Returns `200 {"status":"UP"}`. The keep-alive cron now hits this instead of `/legal/terms`. Use it for any uptime monitoring you wire externally.
+
+### Password reset + email verification
+- **New: `POST /api/v1/auth/forgot-password`** `{ email }` → 204. Always 204 even when email isn't registered (no enumeration leak).
+- **New: `POST /api/v1/auth/reset-password`** `{ token, newPassword }` → 204. Token from the link, single-use, expires 60 min.
+- **New: `POST /api/v1/auth/verify-email`** `{ token }` → 204. Token sent automatically on register, expires 24h.
+- **New: `POST /api/v1/users/me/email-verification/resend`** — re-sends a fresh verification token if the old one expired.
+- `User` now has `emailVerified` / `emailVerifiedAt` fields (visible via `GET /users/me` once you re-pull).
+- **Dev shortcut:** until SMTP is wired in Render, the link is **logged with `[DEV-MODE]` prefix** instead of emailed. Grep server logs for the token. Documented in `DEV_NOTES.md`.
+
+### Persistent shopping lists
+- **New: `GET /api/v1/shopping-lists`** — household's lists (newest first).
+- **New: `POST /api/v1/shopping-lists`** `{ name, items?: [{productId? | freeText?, quantity?}] }` — create.
+- **New: `GET /api/v1/shopping-lists/{id}`** — detail with items.
+- **New: `PATCH /api/v1/shopping-lists/{id}`** `{ name }` — rename.
+- **New: `DELETE /api/v1/shopping-lists/{id}`** — delete (cascades items).
+- **New: `POST /api/v1/shopping-lists/{id}/items`** — add item.
+- **New: `POST /api/v1/shopping-lists/{id}/items/{itemId}/toggle`** — toggle checked.
+- **New: `DELETE /api/v1/shopping-lists/{id}/items/{itemId}`** — remove item.
+- Items can reference a canonical Product (auto-suggestions, optimizer-friendly) OR be free text (e.g. "papel higiênico" before we have a canonical Product for it).
+- The existing stateless `POST /api/v1/shopping-list/optimize` (singular) stays for ad-hoc one-shot optimization.
+
+---
+
 ## 2026-05-02
 
 ### Profile pictures
