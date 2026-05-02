@@ -1,0 +1,39 @@
+# Render's free tier spins the service down after ~15 min of no HTTP
+# traffic — the next request then waits ~30s for cold start. This cron
+# pings a public, no-auth, no-DB endpoint every 10 minutes to keep the
+# JVM warm. Cost: zero (GitHub Actions cron is free for public repos
+# and well within the included minutes for private).
+#
+# GitHub cron isn't precise (lag of 5-15 min during peak hours is
+# normal), so 10 min interval gives some headroom against the 15-min
+# sleep window. If a cold start ever does happen, the FE just sees a
+# slow first request — not an outage.
+#
+# Drop this when we move off Render free tier (the paid plans don't
+# sleep) or when traffic is high enough to keep the service warm
+# organically (a few real requests every 10-15 min from production
+# users).
+
+name: keep-render-warm
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Ping legal/terms (public, lightweight, no DB hit)
+        run: |
+          for attempt in 1 2 3; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
+              "https://economiz-ai.onrender.com/api/v1/legal/terms")
+            echo "attempt $attempt → HTTP $code"
+            if [ "$code" = "200" ]; then exit 0; fi
+            sleep 15
+          done
+          echo "All 3 ping attempts failed — service may be down"
+          exit 1
