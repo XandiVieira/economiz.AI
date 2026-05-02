@@ -42,7 +42,7 @@ public class Receipt extends BaseEntity {
     @JoinColumn(name = "household_id", nullable = false)
     private Household household;
 
-    @Column(name = "chave_acesso", nullable = false, unique = true, length = 44)
+    @Column(name = "chave_acesso", nullable = false, length = 44)
     private String chaveAcesso;
 
     @Enumerated(EnumType.STRING)

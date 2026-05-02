@@ -123,7 +123,7 @@ de acesso server-side. Pass exactly what the QR scanner returned:
 | 400 `receipt.state.unsupported` | Chave is from a state we don't have a SEFAZ adapter for (only RS today) |
 | 502 `receipt.sefaz.fetch.failed` | SVRS portal didn't respond / 5xx'd |
 | 400 `receipt.parse.failed` | We fetched HTML but the parser couldn't extract items. **The receipt is still saved with `status=FAILED_PARSE` + `rawHtml`** so ops can patch the parser without you re-scanning. |
-| 409 `receipt.already.ingested` | This chave was already submitted by some user |
+| 409 `receipt.already.ingested` | This chave is already in **your household's** history. Other households can still import the same chave; this only blocks double-import within yours. Delete it via `DELETE /receipts/{id}` to free the slot. |
 
 ### Review + confirm
 
@@ -135,6 +135,7 @@ GET    /api/v1/receipts/{id}                         → full receipt with items
 PATCH  /api/v1/receipts/{id}/items/{itemId}          → fix typos / qty
 POST   /api/v1/receipts/{id}/confirm                 → commit. Returns { receipt, personalPromos: [...] }
 POST   /api/v1/receipts/{id}/reject                  → discard. Receipt stays as REJECTED in history.
+DELETE /api/v1/receipts/{id}                         → hard delete. Frees the chave so it can be re-imported.
 ```
 
 Confirm is what triggers downstream side effects:

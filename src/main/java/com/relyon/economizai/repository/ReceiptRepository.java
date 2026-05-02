@@ -16,6 +16,8 @@ public interface ReceiptRepository extends JpaRepository<Receipt, UUID>, JpaSpec
 
     boolean existsByChaveAcesso(String chaveAcesso);
 
+    boolean existsByHouseholdIdAndChaveAcesso(UUID householdId, String chaveAcesso);
+
     /** Distinct CNPJs the household has ever submitted a confirmed receipt from. */
     @Query("""
         SELECT DISTINCT r.cnpjEmitente FROM Receipt r

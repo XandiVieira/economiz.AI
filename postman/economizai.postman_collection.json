@@ -340,6 +340,15 @@
             "url": {"raw": "{{baseUrl}}/api/v1/receipts/{{e2eReceiptId}}/reject", "host": ["{{baseUrl}}"], "path": ["api","v1","receipts","{{e2eReceiptId}}","reject"]}
           },
           "response": []
+        },
+        {
+          "name": "Delete receipt (frees the chave for re-import within the same household)",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/receipts/{{e2eReceiptId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","receipts","{{e2eReceiptId}}"]}
+          },
+          "response": []
         }
       ]
     },

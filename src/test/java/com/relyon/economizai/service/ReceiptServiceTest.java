@@ -37,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -117,7 +118,7 @@ class ReceiptServiceTest {
     @Test
     void submit_persistsParsedReceiptInPendingStatus() {
         var user = buildUser();
-        when(receiptRepository.existsByChaveAcesso(CHAVE_RS)).thenReturn(false);
+        when(receiptRepository.existsByHouseholdIdAndChaveAcesso(any(), eq(CHAVE_RS))).thenReturn(false);
         var fetched = new SefazIngestionService.FetchedDocument(null, "<html/>", CHAVE_RS,
                 com.relyon.economizai.model.enums.UnidadeFederativa.RS, null);
         when(sefazIngestionService.fetch(CHAVE_RS)).thenReturn(fetched);
@@ -139,7 +140,7 @@ class ReceiptServiceTest {
     @Test
     void submit_rejectsDuplicateChave() {
         var user = buildUser();
-        when(receiptRepository.existsByChaveAcesso(CHAVE_RS)).thenReturn(true);
+        when(receiptRepository.existsByHouseholdIdAndChaveAcesso(any(), eq(CHAVE_RS))).thenReturn(true);
 
         assertThrows(ReceiptAlreadyIngestedException.class,
                 () -> receiptService.submit(user, new SubmitReceiptRequest(CHAVE_RS)));

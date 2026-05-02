@@ -70,8 +70,12 @@ public class ReceiptService {
         var chave = ChaveAcessoParser.extractChave(qrPayload);
         log.info("submit chave={}", LogMasker.chave(chave));
 
-        if (receiptRepository.existsByChaveAcesso(chave)) {
-            log.info("submit rejected: chave {} already ingested", LogMasker.chave(chave));
+        // Per-household uniqueness: a household can't double-import its own
+        // receipts, but two different households CAN both record the same
+        // fiscal event (couple split a bill, or dev/test scenarios).
+        if (receiptRepository.existsByHouseholdIdAndChaveAcesso(user.getHousehold().getId(), chave)) {
+            log.info("submit rejected: chave {} already in household {}",
+                    LogMasker.chave(chave), user.getHousehold().getId());
             throw new ReceiptAlreadyIngestedException(chave);
         }
 
@@ -176,6 +180,14 @@ public class ReceiptService {
                     )
             ));
         }
+    }
+
+    @Transactional
+    public void delete(User user, UUID receiptId) {
+        MDC.put(MdcContextFilter.RECEIPT_ID, abbrev(receiptId));
+        var receipt = loadOwned(user, receiptId);
+        receiptRepository.delete(receipt);
+        log.info("delete ok status_was={}", receipt.getStatus());
     }
 
     @Transactional

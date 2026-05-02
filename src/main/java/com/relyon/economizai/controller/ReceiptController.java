@@ -18,6 +18,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -79,5 +80,11 @@ public class ReceiptController {
     public ResponseEntity<ReceiptResponse> reject(@AuthenticationPrincipal User user,
                                                   @PathVariable UUID id) {
         return ResponseEntity.ok(receiptService.reject(user, id));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@AuthenticationPrincipal User user, @PathVariable UUID id) {
+        receiptService.delete(user, id);
+        return ResponseEntity.noContent().build();
     }
 }
