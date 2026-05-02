@@ -319,7 +319,7 @@
               {"key": "Accept-Language", "value": "pt"}
             ],
             "url": {"raw": "{{baseUrl}}/api/v1/receipts/{{e2eReceiptId}}/items/{{e2eReceiptItemId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","receipts","{{e2eReceiptId}}","items","{{e2eReceiptItemId}}"]},
-            "body": {"mode": "raw", "raw": "{\n  \"rawDescription\": \"ARROZ TIO JOAO TIPO 1 5KG\",\n  \"ean\": \"7891234567890\",\n  \"quantity\": 2,\n  \"unit\": \"UN\",\n  \"unitPrice\": 28.90,\n  \"totalPrice\": 57.80\n}"}
+            "body": {"mode": "raw", "raw": "{\n  \"ean\": \"7891234567890\",\n  \"quantity\": 2,\n  \"unit\": \"UN\",\n  \"unitPrice\": 28.90,\n  \"totalPrice\": 57.80,\n  \"friendlyDescription\": \"Arroz Tio João 5kg\"\n}"}
           },
           "response": []
         },

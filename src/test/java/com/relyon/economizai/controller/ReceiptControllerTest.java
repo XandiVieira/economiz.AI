@@ -102,6 +102,8 @@ class ReceiptControllerTest {
                         UUID.randomUUID(),
                         1,
                         "ARROZ TIO J 5KG",
+                        null,
+                        "ARROZ TIO J 5KG",
                         "7891234567890",
                         new BigDecimal("2"),
                         "UN",
@@ -231,7 +233,7 @@ class ReceiptControllerTest {
         var id = UUID.randomUUID();
         var itemId = UUID.randomUUID();
         var request = new UpdateReceiptItemRequest("ARROZ TIO JOAO 5KG", "7891234567890",
-                new BigDecimal("2"), "UN", new BigDecimal("28.90"), new BigDecimal("57.80"), null);
+                new BigDecimal("2"), "UN", new BigDecimal("28.90"), new BigDecimal("57.80"), null, null);
         when(receiptService.updateItem(any(User.class), eq(id), eq(itemId), any(UpdateReceiptItemRequest.class)))
                 .thenReturn(sampleReceipt(ReceiptStatus.PENDING_CONFIRMATION));
 

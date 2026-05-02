@@ -139,6 +139,15 @@ POST   /api/v1/receipts/{id}/reject                  → discard. Receipt stays 
 DELETE /api/v1/receipts/{id}                         → hard delete. Frees the chave so it can be re-imported.
 ```
 
+**Per-item display name (`friendlyDescription`)** — NFC-e descriptions are noisy ("ARROZ TIO J TP1 5KG"). The user can rename an item for display via `PATCH /receipts/{id}/items/{itemId}` with `{ "friendlyDescription": "Arroz Tio João 5kg" }`. The original `rawDescription` stays untouched (it's the legal audit text from SEFAZ — immutable).
+
+The response always includes both:
+- `rawDescription` — original NFC-e text, never changes
+- `friendlyDescription` — user override, null when not set
+- `displayDescription` — derived: `friendlyDescription` if set, else `rawDescription`. Use this for rendering.
+
+**Household memory** — when the user names an item that's linked to a Product, the name is remembered household-wide. Future receipts that contain the same Product (matched by EAN or alias) will inherit `friendlyDescription` automatically — the user only types it once. Different households can have different names for the same product.
+
 **Per-item exclusion** — when the household shopped together with someone outside (a friend, a roommate's purchase) and only some items are theirs, the user can mark items as excluded. Excluded items:
 
 - Stay on the receipt for audit (the original NF is a legal document, we don't rewrite it)

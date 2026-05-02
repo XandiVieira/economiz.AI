@@ -37,6 +37,9 @@ public class ReceiptItem extends BaseEntity {
     @Column(name = "raw_description", nullable = false, columnDefinition = "TEXT")
     private String rawDescription;
 
+    @Column(name = "friendly_description", length = 500)
+    private String friendlyDescription;
+
     @Column(length = 14)
     private String ean;
 

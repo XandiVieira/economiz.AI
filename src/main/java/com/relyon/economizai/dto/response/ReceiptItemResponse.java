@@ -9,6 +9,8 @@ public record ReceiptItemResponse(
         UUID id,
         Integer lineNumber,
         String rawDescription,
+        String friendlyDescription,
+        String displayDescription,
         String ean,
         BigDecimal quantity,
         String unit,
@@ -17,10 +19,14 @@ public record ReceiptItemResponse(
         boolean excluded
 ) {
     public static ReceiptItemResponse from(ReceiptItem item) {
+        var friendly = item.getFriendlyDescription();
+        var display = friendly != null && !friendly.isBlank() ? friendly : item.getRawDescription();
         return new ReceiptItemResponse(
                 item.getId(),
                 item.getLineNumber(),
                 item.getRawDescription(),
+                friendly,
+                display,
                 item.getEan(),
                 item.getQuantity(),
                 item.getUnit(),

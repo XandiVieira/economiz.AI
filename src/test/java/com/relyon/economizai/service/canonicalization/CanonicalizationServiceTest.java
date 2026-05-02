@@ -10,6 +10,7 @@ import com.relyon.economizai.model.enums.CategorizationSource;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.repository.ProductAliasRepository;
 import com.relyon.economizai.repository.ProductRepository;
+import com.relyon.economizai.service.HouseholdProductAliasService;
 import com.relyon.economizai.service.extraction.ProductExtraction;
 import com.relyon.economizai.service.extraction.ProductExtractor;
 import org.junit.jupiter.api.Test;
@@ -37,6 +38,7 @@ class CanonicalizationServiceTest {
     @Mock private ProductRepository productRepository;
     @Mock private ProductAliasRepository aliasRepository;
     @Mock private ProductExtractor productExtractor;
+    @Mock private HouseholdProductAliasService householdProductAliasService;
 
     @InjectMocks private CanonicalizationService service;
 

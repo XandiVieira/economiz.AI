@@ -7,6 +7,7 @@ import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.repository.ProductAliasRepository;
 import com.relyon.economizai.repository.ProductRepository;
+import com.relyon.economizai.service.HouseholdProductAliasService;
 import com.relyon.economizai.service.extraction.ProductExtraction;
 import com.relyon.economizai.service.extraction.ProductExtractor;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,7 @@ public class CanonicalizationService {
     private final ProductRepository productRepository;
     private final ProductAliasRepository aliasRepository;
     private final ProductExtractor productExtractor;
+    private final HouseholdProductAliasService householdProductAliasService;
 
     @Transactional
     public CanonicalizationOutcome canonicalize(Receipt receipt) {
@@ -41,12 +43,26 @@ public class CanonicalizationService {
                     case CREATED -> created++;
                     case UNMATCHED -> unmatched++;
                 }
+                applyHouseholdFriendlyName(receipt, item);
             } finally {
                 MDC.remove(MdcContextFilter.ITEM_ID);
             }
         }
         log.info("canonicalize done matched={} created={} unmatched={}", matched, created, unmatched);
         return new CanonicalizationOutcome(matched, created, unmatched);
+    }
+
+    private void applyHouseholdFriendlyName(Receipt receipt, ReceiptItem item) {
+        // Skip if user already typed a name on this item, or item didn't get
+        // linked to a Product, or there's no household memory for this product.
+        if (item.getFriendlyDescription() != null && !item.getFriendlyDescription().isBlank()) return;
+        if (item.getProduct() == null) return;
+        var remembered = householdProductAliasService.findFor(receipt.getHousehold(), item.getProduct());
+        if (remembered != null) {
+            item.setFriendlyDescription(remembered);
+            log.info("item.inherited_friendly_name product={} name='{}'",
+                    abbrev(item.getProduct().getId()), remembered);
+        }
     }
 
     private ItemResult canonicalizeItem(ReceiptItem item) {

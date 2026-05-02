@@ -2,16 +2,17 @@ package com.relyon.economizai.dto.request;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 
 public record UpdateReceiptItemRequest(
-        @Schema(description = "Item text exactly as parsed from the NFC-e — fix typos here before confirming.",
-                example = "ARROZ TIO J TP1 5KG")
-        @NotBlank @Size(max = 500) String rawDescription,
+        @Schema(description = "Original NFC-e text. **Read-only / ignored by the server** — kept in the request " +
+                "shape for backwards compatibility, but the field is immutable after parsing. To rename an item " +
+                "for display, set friendlyDescription instead.",
+                example = "ARROZ TIO J TP1 5KG", deprecated = true)
+        @Size(max = 500) String rawDescription,
         @Schema(description = "EAN barcode (digits only). Optional — leave null if the receipt didn't carry one.",
                 example = "7891234567890")
         @Size(max = 14) String ean,
@@ -25,5 +26,11 @@ public record UpdateReceiptItemRequest(
         @NotNull @DecimalMin(value = "0.0") BigDecimal totalPrice,
         @Schema(description = "Optional. true = exclude this item from spend / consumption / price-index. " +
                 "Useful for items that belong to someone outside the household. Omit to leave the flag unchanged.")
-        Boolean excluded
+        Boolean excluded,
+        @Schema(description = "Optional. User-friendly display name shown to the household. rawDescription " +
+                "stays untouched (it's the audit trail from SEFAZ). When set on an item already linked to a " +
+                "Product, also remembered household-wide so future receipts of the same product inherit it. " +
+                "Send empty string to clear.",
+                example = "Cerveja Stella 330ml")
+        @Size(max = 500) String friendlyDescription
 ) {}

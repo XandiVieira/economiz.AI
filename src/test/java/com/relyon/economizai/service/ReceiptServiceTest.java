@@ -14,6 +14,7 @@ import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
 import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.repository.ReceiptRepository;
+import com.relyon.economizai.service.HouseholdProductAliasService;
 import com.relyon.economizai.service.canonicalization.CanonicalizationService;
 import com.relyon.economizai.service.geo.MarketLocationService;
 import com.relyon.economizai.service.priceindex.PriceIndexService;
@@ -54,6 +55,7 @@ class ReceiptServiceTest {
     @Mock private PriceIndexService priceIndexService;
     @Mock private PromoDetector promoDetector;
     @Mock private MarketLocationService marketLocationService;
+    @Mock private HouseholdProductAliasService householdProductAliasService;
 
     @InjectMocks private ReceiptService receiptService;
 
@@ -192,20 +194,27 @@ class ReceiptServiceTest {
         when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
 
         var request = new UpdateReceiptItemRequest(
-                "ARROZ TIO JOAO TIPO 1 5KG",
+                "IGNORED — rawDescription is immutable",
                 "7891234567890",
                 new BigDecimal("3"),
                 "UN",
                 new BigDecimal("28.90"),
                 new BigDecimal("86.70"),
-                null
+                null,
+                "Arroz Tio João 5kg"
         );
 
         var response = receiptService.updateItem(user, receipt.getId(), item.getId(), request);
 
-        assertEquals("ARROZ TIO JOAO TIPO 1 5KG", response.items().get(0).rawDescription());
-        assertEquals(new BigDecimal("3"), response.items().get(0).quantity());
-        assertEquals(new BigDecimal("86.70"), response.items().get(0).totalPrice());
+        var updated = response.items().get(0);
+        // rawDescription stays as the original (immutable audit text)
+        assertEquals("ARROZ TIO J 5KG", updated.rawDescription());
+        // friendlyDescription captures the user's display rename
+        assertEquals("Arroz Tio João 5kg", updated.friendlyDescription());
+        // displayDescription is the resolved field — friendly when set, raw otherwise
+        assertEquals("Arroz Tio João 5kg", updated.displayDescription());
+        assertEquals(new BigDecimal("3"), updated.quantity());
+        assertEquals(new BigDecimal("86.70"), updated.totalPrice());
     }
 
     @Test
@@ -215,7 +224,7 @@ class ReceiptServiceTest {
         when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
 
         var request = new UpdateReceiptItemRequest("X", null,
-                new BigDecimal("1"), null, null, new BigDecimal("1"), null);
+                new BigDecimal("1"), null, null, new BigDecimal("1"), null, null);
 
         assertThrows(ReceiptItemNotFoundException.class,
                 () -> receiptService.updateItem(user, receipt.getId(), UUID.randomUUID(), request));

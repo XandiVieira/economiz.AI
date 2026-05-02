@@ -65,6 +65,7 @@ public class ReceiptService {
     private final PromoDetector promoDetector;
     private final MarketLocationService marketLocationService;
     private final NotificationService notificationService;
+    private final HouseholdProductAliasService householdProductAliasService;
 
     @Transactional
     public ReceiptResponse submit(User user, SubmitReceiptRequest request) {
@@ -232,6 +233,9 @@ public class ReceiptService {
                 .orElseThrow(ReceiptItemNotFoundException::new);
         applyUpdate(item, request);
         receiptItemRepository.save(item);
+        // Remember the friendly name household-wide so future receipts of
+        // the same Product inherit it. No-op when item isn't linked yet.
+        householdProductAliasService.rememberFromItem(receipt.getHousehold(), item);
         log.info("item.updated description='{}' qty={} totalPrice={}",
                 item.getRawDescription(), item.getQuantity(), item.getTotalPrice());
         return ReceiptResponse.from(receipt);
@@ -284,12 +288,17 @@ public class ReceiptService {
     }
 
     private void applyUpdate(ReceiptItem item, UpdateReceiptItemRequest request) {
-        item.setRawDescription(request.rawDescription());
+        // rawDescription stays immutable — it's the SEFAZ-issued audit text.
+        // Display overrides go on friendlyDescription.
         item.setEan(request.ean());
         item.setQuantity(request.quantity());
         item.setUnit(request.unit());
         item.setUnitPrice(request.unitPrice());
         item.setTotalPrice(request.totalPrice());
         if (request.excluded() != null) item.setExcluded(request.excluded());
+        if (request.friendlyDescription() != null) {
+            item.setFriendlyDescription(request.friendlyDescription().isBlank()
+                    ? null : request.friendlyDescription());
+        }
     }
 }
