@@ -1,24 +1,22 @@
-# Render's free tier spins the service down after ~15 min of no HTTP
-# traffic — the next request then waits ~30s for cold start. This cron
-# pings a public, no-auth, no-DB endpoint every 10 minutes to keep the
-# JVM warm. Cost: zero (GitHub Actions cron is free for public repos
-# and well within the included minutes for private).
+# Render free tier spins the service down after exactly 15 min of no
+# incoming HTTP request (per render.com/docs/free). Next request then
+# waits ~30s for cold start. This cron pings a public, no-auth, no-DB
+# endpoint just inside that window to keep the JVM warm.
 #
-# GitHub cron isn't precise (lag of 5-15 min during peak hours is
-# normal), so 10 min interval gives some headroom against the 15-min
-# sleep window. If a cold start ever does happen, the FE just sees a
-# slow first request — not an outage.
+# Interval choice: 14 min (just under the 15-min sleep). Trade-off —
+# GitHub Actions cron can lag by 5-30 min during peak hours, so on a
+# bad-luck day a ping might arrive late and the FE sees one cold start.
+# Acceptable for free tier. Bump to */10 if cold starts become annoying.
 #
-# Drop this when we move off Render free tier (the paid plans don't
-# sleep) or when traffic is high enough to keep the service warm
-# organically (a few real requests every 10-15 min from production
-# users).
+# Cost: zero (free for public repos, well within included minutes for
+# private). Drop when we move off Render free tier or when organic
+# traffic keeps the service warm by itself.
 
 name: keep-render-warm
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "*/14 * * * *"
   workflow_dispatch: {}
 
 jobs:
