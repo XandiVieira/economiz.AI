@@ -252,6 +252,24 @@
             "url": {"raw": "{{baseUrl}}/api/v1/households/leave", "host": ["{{baseUrl}}"], "path": ["api","v1","households","leave"]}
           },
           "response": []
+        },
+        {
+          "name": "Regenerate invite code (rotates + extends 48h TTL)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/households/me/invite-code/regenerate", "host": ["{{baseUrl}}"], "path": ["api","v1","households","me","invite-code","regenerate"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Remove a member (kick — moves them to a fresh solo household)",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/households/me/members/{{memberUserId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","households","me","members","{{memberUserId}}"]}
+          },
+          "response": []
         }
       ]
     },
@@ -569,7 +587,7 @@
     },
     {
       "name": "Consumption (Phase 3)",
-      "description": "Predictive purchase intelligence per household — when products will run out, suggested shopping list. Volume-gated: products with fewer than 3 prior purchases are silently skipped.",
+      "description": "Predictive purchase intelligence per household — when products will run out, suggested shopping list. Volume-gated: products with fewer than 2 prior purchases are silently skipped.",
       "item": [
         {
           "name": "Predictions per product",
@@ -581,11 +599,65 @@
           "response": []
         },
         {
-          "name": "Suggested shopping list",
+          "name": "Suggested shopping list (RAN_OUT + RUNNING_LOW only)",
           "request": {
             "method": "GET",
             "header": [{"key": "Accept-Language", "value": "pt"}],
             "url": {"raw": "{{baseUrl}}/api/v1/consumption/suggested-list", "host": ["{{baseUrl}}"], "path": ["api","v1","consumption","suggested-list"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Suggested shopping list with upcoming items",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/consumption/suggested-list?includeUpcoming=true&upcomingLimit=5", "host": ["{{baseUrl}}"], "path": ["api","v1","consumption","suggested-list"], "query": [{"key": "includeUpcoming", "value": "true"}, {"key": "upcomingLimit", "value": "5"}]}
+          },
+          "response": []
+        },
+        {
+          "name": "Snooze a product (Não preciso agora)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/consumption/snooze/{{e2eProductId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","consumption","snooze","{{e2eProductId}}"]},
+            "body": {"mode": "raw", "raw": "{\n  \"days\": 7\n}"}
+          },
+          "response": []
+        },
+        {
+          "name": "Clear snooze",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/consumption/snooze/{{e2eProductId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","consumption","snooze","{{e2eProductId}}"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Log manual purchase (Já comprei sem nota)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/consumption/manual-purchase", "host": ["{{baseUrl}}"], "path": ["api","v1","consumption","manual-purchase"]},
+            "body": {"mode": "raw", "raw": "{\n  \"productId\": \"{{e2eProductId}}\",\n  \"quantity\": 1\n}"}
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Shopping list (PRO-52)",
+      "description": "Multi-market basket optimization. Greedy heuristic — for each item picks the cheapest known market (local history first, community index fallback), then groups items per market.",
+      "item": [
+        {
+          "name": "Optimize a shopping list",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/shopping-list/optimize", "host": ["{{baseUrl}}"], "path": ["api","v1","shopping-list","optimize"]},
+            "body": {"mode": "raw", "raw": "{\n  \"items\": [\n    { \"productId\": \"{{e2eProductId}}\", \"quantity\": 1 }\n  ]\n}"}
           },
           "response": []
         }
@@ -1309,7 +1381,60 @@
           ]
         },
         {
-          "name": "37. LGPD: delete my account (idempotent terminator)",
+          "name": "37. Snooze a product (Phase 3 dismissal)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/consumption/snooze/{{e2eProductId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","consumption","snooze","{{e2eProductId}}"]},
+            "body": {"mode": "raw", "raw": "{\n  \"days\": 7\n}"}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "if (!pm.collectionVariables.get('e2eProductId')) { pm.test.skip('No product id — skipping'); return; }",
+              "pm.test('Returns 204', function () { pm.response.to.have.status(204); });"
+            ]}}
+          ]
+        },
+        {
+          "name": "38. Log a manual purchase",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/consumption/manual-purchase", "host": ["{{baseUrl}}"], "path": ["api","v1","consumption","manual-purchase"]},
+            "body": {"mode": "raw", "raw": "{\n  \"productId\": \"{{e2eProductId}}\",\n  \"quantity\": 1\n}"}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "if (!pm.collectionVariables.get('e2eProductId')) { pm.test.skip('No product id — skipping'); return; }",
+              "pm.test('Returns 204', function () { pm.response.to.have.status(204); });"
+            ]}}
+          ]
+        },
+        {
+          "name": "39. Optimize a shopping list (basket grouping by market)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/shopping-list/optimize", "host": ["{{baseUrl}}"], "path": ["api","v1","shopping-list","optimize"]},
+            "body": {"mode": "raw", "raw": "{\n  \"items\": [\n    { \"productId\": \"{{e2eProductId}}\", \"quantity\": 1 }\n  ]\n}"}
+          },
+          "response": [],
+          "event": [
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "if (!pm.collectionVariables.get('e2eProductId')) { pm.test.skip('No product id — skipping'); return; }",
+              "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+              "var d = pm.response.json();",
+              "pm.test('Has marketPlans + estimatedTotal + unpriced', function () {",
+              "    pm.expect(d.marketPlans).to.be.an('array');",
+              "    pm.expect(d.unpriced).to.be.an('array');",
+              "});"
+            ]}}
+          ]
+        },
+        {
+          "name": "40. LGPD: delete my account (idempotent terminator)",
           "request": {
             "method": "DELETE",
             "header": [{"key": "Accept-Language", "value": "pt"}],
