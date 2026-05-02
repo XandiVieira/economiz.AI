@@ -13,18 +13,23 @@ import com.relyon.economizai.model.User;
 import com.relyon.economizai.service.LocalizedMessageService;
 import com.relyon.economizai.service.UserService;
 import com.relyon.economizai.service.notifications.NotificationPreferenceService;
+import com.relyon.economizai.service.profile.ProfilePictureService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
@@ -38,6 +43,7 @@ public class UserController {
     private final UserService userService;
     private final LocalizedMessageService messageService;
     private final NotificationPreferenceService notificationPreferenceService;
+    private final ProfilePictureService profilePictureService;
 
     @GetMapping("/me")
     public ResponseEntity<UserResponse> getProfile(@AuthenticationPrincipal User user) {
@@ -98,5 +104,26 @@ public class UserController {
     public ResponseEntity<Map<String, String>> deleteAccount(@AuthenticationPrincipal User user) {
         userService.deleteAccount(user);
         return ResponseEntity.ok(Map.of("message", messageService.translate("user.account.deleted")));
+    }
+
+    @PostMapping(value = "/me/profile-picture", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, String>> uploadProfilePicture(@AuthenticationPrincipal User user,
+                                                                    @RequestParam("file") MultipartFile file) {
+        profilePictureService.upload(user, file);
+        return ResponseEntity.ok(Map.of("status", "ok"));
+    }
+
+    @GetMapping("/me/profile-picture")
+    public ResponseEntity<byte[]> getProfilePicture(@AuthenticationPrincipal User user) {
+        var pic = profilePictureService.read(user);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(pic.contentType() == null ? "application/octet-stream" : pic.contentType()))
+                .body(pic.bytes());
+    }
+
+    @DeleteMapping("/me/profile-picture")
+    public ResponseEntity<Void> deleteProfilePicture(@AuthenticationPrincipal User user) {
+        profilePictureService.delete(user);
+        return ResponseEntity.noContent().build();
     }
 }

@@ -68,7 +68,14 @@ PATCH  /api/v1/users/me/push-token      { "pushDeviceToken": "<FCM>" }   ← nul
 GET    /api/v1/users/me/notification-preferences
 PUT    /api/v1/users/me/notification-preferences
        { "preferences": [ { "type": "PROMO_PERSONAL", "channel": "PUSH" }, ... ] }
+
+POST   /api/v1/users/me/profile-picture   ← multipart form, field name "file"
+                                            JPG/PNG/WEBP, max 5MB
+GET    /api/v1/users/me/profile-picture   ← returns the bytes (Content-Type matches the upload)
+DELETE /api/v1/users/me/profile-picture
 ```
+
+**Profile picture**: standard multipart upload. The response is JSON `{ "status": "ok" }` on success. GET returns the raw image bytes — set the `<img src>` directly to the URL with the `Authorization` header in your fetch wrapper, or fetch + blob-URL it. Storage is local-disk in dev (ephemeral on Render free tier — see `DEV_NOTES.md` for the prod plan); the API contract won't change when we swap backends.
 
 ---
 

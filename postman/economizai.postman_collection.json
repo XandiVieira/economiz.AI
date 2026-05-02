@@ -209,6 +209,39 @@
           "response": []
         },
         {
+          "name": "Upload profile picture (multipart, max 5MB, JPG/PNG/WEBP)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/users/me/profile-picture", "host": ["{{baseUrl}}"], "path": ["api","v1","users","me","profile-picture"]},
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {"key": "file", "type": "file", "src": []}
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get profile picture (binary)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/users/me/profile-picture", "host": ["{{baseUrl}}"], "path": ["api","v1","users","me","profile-picture"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Delete profile picture",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/users/me/profile-picture", "host": ["{{baseUrl}}"], "path": ["api","v1","users","me","profile-picture"]}
+          },
+          "response": []
+        },
+        {
           "name": "Delete my account (LGPD Art. 18 VI)",
           "request": {
             "method": "DELETE",

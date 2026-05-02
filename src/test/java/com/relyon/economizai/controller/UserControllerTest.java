@@ -16,6 +16,7 @@ import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.LocalizedMessageService;
 import com.relyon.economizai.service.UserService;
 import com.relyon.economizai.service.notifications.NotificationPreferenceService;
+import com.relyon.economizai.service.profile.ProfilePictureService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -66,6 +67,9 @@ class UserControllerTest {
 
     @MockitoBean
     private NotificationPreferenceService notificationPreferenceService;
+
+    @MockitoBean
+    private ProfilePictureService profilePictureService;
 
     private User buildUser() {
         var user = User.builder()

@@ -1,6 +1,10 @@
 spring:
   application:
     name: economizai
+  servlet:
+    multipart:
+      max-file-size: 6MB     # leaves headroom over the app-level 5MB profile-picture cap
+      max-request-size: 8MB
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/economizai}
     username: ${DB_USERNAME:economizai}
@@ -72,6 +76,9 @@ economizai:
     email:
       enabled: ${NOTIFICATIONS_EMAIL_ENABLED:false}    # turn on once SMTP env vars (host/port/user/pass) are wired in Render
       from: ${EMAIL_FROM:noreply@economiz.ai}
+  profile-picture:
+    local-dir: ${PROFILE_PICTURE_DIR:/tmp/economizai/profile-pics}   # dev: local disk. prod: see DEV_NOTES.md
+    max-size-mb: 5
 
 springdoc:
   swagger-ui:

@@ -87,6 +87,15 @@ public class User extends BaseEntity implements UserDetails {
     @Column(name = "push_token_updated_at")
     private java.time.LocalDateTime pushTokenUpdatedAt;
 
+    @Column(name = "profile_picture_key", length = 255)
+    private String profilePictureKey;
+
+    @Column(name = "profile_picture_content_type", length = 50)
+    private String profilePictureContentType;
+
+    @Column(name = "profile_picture_uploaded_at")
+    private java.time.LocalDateTime profilePictureUploadedAt;
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
