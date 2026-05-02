@@ -56,6 +56,12 @@ public class MarketLocation extends BaseEntity {
     @lombok.Builder.Default
     private int geocodeAttempts = 0;
 
+    @Column(length = 120)
+    private String city;
+
+    @Column(length = 2)
+    private String state;
+
     public boolean hasCoordinates() {
         return latitude != null && longitude != null;
     }

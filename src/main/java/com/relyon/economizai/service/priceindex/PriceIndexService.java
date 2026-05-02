@@ -70,6 +70,13 @@ public class PriceIndexService {
             return 0;
         }
 
+        // Snapshot location at write time so retroactive geocode changes don't
+        // rewrite the history of where a price was observed.
+        var marketLoc = marketLocationService.findByCnpjs(List.of(receipt.getCnpjEmitente()))
+                .get(receipt.getCnpjEmitente());
+        var city = marketLoc != null ? marketLoc.getCity() : null;
+        var state = marketLoc != null ? marketLoc.getState() : null;
+
         var written = 0;
         for (var item : receipt.getItems()) {
             if (item.getProduct() == null || item.getUnitPrice() == null) continue;
@@ -83,6 +90,8 @@ public class PriceIndexService {
                     .packSize(item.getProduct().getPackSize())
                     .packUnit(item.getProduct().getPackUnit())
                     .observedAt(receipt.getIssuedAt() != null ? receipt.getIssuedAt() : LocalDateTime.now())
+                    .city(city)
+                    .state(state)
                     .build();
             var saved = observationRepository.save(observation);
 
@@ -104,22 +113,22 @@ public class PriceIndexService {
         if (!properties.getCollaborative().isEnabled()) return ReferencePrice.empty();
         var since = LocalDateTime.now().minusDays(properties.getCollaborative().getLookbackDays());
         var observations = observationRepository.findRecentByProductAndMarket(productId, marketCnpj, since);
-        if (observations.size() < properties.getCollaborative().getMinObservationsPerProductMarket()) {
-            log.debug("reference_price.empty reason=insufficient_observations product={} market={} have={} need={}",
-                    productId, marketCnpj, observations.size(),
-                    properties.getCollaborative().getMinObservationsPerProductMarket());
-            return ReferencePrice.empty();
-        }
-        var distinctHouseholds = auditRepository.countDistinctHouseholdsForProductMarket(productId, marketCnpj, since);
-        if (distinctHouseholds < properties.getCollaborative().getMinHouseholdsForPublic()) {
-            log.debug("reference_price.empty reason=k_anon product={} market={} households={} need={}",
-                    productId, marketCnpj, distinctHouseholds,
-                    properties.getCollaborative().getMinHouseholdsForPublic());
-            return ReferencePrice.empty();
+        var distinctHouseholds = observations.isEmpty()
+                ? 0L
+                : auditRepository.countDistinctHouseholdsForProductMarket(productId, marketCnpj, since);
+
+        // Hybrid disclosure (PRO-54 AC2): when below k-anon or sample threshold,
+        // surface counts so the FE can warn the user ("poucas amostras") without
+        // ever leaking the actual sub-K-anon price. Price stays null in that case.
+        if (observations.size() < properties.getCollaborative().getMinObservationsPerProductMarket()
+                || distinctHouseholds < properties.getCollaborative().getMinHouseholdsForPublic()) {
+            log.debug("reference_price.kanon_blocked product={} market={} samples={} households={}",
+                    productId, marketCnpj, observations.size(), distinctHouseholds);
+            return new ReferencePrice(null, null, null, observations.size(), distinctHouseholds, null, true);
         }
         var prices = observations.stream().map(PriceObservation::getUnitPrice).toList();
         return new ReferencePrice(median(prices), min(prices), max(prices),
-                observations.size(), distinctHouseholds, observations.get(0).getObservedAt());
+                observations.size(), distinctHouseholds, observations.get(0).getObservedAt(), false);
     }
 
     @Transactional(readOnly = true)
@@ -189,9 +198,10 @@ public class PriceIndexService {
     }
 
     public record ReferencePrice(BigDecimal medianPrice, BigDecimal minPrice, BigDecimal maxPrice,
-                                 int sampleCount, long distinctHouseholds, LocalDateTime mostRecentAt) {
+                                 int sampleCount, long distinctHouseholds, LocalDateTime mostRecentAt,
+                                 boolean kAnonBlocked) {
         public static ReferencePrice empty() {
-            return new ReferencePrice(null, null, null, 0, 0, null);
+            return new ReferencePrice(null, null, null, 0, 0, null, false);
         }
         public boolean hasData() { return medianPrice != null; }
     }

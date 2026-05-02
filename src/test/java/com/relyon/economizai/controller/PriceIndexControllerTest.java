@@ -54,7 +54,7 @@ class PriceIndexControllerTest {
         var pid = UUID.randomUUID();
         var ref = new PriceIndexService.ReferencePrice(
                 new BigDecimal("11.00"), new BigDecimal("9.00"), new BigDecimal("13.00"),
-                5, 3, LocalDateTime.now());
+                5, 3, LocalDateTime.now(), false);
         when(priceIndexService.referencePrice(any(), any())).thenReturn(ref);
 
         mockMvc.perform(get("/api/v1/price-index/products/" + pid + "/markets/93015006005182/reference")

@@ -64,4 +64,10 @@ public class PriceObservation extends BaseEntity {
     @Column(name = "is_outlier", nullable = false)
     @lombok.Builder.Default
     private boolean outlier = false;
+
+    @Column(length = 120)
+    private String city;
+
+    @Column(length = 2)
+    private String state;
 }

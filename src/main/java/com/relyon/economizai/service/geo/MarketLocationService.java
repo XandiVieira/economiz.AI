@@ -79,8 +79,11 @@ public class MarketLocationService {
         var query = buildGeocodeQuery(market);
         var result = geocoder.geocode(query);
         if (result.isPresent()) {
-            market.setLatitude(result.get().latitude());
-            market.setLongitude(result.get().longitude());
+            var hit = result.get();
+            market.setLatitude(hit.latitude());
+            market.setLongitude(hit.longitude());
+            market.setCity(hit.city());
+            market.setState(hit.state());
             market.setGeocodedAt(LocalDateTime.now());
             market.setGeocodeFailedAt(null);
         } else {
