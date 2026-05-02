@@ -118,7 +118,10 @@ class ReceiptServiceTest {
     void submit_persistsParsedReceiptInPendingStatus() {
         var user = buildUser();
         when(receiptRepository.existsByChaveAcesso(CHAVE_RS)).thenReturn(false);
-        when(sefazIngestionService.ingest(CHAVE_RS)).thenReturn(sampleParsed());
+        var fetched = new SefazIngestionService.FetchedDocument(null, "<html/>", CHAVE_RS,
+                com.relyon.economizai.model.enums.UnidadeFederativa.RS, null);
+        when(sefazIngestionService.fetch(CHAVE_RS)).thenReturn(fetched);
+        when(sefazIngestionService.parse(fetched)).thenReturn(sampleParsed());
         when(receiptRepository.save(any(Receipt.class))).thenAnswer(inv -> {
             var r = inv.<Receipt>getArgument(0);
             r.setId(UUID.randomUUID());

@@ -80,6 +80,9 @@ public class Receipt extends BaseEntity {
     @Column(name = "confirmed_at")
     private LocalDateTime confirmedAt;
 
+    @Column(name = "parse_error_reason", columnDefinition = "TEXT")
+    private String parseErrorReason;
+
     @OneToMany(mappedBy = "receipt", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("lineNumber ASC")
     @Builder.Default

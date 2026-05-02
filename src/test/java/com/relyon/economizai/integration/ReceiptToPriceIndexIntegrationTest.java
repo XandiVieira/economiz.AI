@@ -91,7 +91,10 @@ class ReceiptToPriceIndexIntegrationTest {
     @Test
     void submitConfirmFlow_createsReceiptCanonicalProductsAndObservations() throws Exception {
         var token = registerAndLogin("e2e-pi-1@test.com");
-        when(sefazIngestionService.ingest(any())).thenReturn(fakeParsedReceipt(new BigDecimal("28.00")));
+        var fetched = new SefazIngestionService.FetchedDocument(null, "<html/>", "00000000000000000000000000000000000000000000",
+                com.relyon.economizai.model.enums.UnidadeFederativa.RS, null);
+        when(sefazIngestionService.fetch(any())).thenReturn(fetched);
+        when(sefazIngestionService.parse(any())).thenReturn(fakeParsedReceipt(new BigDecimal("28.00")));
 
         // submit
         var submitResult = mockMvc.perform(post("/api/v1/receipts")
@@ -136,7 +139,10 @@ class ReceiptToPriceIndexIntegrationTest {
     @Test
     void confirm_skipsObservationsWhenUserOptedOut() throws Exception {
         var token = registerAndLogin("e2e-pi-optout@test.com");
-        when(sefazIngestionService.ingest(any())).thenReturn(fakeParsedReceipt(new BigDecimal("28.00")));
+        var fetched = new SefazIngestionService.FetchedDocument(null, "<html/>", "00000000000000000000000000000000000000000000",
+                com.relyon.economizai.model.enums.UnidadeFederativa.RS, null);
+        when(sefazIngestionService.fetch(any())).thenReturn(fetched);
+        when(sefazIngestionService.parse(any())).thenReturn(fakeParsedReceipt(new BigDecimal("28.00")));
 
         // opt out before submitting
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders

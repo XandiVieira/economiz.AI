@@ -9,6 +9,7 @@ import com.relyon.economizai.exception.ReceiptAlreadyIngestedException;
 import com.relyon.economizai.exception.ReceiptItemNotFoundException;
 import com.relyon.economizai.exception.ReceiptNotEditableException;
 import com.relyon.economizai.exception.ReceiptNotFoundException;
+import com.relyon.economizai.exception.ReceiptParseException;
 import com.relyon.economizai.config.MdcContextFilter;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.ReceiptItem;
@@ -72,12 +73,38 @@ public class ReceiptService {
             throw new ReceiptAlreadyIngestedException(chave);
         }
 
-        var parsed = sefazIngestionService.ingest(qrPayload);
+        var fetched = sefazIngestionService.fetch(qrPayload);
+        ParsedReceipt parsed;
+        try {
+            parsed = sefazIngestionService.parse(fetched);
+        } catch (ReceiptParseException ex) {
+            persistFailedParse(user, qrPayload, fetched, ex);
+            throw ex;
+        }
         var receipt = persistParsed(user, qrPayload, parsed);
         MDC.put(MdcContextFilter.RECEIPT_ID, abbrev(receipt.getId()));
         log.info("submit ok status=PENDING_CONFIRMATION items={} total={} market='{}'",
                 receipt.getItems().size(), receipt.getTotalAmount(), receipt.getMarketName());
         return ReceiptResponse.from(receipt);
+    }
+
+    private void persistFailedParse(User user, String qrPayload,
+                                    SefazIngestionService.FetchedDocument fetched,
+                                    ReceiptParseException ex) {
+        var failed = Receipt.builder()
+                .user(user)
+                .household(user.getHousehold())
+                .chaveAcesso(fetched.chave())
+                .uf(fetched.uf())
+                .qrPayload(qrPayload)
+                .sourceUrl(fetched.sourceUrl())
+                .rawHtml(fetched.html())
+                .status(ReceiptStatus.FAILED_PARSE)
+                .parseErrorReason(ex.getMessageKey() + ":" + String.join(",", ex.getArguments()))
+                .build();
+        receiptRepository.save(failed);
+        log.warn("submit parse-failed chave={} reason={} (raw HTML kept for review)",
+                LogMasker.chave(fetched.chave()), ex.getMessageKey());
     }
 
     @Transactional(readOnly = true)

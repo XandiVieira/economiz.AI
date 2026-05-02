@@ -23,6 +23,16 @@ public class SefazIngestionService {
     }
 
     public ParsedReceipt ingest(String qrPayload) {
+        var fetched = fetch(qrPayload);
+        return parse(fetched);
+    }
+
+    /**
+     * Step 1: pick the right state adapter, fetch + sanitize the HTML.
+     * Split from {@link #parse} so callers (ReceiptService) can persist
+     * the raw HTML even when parsing fails downstream — needed by PRO-43.
+     */
+    public FetchedDocument fetch(String qrPayload) {
         var chave = ChaveAcessoParser.extractChave(qrPayload);
         var uf = ChaveAcessoParser.extractUf(chave);
         var adapter = adapters.get(uf);
@@ -32,6 +42,13 @@ public class SefazIngestionService {
         var html = adapter.fetchHtml(qrPayload);
         var sanitized = CpfMasker.strip(html);
         var sourceUrl = qrPayload.trim().toLowerCase().startsWith("http") ? qrPayload.trim() : null;
-        return adapter.parseHtml(sanitized, chave, sourceUrl);
+        return new FetchedDocument(adapter, sanitized, chave, uf, sourceUrl);
     }
+
+    public ParsedReceipt parse(FetchedDocument fetched) {
+        return fetched.adapter().parseHtml(fetched.html(), fetched.chave(), fetched.sourceUrl());
+    }
+
+    public record FetchedDocument(SefazAdapter adapter, String html, String chave,
+                                  UnidadeFederativa uf, String sourceUrl) {}
 }
