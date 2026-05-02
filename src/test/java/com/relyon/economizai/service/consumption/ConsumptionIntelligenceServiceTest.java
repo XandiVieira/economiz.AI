@@ -7,6 +7,9 @@ import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.repository.ConsumptionSnoozeRepository;
+import com.relyon.economizai.repository.ManualPurchaseRepository;
+import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.repository.ReceiptItemRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,6 +33,9 @@ import static org.mockito.Mockito.when;
 class ConsumptionIntelligenceServiceTest {
 
     @Mock private ReceiptItemRepository receiptItemRepository;
+    @Mock private ManualPurchaseRepository manualPurchaseRepository;
+    @Mock private ConsumptionSnoozeRepository snoozeRepository;
+    @Mock private ProductRepository productRepository;
 
     private CollaborativeProperties properties;
     private ConsumptionIntelligenceService service;
@@ -38,9 +44,18 @@ class ConsumptionIntelligenceServiceTest {
     @BeforeEach
     void setUp() {
         properties = new CollaborativeProperties();
-        service = new ConsumptionIntelligenceService(receiptItemRepository, properties);
+        // FE alignment: keep min-purchases at 3 for these tests so the
+        // existing test data (designed around N=3) still represents
+        // medium-history behavior. Default is now 2 per PRO-50.
+        properties.getConsumption().setMinPurchasesForPrediction(3);
+        service = new ConsumptionIntelligenceService(receiptItemRepository, manualPurchaseRepository,
+                snoozeRepository, productRepository, properties);
         var household = Household.builder().id(UUID.randomUUID()).inviteCode("ABC123").build();
         user = User.builder().id(UUID.randomUUID()).email("u@e").household(household).build();
+        org.mockito.Mockito.lenient()
+                .when(manualPurchaseRepository.findAllByHouseholdId(any())).thenReturn(List.of());
+        org.mockito.Mockito.lenient()
+                .when(snoozeRepository.findAllByHouseholdIdAndSnoozedUntilAfter(any(), any())).thenReturn(List.of());
     }
 
     @Test
@@ -149,7 +164,7 @@ class ConsumptionIntelligenceServiceTest {
         for (int d : new int[]{90, 60, 30, 0}) items.add(purchase(okProduct, now.minusDays(d), BigDecimal.ONE));
         when(receiptItemRepository.findConfirmedHistoryForHousehold(any())).thenReturn(items);
 
-        var suggested = service.suggestedList(user);
+        var suggested = service.suggestedList(user, false, 5);
 
         assertEquals(1, suggested.items().size());
         assertEquals(lowProduct.getId(), suggested.items().get(0).productId());

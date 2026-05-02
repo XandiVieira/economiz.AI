@@ -59,7 +59,7 @@ public class CollaborativeProperties {
      */
     public static class Consumption {
         private boolean enabled = true;
-        private int minPurchasesForPrediction = 3;
+        private int minPurchasesForPrediction = 2;
         private int historyLookbackDays = 365;
         private int runningLowThresholdDays = 7;
         private int ranOutGraceDays = 0;

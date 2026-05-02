@@ -53,7 +53,7 @@ economizai:
     min-purchases-for-baseline: 3              # need this many prior purchases to detect personal promos
   consumption:
     enabled: true                              # master switch for Phase 3 consumption-intelligence endpoints
-    min-purchases-for-prediction: 3            # below this, a product is silently skipped from /predictions
+    min-purchases-for-prediction: 2            # below this, a product is silently skipped from /predictions
     history-lookback-days: 365                 # window for computing inter-purchase intervals
     running-low-threshold-days: 7              # days-until-runout that flips status to RUNNING_LOW
     ran-out-grace-days: 0                      # tolerance before flipping to RAN_OUT

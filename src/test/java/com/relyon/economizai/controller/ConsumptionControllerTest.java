@@ -65,7 +65,8 @@ class ConsumptionControllerTest {
 
     @Test
     void suggested_returnsListWithMetadata() throws Exception {
-        when(service.suggestedList(any())).thenReturn(new SuggestedShoppingListResponse(
+        when(service.suggestedList(any(), org.mockito.ArgumentMatchers.anyBoolean(),
+                org.mockito.ArgumentMatchers.anyInt())).thenReturn(new SuggestedShoppingListResponse(
                 List.of(), LocalDateTime.now()));
 
         mockMvc.perform(get("/api/v1/consumption/suggested-list")
