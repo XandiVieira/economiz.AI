@@ -79,6 +79,7 @@ public class PriceIndexService {
 
         var written = 0;
         for (var item : receipt.getItems()) {
+            if (item.isExcluded()) continue;
             if (item.getProduct() == null || item.getUnitPrice() == null) continue;
             var observation = PriceObservation.builder()
                     .product(item.getProduct())

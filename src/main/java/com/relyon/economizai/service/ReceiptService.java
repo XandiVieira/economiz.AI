@@ -1,5 +1,6 @@
 package com.relyon.economizai.service;
 
+import com.relyon.economizai.dto.request.ConfirmReceiptRequest;
 import com.relyon.economizai.dto.request.SubmitReceiptRequest;
 import com.relyon.economizai.dto.request.UpdateReceiptItemRequest;
 import com.relyon.economizai.dto.response.ConfirmReceiptResponse;
@@ -47,6 +48,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -145,11 +147,28 @@ public class ReceiptService {
     }
 
     @Transactional
-    public ConfirmReceiptResponse confirm(User user, UUID receiptId) {
+    public ConfirmReceiptResponse confirm(User user, UUID receiptId, ConfirmReceiptRequest request) {
         MDC.put(MdcContextFilter.RECEIPT_ID, abbrev(receiptId));
         log.info("confirm started");
         var receipt = loadOwned(user, receiptId);
         requirePending(receipt);
+
+        // Apply per-item exclusions BEFORE downstream processing so canonicalization,
+        // promo detection, and price-index contributions all skip the excluded rows.
+        var excludedIds = request != null && request.excludedItemIds() != null
+                ? Set.copyOf(request.excludedItemIds())
+                : Set.<UUID>of();
+        if (!excludedIds.isEmpty()) {
+            var excludedCount = 0;
+            for (var item : receipt.getItems()) {
+                if (excludedIds.contains(item.getId())) {
+                    item.setExcluded(true);
+                    excludedCount++;
+                }
+            }
+            log.info("confirm.exclusions applied={}/{} items", excludedCount, receipt.getItems().size());
+        }
+
         receipt.setStatus(ReceiptStatus.CONFIRMED);
         receipt.setConfirmedAt(LocalDateTime.now());
         canonicalizationService.canonicalize(receipt);
@@ -271,5 +290,6 @@ public class ReceiptService {
         item.setUnit(request.unit());
         item.setUnitPrice(request.unitPrice());
         item.setTotalPrice(request.totalPrice());
+        if (request.excluded() != null) item.setExcluded(request.excluded());
     }
 }

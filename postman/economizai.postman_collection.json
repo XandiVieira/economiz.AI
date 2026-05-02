@@ -324,11 +324,21 @@
           "response": []
         },
         {
-          "name": "Confirm receipt",
+          "name": "Confirm receipt (all items)",
           "request": {
             "method": "POST",
             "header": [{"key": "Accept-Language", "value": "pt"}],
             "url": {"raw": "{{baseUrl}}/api/v1/receipts/{{e2eReceiptId}}/confirm", "host": ["{{baseUrl}}"], "path": ["api","v1","receipts","{{e2eReceiptId}}","confirm"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Confirm receipt with item exclusions (only mine)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Accept-Language", "value": "pt"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/receipts/{{e2eReceiptId}}/confirm", "host": ["{{baseUrl}}"], "path": ["api","v1","receipts","{{e2eReceiptId}}","confirm"]},
+            "body": {"mode": "raw", "raw": "{\n  \"excludedItemIds\": [\n    \"{{e2eReceiptItemId}}\"\n  ]\n}"}
           },
           "response": []
         },

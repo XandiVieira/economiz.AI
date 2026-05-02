@@ -15,10 +15,12 @@ import java.util.UUID;
 public interface InsightsRepository extends JpaRepository<Receipt, UUID> {
 
     @Query("""
-        SELECT COALESCE(SUM(r.totalAmount), 0)
-        FROM Receipt r
+        SELECT COALESCE(SUM(ri.totalPrice), 0)
+        FROM ReceiptItem ri
+        JOIN ri.receipt r
         WHERE r.household.id = :householdId
           AND r.status = com.relyon.economizai.model.enums.ReceiptStatus.CONFIRMED
+          AND ri.excluded = false
           AND r.issuedAt >= :from
           AND r.issuedAt <= :to
     """)
@@ -29,11 +31,13 @@ public interface InsightsRepository extends JpaRepository<Receipt, UUID> {
     @Query("""
         SELECT EXTRACT(YEAR FROM r.issuedAt) AS year,
                EXTRACT(MONTH FROM r.issuedAt) AS month,
-               COALESCE(SUM(r.totalAmount), 0) AS total,
-               COUNT(r) AS receiptCount
-        FROM Receipt r
+               COALESCE(SUM(ri.totalPrice), 0) AS total,
+               COUNT(DISTINCT r.id) AS receiptCount
+        FROM ReceiptItem ri
+        JOIN ri.receipt r
         WHERE r.household.id = :householdId
           AND r.status = com.relyon.economizai.model.enums.ReceiptStatus.CONFIRMED
+          AND ri.excluded = false
           AND r.issuedAt >= :from
           AND r.issuedAt <= :to
         GROUP BY EXTRACT(YEAR FROM r.issuedAt), EXTRACT(MONTH FROM r.issuedAt)
@@ -46,11 +50,13 @@ public interface InsightsRepository extends JpaRepository<Receipt, UUID> {
     @Query("""
         SELECT r.cnpjEmitente AS cnpj,
                MAX(r.marketName) AS marketName,
-               COALESCE(SUM(r.totalAmount), 0) AS total,
-               COUNT(r) AS receiptCount
-        FROM Receipt r
+               COALESCE(SUM(ri.totalPrice), 0) AS total,
+               COUNT(DISTINCT r.id) AS receiptCount
+        FROM ReceiptItem ri
+        JOIN ri.receipt r
         WHERE r.household.id = :householdId
           AND r.status = com.relyon.economizai.model.enums.ReceiptStatus.CONFIRMED
+          AND ri.excluded = false
           AND r.issuedAt >= :from
           AND r.issuedAt <= :to
         GROUP BY r.cnpjEmitente
@@ -69,6 +75,7 @@ public interface InsightsRepository extends JpaRepository<Receipt, UUID> {
         LEFT JOIN ri.product p
         WHERE r.household.id = :householdId
           AND r.status = com.relyon.economizai.model.enums.ReceiptStatus.CONFIRMED
+          AND ri.excluded = false
           AND r.issuedAt >= :from
           AND r.issuedAt <= :to
         GROUP BY COALESCE(p.category, com.relyon.economizai.model.enums.ProductCategory.OTHER)
@@ -88,6 +95,7 @@ public interface InsightsRepository extends JpaRepository<Receipt, UUID> {
         JOIN ri.receipt r
         WHERE r.household.id = :householdId
           AND r.status = com.relyon.economizai.model.enums.ReceiptStatus.CONFIRMED
+          AND ri.excluded = false
           AND ri.product.id = :productId
           AND r.issuedAt >= :from
           AND r.issuedAt <= :to
@@ -101,11 +109,13 @@ public interface InsightsRepository extends JpaRepository<Receipt, UUID> {
     @Query("""
         SELECT EXTRACT(YEAR FROM r.issuedAt) AS year,
                EXTRACT(WEEK FROM r.issuedAt) AS week,
-               COALESCE(SUM(r.totalAmount), 0) AS total,
-               COUNT(r) AS receiptCount
-        FROM Receipt r
+               COALESCE(SUM(ri.totalPrice), 0) AS total,
+               COUNT(DISTINCT r.id) AS receiptCount
+        FROM ReceiptItem ri
+        JOIN ri.receipt r
         WHERE r.household.id = :householdId
           AND r.status = com.relyon.economizai.model.enums.ReceiptStatus.CONFIRMED
+          AND ri.excluded = false
           AND r.issuedAt >= :from
           AND r.issuedAt <= :to
         GROUP BY EXTRACT(YEAR FROM r.issuedAt), EXTRACT(WEEK FROM r.issuedAt)

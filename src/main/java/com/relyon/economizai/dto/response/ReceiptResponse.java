@@ -18,12 +18,17 @@ public record ReceiptResponse(
         String marketAddress,
         LocalDateTime issuedAt,
         BigDecimal totalAmount,
+        BigDecimal householdTotalAmount,
         ReceiptStatus status,
         LocalDateTime confirmedAt,
         LocalDateTime createdAt,
         List<ReceiptItemResponse> items
 ) {
     public static ReceiptResponse from(Receipt receipt) {
+        var householdTotal = receipt.getItems().stream()
+                .filter(i -> !i.isExcluded())
+                .map(i -> i.getTotalPrice())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         return new ReceiptResponse(
                 receipt.getId(),
                 receipt.getChaveAcesso(),
@@ -33,6 +38,7 @@ public record ReceiptResponse(
                 receipt.getMarketAddress(),
                 receipt.getIssuedAt(),
                 receipt.getTotalAmount(),
+                householdTotal,
                 receipt.getStatus(),
                 receipt.getConfirmedAt(),
                 receipt.getCreatedAt(),

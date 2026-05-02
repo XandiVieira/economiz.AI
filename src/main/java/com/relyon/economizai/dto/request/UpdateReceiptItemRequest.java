@@ -22,5 +22,8 @@ public record UpdateReceiptItemRequest(
         @Schema(description = "Price per unit. Optional if you only edit the total.")
         @DecimalMin(value = "0.0") BigDecimal unitPrice,
         @Schema(description = "Total paid for this line. Should equal quantity × unitPrice for the math to check out.")
-        @NotNull @DecimalMin(value = "0.0") BigDecimal totalPrice
+        @NotNull @DecimalMin(value = "0.0") BigDecimal totalPrice,
+        @Schema(description = "Optional. true = exclude this item from spend / consumption / price-index. " +
+                "Useful for items that belong to someone outside the household. Omit to leave the flag unchanged.")
+        Boolean excluded
 ) {}

@@ -13,7 +13,8 @@ public record ReceiptItemResponse(
         BigDecimal quantity,
         String unit,
         BigDecimal unitPrice,
-        BigDecimal totalPrice
+        BigDecimal totalPrice,
+        boolean excluded
 ) {
     public static ReceiptItemResponse from(ReceiptItem item) {
         return new ReceiptItemResponse(
@@ -24,7 +25,8 @@ public record ReceiptItemResponse(
                 item.getQuantity(),
                 item.getUnit(),
                 item.getUnitPrice(),
-                item.getTotalPrice()
+                item.getTotalPrice(),
+                item.isExcluded()
         );
     }
 }

@@ -72,9 +72,12 @@ class InsightsRepositoryTest {
                 .issuedAt(issuedAt).totalAmount(total)
                 .qrPayload("payload").status(status)
                 .build();
+        // Split the total across items so item-totals sum back to the receipt total —
+        // insights now derive sums from non-excluded items rather than the receipt header.
+        var firstShare = second != null ? total.divide(new BigDecimal("2")) : total;
         receipt.addItem(ReceiptItem.builder()
                 .lineNumber(1).rawDescription(first.getNormalizedName())
-                .quantity(BigDecimal.ONE).totalPrice(total.divide(new BigDecimal("2")))
+                .quantity(BigDecimal.ONE).totalPrice(firstShare)
                 .product(first).build());
         if (second != null) {
             receipt.addItem(ReceiptItem.builder()

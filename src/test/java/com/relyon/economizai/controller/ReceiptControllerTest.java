@@ -94,6 +94,7 @@ class ReceiptControllerTest {
                 "Rua Y, 123",
                 LocalDateTime.now(),
                 new BigDecimal("57.80"),
+                new BigDecimal("57.80"),
                 status,
                 status == ReceiptStatus.CONFIRMED ? LocalDateTime.now() : null,
                 LocalDateTime.now(),
@@ -105,7 +106,8 @@ class ReceiptControllerTest {
                         new BigDecimal("2"),
                         "UN",
                         new BigDecimal("28.90"),
-                        new BigDecimal("57.80")
+                        new BigDecimal("57.80"),
+                        false
                 ))
         );
     }
@@ -202,7 +204,7 @@ class ReceiptControllerTest {
         var id = UUID.randomUUID();
         var confirmResponse = new ConfirmReceiptResponse(
                 sampleReceipt(ReceiptStatus.CONFIRMED), List.of());
-        when(receiptService.confirm(any(User.class), eq(id))).thenReturn(confirmResponse);
+        when(receiptService.confirm(any(User.class), eq(id), any())).thenReturn(confirmResponse);
 
         mockMvc.perform(post("/api/v1/receipts/" + id + "/confirm")
                         .with(SecurityMockMvcRequestPostProcessors.user(user)))
@@ -215,7 +217,7 @@ class ReceiptControllerTest {
     void confirm_returns400WhenAlreadyConfirmed() throws Exception {
         var user = buildUser();
         var id = UUID.randomUUID();
-        when(receiptService.confirm(any(User.class), eq(id)))
+        when(receiptService.confirm(any(User.class), eq(id), any()))
                 .thenThrow(new ReceiptNotEditableException("CONFIRMED"));
 
         mockMvc.perform(post("/api/v1/receipts/" + id + "/confirm")
@@ -229,7 +231,7 @@ class ReceiptControllerTest {
         var id = UUID.randomUUID();
         var itemId = UUID.randomUUID();
         var request = new UpdateReceiptItemRequest("ARROZ TIO JOAO 5KG", "7891234567890",
-                new BigDecimal("2"), "UN", new BigDecimal("28.90"), new BigDecimal("57.80"));
+                new BigDecimal("2"), "UN", new BigDecimal("28.90"), new BigDecimal("57.80"), null);
         when(receiptService.updateItem(any(User.class), eq(id), eq(itemId), any(UpdateReceiptItemRequest.class)))
                 .thenReturn(sampleReceipt(ReceiptStatus.PENDING_CONFIRMATION));
 

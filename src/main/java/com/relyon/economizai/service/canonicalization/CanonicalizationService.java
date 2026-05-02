@@ -32,6 +32,7 @@ public class CanonicalizationService {
         var created = 0;
         var unmatched = 0;
         for (var item : receipt.getItems()) {
+            if (item.isExcluded()) continue;
             MDC.put(MdcContextFilter.ITEM_ID, abbrev(item.getId()));
             try {
                 var result = canonicalizeItem(item);

@@ -42,10 +42,12 @@ public class PromoDetector {
         var promos = new ArrayList<PersonalPromo>();
         var householdId = receipt.getHousehold().getId();
         for (var item : receipt.getItems()) {
+            if (item.isExcluded()) continue;
             if (item.getProduct() == null || item.getUnitPrice() == null) continue;
             var historical = receiptItemRepository
                     .findHouseholdHistoryForProduct(item.getProduct().getId(), householdId).stream()
                     .filter(prev -> !prev.getId().equals(item.getId()))
+                    .filter(prev -> !prev.isExcluded())
                     .filter(prev -> prev.getUnitPrice() != null)
                     .toList();
             if (historical.size() < properties.getPersonalPromo().getMinPurchasesForBaseline()) continue;

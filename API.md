@@ -132,11 +132,29 @@ They can:
 
 ```
 GET    /api/v1/receipts/{id}                         → full receipt with items
-PATCH  /api/v1/receipts/{id}/items/{itemId}          → fix typos / qty
-POST   /api/v1/receipts/{id}/confirm                 → commit. Returns { receipt, personalPromos: [...] }
+PATCH  /api/v1/receipts/{id}/items/{itemId}          → fix typos / qty / toggle excluded
+POST   /api/v1/receipts/{id}/confirm                 → commit. Optional body { excludedItemIds: [uuid, ...] }
+                                                        Returns { receipt, personalPromos: [...] }
 POST   /api/v1/receipts/{id}/reject                  → discard. Receipt stays as REJECTED in history.
 DELETE /api/v1/receipts/{id}                         → hard delete. Frees the chave so it can be re-imported.
 ```
+
+**Per-item exclusion** — when the household shopped together with someone outside (a friend, a roommate's purchase) and only some items are theirs, the user can mark items as excluded. Excluded items:
+
+- Stay on the receipt for audit (the original NF is a legal document, we don't rewrite it)
+- Don't count toward `householdTotalAmount`
+- Don't contribute to the collaborative price index
+- Don't feed consumption-cadence predictions
+- Don't appear in spend totals or category insights
+
+Two ways to mark an item excluded:
+
+1. **At confirm time**: `POST /receipts/{id}/confirm` with `{ "excludedItemIds": ["uuid-1", "uuid-2"] }` in the body. Items in the list get marked excluded *before* downstream processing.
+2. **Per-item PATCH** (works on PENDING_CONFIRMATION receipts): `PATCH /receipts/{id}/items/{itemId}` with `{ "excluded": true, ... }`.
+
+`ReceiptResponse` now exposes both:
+- `totalAmount` — the original NF total. Never changes.
+- `householdTotalAmount` — sum of non-excluded items. Use this for "what we actually spent".
 
 Confirm is what triggers downstream side effects:
 - Item canonicalization (raw text → canonical Product)

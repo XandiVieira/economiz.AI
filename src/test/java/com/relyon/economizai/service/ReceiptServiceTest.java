@@ -156,7 +156,7 @@ class ReceiptServiceTest {
         when(receiptRepository.save(receipt)).thenReturn(receipt);
         when(promoDetector.detectPersonalPromos(receipt)).thenReturn(java.util.List.of());
 
-        var response = receiptService.confirm(user, receipt.getId());
+        var response = receiptService.confirm(user, receipt.getId(), null);
 
         assertEquals(ReceiptStatus.CONFIRMED, response.receipt().status());
         assertNotNull(response.receipt().confirmedAt());
@@ -171,7 +171,7 @@ class ReceiptServiceTest {
         when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
 
         assertThrows(ReceiptNotFoundException.class,
-                () -> receiptService.confirm(user, receipt.getId()));
+                () -> receiptService.confirm(user, receipt.getId(), null));
     }
 
     @Test
@@ -181,7 +181,7 @@ class ReceiptServiceTest {
         when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
 
         assertThrows(ReceiptNotEditableException.class,
-                () -> receiptService.confirm(user, receipt.getId()));
+                () -> receiptService.confirm(user, receipt.getId(), null));
     }
 
     @Test
@@ -197,7 +197,8 @@ class ReceiptServiceTest {
                 new BigDecimal("3"),
                 "UN",
                 new BigDecimal("28.90"),
-                new BigDecimal("86.70")
+                new BigDecimal("86.70"),
+                null
         );
 
         var response = receiptService.updateItem(user, receipt.getId(), item.getId(), request);
@@ -214,7 +215,7 @@ class ReceiptServiceTest {
         when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
 
         var request = new UpdateReceiptItemRequest("X", null,
-                new BigDecimal("1"), null, null, new BigDecimal("1"));
+                new BigDecimal("1"), null, null, new BigDecimal("1"), null);
 
         assertThrows(ReceiptItemNotFoundException.class,
                 () -> receiptService.updateItem(user, receipt.getId(), UUID.randomUUID(), request));

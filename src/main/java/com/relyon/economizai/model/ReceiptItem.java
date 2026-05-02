@@ -51,4 +51,8 @@ public class ReceiptItem extends BaseEntity {
 
     @Column(name = "total_price", precision = 12, scale = 2, nullable = false)
     private BigDecimal totalPrice;
+
+    @Column(nullable = false)
+    @lombok.Builder.Default
+    private boolean excluded = false;
 }
