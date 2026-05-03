@@ -8,9 +8,11 @@ you're against (everything's annotated with descriptions and examples).
 - **Local:** `http://localhost:8080`
 
 All `/api/v1/**` routes (except `/auth/*` and `/legal/*`) require a JWT in the
-`Authorization: Bearer <token>` header. Tokens expire after 24h —
-re-login when you get a 401. The header `Accept-Language: pt` gives Portuguese
-error messages; default is `pt`, fall back to `en` is supported.
+`Authorization: Bearer <token>` header. Access tokens expire after 24h —
+exchange the long-lived refresh token (30d) for a new pair via
+`POST /auth/refresh` instead of forcing the user back to the login screen. The
+header `Accept-Language: pt` gives Portuguese error messages; default is `pt`,
+fall back to `en` is supported.
 
 > **Naming convention.** "Receipt" / "nota" / "NFC-e" all refer to the same
 > thing. The literal Portuguese terms (chave de acesso, CNPJ, NFC-e, SEFAZ) are
@@ -53,7 +55,7 @@ POST /api/v1/auth/register
   "acceptedTermsVersion": "1.0",
   "acceptedPrivacyVersion": "1.0"
 }
-→ 201 { "token": "...", "user": { ... } }
+→ 201 { "token": "...", "refreshToken": "...", "user": { ... } }
 ```
 
 The terms/privacy versions come from `GET /api/v1/legal/terms` and
@@ -70,11 +72,21 @@ member, and they get an `inviteCode` valid for 48h. They can:
 ```
 POST /api/v1/auth/login
 { "email": "maria@example.com", "password": "..." }
-→ 200 { "token": "...", "user": { ... } }
+→ 200 { "token": "...", "refreshToken": "...", "user": { ... } }
 ```
 
-JWT logout is FE-side: drop the token from storage. There is no `/logout`
-endpoint by design.
+### Refresh + logout
+
+```
+POST /api/v1/auth/refresh    { "refreshToken": "..." }
+                              → 200 { "token": "...", "refreshToken": "...", "user": {...} }
+
+POST /api/v1/auth/logout     { "refreshToken": "..." }   → 204 (idempotent)
+```
+
+The refresh token is **single-use** — every `/refresh` call returns a new pair, and the previous refresh token is marked consumed. If a consumed token is replayed, you get `400 auth.token.invalid` (a sign that someone may be replaying tokens). Refresh tokens live for 30 days; access tokens for 24h. Call `/refresh` proactively when an access token is close to expiring, or reactively on the first 401 you get.
+
+`/logout` revokes the presented refresh token. Always returns 204, even when the token is unknown — keeps the endpoint idempotent. The access token is still technically valid until it expires (24h max), so the FE should also drop both tokens from storage.
 
 ### Profile
 
@@ -97,7 +109,12 @@ GET    /api/v1/users/me/profile-picture   ← returns the bytes (Content-Type ma
 DELETE /api/v1/users/me/profile-picture
 ```
 
-**Profile picture**: standard multipart upload. The response is JSON `{ "status": "ok" }` on success. GET returns the raw image bytes — set the `<img src>` directly to the URL with the `Authorization` header in your fetch wrapper, or fetch + blob-URL it. Storage is local-disk in dev (ephemeral on Render free tier — see `DEV_NOTES.md` for the prod plan); the API contract won't change when we swap backends.
+**Profile picture**: standard multipart upload. The response is JSON `{ "status": "ok" }` on success.
+
+- **On upload**: server-side downscales JPEG/PNG to a 512px max dimension before storing (saves disk + bandwidth, no FE work).
+- **On GET**: returns the raw image bytes. **Never 404s** — when no picture has been uploaded, the server generates a deterministic initials avatar (PNG, 256x256, color hashed from email) so `<img>` tags always render. Inspect the **`X-Profile-Picture-Fallback: true|false`** response header to distinguish a generated avatar from a user-uploaded photo (handy for "edit photo" vs "upload photo" copy).
+- **WebP**: stored as-is (no resize). All other formats (JPEG/PNG) are normalized.
+- Storage is local-disk in dev (ephemeral on Render free tier — see `DEV_NOTES.md` for the prod plan); the API contract won't change when we swap backends.
 
 ### Password reset + email verification
 
@@ -210,6 +227,8 @@ Two ways to mark an item excluded:
 - `totalAmount` — the original NF total. Never changes.
 - `householdTotalAmount` — sum of non-excluded items. Use this for "what we actually spent".
 
+**Item-level promo flag (new)** — each `ReceiptResponse.items[*]` now carries `nfcePromoFlag: boolean`. True when the SEFAZ HTML signaled the line was on promo / discount (a discount cell was present, or the description carries stems like "OFERTA", "PROMO", "DESCONTO", "COMBO", "LEVE 3"). Use it for visual emphasis ("oferta!" badge) on receipt detail cards. Backend behavior: flagged items are excluded from baseline calcs in community-promo detection so we don't compare promos to historic promos.
+
 Confirm is what triggers downstream side effects:
 - Item canonicalization (raw text → canonical Product)
 - Anonymized contribution to the collaborative price index (skipped if `contributionOptIn=false`)
@@ -225,13 +244,16 @@ notably less for than usual — surface as "Você economizou" cards.
 GET /api/v1/receipts
     ?from=2026-04-01T00:00:00
     &to=2026-04-30T23:59:59
-    &cnpjEmitente=83261420003255
+    &marketCnpj=83261420003255
     &category=GROCERIES
+    &q=leite condensado
     &page=0&size=20
 → Page<ReceiptSummaryResponse>  (each row has marketName, issuedAt, totalAmount, itemCount, status)
 ```
 
 Default sort is `issuedAt DESC`. All filters optional.
+
+**Content search (`q`)** — case-insensitive substring match against `rawDescription`, `friendlyDescription`, the linked product's normalized name, AND the receipt's market name. So `q=leite` finds every receipt that includes a milk item OR was issued by a market with "leite" in the name. Combine with `from`/`to`/`category` freely.
 
 ---
 
@@ -404,17 +426,19 @@ markets the user would have to visit.
 ## 10. Household preferences (Phase 2.6)
 
 ```
-GET /api/v1/preferences
-→ list of HouseholdPreferenceResponse (one per generic the household buys regularly)
+GET    /api/v1/preferences
+       → list of HouseholdPreferenceResponse (one per generic the household buys regularly)
+
+PUT    /api/v1/preferences/brand/{genericName}
+       { "brand": "Itambé", "strength": "MUST_HAVE" }    → 204
+DELETE /api/v1/preferences/brand/{genericName}            → 204
 ```
 
-Auto-derived from purchase history — no manual override yet. Surfaces the
-typical pack size + dominant brand per generic. **Volume gate**: silent until
-the household has 5+ confirmed purchases of a given generic.
+Auto-derived from purchase history. Surfaces the typical pack size + dominant brand per generic. **Volume gate** for derived entries: silent until the household has 5+ confirmed purchases of a given generic.
 
-`brandStrength`: `PREFERRED` (top brand 60–85% share) or `MUST_HAVE` (>85%). FE
-can render as a soft hint ("você costuma comprar Italac") or a hard filter on
-suggested-list views.
+`brandStrength`: `PREFERRED` (top brand 60–85% share) or `MUST_HAVE` (>85%). FE can render as a soft hint ("você costuma comprar Italac") or a hard filter on suggested-list views.
+
+**Manual brand override** — `PUT /preferences/brand/{genericName}` lets the user explicitly say "for milk, my brand is Itambé". The override **wins over derived** in `GET /preferences`: the row will carry the user's chosen brand + strength, but the underlying `brandDistribution`, `sampleSize`, and pack-size fields stay derived so the user still sees the historical signal. Manual entries can also surface generics the household hasn't bought yet (sample size will be 0). `DELETE` to clear and fall back to derived.
 
 ---
 
@@ -453,6 +477,27 @@ DELETE /api/v1/shopping-lists/{id}/items/{itemId}                      → remov
 Each item is **either** linked to a canonical `Product` (auto-suggestion-friendly) **or** free text — the request must include exactly one. Free-text entries can be upgraded later by replacing the row with a productId-bound one.
 
 `ShoppingListResponse.items[*].displayName` is the resolved label — `productName` if linked, else `freeText`.
+
+---
+
+## 10d. Admin (ROLE_ADMIN only — not consumed by the FE)
+
+```
+GET    /api/v1/admin/users?q=&page=&size=   → Page<AdminUserSummaryResponse>
+GET    /api/v1/admin/users/{id}              → AdminUserDetailResponse
+GET    /api/v1/admin/receipts?from=&to=&marketCnpj=&category=&q=&householdId=&page=&size=
+                                              → Page<ReceiptSummaryResponse>
+GET    /api/v1/admin/receipts/{id}            → ReceiptResponse
+POST   /api/v1/admin/receipts/{id}/reparse    → 200 ReceiptResponse
+```
+
+- **Users list** — `q` does substring match on email + name (case-insensitive). Sorted by `createdAt` desc by default.
+- **User detail** — bundles `householdId`, `householdMemberCount`, `receipts` counts (PENDING_CONFIRMATION / CONFIRMED / REJECTED / FAILED_PARSE), and `spendLast30Days`. Useful for triaging "why is X seeing Y".
+- **Receipts list** — same content-search semantics as `GET /receipts` (substring on raw + friendly description, product name, market name) but cross-household. `householdId` is an additional optional filter to scope to one household. Includes `FAILED_PARSE` rows (useful for parser triage).
+- **Receipts get** — bypasses the per-household ownership check.
+- **Reparse** — re-runs parsing on the receipt's stored raw HTML and replaces its items with the freshly-parsed ones. Resets `status` to `PENDING_CONFIRMATION` and clears `confirmedAt` — the owner re-confirms to commit. Useful when a parser fix lands. 400 if `rawHtml` is missing (e.g. legacy rows from before we persisted it).
+
+All five require a JWT for a user with `Role.ADMIN`. Regular users hit 403.
 
 ---
 
@@ -496,6 +541,12 @@ the register request.
 - **Volume gates** mean some endpoints return empty until enough data
   accumulates (predictions: ≥2 per product, preferences: ≥5 per generic,
   reference price: ≥5 samples + ≥3 households). This is by design.
+- **Rate limiting.** `POST /auth/*` is capped at **5 req/min/IP**;
+  `POST /receipts` is capped at **30 req/hour/user**. Over-quota responses
+  are `429 Too Many Requests` with a `Retry-After: <seconds>` header and a
+  translated message body. Successful responses on rate-limited routes
+  carry `X-RateLimit-Remaining` so the FE can warn the user before they
+  hit the wall. Other routes are uncapped.
 
 ---
 

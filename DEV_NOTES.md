@@ -91,7 +91,7 @@ mirror entries here.
 
 ---
 
-## Last-checked: 2026-05-02
+## Last-checked: 2026-05-03
 
 When you take care of an item above, **delete it from this file** instead
 of marking it done — keep the file lean so what remains is what's
