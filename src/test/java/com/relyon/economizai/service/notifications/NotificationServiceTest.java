@@ -13,6 +13,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.ArrayList;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -22,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -44,13 +47,13 @@ class NotificationServiceTest {
     }
 
     private NotificationService service(boolean withEmail, boolean withPush) {
-        var dispatchers = new java.util.ArrayList<NotificationDispatcher>();
+        var dispatchers = new ArrayList<NotificationDispatcher>();
         if (withEmail) {
-            org.mockito.Mockito.lenient().when(emailDispatcher.channel()).thenReturn(NotificationChannel.EMAIL);
+            lenient().when(emailDispatcher.channel()).thenReturn(NotificationChannel.EMAIL);
             dispatchers.add(emailDispatcher);
         }
         if (withPush) {
-            org.mockito.Mockito.lenient().when(pushDispatcher.channel()).thenReturn(NotificationChannel.PUSH);
+            lenient().when(pushDispatcher.channel()).thenReturn(NotificationChannel.PUSH);
             dispatchers.add(pushDispatcher);
         }
         return new NotificationService(preferenceRepository, notificationRepository, dispatchers);

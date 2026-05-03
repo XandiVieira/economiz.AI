@@ -24,6 +24,8 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -65,8 +67,7 @@ class ConsumptionControllerTest {
 
     @Test
     void suggested_returnsListWithMetadata() throws Exception {
-        when(service.suggestedList(any(), org.mockito.ArgumentMatchers.anyBoolean(),
-                org.mockito.ArgumentMatchers.anyInt())).thenReturn(new SuggestedShoppingListResponse(
+        when(service.suggestedList(any(), anyBoolean(), anyInt())).thenReturn(new SuggestedShoppingListResponse(
                 List.of(), LocalDateTime.now()));
 
         mockMvc.perform(get("/api/v1/consumption/suggested-list")

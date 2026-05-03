@@ -20,6 +20,8 @@ import com.relyon.economizai.repository.UserRepository;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.auth.EmailVerificationService;
 import com.relyon.economizai.service.auth.RefreshTokenService;
+import org.mockito.ArgumentMatchers;
+import org.springframework.data.jpa.domain.Specification;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -264,7 +266,7 @@ class UserServiceTest {
         var user = buildUser();
         when(householdRepository.findById(user.getHousehold().getId())).thenReturn(Optional.of(user.getHousehold()));
         when(userRepository.findAllByHouseholdId(user.getHousehold().getId())).thenReturn(List.of(user));
-        when(receiptRepository.findAll(org.mockito.ArgumentMatchers.<org.springframework.data.jpa.domain.Specification<Receipt>>any()))
+        when(receiptRepository.findAll(ArgumentMatchers.<Specification<Receipt>>any()))
                 .thenReturn(List.of());
 
         var response = userService.exportData(user);

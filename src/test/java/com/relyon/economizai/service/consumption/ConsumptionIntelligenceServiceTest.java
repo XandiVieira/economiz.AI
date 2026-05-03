@@ -27,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -52,10 +53,8 @@ class ConsumptionIntelligenceServiceTest {
                 snoozeRepository, productRepository, properties);
         var household = Household.builder().id(UUID.randomUUID()).inviteCode("ABC123").build();
         user = User.builder().id(UUID.randomUUID()).email("u@e").household(household).build();
-        org.mockito.Mockito.lenient()
-                .when(manualPurchaseRepository.findAllByHouseholdId(any())).thenReturn(List.of());
-        org.mockito.Mockito.lenient()
-                .when(snoozeRepository.findAllByHouseholdIdAndSnoozedUntilAfter(any(), any())).thenReturn(List.of());
+        lenient().when(manualPurchaseRepository.findAllByHouseholdId(any())).thenReturn(List.of());
+        lenient().when(snoozeRepository.findAllByHouseholdIdAndSnoozedUntilAfter(any(), any())).thenReturn(List.of());
     }
 
     @Test

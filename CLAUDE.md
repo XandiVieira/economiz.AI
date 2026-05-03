@@ -33,6 +33,7 @@ GitHub repo: `economiz.AI` (https://github.com/XandiVieira/economiz.AI.git)
 - Minimal comments — only when logic is non-obvious
 - No unnecessary abstractions or premature generalization
 - Domain language is Brazilian Portuguese where it's a legal/domain term (NFC-e, CNPJ, CPF, SEFAZ, chave de acesso) — do not translate these
+- **No inline fully-qualified names.** Always import the class at the top of the file and reference it by simple name. Avoid `org.foo.bar.Baz.method(...)` or `@org.foo.bar.SomeAnnotation` mid-code. The only exception is when two imported classes would collide (e.g. you're using both `java.sql.Date` and `java.util.Date` in the same file) — then qualify only the conflicting one. Applies to JPQL @Query strings as well: prefer the entity's enum reference style (`r.status = CONFIRMED` after `import com.relyon.economizai.model.enums.ReceiptStatus.CONFIRMED`) over baking the FQN into the query string when feasible.
 
 ### Logging
 - Use SLF4J (`org.slf4j.Logger` / `org.slf4j.LoggerFactory`) via `@Slf4j` Lombok annotation

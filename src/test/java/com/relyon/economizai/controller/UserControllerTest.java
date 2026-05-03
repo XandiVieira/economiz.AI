@@ -219,7 +219,7 @@ class UserControllerTest {
     @Test
     void deleteAccount_returns200() throws Exception {
         var user = buildUser();
-        org.mockito.Mockito.when(localizedMessageService.translate("user.account.deleted"))
+        when(localizedMessageService.translate("user.account.deleted"))
                 .thenReturn("Conta excluida.");
 
         mockMvc.perform(delete("/api/v1/users/me")

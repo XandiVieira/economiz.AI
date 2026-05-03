@@ -1,6 +1,7 @@
 package com.relyon.economizai.service.sefaz;
 
 import org.jsoup.Jsoup;
+import org.jsoup.nodes.Element;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -8,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PromoMarkerDetectorTest {
 
-    private static org.jsoup.nodes.Element row(String html) {
+    private static Element row(String html) {
         return Jsoup.parse("<table><tr>" + html + "</tr></table>").selectFirst("tr");
     }
 
