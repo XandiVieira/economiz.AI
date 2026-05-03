@@ -55,11 +55,13 @@ public class SecurityConfig {
                         // Unauthenticated → 401 (anonymous request, no token, expired token).
                         .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
                         // Authenticated but missing the required role → 403.
-                        // Set explicitly because the default impl was empirically
-                        // landing on the entry point (401) on Render — likely a
-                        // SecurityContext-clearing quirk with the JWT filter chain.
-                        .accessDeniedHandler((request, response, ex2) ->
-                                response.sendError(HttpStatus.FORBIDDEN.value()))
+                        // setStatus + write a JSON body, instead of sendError() which can
+                        // forward to /error and re-trigger the security chain.
+                        .accessDeniedHandler((request, response, ex2) -> {
+                            response.setStatus(HttpStatus.FORBIDDEN.value());
+                            response.setContentType("application/json");
+                            response.getWriter().write("{\"status\":403,\"message\":\"Forbidden\"}");
+                        })
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         // Rate limiting runs AFTER auth so per-user buckets can read the

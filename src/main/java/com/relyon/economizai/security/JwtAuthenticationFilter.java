@@ -8,6 +8,9 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -22,6 +25,27 @@ import java.io.IOException;
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    /**
+     * Spring Boot auto-registers any {@code @Component Filter} as a top-level
+     * servlet filter, which would run this filter OUTSIDE the Spring Security
+     * chain — before {@code SecurityContextHolderFilter} loads its context.
+     * The auth set there gets wiped when the SS chain initializes its own
+     * context, leaving {@code AuthorizationFilter} to see anonymous and
+     * route to the {@code AuthenticationEntryPoint} (401) instead of the
+     * {@code AccessDeniedHandler} (403). Disable the auto-registration so
+     * this filter only runs inside the SS chain via SecurityConfig.
+     */
+    @Configuration
+    static class DisableAutoRegistration {
+        @Bean
+        FilterRegistrationBean<JwtAuthenticationFilter> jwtAuthenticationFilterRegistration(
+                JwtAuthenticationFilter filter) {
+            var bean = new FilterRegistrationBean<>(filter);
+            bean.setEnabled(false);
+            return bean;
+        }
+    }
 
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
