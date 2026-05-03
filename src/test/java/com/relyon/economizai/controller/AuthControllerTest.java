@@ -15,6 +15,7 @@ import com.relyon.economizai.service.LocalizedMessageService;
 import com.relyon.economizai.service.UserService;
 import com.relyon.economizai.service.auth.EmailVerificationService;
 import com.relyon.economizai.service.auth.PasswordResetService;
+import com.relyon.economizai.service.auth.RefreshTokenService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -60,6 +61,9 @@ class AuthControllerTest {
     @MockitoBean
     private EmailVerificationService emailVerificationService;
 
+    @MockitoBean
+    private RefreshTokenService refreshTokenService;
+
     private UserResponse sampleUserResponse() {
         return new UserResponse(
                 UUID.randomUUID(),
@@ -77,7 +81,7 @@ class AuthControllerTest {
     @Test
     void register_shouldReturn201WithToken() throws Exception {
         var request = new RegisterRequest("John", "john@test.com", "password123", "1.0", "1.0");
-        var response = new AuthResponse("jwt-token", sampleUserResponse());
+        var response = new AuthResponse("jwt-token", "refresh-token", sampleUserResponse());
         when(userService.register(any(RegisterRequest.class))).thenReturn(response);
 
         mockMvc.perform(post("/api/v1/auth/register")
@@ -114,7 +118,7 @@ class AuthControllerTest {
     @Test
     void login_shouldReturn200WithToken() throws Exception {
         var request = new LoginRequest("john@test.com", "password123");
-        var response = new AuthResponse("jwt-token", sampleUserResponse());
+        var response = new AuthResponse("jwt-token", "refresh-token", sampleUserResponse());
         when(userService.login(any(LoginRequest.class))).thenReturn(response);
 
         mockMvc.perform(post("/api/v1/auth/login")

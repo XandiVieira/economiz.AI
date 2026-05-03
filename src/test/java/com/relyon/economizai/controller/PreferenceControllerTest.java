@@ -9,6 +9,7 @@ import com.relyon.economizai.model.User;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.LocalizedMessageService;
 import com.relyon.economizai.service.preferences.HouseholdPreferenceService;
+import com.relyon.economizai.service.preferences.ManualBrandPreferenceService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -35,6 +36,7 @@ class PreferenceControllerTest {
     @Autowired private MockMvc mockMvc;
 
     @MockitoBean private HouseholdPreferenceService preferenceService;
+    @MockitoBean private ManualBrandPreferenceService manualBrandPreferenceService;
     @MockitoBean private JwtService jwtService;
     @MockitoBean private UserDetailsService userDetailsService;
     @MockitoBean private LocalizedMessageService localizedMessageService;

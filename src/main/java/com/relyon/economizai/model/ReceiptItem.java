@@ -58,4 +58,13 @@ public class ReceiptItem extends BaseEntity {
     @Column(nullable = false)
     @lombok.Builder.Default
     private boolean excluded = false;
+
+    /**
+     * True when the SEFAZ HTML signaled this item was on promo / discount.
+     * Surfaces in the user's history ("você pegou uma oferta") and tells
+     * the price-index pipeline NOT to use this row as a baseline price.
+     */
+    @Column(name = "nfce_promo_flag", nullable = false)
+    @lombok.Builder.Default
+    private boolean nfcePromoFlag = false;
 }

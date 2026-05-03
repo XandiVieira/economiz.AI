@@ -121,14 +121,16 @@ public class RioGrandeDoSulAdapter implements SefazAdapter {
             if (totalPrice == null) continue;
 
             line++;
+            var trimmedDescription = description.trim();
             items.add(ParsedReceiptItem.builder()
                     .lineNumber(line)
-                    .rawDescription(description.trim())
+                    .rawDescription(trimmedDescription)
                     .ean(extractEan(ean))
                     .quantity(qty.signum() == 0 ? BigDecimal.ONE : qty)
                     .unit(unit.isBlank() ? null : unit.toUpperCase())
                     .unitPrice(unitPrice)
                     .totalPrice(totalPrice)
+                    .nfcePromoFlag(PromoMarkerDetector.isPromo(row, trimmedDescription))
                     .build());
         }
         return items;

@@ -49,6 +49,19 @@ public class SefazIngestionService {
         return fetched.adapter().parseHtml(fetched.html(), fetched.chave(), fetched.sourceUrl());
     }
 
+    /**
+     * Re-runs parsing on already-stored HTML — used by the admin reparse
+     * endpoint when a parser fix lands and we want to re-process old
+     * receipts without hitting SEFAZ again.
+     */
+    public ParsedReceipt reparseStored(UnidadeFederativa uf, String html, String chave, String sourceUrl) {
+        var adapter = adapters.get(uf);
+        if (adapter == null) {
+            throw new UnsupportedStateException(uf.name());
+        }
+        return adapter.parseHtml(html, chave, sourceUrl);
+    }
+
     public record FetchedDocument(SefazAdapter adapter, String html, String chave,
                                   UnidadeFederativa uf, String sourceUrl) {}
 }

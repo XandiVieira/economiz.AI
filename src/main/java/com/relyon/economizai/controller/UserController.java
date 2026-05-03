@@ -118,7 +118,12 @@ public class UserController {
     @GetMapping("/me/profile-picture")
     public ResponseEntity<byte[]> getProfilePicture(@AuthenticationPrincipal User user) {
         var pic = profilePictureService.read(user);
+        // X-Profile-Picture-Fallback lets the FE distinguish a generated
+        // initials avatar from a user-uploaded photo without a separate
+        // metadata round-trip (e.g. to gate "edit photo" vs "upload photo"
+        // copy in the UI).
         return ResponseEntity.ok()
+                .header("X-Profile-Picture-Fallback", String.valueOf(pic.fallback()))
                 .contentType(MediaType.parseMediaType(pic.contentType() == null ? "application/octet-stream" : pic.contentType()))
                 .body(pic.bytes());
     }

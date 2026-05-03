@@ -1,7 +1,9 @@
 package com.relyon.economizai.config;
 
 import com.relyon.economizai.security.JwtAuthenticationFilter;
+import com.relyon.economizai.security.ratelimit.RateLimitFilter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,13 +30,19 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    /**
+     * Optional so {@code @WebMvcTest} slices that import only this config
+     * don't have to wire the rate-limit machinery. In production the bean
+     * is always present and gets added to the chain.
+     */
+    private final ObjectProvider<RateLimitFilter> rateLimitFilterProvider;
 
     @Value("${economizai.cors.allowed-origins:http://localhost:3000,http://localhost:5173}")
     private String allowedOrigins;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        return http
+        http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -46,8 +54,13 @@ public class SecurityConfig {
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
                 )
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                .build();
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        // Rate limiting runs AFTER auth so per-user buckets can read the
+        // principal. /auth/* rules fall through to IP-based keying. Skipped
+        // when the bean isn't present (test slices that import only this config).
+        rateLimitFilterProvider.ifAvailable(filter ->
+                http.addFilterAfter(filter, JwtAuthenticationFilter.class));
+        return http.build();
     }
 
     @Bean

@@ -32,7 +32,8 @@ spring:
 
 jwt:
   secret: ${JWT_SECRET:economizai-dev-secret-key-must-be-at-least-256-bits-long-for-hs256}
-  expiration: 86400000
+  expiration: 86400000              # access token: 24h
+  refresh-expiration: 2592000000    # refresh token: 30d
 
 economizai:
   cors:

@@ -22,6 +22,7 @@ import com.relyon.economizai.repository.ReceiptRepository;
 import com.relyon.economizai.repository.UserRepository;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.auth.EmailVerificationService;
+import com.relyon.economizai.service.auth.RefreshTokenService;
 import com.relyon.economizai.service.privacy.LogMasker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,6 +44,7 @@ public class UserService {
     private final JwtService jwtService;
     private final HouseholdService householdService;
     private final EmailVerificationService emailVerificationService;
+    private final RefreshTokenService refreshTokenService;
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -72,10 +74,11 @@ public class UserService {
         var savedUser = userRepository.save(user);
         emailVerificationService.sendVerificationFor(savedUser);
         var token = jwtService.generateToken(savedUser);
+        var refreshToken = refreshTokenService.issue(savedUser);
         log.info("New user registered: {} (household {}, terms v{}, privacy v{})",
                 LogMasker.email(savedUser.getEmail()), household.getId(),
                 savedUser.getAcceptedTermsVersion(), savedUser.getAcceptedPrivacyVersion());
-        return new AuthResponse(token, UserResponse.from(savedUser));
+        return new AuthResponse(token, refreshToken, UserResponse.from(savedUser));
     }
 
     public AuthResponse login(LoginRequest request) {
@@ -84,8 +87,9 @@ public class UserService {
                 .orElseThrow(InvalidCredentialsException::new);
 
         var token = jwtService.generateToken(user);
+        var refreshToken = refreshTokenService.issue(user);
         log.info("User logged in: {}", LogMasker.email(user.getEmail()));
-        return new AuthResponse(token, UserResponse.from(user));
+        return new AuthResponse(token, refreshToken, UserResponse.from(user));
     }
 
     public UserResponse getProfile(User user) {

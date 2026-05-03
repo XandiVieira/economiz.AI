@@ -81,16 +81,24 @@ public class PriceIndexService {
         for (var item : receipt.getItems()) {
             if (item.isExcluded()) continue;
             if (item.getProduct() == null || item.getUnitPrice() == null) continue;
+            var product = item.getProduct();
+            var normalized = UnitConverter.normalizeItemPrice(
+                    item.getQuantity(), item.getUnit(),
+                    product.getPackSize(), product.getPackUnit(),
+                    item.getTotalPrice());
             var observation = PriceObservation.builder()
-                    .product(item.getProduct())
+                    .product(product)
                     .marketCnpj(receipt.getCnpjEmitente())
                     .marketCnpjRoot(cnpjRoot(receipt.getCnpjEmitente()))
                     .marketName(receipt.getMarketName())
                     .unitPrice(item.getUnitPrice())
                     .quantity(item.getQuantity())
-                    .packSize(item.getProduct().getPackSize())
-                    .packUnit(item.getProduct().getPackUnit())
+                    .packSize(product.getPackSize())
+                    .packUnit(product.getPackUnit())
                     .observedAt(receipt.getIssuedAt() != null ? receipt.getIssuedAt() : LocalDateTime.now())
+                    .promoFlag(item.isNfcePromoFlag())
+                    .normalizedUnitPrice(normalized.map(UnitConverter.NormalizedPrice::pricePerBaseUnit).orElse(null))
+                    .normalizedUnit(normalized.map(n -> n.baseUnit().name()).orElse(null))
                     .city(city)
                     .state(state)
                     .build();

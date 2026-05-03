@@ -103,13 +103,27 @@ public class CommunityPromoService {
                     }
                 }
 
+                // Use normalized R$/base-unit when ALL rows in the group carry it
+                // (same product across time can shift pack sizes — a market that
+                // moves milk from 1L to 2L bottles would otherwise look like a
+                // huge price hike instead of a per-litre drop). Mixed → fall back
+                // to raw unit price.
+                var allNormalized = rows.stream().allMatch(po -> po.getNormalizedUnitPrice() != null);
+                var priceFn = allNormalized
+                        ? (java.util.function.Function<PriceObservation, BigDecimal>) PriceObservation::getNormalizedUnitPrice
+                        : (java.util.function.Function<PriceObservation, BigDecimal>) PriceObservation::getUnitPrice;
+
                 var recentPrices = rows.stream()
                         .filter(po -> po.getObservedAt().isAfter(recentCutoff))
-                        .map(PriceObservation::getUnitPrice)
+                        .map(priceFn)
                         .toList();
+                // Baseline excludes prior promo-flagged rows: comparing a current
+                // promo to an old promo would silence the signal we're trying
+                // to detect. Promo rows still count toward 'recent'.
                 var baselinePrices = rows.stream()
                         .filter(po -> !po.getObservedAt().isAfter(recentCutoff))
-                        .map(PriceObservation::getUnitPrice)
+                        .filter(po -> !po.isPromoFlag())
+                        .map(priceFn)
                         .toList();
                 if (recentPrices.isEmpty() || baselinePrices.size() < 3) continue;
 

@@ -65,6 +65,28 @@ public class PriceObservation extends BaseEntity {
     @lombok.Builder.Default
     private boolean outlier = false;
 
+    /**
+     * Mirrors {@link com.relyon.economizai.model.ReceiptItem#isNfcePromoFlag}
+     * at the moment of write. Lets the panel exclude promo prices from
+     * baseline median calcs without joining back through the audit table
+     * and the source receipt item.
+     */
+    @Column(name = "promo_flag", nullable = false)
+    @lombok.Builder.Default
+    private boolean promoFlag = false;
+
+    /**
+     * Price per base unit (e.g. R$/L, R$/kg, R$/UN) — see
+     * {@link com.relyon.economizai.service.priceindex.UnitConverter}.
+     * Null when the item's unit + product pack info don't map to a known
+     * base; consumers fall back to {@link #unitPrice}.
+     */
+    @Column(name = "normalized_unit_price", precision = 12, scale = 4)
+    private BigDecimal normalizedUnitPrice;
+
+    @Column(name = "normalized_unit", length = 8)
+    private String normalizedUnit;
+
     @Column(length = 120)
     private String city;
 

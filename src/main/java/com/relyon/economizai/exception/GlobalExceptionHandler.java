@@ -41,7 +41,7 @@ public class GlobalExceptionHandler {
         return respond(ex, HttpStatus.NOT_FOUND, "User not found");
     }
 
-    @ExceptionHandler({HouseholdNotFoundException.class, ReceiptNotFoundException.class, ReceiptItemNotFoundException.class, ProductNotFoundException.class, MarketNotFoundException.class, NotInHouseholdException.class, ProfilePictureNotFoundException.class, NotificationNotFoundException.class, ShoppingListNotFoundException.class})
+    @ExceptionHandler({HouseholdNotFoundException.class, ReceiptNotFoundException.class, ReceiptItemNotFoundException.class, ProductNotFoundException.class, MarketNotFoundException.class, NotInHouseholdException.class, NotificationNotFoundException.class, ShoppingListNotFoundException.class})
     public ResponseEntity<ErrorResponse> handleNotFound(DomainException ex) {
         return respond(ex, HttpStatus.NOT_FOUND, "Entity not found");
     }

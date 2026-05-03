@@ -2,13 +2,17 @@ package com.relyon.economizai.controller;
 
 import com.relyon.economizai.dto.request.ForgotPasswordRequest;
 import com.relyon.economizai.dto.request.LoginRequest;
+import com.relyon.economizai.dto.request.RefreshTokenRequest;
 import com.relyon.economizai.dto.request.RegisterRequest;
 import com.relyon.economizai.dto.request.ResetPasswordRequest;
 import com.relyon.economizai.dto.request.VerifyEmailRequest;
 import com.relyon.economizai.dto.response.AuthResponse;
+import com.relyon.economizai.dto.response.UserResponse;
+import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.UserService;
 import com.relyon.economizai.service.auth.EmailVerificationService;
 import com.relyon.economizai.service.auth.PasswordResetService;
+import com.relyon.economizai.service.auth.RefreshTokenService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +32,8 @@ public class AuthController {
     private final UserService userService;
     private final PasswordResetService passwordResetService;
     private final EmailVerificationService emailVerificationService;
+    private final RefreshTokenService refreshTokenService;
+    private final JwtService jwtService;
 
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
@@ -55,6 +61,21 @@ public class AuthController {
     @PostMapping("/verify-email")
     public ResponseEntity<Void> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
         emailVerificationService.verify(request.token());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<AuthResponse> refresh(@Valid @RequestBody RefreshTokenRequest request) {
+        var user = refreshTokenService.rotate(request.refreshToken());
+        var accessToken = jwtService.generateToken(user);
+        var newRefresh = refreshTokenService.issue(user);
+        return ResponseEntity.ok(new AuthResponse(accessToken, newRefresh, UserResponse.from(user)));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(@Valid @RequestBody RefreshTokenRequest request) {
+        refreshTokenService.revoke(request.refreshToken());
+        // Idempotent — unknown / already-invalid tokens still return 204.
         return ResponseEntity.noContent().build();
     }
 }

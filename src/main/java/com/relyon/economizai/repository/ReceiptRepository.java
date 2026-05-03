@@ -1,6 +1,7 @@
 package com.relyon.economizai.repository;
 
 import com.relyon.economizai.model.Receipt;
+import com.relyon.economizai.model.enums.ReceiptStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -17,6 +18,8 @@ public interface ReceiptRepository extends JpaRepository<Receipt, UUID>, JpaSpec
     boolean existsByChaveAcesso(String chaveAcesso);
 
     boolean existsByHouseholdIdAndChaveAcesso(UUID householdId, String chaveAcesso);
+
+    long countByHouseholdIdAndStatus(UUID householdId, ReceiptStatus status);
 
     /** Distinct CNPJs the household has ever submitted a confirmed receipt from. */
     @Query("""

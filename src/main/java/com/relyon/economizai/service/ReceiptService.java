@@ -32,20 +32,16 @@ import com.relyon.economizai.service.sefaz.ChaveAcessoParser;
 import com.relyon.economizai.service.sefaz.FailedParseRecorder;
 import com.relyon.economizai.service.sefaz.ParsedReceipt;
 import com.relyon.economizai.service.sefaz.SefazIngestionService;
-import jakarta.persistence.criteria.JoinType;
-import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -107,40 +103,17 @@ public class ReceiptService {
                                              LocalDateTime to,
                                              String cnpjEmitente,
                                              ProductCategory category,
+                                             String search,
                                              Pageable pageable) {
         var cnpj = Optional.ofNullable(cnpjEmitente).map(String::trim).filter(s -> !s.isBlank()).orElse(null);
+        var trimmedSearch = Optional.ofNullable(search).map(String::trim).filter(s -> !s.isBlank()).orElse(null);
         var sortedPageable = pageable.getSort().isUnsorted()
                 ? org.springframework.data.domain.PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
                         Sort.by(Sort.Direction.DESC, "issuedAt"))
                 : pageable;
-        return receiptRepository
-                .findAll(filtered(user.getHousehold().getId(), from, to, cnpj, category), sortedPageable)
-                .map(ReceiptSummaryResponse::from);
-    }
-
-    private Specification<Receipt> filtered(UUID householdId,
-                                                                        LocalDateTime from,
-                                                                        LocalDateTime to,
-                                                                        String cnpj,
-                                                                        ProductCategory category) {
-        return (root, query, cb) -> {
-            var predicates = new ArrayList<Predicate>();
-            predicates.add(cb.equal(root.get("household").get("id"), householdId));
-            // FAILED_PARSE rows are kept for ops review (PRO-43) but hidden from
-            // the user history — the user didn't actually buy anything from a
-            // failed scan, so it would just be noise in their "compras" list.
-            predicates.add(cb.notEqual(root.get("status"), ReceiptStatus.FAILED_PARSE));
-            if (from != null) predicates.add(cb.greaterThanOrEqualTo(root.get("issuedAt"), from));
-            if (to != null) predicates.add(cb.lessThanOrEqualTo(root.get("issuedAt"), to));
-            if (cnpj != null) predicates.add(cb.equal(root.get("cnpjEmitente"), cnpj));
-            if (category != null) {
-                if (query != null) query.distinct(true);
-                var items = root.join("items", JoinType.INNER);
-                var product = items.join("product", JoinType.INNER);
-                predicates.add(cb.equal(product.get("category"), category));
-            }
-            return cb.and(predicates.toArray(new Predicate[0]));
-        };
+        var spec = ReceiptSpecifications.forSearch(
+                user.getHousehold().getId(), from, to, cnpj, category, trimmedSearch, true);
+        return receiptRepository.findAll(spec, sortedPageable).map(ReceiptSummaryResponse::from);
     }
 
     @Transactional(readOnly = true)
@@ -209,6 +182,57 @@ public class ReceiptService {
         var receipt = loadOwned(user, receiptId);
         receiptRepository.delete(receipt);
         log.info("delete ok status_was={}", receipt.getStatus());
+    }
+
+    /**
+     * Admin-only: re-runs parsing on the stored raw HTML, replaces the
+     * existing items with the freshly-parsed ones, and resets the receipt
+     * to PENDING_CONFIRMATION so the owner can review and re-confirm.
+     *
+     * <p>Use case: a parser bug is fixed and we want to re-process old
+     * receipts without forcing users to re-scan their QR codes.
+     *
+     * <p>Caveat: if the receipt was previously CONFIRMED, its old
+     * PriceObservation rows remain. They'll be joined by new ones when
+     * the user re-confirms. Acceptable at admin scale; revisit if this
+     * endpoint ever gets bulk usage.
+     */
+    @Transactional
+    public ReceiptResponse reparse(UUID receiptId) {
+        MDC.put(MdcContextFilter.RECEIPT_ID, abbrev(receiptId));
+        var receipt = receiptRepository.findById(receiptId).orElseThrow(ReceiptNotFoundException::new);
+        if (receipt.getRawHtml() == null || receipt.getRawHtml().isBlank()) {
+            throw new ReceiptNotEditableException("RAW_HTML_MISSING");
+        }
+        log.info("reparse start status_was={} chave={}",
+                receipt.getStatus(), LogMasker.chave(receipt.getChaveAcesso()));
+
+        var parsed = sefazIngestionService.reparseStored(
+                receipt.getUf(), receipt.getRawHtml(), receipt.getChaveAcesso(), receipt.getSourceUrl());
+
+        receipt.getItems().clear();
+        parsed.items().forEach(p -> receipt.addItem(ReceiptItem.builder()
+                .lineNumber(p.lineNumber())
+                .rawDescription(p.rawDescription())
+                .ean(p.ean())
+                .quantity(p.quantity())
+                .unit(p.unit())
+                .unitPrice(p.unitPrice())
+                .totalPrice(p.totalPrice())
+                .nfcePromoFlag(p.nfcePromoFlag())
+                .build()));
+        receipt.setMarketName(parsed.marketName());
+        receipt.setMarketAddress(parsed.marketAddress());
+        receipt.setIssuedAt(parsed.issuedAt());
+        receipt.setTotalAmount(parsed.totalAmount());
+        receipt.setCnpjEmitente(parsed.cnpjEmitente());
+        receipt.setStatus(ReceiptStatus.PENDING_CONFIRMATION);
+        receipt.setConfirmedAt(null);
+        receipt.setParseErrorReason(null);
+        var saved = receiptRepository.save(receipt);
+        log.info("reparse ok items={} total={} market='{}'",
+                saved.getItems().size(), saved.getTotalAmount(), saved.getMarketName());
+        return ReceiptResponse.from(saved);
     }
 
     @Transactional
@@ -316,6 +340,7 @@ public class ReceiptService {
                 .unit(p.unit())
                 .unitPrice(p.unitPrice())
                 .totalPrice(p.totalPrice())
+                .nfcePromoFlag(p.nfcePromoFlag())
                 .build()));
         return receiptRepository.save(receipt);
     }

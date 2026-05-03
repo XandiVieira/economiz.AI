@@ -16,7 +16,8 @@ public record ReceiptItemResponse(
         String unit,
         BigDecimal unitPrice,
         BigDecimal totalPrice,
-        boolean excluded
+        boolean excluded,
+        boolean nfcePromoFlag
 ) {
     public static ReceiptItemResponse from(ReceiptItem item) {
         var friendly = item.getFriendlyDescription();
@@ -32,7 +33,8 @@ public record ReceiptItemResponse(
                 item.getUnit(),
                 item.getUnitPrice(),
                 item.getTotalPrice(),
-                item.isExcluded()
+                item.isExcluded(),
+                item.isNfcePromoFlag()
         );
     }
 }

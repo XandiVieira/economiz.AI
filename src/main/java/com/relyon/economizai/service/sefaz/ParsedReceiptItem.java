@@ -12,5 +12,6 @@ public record ParsedReceiptItem(
         BigDecimal quantity,
         String unit,
         BigDecimal unitPrice,
-        BigDecimal totalPrice
+        BigDecimal totalPrice,
+        boolean nfcePromoFlag
 ) {}

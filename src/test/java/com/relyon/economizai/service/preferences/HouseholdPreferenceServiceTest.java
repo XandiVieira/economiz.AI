@@ -8,6 +8,7 @@ import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.repository.ManualBrandPreferenceRepository;
 import com.relyon.economizai.repository.ReceiptItemRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,12 +25,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class HouseholdPreferenceServiceTest {
 
     @Mock private ReceiptItemRepository receiptItemRepository;
+    @Mock private ManualBrandPreferenceRepository manualBrandPreferenceRepository;
 
     private CollaborativeProperties properties;
     private HouseholdPreferenceService service;
@@ -38,7 +41,8 @@ class HouseholdPreferenceServiceTest {
     @BeforeEach
     void setUp() {
         properties = new CollaborativeProperties();
-        service = new HouseholdPreferenceService(receiptItemRepository, properties);
+        service = new HouseholdPreferenceService(receiptItemRepository, manualBrandPreferenceRepository, properties);
+        lenient().when(manualBrandPreferenceRepository.findAllByHouseholdId(any())).thenReturn(List.of());
         var household = Household.builder().id(UUID.randomUUID()).inviteCode("ABC123").build();
         user = User.builder().id(UUID.randomUUID()).email("u@e").household(household).build();
     }
