@@ -24,6 +24,7 @@ import com.relyon.economizai.service.sefaz.ParsedReceiptItem;
 import com.relyon.economizai.service.sefaz.SefazIngestionService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -120,9 +121,9 @@ class ReceiptServiceTest {
     @Test
     void submit_persistsParsedReceiptInPendingStatus() {
         var user = buildUser();
-        when(receiptRepository.existsByHouseholdIdAndChaveAcesso(any(), eq(CHAVE_RS))).thenReturn(false);
+        when(receiptRepository.findByHouseholdIdAndChaveAcesso(any(), eq(CHAVE_RS))).thenReturn(Optional.empty());
         var fetched = new SefazIngestionService.FetchedDocument(null, "<html/>", CHAVE_RS,
-                com.relyon.economizai.model.enums.UnidadeFederativa.RS, null);
+                UnidadeFederativa.RS, null);
         when(sefazIngestionService.fetch(CHAVE_RS)).thenReturn(fetched);
         when(sefazIngestionService.parse(fetched)).thenReturn(sampleParsed());
         when(receiptRepository.save(any(Receipt.class))).thenAnswer(inv -> {
@@ -140,14 +141,45 @@ class ReceiptServiceTest {
     }
 
     @Test
-    void submit_rejectsDuplicateChave() {
+    void submit_rejectsDuplicateOnlyWhenPriorIsConfirmed() {
         var user = buildUser();
-        when(receiptRepository.existsByHouseholdIdAndChaveAcesso(any(), eq(CHAVE_RS))).thenReturn(true);
+        var existingConfirmed = persistedReceipt(user, ReceiptStatus.CONFIRMED);
+        when(receiptRepository.findByHouseholdIdAndChaveAcesso(any(), eq(CHAVE_RS)))
+                .thenReturn(Optional.of(existingConfirmed));
 
         assertThrows(ReceiptAlreadyIngestedException.class,
                 () -> receiptService.submit(user, new SubmitReceiptRequest(CHAVE_RS)));
 
         verify(receiptRepository, never()).save(any());
+        verify(receiptRepository, never()).delete(any(Receipt.class));
+    }
+
+    @Test
+    void submit_replacesPriorPendingReceiptInsteadOfBlocking() {
+        // FE-reported bug: user closed the app mid-review, then can't re-scan.
+        // Non-CONFIRMED prior rows must be deleted to make room for the fresh submission.
+        var user = buildUser();
+        var stale = persistedReceipt(user, ReceiptStatus.PENDING_CONFIRMATION);
+        when(receiptRepository.findByHouseholdIdAndChaveAcesso(any(), eq(CHAVE_RS)))
+                .thenReturn(Optional.of(stale));
+        var fetched = new SefazIngestionService.FetchedDocument(null, "<html/>", CHAVE_RS,
+                UnidadeFederativa.RS, null);
+        when(sefazIngestionService.fetch(CHAVE_RS)).thenReturn(fetched);
+        when(sefazIngestionService.parse(fetched)).thenReturn(sampleParsed());
+        when(receiptRepository.save(any(Receipt.class))).thenAnswer(inv -> {
+            var r = inv.<Receipt>getArgument(0);
+            r.setId(UUID.randomUUID());
+            return r;
+        });
+
+        var response = receiptService.submit(user, new SubmitReceiptRequest(CHAVE_RS));
+
+        // delete(T) and delete(DeleteSpecification<T>) overload conflict — use
+        // an explicitly-typed captor to disambiguate, then check identity.
+        var captor = ArgumentCaptor.forClass(Receipt.class);
+        verify(receiptRepository).delete(captor.capture());
+        assertEquals(stale.getId(), captor.getValue().getId());
+        assertEquals(ReceiptStatus.PENDING_CONFIRMATION, response.status());
     }
 
     @Test

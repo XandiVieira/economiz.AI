@@ -36,6 +36,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -71,13 +72,26 @@ public class ReceiptService {
         log.info("submit chave={}", LogMasker.chave(chave));
 
         // Per-household uniqueness: a household can't double-import its own
-        // receipts, but two different households CAN both record the same
-        // fiscal event (couple split a bill, or dev/test scenarios).
-        if (receiptRepository.existsByHouseholdIdAndChaveAcesso(user.getHousehold().getId(), chave)) {
-            log.info("submit rejected: chave {} already in household {}",
-                    LogMasker.chave(chave), user.getHousehold().getId());
-            throw new ReceiptAlreadyIngestedException(chave);
-        }
+        // CONFIRMED receipts (data has been committed downstream — price
+        // observations, audit rows, notifications). But re-submit is allowed
+        // when the prior row is in any non-final state — typically PENDING_
+        // CONFIRMATION (user closed the app mid-review and wants to retry),
+        // REJECTED (user changed their mind), or FAILED_PARSE (parser fix
+        // landed). In those cases we discard the stale row so the fresh
+        // submission can take its place. Two different households can
+        // always both record the same fiscal event regardless.
+        receiptRepository.findByHouseholdIdAndChaveAcesso(user.getHousehold().getId(), chave)
+                .ifPresent(existing -> {
+                    if (existing.getStatus() == ReceiptStatus.CONFIRMED) {
+                        log.info("submit rejected: chave {} already CONFIRMED in household {}",
+                                LogMasker.chave(chave), user.getHousehold().getId());
+                        throw new ReceiptAlreadyIngestedException(chave);
+                    }
+                    log.info("submit replacing stale chave {} (status_was={}) in household {}",
+                            LogMasker.chave(chave), existing.getStatus(), user.getHousehold().getId());
+                    receiptRepository.delete(existing);
+                    receiptRepository.flush();
+                });
 
         var fetched = sefazIngestionService.fetch(qrPayload);
         ParsedReceipt parsed;
@@ -108,7 +122,7 @@ public class ReceiptService {
         var cnpj = Optional.ofNullable(cnpjEmitente).map(String::trim).filter(s -> !s.isBlank()).orElse(null);
         var trimmedSearch = Optional.ofNullable(search).map(String::trim).filter(s -> !s.isBlank()).orElse(null);
         var sortedPageable = pageable.getSort().isUnsorted()
-                ? org.springframework.data.domain.PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
+                ? PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
                         Sort.by(Sort.Direction.DESC, "issuedAt"))
                 : pageable;
         var spec = ReceiptSpecifications.forSearch(

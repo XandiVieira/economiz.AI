@@ -2,6 +2,7 @@ package com.relyon.economizai.integration;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.relyon.economizai.model.enums.UnidadeFederativa;
 import com.relyon.economizai.repository.PriceObservationAuditRepository;
 import com.relyon.economizai.repository.PriceObservationRepository;
 import com.relyon.economizai.service.sefaz.ParsedReceipt;
@@ -10,6 +11,7 @@ import com.relyon.economizai.service.sefaz.SefazIngestionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -26,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.boot.test.context.SpringBootTest.WebEnvironment.MOCK;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -45,7 +48,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest(webEnvironment = MOCK)
 @ActiveProfiles("test")
-@org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
+@AutoConfigureMockMvc
 @Transactional
 class ReceiptToPriceIndexIntegrationTest {
 
@@ -92,7 +95,7 @@ class ReceiptToPriceIndexIntegrationTest {
     void submitConfirmFlow_createsReceiptCanonicalProductsAndObservations() throws Exception {
         var token = registerAndLogin("e2e-pi-1@test.com");
         var fetched = new SefazIngestionService.FetchedDocument(null, "<html/>", "00000000000000000000000000000000000000000000",
-                com.relyon.economizai.model.enums.UnidadeFederativa.RS, null);
+                UnidadeFederativa.RS, null);
         when(sefazIngestionService.fetch(any())).thenReturn(fetched);
         when(sefazIngestionService.parse(any())).thenReturn(fakeParsedReceipt(new BigDecimal("28.00")));
 
@@ -137,16 +140,59 @@ class ReceiptToPriceIndexIntegrationTest {
     }
 
     @Test
+    void resubmit_replacesPriorPendingReceiptInsteadOfBlocking() throws Exception {
+        // Repro of the FE-reported bug: user scans an NF, closes the app
+        // before confirming, then tries to scan the same QR again — the
+        // PENDING_CONFIRMATION row from attempt 1 must be replaced, not
+        // 409'd, so the user can resume the flow.
+        var token = registerAndLogin("e2e-resubmit@test.com");
+        var fetched = new SefazIngestionService.FetchedDocument(null, "<html/>", "00000000000000000000000000000000000000000000",
+                UnidadeFederativa.RS, null);
+        when(sefazIngestionService.fetch(any())).thenReturn(fetched);
+        when(sefazIngestionService.parse(any())).thenReturn(fakeParsedReceipt(new BigDecimal("28.00")));
+
+        // First submit — leaves a PENDING_CONFIRMATION row.
+        var first = mockMvc.perform(post("/api/v1/receipts")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"qrPayload\":\"" + CHAVE + "\"}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        var firstId = objectMapper.readTree(first.getResponse().getContentAsString()).get("id").asText();
+
+        // Re-submit the same chave — must succeed (201) with a new id, NOT 409.
+        var second = mockMvc.perform(post("/api/v1/receipts")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"qrPayload\":\"" + CHAVE + "\"}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        var secondId = objectMapper.readTree(second.getResponse().getContentAsString()).get("id").asText();
+        assertTrue(!secondId.equals(firstId), "re-submit should produce a fresh receipt id");
+
+        // Confirm the second one — first must be gone.
+        mockMvc.perform(post("/api/v1/receipts/" + secondId + "/confirm")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+
+        // Now a third submit must be blocked because the chave is CONFIRMED.
+        mockMvc.perform(post("/api/v1/receipts")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"qrPayload\":\"" + CHAVE + "\"}"))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
     void confirm_skipsObservationsWhenUserOptedOut() throws Exception {
         var token = registerAndLogin("e2e-pi-optout@test.com");
         var fetched = new SefazIngestionService.FetchedDocument(null, "<html/>", "00000000000000000000000000000000000000000000",
-                com.relyon.economizai.model.enums.UnidadeFederativa.RS, null);
+                UnidadeFederativa.RS, null);
         when(sefazIngestionService.fetch(any())).thenReturn(fetched);
         when(sefazIngestionService.parse(any())).thenReturn(fakeParsedReceipt(new BigDecimal("28.00")));
 
         // opt out before submitting
-        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-                        .patch("/api/v1/users/me/contribution")
+        mockMvc.perform(patch("/api/v1/users/me/contribution")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"contributionOptIn\":false}"))
