@@ -52,7 +52,14 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex
+                        // Unauthenticated → 401 (anonymous request, no token, expired token).
                         .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
+                        // Authenticated but missing the required role → 403.
+                        // Set explicitly because the default impl was empirically
+                        // landing on the entry point (401) on Render — likely a
+                        // SecurityContext-clearing quirk with the JWT filter chain.
+                        .accessDeniedHandler((request, response, ex2) ->
+                                response.sendError(HttpStatus.FORBIDDEN.value()))
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         // Rate limiting runs AFTER auth so per-user buckets can read the
