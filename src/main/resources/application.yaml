@@ -96,6 +96,13 @@ management:
   endpoint:
     health:
       show-details: never    # don't leak DB/disk internals to anyone hitting /actuator/health
+  health:
+    # SMTP isn't always wired in dev / Render free tier (see DEV_NOTES) and
+    # the mail indicator otherwise tries to ping the server every /health
+    # call → returns DOWN → uptime monitors + the keep-alive cron see 503.
+    # The AuthEmailSender already degrades gracefully when SMTP is missing.
+    mail:
+      enabled: false
 
 logging:
   level:
