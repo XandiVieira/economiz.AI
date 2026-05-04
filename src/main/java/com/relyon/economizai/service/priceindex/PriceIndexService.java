@@ -69,6 +69,13 @@ public class PriceIndexService {
             log.warn("price_index.write.skipped reason=no_market_cnpj receipt={}", receipt.getId());
             return 0;
         }
+        if (receipt.getChaveAcesso() != null
+                && auditRepository.existsContributionForChaveFromOtherHousehold(
+                        receipt.getChaveAcesso(), receipt.getHousehold().getId())) {
+            log.warn("price_index.write.skipped reason=duplicate_chave_other_household receipt={} chave={}",
+                    receipt.getId(), receipt.getChaveAcesso());
+            return 0;
+        }
 
         // Snapshot location at write time so retroactive geocode changes don't
         // rewrite the history of where a price was observed.

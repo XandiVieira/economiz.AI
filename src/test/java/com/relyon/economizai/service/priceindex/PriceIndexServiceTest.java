@@ -136,6 +136,20 @@ class PriceIndexServiceTest {
     }
 
     @Test
+    void recordContributions_skipsWhenSameChaveAlreadyContributedByOtherHousehold() {
+        var receipt = buildConfirmedReceipt(true, itemWithProduct(product(), new BigDecimal("10")));
+        receipt.setChaveAcesso("43260412345678000190650010000123451123456780");
+        when(auditRepository.existsContributionForChaveFromOtherHousehold(
+                receipt.getChaveAcesso(), receipt.getHousehold().getId())).thenReturn(true);
+
+        var written = service.recordContributions(receipt);
+
+        assertEquals(0, written);
+        verify(observationRepository, never()).save(any());
+        verify(auditRepository, never()).save(any());
+    }
+
+    @Test
     void recordContributions_setsCnpjRoot() {
         var receipt = buildConfirmedReceipt(true, itemWithProduct(product(), new BigDecimal("10")));
         when(observationRepository.save(any(PriceObservation.class))).thenAnswer(inv -> {

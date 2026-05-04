@@ -33,4 +33,20 @@ public interface PriceObservationAuditRepository extends JpaRepository<PriceObse
     """)
     long countDistinctHouseholdsForProduct(@Param("productId") UUID productId,
                                            @Param("since") LocalDateTime since);
+
+    /**
+     * True when another household has already contributed observations for
+     * a receipt sharing this fiscal chave. Used to keep the same NF from
+     * counting twice in the collaborative panel when two households both
+     * import it (e.g. couple split a bill).
+     */
+    @Query("""
+        SELECT COUNT(a) > 0
+        FROM PriceObservationAudit a, Receipt r
+        WHERE a.receiptId = r.id
+          AND r.chaveAcesso = :chaveAcesso
+          AND a.householdId <> :currentHouseholdId
+    """)
+    boolean existsContributionForChaveFromOtherHousehold(@Param("chaveAcesso") String chaveAcesso,
+                                                         @Param("currentHouseholdId") UUID currentHouseholdId);
 }
