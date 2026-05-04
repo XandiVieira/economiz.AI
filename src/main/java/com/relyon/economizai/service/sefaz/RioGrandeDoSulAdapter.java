@@ -13,9 +13,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Pattern;
 
 @Slf4j
@@ -75,13 +77,15 @@ public class RioGrandeDoSulAdapter implements SefazAdapter {
             log.warn("Parser found no items in SEFAZ-RS HTML for chave {}", chaveAcesso);
             throw new ReceiptParseException("no-items-found");
         }
+        var totalAmount = parseTotal(document);
+        items = reconcileItemsToTotal(items, totalAmount);
         var parsed = ParsedReceipt.builder()
                 .chaveAcesso(chaveAcesso)
                 .cnpjEmitente(parseCnpj(document))
                 .marketName(parseMarketName(document))
                 .marketAddress(parseMarketAddress(document))
                 .issuedAt(parseIssuedAt(document))
-                .totalAmount(parseTotal(document))
+                .totalAmount(totalAmount)
                 .sourceUrl(sourceUrl)
                 .rawHtml(html)
                 .items(items)
@@ -99,7 +103,55 @@ public class RioGrandeDoSulAdapter implements SefazAdapter {
         return PORTAL_URL + "?p=" + trimmed;
     }
 
-    private java.util.List<ParsedReceiptItem> parseItems(Document document) {
+    /**
+     * If the items don't sum to the receipt's "Valor a pagar", a discount
+     * is hiding somewhere — either a per-line one we couldn't read or a
+     * receipt-level rebate. Distribute the gap proportionally so each
+     * item's totalPrice (and recomputed unitPrice) reflects what the
+     * household actually paid. Portal-agnostic: works whether per-line
+     * `valor` is gross or net. No-op when sums already match within
+     * rounding tolerance, when the receipt total is missing, or when
+     * items somehow sum to less than the receipt total (a bug we'd
+     * rather log than silently mask).
+     */
+    static List<ParsedReceiptItem> reconcileItemsToTotal(List<ParsedReceiptItem> items, BigDecimal receiptTotal) {
+        if (receiptTotal == null || receiptTotal.signum() <= 0 || items.isEmpty()) return items;
+        var sum = items.stream()
+                .map(ParsedReceiptItem::totalPrice)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (sum.signum() <= 0) return items;
+        var diff = sum.subtract(receiptTotal);
+        if (diff.abs().compareTo(new BigDecimal("0.05")) <= 0) return items;
+        if (diff.signum() < 0) {
+            log.warn("reconcile.items.sum_below_total itemSum={} total={} diff={} — leaving items as-is",
+                    sum, receiptTotal, diff);
+            return items;
+        }
+        log.info("reconcile.items.discount_distributed itemSum={} total={} discount={} count={}",
+                sum, receiptTotal, diff, items.size());
+        var ratio = receiptTotal.divide(sum, 10, RoundingMode.HALF_UP);
+        var adjusted = new ArrayList<ParsedReceiptItem>(items.size());
+        for (var item : items) {
+            var newTotal = item.totalPrice().multiply(ratio).setScale(2, RoundingMode.HALF_UP);
+            var qty = item.quantity();
+            var newUnit = qty != null && qty.signum() > 0
+                    ? newTotal.divide(qty, 4, RoundingMode.HALF_UP)
+                    : item.unitPrice();
+            adjusted.add(ParsedReceiptItem.builder()
+                    .lineNumber(item.lineNumber())
+                    .rawDescription(item.rawDescription())
+                    .ean(item.ean())
+                    .quantity(qty)
+                    .unit(item.unit())
+                    .unitPrice(newUnit)
+                    .totalPrice(newTotal)
+                    .nfcePromoFlag(item.nfcePromoFlag())
+                    .build());
+        }
+        return adjusted;
+    }
+
+    private List<ParsedReceiptItem> parseItems(Document document) {
         var rows = document.select("#tabResult tr");
         if (rows.isEmpty()) {
             rows = document.select("table.tabResult tr");

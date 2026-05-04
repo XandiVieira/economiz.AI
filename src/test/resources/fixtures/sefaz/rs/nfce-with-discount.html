@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<!--
+  Synthetic NFC-e RS fixture where item line totals don't add up to the
+  receipt total (Valor a pagar). Models a R$ 4,00 discount that the
+  parser must distribute back across line items so unitPrice / totalPrice
+  reflect what the household actually paid.
+
+  Line totals: 50,00 + 30,00 = 80,00
+  Receipt total (Valor a pagar): 76,00
+  Implicit discount: 4,00
+  Ratio: 76 / 80 = 0.95
+  Expected after reconciliation:
+    arroz totalPrice 47.50 (50.00 * 0.95) / unitPrice 23.7500 (qty 2)
+    leite totalPrice 28.50 (30.00 * 0.95) / unitPrice 28.5000 (qty 1)
+    sum: 76.00 (matches receipt total)
+-->
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>NFC-e RS — discount fixture</title>
+</head>
+<body>
+<div id="conteudo">
+    <div id="u20">
+        <div class="txtTopo">SUPERMERCADO ZAFFARI HIGIENOPOLIS</div>
+        <div class="text">CNPJ: 12.345.678/0001-90</div>
+        <div class="text">Av. Independencia, 1234, Porto Alegre - RS</div>
+    </div>
+
+    <table id="tabResult">
+        <tr>
+            <td>
+                <span class="txtTit">ARROZ TIO J TP1 5KG</span>
+                <span class="RCod">(Código: 7891234567890)</span>
+                <span class="Rqtde">Qtde.: 2</span>
+                <span class="RUN">UN: UN</span>
+                <span class="RvlUnit">Vl. Unit.: 25,00</span>
+            </td>
+            <td>
+                <span class="valor">50,00</span>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <span class="txtTit">LEITE INTEGRAL ELEGE 1L</span>
+                <span class="RCod">(Código: 7899876543210)</span>
+                <span class="Rqtde">Qtde.: 1</span>
+                <span class="RUN">UN: UN</span>
+                <span class="RvlUnit">Vl. Unit.: 30,00</span>
+            </td>
+            <td>
+                <span class="valor">30,00</span>
+            </td>
+        </tr>
+    </table>
+
+    <div id="totalNota">
+        <span class="totalNumb txtMax">76,00</span>
+    </div>
+
+    <ul>
+        <li><strong>Emissão:</strong> 15/04/2026 18:32:45</li>
+        <li>Chave de Acesso: 4326 0412 3456 7800 0190 6500 1000 0123 4511 2345 6780</li>
+    </ul>
+</div>
+</body>
+</html>

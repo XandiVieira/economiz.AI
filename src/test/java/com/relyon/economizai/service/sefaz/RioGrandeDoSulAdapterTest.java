@@ -22,7 +22,11 @@ class RioGrandeDoSulAdapterTest {
             RestClient.builder(), 5000, "test-agent");
 
     private String loadFixture() throws Exception {
-        try (var stream = new ClassPathResource("fixtures/sefaz/rs/nfce-sample.html").getInputStream()) {
+        return loadFixture("nfce-sample.html");
+    }
+
+    private String loadFixture(String name) throws Exception {
+        try (var stream = new ClassPathResource("fixtures/sefaz/rs/" + name).getInputStream()) {
             return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
         }
     }
@@ -79,6 +83,28 @@ class RioGrandeDoSulAdapterTest {
     void parseHtml_throwsWhenNoItems() {
         var html = "<html><body><div>no items here</div></body></html>";
         assertThrows(ReceiptParseException.class, () -> adapter.parseHtml(html, CHAVE_RS, null));
+    }
+
+    @Test
+    void parseHtml_distributesReceiptDiscountAcrossItems() throws Exception {
+        var html = loadFixture("nfce-with-discount.html");
+        var parsed = adapter.parseHtml(html, CHAVE_RS, null);
+
+        assertEquals(new BigDecimal("76.00"), parsed.totalAmount());
+        assertEquals(2, parsed.items().size());
+
+        var arroz = parsed.items().get(0);
+        assertEquals(new BigDecimal("47.50"), arroz.totalPrice());
+        assertEquals(new BigDecimal("23.7500"), arroz.unitPrice());
+
+        var leite = parsed.items().get(1);
+        assertEquals(new BigDecimal("28.50"), leite.totalPrice());
+        assertEquals(new BigDecimal("28.5000"), leite.unitPrice());
+
+        var sum = parsed.items().stream()
+                .map(ParsedReceiptItem::totalPrice)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        assertEquals(new BigDecimal("76.00"), sum);
     }
 
     @Test

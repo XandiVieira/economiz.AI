@@ -10,6 +10,18 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-05-04 — receipt-level discounts now reflected in item prices
+
+NFC-e item line totals don't always sum to the printed "Valor a pagar" — there can be a per-line or whole-bill discount that the parser was previously ignoring. From now on, when items don't sum to the receipt total (within R$ 0,05), the gap is **distributed proportionally across items** before persistence. So `unitPrice` and `totalPrice` on `ReceiptItemResponse` now reflect what the household actually paid, not the gross sticker prices. Knock-on effects:
+
+- Per-product price history (`/insights/products/{id}/price-history`) is honest.
+- The collaborative price index (`PriceObservation`) gets accurate per-unit numbers.
+- Personal-promo detection compares apples to apples.
+
+Existing receipts aren't backfilled. New submissions get the fix.
+
+---
+
 ## 2026-05-04 — `category` exposed on receipt items
 
 `ReceiptResponse.items[*]` now includes `category: string | null` — the `ProductCategory` of the linked Product (`GROCERIES` · `BEVERAGES` · `PRODUCE` · `MEAT_DAIRY` · `BAKERY` · `CLEANING` · `PERSONAL_CARE` · `OTHER`), or `null` when the item hasn't been canonicalized yet. Lets the FE render a category chip per item on `GET /receipts/{id}` without a per-item `GET /products/{id}` round-trip. Same pattern as `nfcePromoFlag` and `displayDescription`.
