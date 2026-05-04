@@ -7,6 +7,7 @@ import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.security.JwtService;
+import com.relyon.economizai.service.InsightsQueryService;
 import com.relyon.economizai.service.InsightsService;
 import com.relyon.economizai.service.LocalizedMessageService;
 import org.junit.jupiter.api.Test;
@@ -38,6 +39,7 @@ class InsightsControllerTest {
     @Autowired private MockMvc mockMvc;
 
     @MockitoBean private InsightsService insightsService;
+    @MockitoBean private InsightsQueryService insightsQueryService;
     @MockitoBean private JwtService jwtService;
     @MockitoBean private UserDetailsService userDetailsService;
     @MockitoBean private LocalizedMessageService localizedMessageService;
