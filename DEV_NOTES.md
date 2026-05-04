@@ -71,12 +71,6 @@ mirror entries here.
 - **Why OK for dev**: city + state is enough for "show me everything in Porto Alegre".
 - **Fix before prod B2B sales**: load the IBGE municipality CSV (5,570 rows) into a lookup table, backfill the column on existing rows, derive on geocode. Important for regional aggregation and for matching against external datasets (IBGE's own published prices, IPCA, etc). ~3 hr.
 
-### PriceObservation can double-count when same chave appears in two households
-- **Now**: per-household chave uniqueness lets two households both record the same fiscal NF. Each contributes its own PriceObservation rows → that fiscal event becomes 2+ observations in the panel.
-- **Why OK for dev**: tiny edge case at low volume.
-- **Why to revisit before B2B sells**: slight upward bias on sample counts and median stability for the same physical NF.
-- **Fix when it matters**: dedup PriceObservation by (productId, marketCnpj, observedAt±tolerance) at write time, OR mark cross-household duplicates and keep only one in aggregates. ~4 hr.
-
 ---
 
 ## Monitoring / ops
