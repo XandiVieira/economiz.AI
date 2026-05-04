@@ -288,6 +288,77 @@ marketName** so the FE can color the points to differentiate stores of the same
 chain (Zaffari Hipica vs Zaffari Centro both render as "ZAFFARI" but have
 different CNPJs).
 
+### Flexible spend slicer (use this for any cross-filtered chart)
+
+When the four endpoints above don't compose the slice you need (e.g., "spend on GROCERIES at Zaffari last month, by week"), reach for the unified query endpoint instead:
+
+```
+GET /api/v1/insights/query
+    ?from=2026-04-01T00:00:00
+    &to=2026-04-30T23:59:59
+    &marketCnpj=93015006005182        ← repeat for OR: ?marketCnpj=A&marketCnpj=B
+    &marketCnpjRoot=93015006          ← chain-level (8-digit CNPJ root), list-typed
+    &category=GROCERIES               ← repeat for OR: ?category=GROCERIES&category=BEVERAGES
+    &productId=<uuid>                 ← list-typed
+    &ean=7891234567890                ← list-typed
+    &minReceiptTotal=100.00           ← receipt-total range
+    &maxReceiptTotal=500.00
+    &groupBy=WEEK                     ← see list below
+    &limit=100                        ← bucket cap (default 100, max 500)
+```
+
+**`groupBy`** is a single dimension (one at a time):
+- **Temporal:** `DAY`, `WEEK`, `MONTH`, `YEAR` — sorted ascending
+- **Categorical:** `MARKET` (full CNPJ), `CHAIN` (CNPJ root), `CATEGORY`, `PRODUCT` — sorted descending by total
+- **`NONE`** (default) — return only the summary, no buckets
+
+**Response shape:**
+```json
+{
+  "filters": {
+    "from": "2026-04-01T00:00:00",
+    "to": "2026-04-30T23:59:59",
+    "marketCnpjs": ["93015006005182"],
+    "marketCnpjRoots": null,
+    "categories": ["GROCERIES"],
+    "productIds": null,
+    "eans": null,
+    "minReceiptTotal": null,
+    "maxReceiptTotal": null
+  },
+  "summary": {
+    "total": 234.50,
+    "receiptCount": 3,
+    "itemCount": 18,
+    "averageTicket": 78.17
+  },
+  "groupBy": "WEEK",
+  "buckets": [
+    { "key": "2026-W14", "label": "2026-W14", "total": 80.00, "receiptCount": 1, "itemCount": 6, "averageTicket": 80.00 },
+    { "key": "2026-W15", "label": "2026-W15", "total": 154.50, "receiptCount": 2, "itemCount": 12, "averageTicket": 77.25 }
+  ]
+}
+```
+
+**Conventions:**
+- All filters are **optional** — empty filter = no constraint on that dimension.
+- Repeated query params = OR within the same dimension (`?category=A&category=B`). Different dimensions are AND'd together.
+- `key` is the canonical machine value (CNPJ, UUID, "GROCERIES", "2026-04"). `label` is the human-friendly version (market name, product name) — use it for display.
+- Empty result is `summary.total = 0` + `buckets = []`, NOT a 404.
+
+**Examples for common dashboards:**
+| Question | Query |
+|----------|-------|
+| Weekly spend in April | `?from=2026-04-01T00:00:00&to=2026-04-30T23:59:59&groupBy=WEEK` |
+| Top 5 markets this year | `?from=2026-01-01T00:00:00&groupBy=MARKET&limit=5` |
+| Spend per chain (collapse store-level CNPJs) | `?groupBy=CHAIN` |
+| Category breakdown at one specific market | `?marketCnpj=93015006005182&groupBy=CATEGORY` |
+| Top 20 products in groceries OR beverages | `?category=GROCERIES&category=BEVERAGES&groupBy=PRODUCT&limit=20` |
+| Big shopping trips only (R$200+) by month | `?minReceiptTotal=200.00&groupBy=MONTH` |
+| Total spend on milk EAN | `?ean=7891234567890` (no groupBy = just summary) |
+
+The legacy `/insights/spend`, `/markets/top`, `/categories/top`, `/products/{id}/price-history` endpoints stay around for the existing dashboards. Use `/insights/query` for anything custom.
+
 ---
 
 ## 5. Products

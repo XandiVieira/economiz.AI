@@ -10,6 +10,28 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-05-04 — flexible insights query endpoint
+
+### `GET /api/v1/insights/query` — one endpoint, any spend slice
+Replaces the need to fan out across `/insights/spend` + `/insights/markets/top` + `/insights/categories/top` for cross-filtered views. Combine any subset of filters with a single `groupBy` dimension.
+
+**Filters (all optional, list-typed where it makes sense):**
+- `from`, `to` — date range (inclusive)
+- `marketCnpj` — full CNPJs (repeat for multi-value: `?marketCnpj=A&marketCnpj=B`)
+- `marketCnpjRoot` — chain-level (8-digit CNPJ root)
+- `category` — `ProductCategory` values, list-typed
+- `productId` — UUIDs, list-typed
+- `ean` — EANs, list-typed
+- `minReceiptTotal`, `maxReceiptTotal` — receipt-total range (BigDecimal)
+
+**`groupBy`** (single dimension): `NONE` (default) | `DAY` | `WEEK` | `MONTH` | `YEAR` | `MARKET` | `CHAIN` | `CATEGORY` | `PRODUCT`. Temporal groupings sort ascending; non-temporal sort descending by total. `limit` caps bucket count (default 100, max 500).
+
+**Response:** `{ filters, summary, groupBy, buckets }` — `summary` always present (total + receiptCount + itemCount + averageTicket); `buckets` populated when groupBy ≠ NONE. See API.md §4 for full shape and FE-friendly examples.
+
+Backwards-compatible: existing `/insights/spend`, `/markets/top`, `/categories/top`, `/products/{id}/price-history` endpoints unchanged.
+
+---
+
 ## 2026-05-03 (Tier 2 batch — admin endpoints, rate limiting, promo flag, unit normalization)
 
 ### Admin endpoints (ROLE_ADMIN only)
