@@ -17,8 +17,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/shopping-list")
 @RequiredArgsConstructor
-@Tag(name = "Shopping list", description = "Multi-market basket optimization (PRO-52)")
-public class ShoppingListController {
+@Tag(name = "Shopping list optimizer", description = "Stateless multi-market basket optimization (PRO-52)")
+public class ShoppingListOptimizerController {
 
     private final ShoppingListOptimizer optimizer;
 
