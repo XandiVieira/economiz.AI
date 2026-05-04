@@ -91,11 +91,15 @@ management:
   endpoints:
     web:
       exposure:
-        include: health      # only health is public; the rest stay off
+        include: health,prometheus   # health is public; prometheus is for the metrics scraper
       base-path: /actuator
   endpoint:
     health:
       show-details: never    # don't leak DB/disk internals to anyone hitting /actuator/health
+  prometheus:
+    metrics:
+      export:
+        enabled: true
   health:
     # SMTP isn't always wired in dev / Render free tier (see DEV_NOTES) and
     # the mail indicator otherwise tries to ping the server every /health

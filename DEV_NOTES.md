@@ -81,9 +81,10 @@ mirror entries here.
 
 ## Monitoring / ops
 
-### No `/metrics` endpoint
-- **Now**: Spring Boot Actuator is in, but only `/actuator/health` is exposed. No `/actuator/prometheus` for metrics scraping.
-- **Fix before serious ops**: change `management.endpoints.web.exposure.include` to add `prometheus` (and maybe `info`), wire to a Grafana/Prometheus endpoint. ~20 min.
+### `/actuator/prometheus` is public (no auth)
+- **Now**: `/actuator/prometheus` is exposed and `permitAll`'d so a scraper can hit it without credentials. Leaks JVM stats, request counts per route, error rates, GC timings.
+- **Why OK for dev**: nobody is scraping yet, the data is only useful with context, and no scraper SDK natively does JWT bearer auth.
+- **Fix before serious traffic**: tighten via one of (a) basic auth on the actuator chain, (b) IP allowlist to the scraper's egress, (c) a separate management port not exposed to the internet, (d) a dedicated `metrics-scraper` service account behind the existing JWT filter. ~30 min.
 
 ### Logs go to stdout only — no aggregation
 - **Now**: Render captures stdout. Searchable in their dashboard but no retention beyond the free-tier window.
