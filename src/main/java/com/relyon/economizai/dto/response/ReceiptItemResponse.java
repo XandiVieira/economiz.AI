@@ -17,11 +17,14 @@ public record ReceiptItemResponse(
         BigDecimal unitPrice,
         BigDecimal totalPrice,
         boolean excluded,
-        boolean nfcePromoFlag
+        boolean nfcePromoFlag,
+        String category
 ) {
     public static ReceiptItemResponse from(ReceiptItem item) {
         var friendly = item.getFriendlyDescription();
         var display = friendly != null && !friendly.isBlank() ? friendly : item.getRawDescription();
+        var product = item.getProduct();
+        var category = product != null && product.getCategory() != null ? product.getCategory().name() : null;
         return new ReceiptItemResponse(
                 item.getId(),
                 item.getLineNumber(),
@@ -34,7 +37,8 @@ public record ReceiptItemResponse(
                 item.getUnitPrice(),
                 item.getTotalPrice(),
                 item.isExcluded(),
-                item.isNfcePromoFlag()
+                item.isNfcePromoFlag(),
+                category
         );
     }
 }

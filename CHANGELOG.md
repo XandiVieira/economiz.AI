@@ -10,6 +10,12 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-05-04 — `category` exposed on receipt items
+
+`ReceiptResponse.items[*]` now includes `category: string | null` — the `ProductCategory` of the linked Product (`GROCERIES` · `BEVERAGES` · `PRODUCE` · `MEAT_DAIRY` · `BAKERY` · `CLEANING` · `PERSONAL_CARE` · `OTHER`), or `null` when the item hasn't been canonicalized yet. Lets the FE render a category chip per item on `GET /receipts/{id}` without a per-item `GET /products/{id}` round-trip. Same pattern as `nfcePromoFlag` and `displayDescription`.
+
+---
+
 ## 2026-05-04 — flexible insights query endpoint
 
 ### `GET /api/v1/insights/query` — one endpoint, any spend slice

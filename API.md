@@ -229,6 +229,8 @@ Two ways to mark an item excluded:
 
 **Item-level promo flag (new)** — each `ReceiptResponse.items[*]` now carries `nfcePromoFlag: boolean`. True when the SEFAZ HTML signaled the line was on promo / discount (a discount cell was present, or the description carries stems like "OFERTA", "PROMO", "DESCONTO", "COMBO", "LEVE 3"). Use it for visual emphasis ("oferta!" badge) on receipt detail cards. Backend behavior: flagged items are excluded from baseline calcs in community-promo detection so we don't compare promos to historic promos.
 
+**Item-level category (new)** — each `ReceiptResponse.items[*]` now carries `category: string | null`. Resolved from the linked `Product` (when the item has been canonicalized). Values: `GROCERIES`, `BEVERAGES`, `PRODUCE`, `MEAT_DAIRY`, `BAKERY`, `CLEANING`, `PERSONAL_CARE`, `OTHER`. `null` when the item hasn't been linked to a Product yet, or the Product has no category set. Use it to show a category chip per line on the ReviewScreen / receipt detail without a follow-up `GET /products/{id}` call.
+
 Confirm is what triggers downstream side effects:
 - Item canonicalization (raw text → canonical Product)
 - Anonymized contribution to the collaborative price index (skipped if `contributionOptIn=false`)

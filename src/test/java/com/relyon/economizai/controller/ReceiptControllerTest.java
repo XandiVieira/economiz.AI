@@ -110,7 +110,8 @@ class ReceiptControllerTest {
                         new BigDecimal("28.90"),
                         new BigDecimal("57.80"),
                         false,
-                        false
+                        false,
+                        null
                 ))
         );
     }
