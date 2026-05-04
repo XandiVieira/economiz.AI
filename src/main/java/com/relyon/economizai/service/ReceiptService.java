@@ -317,7 +317,8 @@ public class ReceiptService {
     }
 
     private Receipt loadOwned(User user, UUID receiptId) {
-        var receipt = receiptRepository.findById(receiptId).orElseThrow(ReceiptNotFoundException::new);
+        var receipt = receiptRepository.findByIdWithItemsAndProducts(receiptId)
+                .orElseThrow(ReceiptNotFoundException::new);
         if (!receipt.getHousehold().getId().equals(user.getHousehold().getId())) {
             throw new ReceiptNotFoundException();
         }

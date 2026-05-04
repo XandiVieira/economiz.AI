@@ -31,4 +31,16 @@ public interface ReceiptRepository extends JpaRepository<Receipt, UUID>, JpaSpec
           AND r.cnpjEmitente IS NOT NULL
     """)
     List<String> findDistinctCnpjsByHousehold(@Param("householdId") UUID householdId);
+
+    /**
+     * Eagerly loads items + each item's product so DTO mapping doesn't N+1
+     * when the response includes per-item product fields (e.g. category).
+     */
+    @Query("""
+        SELECT DISTINCT r FROM Receipt r
+        LEFT JOIN FETCH r.items i
+        LEFT JOIN FETCH i.product
+        WHERE r.id = :id
+    """)
+    Optional<Receipt> findByIdWithItemsAndProducts(@Param("id") UUID id);
 }

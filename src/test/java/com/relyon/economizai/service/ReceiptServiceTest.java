@@ -186,7 +186,7 @@ class ReceiptServiceTest {
     void confirm_marksReceiptConfirmedAndStampsTime() {
         var user = buildUser();
         var receipt = persistedReceipt(user, ReceiptStatus.PENDING_CONFIRMATION);
-        when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
         when(receiptRepository.save(receipt)).thenReturn(receipt);
         when(promoDetector.detectPersonalPromos(receipt)).thenReturn(java.util.List.of());
 
@@ -202,7 +202,7 @@ class ReceiptServiceTest {
         var user = buildUser();
         var stranger = buildUser();
         var receipt = persistedReceipt(stranger, ReceiptStatus.PENDING_CONFIRMATION);
-        when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
 
         assertThrows(ReceiptNotFoundException.class,
                 () -> receiptService.confirm(user, receipt.getId(), null));
@@ -212,7 +212,7 @@ class ReceiptServiceTest {
     void confirm_throwsWhenAlreadyConfirmed() {
         var user = buildUser();
         var receipt = persistedReceipt(user, ReceiptStatus.CONFIRMED);
-        when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
 
         assertThrows(ReceiptNotEditableException.class,
                 () -> receiptService.confirm(user, receipt.getId(), null));
@@ -223,7 +223,7 @@ class ReceiptServiceTest {
         var user = buildUser();
         var receipt = persistedReceipt(user, ReceiptStatus.PENDING_CONFIRMATION);
         var item = receipt.getItems().get(0);
-        when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
 
         var request = new UpdateReceiptItemRequest(
                 "IGNORED — rawDescription is immutable",
@@ -253,7 +253,7 @@ class ReceiptServiceTest {
     void updateItem_throwsForUnknownItem() {
         var user = buildUser();
         var receipt = persistedReceipt(user, ReceiptStatus.PENDING_CONFIRMATION);
-        when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
 
         var request = new UpdateReceiptItemRequest("X", null,
                 new BigDecimal("1"), null, null, new BigDecimal("1"), null, null);
@@ -266,7 +266,7 @@ class ReceiptServiceTest {
     void reject_marksReceiptRejected() {
         var user = buildUser();
         var receipt = persistedReceipt(user, ReceiptStatus.PENDING_CONFIRMATION);
-        when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
         when(receiptRepository.save(receipt)).thenReturn(receipt);
 
         var response = receiptService.reject(user, receipt.getId());
