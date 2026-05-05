@@ -183,6 +183,40 @@ class ReceiptServiceTest {
     }
 
     @Test
+    void delete_callsRepositoryDeleteForOwnedReceipt() {
+        var user = buildUser();
+        var receipt = persistedReceipt(user, ReceiptStatus.CONFIRMED);
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
+
+        receiptService.delete(user, receipt.getId());
+
+        var captor = ArgumentCaptor.forClass(Receipt.class);
+        verify(receiptRepository).delete(captor.capture());
+        assertEquals(receipt.getId(), captor.getValue().getId());
+    }
+
+    @Test
+    void delete_throwsWhenReceiptBelongsToAnotherHousehold() {
+        var user = buildUser();
+        var stranger = buildUser();
+        var receipt = persistedReceipt(stranger, ReceiptStatus.CONFIRMED);
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
+
+        assertThrows(ReceiptNotFoundException.class, () -> receiptService.delete(user, receipt.getId()));
+        verify(receiptRepository, never()).delete(any(Receipt.class));
+    }
+
+    @Test
+    void delete_throwsWhenReceiptDoesNotExist() {
+        var user = buildUser();
+        var missingId = UUID.randomUUID();
+        when(receiptRepository.findByIdWithItemsAndProducts(missingId)).thenReturn(Optional.empty());
+
+        assertThrows(ReceiptNotFoundException.class, () -> receiptService.delete(user, missingId));
+        verify(receiptRepository, never()).delete(any(Receipt.class));
+    }
+
+    @Test
     void confirm_marksReceiptConfirmedAndStampsTime() {
         var user = buildUser();
         var receipt = persistedReceipt(user, ReceiptStatus.PENDING_CONFIRMATION);

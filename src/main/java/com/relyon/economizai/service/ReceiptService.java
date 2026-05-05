@@ -190,6 +190,17 @@ public class ReceiptService {
         }
     }
 
+    /**
+     * User-initiated hard delete. Removes the receipt + its items + the
+     * audit rows that link the household to anonymized {@code PriceObservation}
+     * entries (cascaded by FK). Does NOT delete the observations themselves —
+     * once contributed, anonymized price data stays in the community index.
+     * This is by design (LGPD right-to-deletion of personal data, while
+     * preserving anonymized aggregates) and is enforced by the schema:
+     * {@code price_observation_audits.receipt_id} has {@code ON DELETE
+     * CASCADE}, but {@code price_observations} has no FK back to receipts.
+     * Frees the chave for re-import within the same household.
+     */
     @Transactional
     public void delete(User user, UUID receiptId) {
         MDC.put(MdcContextFilter.RECEIPT_ID, abbrev(receiptId));

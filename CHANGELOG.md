@@ -10,6 +10,19 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-05-05 — `DELETE /receipts/{id}` documented behavior (no FE change)
+
+The endpoint already existed (still does, same path). Clarifying the LGPD invariant after a question came up:
+
+- **Cascades**: receipt items + the audit-trail rows linking the household to its contributed observations.
+- **Preserves**: anonymized `PriceObservation` rows themselves — once contributed, they stay in the community price index. This is enforced by the schema (FK `ON DELETE CASCADE` on audits, no FK from observations back to receipts).
+- **Frees** the chave for re-import within the same household.
+- 404 if the receipt belongs to another household.
+
+No request/response shape change — just a contract guarantee written down so the FE knows what to expect.
+
+---
+
 ## 2026-05-05 — push notifications go live via Expo Push Service
 
 ### `PushDispatcher` now talks to Expo

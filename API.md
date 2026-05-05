@@ -199,6 +199,12 @@ POST   /api/v1/receipts/{id}/confirm                 → commit. Optional body {
                                                         Returns { receipt, personalPromos: [...] }
 POST   /api/v1/receipts/{id}/reject                  → discard. Receipt stays as REJECTED in history.
 DELETE /api/v1/receipts/{id}                         → hard delete. Frees the chave so it can be re-imported.
+                                                        Removes the receipt + its items + audit-trail rows
+                                                        that link the household to anonymized observations.
+                                                        Anonymized PriceObservation rows themselves stay in
+                                                        the community price index — by design (LGPD: delete
+                                                        personal data, preserve aggregates). 404 if the
+                                                        receipt doesn't belong to the caller's household.
 ```
 
 **Per-item display name (`friendlyDescription`)** — NFC-e descriptions are noisy ("ARROZ TIO J TP1 5KG"). The user can rename an item for display via `PATCH /receipts/{id}/items/{itemId}` with `{ "friendlyDescription": "Arroz Tio João 5kg" }`. The original `rawDescription` stays untouched (it's the legal audit text from SEFAZ — immutable).
