@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * Mobile push channel backed by the Expo Push Service. The FE registers
@@ -25,8 +26,14 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class PushDispatcher implements NotificationDispatcher {
 
-    private static final String EXPO_TOKEN_PREFIX_A = "ExponentPushToken[";
-    private static final String EXPO_TOKEN_PREFIX_B = "ExpoPushToken[";
+    /**
+     * Expo token format: {@code Exp(onent)?PushToken[<base64url-ish>]}.
+     * The inner segment must be non-empty and contain no whitespace —
+     * loose enough to survive minor Expo format tweaks but strict enough
+     * to reject empty brackets, accidental padding, and unicode lookalikes.
+     */
+    private static final Pattern EXPO_TOKEN_PATTERN =
+            Pattern.compile("^Exp(onent)?PushToken\\[\\S+]$");
 
     private final ExpoPushClient expoPushClient;
 
@@ -41,13 +48,18 @@ public class PushDispatcher implements NotificationDispatcher {
         if (token == null || token.isBlank()) {
             return DispatchResult.failed("user has no push device token registered");
         }
-        if (!isExpoToken(token)) {
+        var trimmed = token.trim();
+        if (!EXPO_TOKEN_PATTERN.matcher(trimmed).matches()) {
             log.warn("notification.push.invalid_token user={} token_prefix='{}'",
                     LogMasker.email(payload.user().getEmail()),
-                    token.length() > 20 ? token.substring(0, 20) : token);
+                    trimmed.length() > 20 ? trimmed.substring(0, 20) : trimmed);
             return DispatchResult.failed("token is not an Expo push token (expected ExponentPushToken[...])");
         }
-        var result = expoPushClient.send(token, payload.title(), payload.body(), buildData(payload));
+        if (payload.title() == null || payload.title().isBlank()
+                || payload.body() == null || payload.body().isBlank()) {
+            return DispatchResult.failed("title and body are required");
+        }
+        var result = expoPushClient.send(trimmed, payload.title(), payload.body(), buildData(payload));
         if (result.ok()) {
             log.info("notification.push.sent user={} type={} ticket={}",
                     LogMasker.email(payload.user().getEmail()), payload.type(), result.ticketId());
@@ -58,11 +70,6 @@ public class PushDispatcher implements NotificationDispatcher {
                 result.errorCode(), result.errorMessage());
         return DispatchResult.failed("Expo " + result.errorCode()
                 + (result.errorMessage() != null ? ": " + result.errorMessage() : ""));
-    }
-
-    private boolean isExpoToken(String token) {
-        return (token.startsWith(EXPO_TOKEN_PREFIX_A) || token.startsWith(EXPO_TOKEN_PREFIX_B))
-                && token.endsWith("]");
     }
 
     private Map<String, String> buildData(NotificationPayload payload) {

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -31,13 +32,21 @@ import java.util.Map;
 public class ExpoPushClient {
 
     private static final String EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
+    private static final int CONNECT_TIMEOUT_MS = 5000;
+    private static final int READ_TIMEOUT_MS = 10000;
 
     private final RestClient restClient;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public ExpoPushClient(RestClient.Builder builder,
                           @Value("${economizai.notifications.push.expo.access-token:}") String accessToken) {
+        // Explicit timeouts — without them the request thread can hang indefinitely
+        // waiting on a slow/dead Expo endpoint, blocking the calling controller.
+        var requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(CONNECT_TIMEOUT_MS);
+        requestFactory.setReadTimeout(READ_TIMEOUT_MS);
         var configured = builder
+                .requestFactory(requestFactory)
                 .defaultHeader("Content-Type", "application/json")
                 .defaultHeader("Accept", "application/json")
                 .defaultHeader("Accept-Encoding", "gzip, deflate");

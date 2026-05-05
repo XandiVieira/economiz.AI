@@ -68,6 +68,46 @@ class PushDispatcherTest {
     }
 
     @Test
+    void rejectsTokenWithEmptyBracketsOrWhitespace() {
+        var dispatcher = new PushDispatcher(expoPushClient);
+
+        var emptyBrackets = dispatcher.dispatch(payload("ExponentPushToken[]"));
+        assertFalse(emptyBrackets.delivered());
+        assertTrue(emptyBrackets.failureReason().contains("not an Expo push token"));
+
+        var spaceInside = dispatcher.dispatch(payload("ExponentPushToken[abc def]"));
+        assertFalse(spaceInside.delivered());
+
+        verify(expoPushClient, never()).send(anyString(), anyString(), anyString(), any());
+    }
+
+    @Test
+    void trimsLeadingTrailingWhitespaceBeforeSending() {
+        when(expoPushClient.send(eq(VALID_EXPO_TOKEN), anyString(), anyString(), any()))
+                .thenReturn(ExpoPushClient.Result.ok("ticket-abc"));
+        var dispatcher = new PushDispatcher(expoPushClient);
+
+        var result = dispatcher.dispatch(payload("  " + VALID_EXPO_TOKEN + "\n"));
+
+        assertTrue(result.delivered());
+        verify(expoPushClient).send(eq(VALID_EXPO_TOKEN), anyString(), anyString(), any());
+    }
+
+    @Test
+    void failsEarlyWhenTitleOrBodyIsBlank() {
+        var dispatcher = new PushDispatcher(expoPushClient);
+        var user = User.builder().id(UUID.randomUUID()).email("u@e").pushDeviceToken(VALID_EXPO_TOKEN).build();
+
+        var noTitle = new NotificationPayload(user, NotificationType.SYSTEM, null, "B", Map.of());
+        assertFalse(dispatcher.dispatch(noTitle).delivered());
+
+        var noBody = new NotificationPayload(user, NotificationType.SYSTEM, "T", "  ", Map.of());
+        assertFalse(dispatcher.dispatch(noBody).delivered());
+
+        verify(expoPushClient, never()).send(anyString(), anyString(), anyString(), any());
+    }
+
+    @Test
     void recordsFailureWhenExpoReturnsError() {
         when(expoPushClient.send(eq(VALID_EXPO_TOKEN), anyString(), anyString(), any()))
                 .thenReturn(ExpoPushClient.Result.error("DeviceNotRegistered", "token expired"));

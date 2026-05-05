@@ -136,8 +136,7 @@ class AdminProductServiceTest {
         when(productRepository.findById(survivor.getId())).thenReturn(Optional.of(survivor));
         when(productRepository.findById(absorbed.getId())).thenReturn(Optional.of(absorbed));
         when(aliasRepository.countByProduct(absorbed)).thenReturn(3L);
-        when(receiptItemRepository.findAllByProductIdOrderByReceiptIssuedAtAsc(absorbed.getId()))
-                .thenReturn(List.of());
+        when(receiptItemRepository.countByProduct(absorbed)).thenReturn(0L);
         when(priceObservationRepository.countByProduct(absorbed)).thenReturn(7L);
         when(manualPurchaseRepository.countByProduct(absorbed)).thenReturn(0L);
         when(shoppingListItemRepository.countByProduct(absorbed)).thenReturn(1L);
@@ -161,8 +160,13 @@ class AdminProductServiceTest {
         var absorbed = Product.builder().id(UUID.randomUUID()).normalizedName("Absorbed").build();
         when(productRepository.findById(survivor.getId())).thenReturn(Optional.of(survivor));
         when(productRepository.findById(absorbed.getId())).thenReturn(Optional.of(absorbed));
-        when(receiptItemRepository.findAllByProductIdOrderByReceiptIssuedAtAsc(absorbed.getId()))
-                .thenReturn(List.of());
+        when(receiptItemRepository.countByProduct(absorbed)).thenReturn(5L);
+        when(aliasRepository.countByProduct(absorbed)).thenReturn(2L);
+        when(priceObservationRepository.countByProduct(absorbed)).thenReturn(7L);
+        when(manualPurchaseRepository.countByProduct(absorbed)).thenReturn(0L);
+        when(shoppingListItemRepository.countByProduct(absorbed)).thenReturn(1L);
+        when(householdProductAliasRepository.countByProduct(absorbed)).thenReturn(0L);
+        when(consumptionSnoozeRepository.countByProduct(absorbed)).thenReturn(0L);
         when(aliasRepository.repointProduct(absorbed, survivor)).thenReturn(2);
         when(receiptItemRepository.repointProduct(absorbed, survivor)).thenReturn(5);
         when(priceObservationRepository.repointProduct(absorbed, survivor)).thenReturn(7);
