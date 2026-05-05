@@ -77,6 +77,12 @@ economizai:
     email:
       enabled: ${NOTIFICATIONS_EMAIL_ENABLED:false}    # turn on once SMTP env vars (host/port/user/pass) are wired in Render
       from: ${EMAIL_FROM:noreply@economiz.ai}
+    push:
+      expo:
+        # Optional bearer token for the Expo Push API. Unauthenticated sends still
+        # work for moderate volume; setting this raises rate limits and powers Expo's
+        # analytics dashboard. Generate at https://expo.dev → Account → Access Tokens.
+        access-token: ${EXPO_ACCESS_TOKEN:}
   profile-picture:
     local-dir: ${PROFILE_PICTURE_DIR:/tmp/economizai/profile-pics}   # dev: local disk. prod: see DEV_NOTES.md
     max-size-mb: 5

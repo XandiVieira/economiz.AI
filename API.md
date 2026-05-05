@@ -562,6 +562,7 @@ GET    /api/v1/admin/receipts?from=&to=&marketCnpj=&category=&q=&householdId=&pa
                                               → Page<ReceiptSummaryResponse>
 GET    /api/v1/admin/receipts/{id}            → ReceiptResponse
 POST   /api/v1/admin/receipts/{id}/reparse    → 200 ReceiptResponse
+POST   /api/v1/admin/notifications/test       → 202 Accepted
 ```
 
 - **Users list** — `q` does substring match on email + name (case-insensitive). Sorted by `createdAt` desc by default.
@@ -569,8 +570,9 @@ POST   /api/v1/admin/receipts/{id}/reparse    → 200 ReceiptResponse
 - **Receipts list** — same content-search semantics as `GET /receipts` (substring on raw + friendly description, product name, market name) but cross-household. `householdId` is an additional optional filter to scope to one household. Includes `FAILED_PARSE` rows (useful for parser triage).
 - **Receipts get** — bypasses the per-household ownership check.
 - **Reparse** — re-runs parsing on the receipt's stored raw HTML and replaces its items with the freshly-parsed ones. Resets `status` to `PENDING_CONFIRMATION` and clears `confirmedAt` — the owner re-confirms to commit. Useful when a parser fix lands. 400 if `rawHtml` is missing (e.g. legacy rows from before we persisted it).
+- **Notifications test** — body `{ "email": "...", "title"?, "body"?, "type"? }`. Resolves the user by email and dispatches a payload through `NotificationService`. Useful to verify push/SMTP wiring on demand. Returns 202 even if the channel is stubbed; check the inbox (`GET /notifications`) or the device to confirm delivery. `type` defaults to `SYSTEM`.
 
-All five require a JWT for a user with `Role.ADMIN`. Regular users hit 403.
+All require a JWT for a user with `Role.ADMIN`. Regular users hit 403.
 
 ---
 

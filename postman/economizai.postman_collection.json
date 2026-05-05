@@ -4802,6 +4802,41 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Send test notification (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"poly.fucilini.s@gmail.com\",\n  \"title\": \"economizai test\",\n  \"body\": \"If you can read this, push notifications are working.\",\n  \"type\": \"SYSTEM\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/notifications/test",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "notifications",
+                "test"
+              ]
+            },
+            "description": "Resolves the user by email and dispatches a notification through NotificationService — useful for verifying push/SMTP wiring on demand. Returns 202 even if the channel is stubbed; check the notifications inbox or device to confirm delivery."
+          },
+          "response": []
         }
       ]
     }

@@ -18,11 +18,12 @@ mirror entries here.
 - **Why NOT OK for prod**: Render free tier disk is **ephemeral** — wiped on every redeploy. Users would lose their pics on every push. Also can't scale to multiple instances.
 - **Fix before prod**: implement an `S3ProfilePictureStorage` (or Cloudinary, or Render's paid persistent disk), wire via the `ProfilePictureStorage` interface, switch via env var. ~2 hr.
 
-### FCM push notifications = stub
-- **Now**: `PushDispatcher` logs the would-be payload, doesn't actually send. The notifications row gets `delivered=false`.
-- **Why OK for dev**: no Firebase project / service-account JSON needed.
-- **Why NOT OK for prod**: users won't get push notifications. PROMO_PERSONAL alerts are dead weight.
-- **Fix before prod**: add `firebase-admin` Maven dep, drop service-account JSON in env (or as Render secret file), replace the `// TODO(FCM)` block in `PushDispatcher`. ~1 hr.
+### Push notifications = Expo Push Service (works in dev with no setup)
+- **Now**: `PushDispatcher` calls the Expo Push HTTP API (`https://exp.host/--/api/v2/push/send`). The FE (React Native + Expo) registers an Expo Push Token via `PUT /api/v1/users/me/push-token`; the backend POSTs to Expo, which routes to FCM (Android) or APNs (iOS).
+- **Why this stack and not firebase-admin**: the FE generates Expo tokens (`ExponentPushToken[...]`), which can't be sent through raw FCM. Expo also removes the need for service-account JSON, native config and SDK init.
+- **Dev**: works out of the box — no env var, no project setup. Push reaches the device via Expo Go.
+- **Prod (optional)**: set `EXPO_ACCESS_TOKEN` env var with a token from https://expo.dev → Account → Access Tokens. Raises rate limits and feeds the Expo analytics dashboard. Without it, sends still work but at lower throughput.
+- **Prod (iOS)**: publishing to the App Store requires an Apple Developer Program membership ($99/year — Apple's fee, not Expo's) and uploading the APNs auth key to Expo (Expo handles the rest of the iOS push plumbing).
 
 ### SMTP email = disabled (impacts notifications + auth flows)
 - **Now**: two paths consume SMTP:
@@ -86,7 +87,7 @@ mirror entries here.
 
 ---
 
-## Last-checked: 2026-05-03
+## Last-checked: 2026-05-05
 
 When you take care of an item above, **delete it from this file** instead
 of marking it done — keep the file lean so what remains is what's
