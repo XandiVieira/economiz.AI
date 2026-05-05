@@ -10,6 +10,20 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-05-05 — multi-state SEFAZ ingestion (no FE change)
+
+`SefazAdapter.supportedState()` is now `supportedStates() : Set<UnidadeFederativa>` so a single adapter can claim multiple UFs. The existing RS adapter is renamed `SvrsSharedPortalAdapter` (the underlying portal hosts NFC-e for several states beyond RS) and now reads its UF list from config:
+
+```
+SEFAZ_SVRS_STATES=RS,SC,RJ,...
+```
+
+Default stays `RS`. To opt-in additional states without code: submit a real chave from that UF, verify the parser still extracts items, then add the UF to the env var. States with their own NFC-e portal (SP, MG, BA, PE, PR, GO, MT, MS, DF) still need a dedicated adapter — the SVRS URL won't serve their cupons.
+
+Submitting a chave from a UF without any registered adapter still returns the same `UnsupportedStateException` as before.
+
+---
+
 ## 2026-05-05 — admin: merge duplicate products
 
 Catalog cleanup tool for cases the auto-dedup paths (alias / fuzzy / metadata) don't catch — the curator picks a survivor and absorbs another product into it.

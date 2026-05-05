@@ -45,6 +45,15 @@ economizai:
     sefaz:
       timeout-ms: 30000
       user-agent: "economizai/0.1 (+https://github.com/XandiVieira/economiz.AI)"
+      svrs:
+        # UFs that delegate NFC-e consultation to the SVRS shared portal.
+        # Start with RS (proven to work). Other states known to delegate to
+        # SVRS (AC, AL, AP, CE, ES, MA, PA, PB, PI, RJ, RN, RO, RR, SC, SE, TO)
+        # are worth testing one at a time: submit a real chave, verify the
+        # parser extracts items correctly, then add the UF code here.
+        # States with their own portal (SP, MG, BA, PE, PR, GO, MT, MS, DF)
+        # need a dedicated adapter — the SVRS URL won't serve their cupons.
+        states: ${SEFAZ_SVRS_STATES:RS}
   collaborative:
     enabled: true                              # master switch — disables all observation writes/reads
     min-households-for-public: 3               # k-anon: aggregate queries return empty until this many distinct households contributed

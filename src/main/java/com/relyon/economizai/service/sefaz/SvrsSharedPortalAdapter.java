@@ -17,12 +17,27 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
 
+/**
+ * NFC-e adapter for the SVRS shared portal
+ * ({@code https://dfe-portal.svrs.rs.gov.br/Dfe/QrCodeNFce}). Originally built
+ * for RS, but the underlying SEFAZ infrastructure hosts NFC-e for several
+ * other states that delegate to SVRS. The set of UFs this adapter claims is
+ * driven by config ({@code economizai.ingestion.sefaz.svrs.states}, default
+ * {@code RS}) so a curator can opt-in additional states empirically — submit a
+ * test chave from SC, verify the parser still extracts fields correctly, then
+ * add SC to the env var.
+ *
+ * <p>States with their own NFC-e portal (SP, MG, BA, PE, PR, …) need a
+ * dedicated adapter — those won't render correctly through this URL.
+ */
 @Slf4j
 @Component
-public class RioGrandeDoSulAdapter implements SefazAdapter {
+public class SvrsSharedPortalAdapter implements SefazAdapter {
 
     private static final String PORTAL_URL = "https://dfe-portal.svrs.rs.gov.br/Dfe/QrCodeNFce";
     private static final DateTimeFormatter ISSUED_AT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
@@ -30,10 +45,12 @@ public class RioGrandeDoSulAdapter implements SefazAdapter {
     private static final Pattern EMISSION = Pattern.compile("Emiss[aã]o\\s*:?\\s*(\\d{2}/\\d{2}/\\d{4}\\s+\\d{2}:\\d{2}:\\d{2})", Pattern.CASE_INSENSITIVE);
 
     private final RestClient restClient;
+    private final Set<UnidadeFederativa> supportedStates;
 
-    public RioGrandeDoSulAdapter(RestClient.Builder builder,
-                                 @Value("${economizai.ingestion.sefaz.timeout-ms:30000}") int timeoutMs,
-                                 @Value("${economizai.ingestion.sefaz.user-agent:economizai}") String userAgent) {
+    public SvrsSharedPortalAdapter(RestClient.Builder builder,
+                                   @Value("${economizai.ingestion.sefaz.timeout-ms:30000}") int timeoutMs,
+                                   @Value("${economizai.ingestion.sefaz.user-agent:economizai}") String userAgent,
+                                   @Value("${economizai.ingestion.sefaz.svrs.states:RS}") String svrsStates) {
         var requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Math.min(timeoutMs, 10000));
         requestFactory.setReadTimeout(timeoutMs);
@@ -42,30 +59,47 @@ public class RioGrandeDoSulAdapter implements SefazAdapter {
                 .defaultHeader("Accept", "text/html,application/xhtml+xml")
                 .requestFactory(requestFactory)
                 .build();
+        this.supportedStates = parseStates(svrsStates);
+        log.info("SvrsSharedPortalAdapter active for UFs: {}", this.supportedStates);
+    }
+
+    private Set<UnidadeFederativa> parseStates(String csv) {
+        if (csv == null || csv.isBlank()) return EnumSet.of(UnidadeFederativa.RS);
+        var result = EnumSet.noneOf(UnidadeFederativa.class);
+        for (var token : csv.split(",")) {
+            var trimmed = token.trim().toUpperCase();
+            if (trimmed.isEmpty()) continue;
+            try {
+                result.add(UnidadeFederativa.valueOf(trimmed));
+            } catch (IllegalArgumentException ex) {
+                log.warn("Ignoring unknown UF '{}' in svrs.states", trimmed);
+            }
+        }
+        return result.isEmpty() ? EnumSet.of(UnidadeFederativa.RS) : result;
     }
 
     @Override
-    public UnidadeFederativa supportedState() {
-        return UnidadeFederativa.RS;
+    public Set<UnidadeFederativa> supportedStates() {
+        return supportedStates;
     }
 
     @Override
     public String fetchHtml(String qrPayload) {
         var url = resolveUrl(qrPayload);
-        log.info("Fetching SEFAZ-RS NFC-e at {}", url);
+        log.info("Fetching SEFAZ NFC-e at {}", url);
         try {
             var html = restClient.get().uri(url).retrieve().body(String.class);
             if (html == null || html.isBlank()) {
-                log.warn("SEFAZ-RS returned empty body for {}", url);
-                throw new SefazFetchException(supportedState().name());
+                log.warn("SEFAZ returned empty body for {}", url);
+                throw new SefazFetchException(supportedStates.iterator().next().name());
             }
-            log.info("Fetched SEFAZ-RS HTML ({} bytes)", html.length());
+            log.info("Fetched SEFAZ HTML ({} bytes)", html.length());
             return html;
         } catch (SefazFetchException ex) {
             throw ex;
         } catch (Exception ex) {
-            log.warn("SEFAZ-RS fetch failed: {}: {}", ex.getClass().getSimpleName(), ex.getMessage());
-            throw new SefazFetchException(supportedState().name());
+            log.warn("SEFAZ fetch failed: {}: {}", ex.getClass().getSimpleName(), ex.getMessage());
+            throw new SefazFetchException(supportedStates.iterator().next().name());
         }
     }
 
@@ -74,7 +108,7 @@ public class RioGrandeDoSulAdapter implements SefazAdapter {
         var document = Jsoup.parse(html);
         var items = parseItems(document);
         if (items.isEmpty()) {
-            log.warn("Parser found no items in SEFAZ-RS HTML for chave {}", chaveAcesso);
+            log.warn("Parser found no items in SEFAZ HTML for chave {}", chaveAcesso);
             throw new ReceiptParseException("no-items-found");
         }
         var totalAmount = parseTotal(document);
@@ -90,7 +124,7 @@ public class RioGrandeDoSulAdapter implements SefazAdapter {
                 .rawHtml(html)
                 .items(items)
                 .build();
-        log.info("Parsed SEFAZ-RS receipt: market='{}', total={}, items={}",
+        log.info("Parsed SEFAZ receipt: market='{}', total={}, items={}",
                 parsed.marketName(), parsed.totalAmount(), items.size());
         return parsed;
     }

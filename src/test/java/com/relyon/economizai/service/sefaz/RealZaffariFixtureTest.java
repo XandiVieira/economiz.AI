@@ -14,8 +14,8 @@ class RealZaffariFixtureTest {
 
     private static final String CHAVE = "43260493015006005182651130003394021410514546";
 
-    private final RioGrandeDoSulAdapter adapter = new RioGrandeDoSulAdapter(
-            RestClient.builder(), 5000, "test-agent");
+    private final SvrsSharedPortalAdapter adapter = new SvrsSharedPortalAdapter(
+            RestClient.builder(), 5000, "test-agent", "RS");
 
     @Test
     void parseRealZaffariReceipt() throws Exception {

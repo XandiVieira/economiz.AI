@@ -5,10 +5,9 @@ import com.relyon.economizai.model.enums.UnidadeFederativa;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -17,9 +16,18 @@ public class SefazIngestionService {
     private final Map<UnidadeFederativa, SefazAdapter> adapters;
 
     public SefazIngestionService(List<SefazAdapter> adapters) {
-        this.adapters = adapters.stream()
-                .collect(Collectors.toUnmodifiableMap(SefazAdapter::supportedState, Function.identity()));
-        log.info("Registered SEFAZ adapters: {}", this.adapters.keySet());
+        var byState = new EnumMap<UnidadeFederativa, SefazAdapter>(UnidadeFederativa.class);
+        for (var adapter : adapters) {
+            for (var uf : adapter.supportedStates()) {
+                var prior = byState.put(uf, adapter);
+                if (prior != null && prior != adapter) {
+                    throw new IllegalStateException("Two adapters claim " + uf + ": "
+                            + prior.getClass().getSimpleName() + " and " + adapter.getClass().getSimpleName());
+                }
+            }
+        }
+        this.adapters = Map.copyOf(byState);
+        log.info("Registered SEFAZ adapters covering UFs: {}", this.adapters.keySet());
     }
 
     public ParsedReceipt ingest(String qrPayload) {

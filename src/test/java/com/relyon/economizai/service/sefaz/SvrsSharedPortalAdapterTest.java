@@ -14,12 +14,12 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class RioGrandeDoSulAdapterTest {
+class SvrsSharedPortalAdapterTest {
 
     private static final String CHAVE_RS = "43260412345678000190650010000123451123456780";
 
-    private final RioGrandeDoSulAdapter adapter = new RioGrandeDoSulAdapter(
-            RestClient.builder(), 5000, "test-agent");
+    private final SvrsSharedPortalAdapter adapter = new SvrsSharedPortalAdapter(
+            RestClient.builder(), 5000, "test-agent", "RS");
 
     private String loadFixture() throws Exception {
         return loadFixture("nfce-sample.html");
@@ -32,8 +32,32 @@ class RioGrandeDoSulAdapterTest {
     }
 
     @Test
-    void supportedState_isRs() {
-        assertEquals(UnidadeFederativa.RS, adapter.supportedState());
+    void supportedStates_defaultsToRs() {
+        assertTrue(adapter.supportedStates().contains(UnidadeFederativa.RS));
+        assertEquals(1, adapter.supportedStates().size());
+    }
+
+    @Test
+    void supportedStates_acceptsCsvOfMultipleUfs() {
+        var multi = new SvrsSharedPortalAdapter(RestClient.builder(), 5000, "test", "RS, SC, RJ");
+        assertEquals(3, multi.supportedStates().size());
+        assertTrue(multi.supportedStates().contains(UnidadeFederativa.SC));
+        assertTrue(multi.supportedStates().contains(UnidadeFederativa.RJ));
+    }
+
+    @Test
+    void supportedStates_ignoresUnknownUfTokens() {
+        var partial = new SvrsSharedPortalAdapter(RestClient.builder(), 5000, "test", "RS,XX,SC");
+        assertEquals(2, partial.supportedStates().size());
+        assertTrue(partial.supportedStates().contains(UnidadeFederativa.RS));
+        assertTrue(partial.supportedStates().contains(UnidadeFederativa.SC));
+    }
+
+    @Test
+    void supportedStates_blankConfigFallsBackToRs() {
+        var fallback = new SvrsSharedPortalAdapter(RestClient.builder(), 5000, "test", "");
+        assertEquals(1, fallback.supportedStates().size());
+        assertTrue(fallback.supportedStates().contains(UnidadeFederativa.RS));
     }
 
     @Test
