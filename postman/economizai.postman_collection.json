@@ -4837,6 +4837,105 @@
             "description": "Resolves the user by email and dispatches a notification through NotificationService — useful for verifying push/SMTP wiring on demand. Returns 202 even if the channel is stubbed; check the notifications inbox or device to confirm delivery."
           },
           "response": []
+        },
+        {
+          "name": "List products missing brand (admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/products/missing-brand?page=0&size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "products", "missing-brand"],
+              "query": [
+                {"key": "page", "value": "0"},
+                {"key": "size", "value": "20"}
+              ]
+            },
+            "description": "Paginated list of products with brand=null. Each entry includes up to 5 sample raw descriptions from its aliases — gives the curator enough context to assign a brand."
+          },
+          "response": []
+        },
+        {
+          "name": "Set product brand (admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brand\": \"Tio João\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/products/{{productId}}/brand",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "products", "{{productId}}", "brand"]
+            },
+            "description": "Lightweight admin PATCH that sets only the brand on a product. Returns the updated ProductResponse. Use after listing missing-brand products to fill in catalog gaps."
+          },
+          "response": []
+        },
+        {
+          "name": "List duplicate products (admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/products/duplicates",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "products", "duplicates"]
+            },
+            "description": "Groups of products sharing the same (genericName, brand, packSize, packUnit) profile — likely duplicates. Within each group, oldest product first."
+          },
+          "response": []
+        },
+        {
+          "name": "Merge product (admin, dry run)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"absorbedId\": \"{{absorbedProductId}}\",\n  \"dryRun\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/products/{{survivorProductId}}/merge",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "products", "{{survivorProductId}}", "merge"]
+            },
+            "description": "Returns per-table migration counts WITHOUT applying. Sanity-check the numbers, then re-run with dryRun=false to apply."
+          },
+          "response": []
+        },
+        {
+          "name": "Merge product (admin, apply)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"absorbedId\": \"{{absorbedProductId}}\",\n  \"dryRun\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/products/{{survivorProductId}}/merge",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "products", "{{survivorProductId}}", "merge"]
+            },
+            "description": "APPLIES the merge. Migrates aliases, receipt items, price observations, manual purchases, shopping-list items, household aliases and consumption snoozes from absorbed → survivor, then deletes absorbed. NO undo."
+          },
+          "response": []
         }
       ]
     }

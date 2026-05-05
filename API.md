@@ -569,6 +569,10 @@ GET    /api/v1/admin/receipts?from=&to=&marketCnpj=&category=&q=&householdId=&pa
 GET    /api/v1/admin/receipts/{id}            → ReceiptResponse
 POST   /api/v1/admin/receipts/{id}/reparse    → 200 ReceiptResponse
 POST   /api/v1/admin/notifications/test       → 202 Accepted
+GET    /api/v1/admin/products/missing-brand    → Page<MissingBrandProductResponse>
+PATCH  /api/v1/admin/products/{id}/brand       → 200 ProductResponse
+GET    /api/v1/admin/products/duplicates       → List<DuplicateProductGroupResponse>
+POST   /api/v1/admin/products/{id}/merge       → 200 ProductMergeResultResponse
 ```
 
 - **Users list** — `q` does substring match on email + name (case-insensitive). Sorted by `createdAt` desc by default.
@@ -577,6 +581,10 @@ POST   /api/v1/admin/notifications/test       → 202 Accepted
 - **Receipts get** — bypasses the per-household ownership check.
 - **Reparse** — re-runs parsing on the receipt's stored raw HTML and replaces its items with the freshly-parsed ones. Resets `status` to `PENDING_CONFIRMATION` and clears `confirmedAt` — the owner re-confirms to commit. Useful when a parser fix lands. 400 if `rawHtml` is missing (e.g. legacy rows from before we persisted it).
 - **Notifications test** — body `{ "email": "...", "title"?, "body"?, "type"? }`. Resolves the user by email and dispatches a payload through `NotificationService`. Useful to verify push/SMTP wiring on demand. Returns 202 even if the channel is stubbed; check the inbox (`GET /notifications`) or the device to confirm delivery. `type` defaults to `SYSTEM`.
+- **Products missing brand** — paginated list of products whose brand wasn't auto-extracted (`Product.brand IS NULL`). Each entry includes up to 5 sample `rawDescription` strings from the product's aliases — gives the curator context for what name to assign. Sorted by `normalizedName` so paging is stable.
+- **Set product brand** — body `{ "brand": "Tio João" }`. Lightweight PATCH that only sets `brand`. Returns the updated `ProductResponse`. Use after the missing-brand listing to fill catalog gaps; subsequent canonicalization for items of this product (and the metadata-dedup gate) become more accurate as soon as brand is set.
+- **Products duplicates** — returns groups of products that share an exact `(genericName, brand, packSize, packUnit)` profile and are therefore probable duplicates. Each group: `{ genericName, brand, packSize, packUnit, category, products: [ProductResponse] }`. Only products with all four metadata dimensions populated are eligible. Within a group, the oldest product appears first — a natural default survivor.
+- **Merge product** — body `{ "absorbedId": "<uuid>", "dryRun": false }`. The `{id}` in the path is the **survivor**. Migrates all aliases, receipt items, price observations, manual purchases, shopping-list items, household aliases (drops where survivor already has one for the household), and consumption snoozes (same conflict logic) from `absorbed` to the survivor; deletes `absorbed`. Set `dryRun: true` to get the migration counts without applying any change — the only undo is to **not** apply. Returns `ProductMergeResultResponse` with per-table counts.
 
 All require a JWT for a user with `Role.ADMIN`. Regular users hit 403.
 

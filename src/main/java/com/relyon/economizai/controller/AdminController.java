@@ -1,13 +1,20 @@
 package com.relyon.economizai.controller;
 
+import com.relyon.economizai.dto.request.MergeProductRequest;
 import com.relyon.economizai.dto.request.SendTestNotificationRequest;
+import com.relyon.economizai.dto.request.SetProductBrandRequest;
 import com.relyon.economizai.dto.response.AdminUserDetailResponse;
 import com.relyon.economizai.dto.response.AdminUserSummaryResponse;
+import com.relyon.economizai.dto.response.DuplicateProductGroupResponse;
+import com.relyon.economizai.dto.response.MissingBrandProductResponse;
+import com.relyon.economizai.dto.response.ProductMergeResultResponse;
+import com.relyon.economizai.dto.response.ProductResponse;
 import com.relyon.economizai.dto.response.ReceiptResponse;
 import com.relyon.economizai.dto.response.ReceiptSummaryResponse;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.service.ReceiptService;
 import com.relyon.economizai.service.admin.AdminNotificationService;
+import com.relyon.economizai.service.admin.AdminProductService;
 import com.relyon.economizai.service.admin.AdminReceiptService;
 import com.relyon.economizai.service.admin.AdminUserService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -19,6 +26,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -27,6 +35,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -43,6 +52,7 @@ public class AdminController {
     private final AdminUserService adminUserService;
     private final AdminReceiptService adminReceiptService;
     private final AdminNotificationService adminNotificationService;
+    private final AdminProductService adminProductService;
 
     @PostMapping("/receipts/{id}/reparse")
     public ResponseEntity<ReceiptResponse> reparseReceipt(@PathVariable UUID id) {
@@ -82,5 +92,28 @@ public class AdminController {
     public ResponseEntity<Void> sendTestNotification(@Valid @RequestBody SendTestNotificationRequest request) {
         adminNotificationService.sendTest(request);
         return ResponseEntity.accepted().build();
+    }
+
+    @GetMapping("/products/missing-brand")
+    public ResponseEntity<Page<MissingBrandProductResponse>> listMissingBrand(
+            @PageableDefault(size = 20) Pageable pageable) {
+        return ResponseEntity.ok(adminProductService.listMissingBrand(pageable));
+    }
+
+    @PatchMapping("/products/{id}/brand")
+    public ResponseEntity<ProductResponse> setProductBrand(
+            @PathVariable UUID id, @Valid @RequestBody SetProductBrandRequest request) {
+        return ResponseEntity.ok(adminProductService.setBrand(id, request));
+    }
+
+    @GetMapping("/products/duplicates")
+    public ResponseEntity<List<DuplicateProductGroupResponse>> listDuplicates() {
+        return ResponseEntity.ok(adminProductService.listDuplicateGroups());
+    }
+
+    @PostMapping("/products/{id}/merge")
+    public ResponseEntity<ProductMergeResultResponse> mergeProduct(
+            @PathVariable UUID id, @Valid @RequestBody MergeProductRequest request) {
+        return ResponseEntity.ok(adminProductService.merge(id, request));
     }
 }

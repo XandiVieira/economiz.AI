@@ -1,7 +1,9 @@
 package com.relyon.economizai.repository;
 
+import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.ProductAlias;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -32,4 +34,12 @@ public interface ProductAliasRepository extends JpaRepository<ProductAlias, UUID
     List<ProductAlias> findCandidatesByProductMetadata(@Param("genericName") String genericName,
                                                        @Param("packSize") BigDecimal packSize,
                                                        @Param("packUnit") String packUnit);
+
+    List<ProductAlias> findByProductIdIn(List<UUID> productIds);
+
+    long countByProduct(Product product);
+
+    @Modifying
+    @Query("UPDATE ProductAlias a SET a.product = :survivor WHERE a.product = :absorbed")
+    int repointProduct(@Param("absorbed") Product absorbed, @Param("survivor") Product survivor);
 }

@@ -10,6 +10,39 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-05-05 — admin: merge duplicate products
+
+Catalog cleanup tool for cases the auto-dedup paths (alias / fuzzy / metadata) don't catch — the curator picks a survivor and absorbs another product into it.
+
+### `GET /api/v1/admin/products/duplicates` (ROLE_ADMIN)
+Returns groups of products that share an exact `(genericName, brand, packSize, packUnit)` profile. Each group is `{ genericName, brand, packSize, packUnit, category, products: [ProductResponse] }`. Within a group the oldest product comes first (sensible default survivor).
+
+### `POST /api/v1/admin/products/{survivorId}/merge` (ROLE_ADMIN)
+Body: `{ "absorbedId": "<uuid>", "dryRun": false }`. Migrates everything from `absorbed` into `survivor`:
+
+- aliases, receipt items, price observations, manual purchases, shopping-list items → repointed.
+- household aliases + consumption snoozes → conflict-aware (drops absorbed's row where survivor already has one for the household; UNIQUE (household_id, product_id) would otherwise fail).
+- absorbed product deleted at the end.
+
+Set `dryRun: true` to get the migration counts without applying. Returns `ProductMergeResultResponse` with per-table counts. **No undo** — the dry run is the only safety net.
+
+---
+
+## 2026-05-05 — admin: brand curation tools + bigger brand registry
+
+### Brand registry expanded
+`seed/brand-registry.csv` grew from 137 → 331 entries — covers the most common Brazilian grocery brands across rice/grains, pasta, dairy, chocolate, cookies, cleaning, margarine/oil, bakery, beverages, beer, wine, coffee, pet food, personal care, sweeteners, and ready meals. Existing products with `brand=null` are not auto-backfilled; new submissions match against the larger list automatically.
+
+### `GET /api/v1/admin/products/missing-brand` (ROLE_ADMIN)
+Paginated list of products without a brand. Response shape `MissingBrandProductResponse`: `{ id, ean, normalizedName, genericName, category, packSize, packUnit, sampleDescriptions: [string] }` — `sampleDescriptions` carries up to 5 raw descriptions from the product's aliases, giving the curator enough context to assign a brand without round-tripping.
+
+### `PATCH /api/v1/admin/products/{id}/brand` (ROLE_ADMIN)
+Lightweight PATCH — body `{ "brand": "Tio João" }`. Sets only the brand field. Returns the updated `ProductResponse`. Designed to be called from the missing-brand listing.
+
+These two endpoints unblock manual catalog curation when brand extraction misses (see also: the metadata-dedup gate from this release, which becomes more effective as more products have brands).
+
+---
+
 ## 2026-05-05 — metadata-based dedup for unknown EANs (no FE change)
 
 When a previously-unseen EAN comes in, canonicalization now checks whether an existing product already matches by `(genericName, brand, packSize, packUnit)` before creating a new one. Catches the common case where small markets emit internal pseudo-EANs for the same physical product (mercadinhos, padarias, açougues do bairro) that would otherwise inflate the catalog.

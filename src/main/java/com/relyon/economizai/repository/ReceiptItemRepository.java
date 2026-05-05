@@ -30,6 +30,10 @@ public interface ReceiptItemRepository extends JpaRepository<ReceiptItem, UUID> 
     """)
     int linkByEan(@Param("product") Product product, @Param("ean") String ean);
 
+    @Modifying
+    @Query("UPDATE ReceiptItem ri SET ri.product = :survivor WHERE ri.product = :absorbed")
+    int repointProduct(@Param("absorbed") Product absorbed, @Param("survivor") Product survivor);
+
     List<ReceiptItem> findAllByProductIdOrderByReceiptIssuedAtAsc(UUID productId);
 
     /** Same intent as the method above but fetches receipt + household up front,
