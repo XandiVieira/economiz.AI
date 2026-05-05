@@ -10,6 +10,37 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-05-05 — metadata-based dedup for unknown EANs (no FE change)
+
+When a previously-unseen EAN comes in, canonicalization now checks whether an existing product already matches by `(genericName, brand, packSize, packUnit)` before creating a new one. Catches the common case where small markets emit internal pseudo-EANs for the same physical product (mercadinhos, padarias, açougues do bairro) that would otherwise inflate the catalog.
+
+Behavior:
+
+- **Trigger**: item has an EAN, but the EAN isn't in the DB yet.
+- **Match condition**: extracted `genericName`, `brand`, `packSize`, `packUnit` all non-null AND all four match an existing product. Any null → skip dedup, behave as before (create new product).
+- **On match**: links the item to the existing product and persists the new description as an alias. The pseudo-EAN is intentionally **not** propagated onto the existing product — keeps `Product.ean` as a single canonical code.
+- **Logged as**: `item.matched_by_metadata ean=<x> product=<id> brand=<y>`.
+
+No FE-visible request/response change.
+
+---
+
+## 2026-05-05 — fuzzy alias matching (no FE change, better dedup)
+
+Items without an EAN that previously fell through to `UNMATCHED` because their description was *almost* but not exactly equal to a known alias now get matched via Jaro-Winkler similarity. Concrete: `ARROZ TIO J 5KG` and `ARROZ TIO JOAO 5KG` are now recognized as the same product across markets.
+
+Behavior:
+
+- **Trigger**: only when the item has no EAN AND no exact alias hit.
+- **Candidate pool**: aliases of products with the *same* extracted `(genericName, packSize, packUnit)` profile. Skipped if any of these is null — without that filter the search is too loose and false-positive-prone.
+- **Threshold**: Jaro-Winkler ≥ 0.85.
+- **On match**: links the item to the existing product and persists the new variant as an alias, so subsequent identical descriptions hit the cheap exact-alias path.
+- **Logged as**: `item.matched_by_fuzzy product=<id> score=<n>`.
+
+No request/response shape change. The `category`, `displayDescription`, etc. exposed on `ReceiptItemResponse` will populate more often as a result.
+
+---
+
 ## 2026-05-05 — `DELETE /receipts/{id}` documented behavior (no FE change)
 
 The endpoint already existed (still does, same path). Clarifying the LGPD invariant after a question came up:

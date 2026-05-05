@@ -20,6 +20,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -80,6 +81,7 @@ class CanonicalizationServiceTest {
     @Test
     void createsNewProductWhenEanIsUnknown() {
         var receipt = buildReceipt(item("LEITE INTEGRAL 1L", "123"));
+        // Brand null → metadata-dedup gate is skipped automatically
         when(productExtractor.extract(any())).thenReturn(
                 new ProductExtraction("Leite", null, new BigDecimal("1"), "L",
                         ProductCategory.MEAT_DAIRY, CategorizationSource.DICTIONARY));
@@ -103,6 +105,56 @@ class CanonicalizationServiceTest {
     }
 
     @Test
+    void dedupsToExistingProductWhenEanIsUnknownButMetadataMatches() {
+        var existing = Product.builder().id(UUID.randomUUID())
+                .ean("7891000100103")
+                .normalizedName("Leite Integral Itambe 1L")
+                .genericName("Leite")
+                .brand("Itambe")
+                .packSize(new BigDecimal("1"))
+                .packUnit("L")
+                .build();
+        var receipt = buildReceipt(item("LEITE INTEGRAL ITAMBE 1L", "INTERNO99")); // pseudo-EAN from a small market
+        when(productRepository.findByEan("INTERNO99")).thenReturn(Optional.empty());
+        when(productExtractor.extract(any())).thenReturn(
+                new ProductExtraction("Leite", "Itambe", new BigDecimal("1"), "L",
+                        ProductCategory.MEAT_DAIRY, CategorizationSource.DICTIONARY));
+        when(productRepository.findByMetadata("Leite", "Itambe", new BigDecimal("1"), "L"))
+                .thenReturn(List.of(existing));
+        when(aliasRepository.existsByNormalizedDescription(anyString())).thenReturn(false);
+
+        var outcome = service.canonicalize(receipt);
+
+        assertEquals(1, outcome.matched());
+        assertEquals(existing, receipt.getItems().get(0).getProduct());
+        // existing product's EAN is preserved, NOT overwritten with the pseudo-EAN
+        assertEquals("7891000100103", receipt.getItems().get(0).getProduct().getEan());
+        verify(productRepository, never()).save(any(Product.class));
+        verify(aliasRepository).save(any(ProductAlias.class));
+    }
+
+    @Test
+    void dedupSkippedWhenBrandIsMissing() {
+        var receipt = buildReceipt(item("LEITE INTEGRAL 1L", "123"));
+        when(productRepository.findByEan("123")).thenReturn(Optional.empty());
+        // brand null → dedup gate skipped, falls through to create new
+        when(productExtractor.extract(any())).thenReturn(
+                new ProductExtraction("Leite", null, new BigDecimal("1"), "L",
+                        ProductCategory.MEAT_DAIRY, CategorizationSource.DICTIONARY));
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> {
+            var p = inv.<Product>getArgument(0);
+            p.setId(UUID.randomUUID());
+            return p;
+        });
+        when(aliasRepository.existsByNormalizedDescription(anyString())).thenReturn(false);
+
+        var outcome = service.canonicalize(receipt);
+
+        assertEquals(1, outcome.created());
+        verify(productRepository, never()).findByMetadata(any(), any(), any(), any());
+    }
+
+    @Test
     void matchesByAliasWhenNoEan() {
         var product = Product.builder().id(UUID.randomUUID()).normalizedName("Banana").build();
         var alias = ProductAlias.builder().product(product).normalizedDescription("banana caturra kg").build();
@@ -120,11 +172,84 @@ class CanonicalizationServiceTest {
     void leavesItemUnmatchedWhenNoEanAndNoAlias() {
         var receipt = buildReceipt(item("ITEM DESCONHECIDO", null));
         when(aliasRepository.findByNormalizedDescription(anyString())).thenReturn(Optional.empty());
+        when(productExtractor.extract(any())).thenReturn(ProductExtraction.empty());
 
         var outcome = service.canonicalize(receipt);
 
         assertEquals(1, outcome.unmatched());
         assertNull(receipt.getItems().get(0).getProduct());
+    }
+
+    @Test
+    void fuzzyMatchesByAliasSimilarityWhenExactAliasMisses() {
+        // Existing product cataloged via "ARROZ TIO JOAO 5KG"
+        var product = Product.builder().id(UUID.randomUUID())
+                .normalizedName("Arroz Tio Joao 5KG")
+                .genericName("Arroz")
+                .packSize(new BigDecimal("5"))
+                .packUnit("KG")
+                .build();
+        var existingAlias = ProductAlias.builder()
+                .product(product)
+                .normalizedDescription("arroz tio joao 5kg")
+                .build();
+        // Incoming item from another market with abbreviation
+        var receipt = buildReceipt(item("ARROZ TIO J 5KG", null));
+        when(aliasRepository.findByNormalizedDescription("arroz tio j 5kg")).thenReturn(Optional.empty());
+        when(productExtractor.extract("ARROZ TIO J 5KG")).thenReturn(
+                new ProductExtraction("Arroz", "Tio Joao", new BigDecimal("5"), "KG",
+                        ProductCategory.GROCERIES, CategorizationSource.DICTIONARY));
+        when(aliasRepository.findCandidatesByProductMetadata("Arroz", new BigDecimal("5"), "KG"))
+                .thenReturn(List.of(existingAlias));
+        when(aliasRepository.existsByNormalizedDescription("arroz tio j 5kg")).thenReturn(false);
+
+        var outcome = service.canonicalize(receipt);
+
+        assertEquals(1, outcome.matched());
+        assertEquals(product, receipt.getItems().get(0).getProduct());
+        verify(aliasRepository).save(any(ProductAlias.class)); // new alias persisted for the variant
+    }
+
+    @Test
+    void fuzzyDoesNotMatchWhenScoreBelowThreshold() {
+        var product = Product.builder().id(UUID.randomUUID())
+                .normalizedName("Arroz")
+                .genericName("Arroz")
+                .packSize(new BigDecimal("5"))
+                .packUnit("KG")
+                .build();
+        var existingAlias = ProductAlias.builder()
+                .product(product)
+                .normalizedDescription("arroz tio joao tipo 1 5kg")
+                .build();
+        var receipt = buildReceipt(item("FEIJAO PRETO 5KG", null));
+        when(aliasRepository.findByNormalizedDescription("feijao preto 5kg")).thenReturn(Optional.empty());
+        when(productExtractor.extract("FEIJAO PRETO 5KG")).thenReturn(
+                new ProductExtraction("Arroz", null, new BigDecimal("5"), "KG",
+                        ProductCategory.GROCERIES, CategorizationSource.DICTIONARY));
+        when(aliasRepository.findCandidatesByProductMetadata("Arroz", new BigDecimal("5"), "KG"))
+                .thenReturn(List.of(existingAlias));
+
+        var outcome = service.canonicalize(receipt);
+
+        assertEquals(1, outcome.unmatched());
+        assertNull(receipt.getItems().get(0).getProduct());
+        verify(aliasRepository, never()).save(any(ProductAlias.class));
+    }
+
+    @Test
+    void fuzzySkippedWhenMetadataIncomplete() {
+        // No packSize extracted — fuzzy is skipped to avoid wide-net false positives
+        var receipt = buildReceipt(item("BANANA PRATA KG", null));
+        when(aliasRepository.findByNormalizedDescription("banana prata kg")).thenReturn(Optional.empty());
+        when(productExtractor.extract("BANANA PRATA KG")).thenReturn(
+                new ProductExtraction("Banana Prata", null, null, null,
+                        ProductCategory.PRODUCE, CategorizationSource.DICTIONARY));
+
+        var outcome = service.canonicalize(receipt);
+
+        assertEquals(1, outcome.unmatched());
+        verify(aliasRepository, never()).findCandidatesByProductMetadata(any(), any(), any());
     }
 
     @Test
