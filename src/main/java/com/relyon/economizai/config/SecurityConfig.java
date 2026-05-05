@@ -37,7 +37,7 @@ public class SecurityConfig {
      */
     private final ObjectProvider<RateLimitFilter> rateLimitFilterProvider;
 
-    @Value("${economizai.cors.allowed-origins:http://localhost:3000,http://localhost:5173}")
+    @Value("${economizai.cors.allowed-origins:http://localhost:3000,http://localhost:5173,http://localhost:8081}")
     private String allowedOrigins;
 
     @Bean
