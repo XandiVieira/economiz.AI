@@ -10,6 +10,16 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-05-06 — multi-state recon documented (no behavior change)
+
+Probed all 27 UFs' NFC-e portals empirically and saved the analysis under `docs/MULTI_STATE_RECON.md`. Bottom line: **end-to-end ingestion is verified for 1 UF (RS) today**; any other state still returns `UnsupportedStateException`. The doc maps each portal into tiers (simple GET / JSF stateful / XML / captcha / SPA / fetch issues) with effort estimates and a recommended implementation order.
+
+The blocker is data, not code: writing adapters against synthetic chaves produces broken parsers because the response HTML for an invalid chave doesn't show the success-path layout. Real, recent chaves per UF unblock the work.
+
+DEV_NOTES updated with the same status.
+
+---
+
 ## 2026-05-05 — multi-state SEFAZ ingestion (no FE change)
 
 `SefazAdapter.supportedState()` is now `supportedStates() : Set<UnidadeFederativa>` so a single adapter can claim multiple UFs. The existing RS adapter is renamed `SvrsSharedPortalAdapter` (the underlying portal hosts NFC-e for several states beyond RS) and now reads its UF list from config:

@@ -10,6 +10,14 @@ mirror entries here.
 
 ---
 
+## Multi-state SEFAZ coverage = 1 / 27 verified
+- **Now**: only RS has a working end-to-end ingestion path (`SvrsSharedPortalAdapter` against `dfe-portal.svrs.rs.gov.br`, with real Zaffari/Bistek HTML fixtures). Submitting chaves from any other UF returns `UnsupportedStateException`.
+- **What we know**: empirical probe of all 27 portals on 2026-05-06 documented in `docs/MULTI_STATE_RECON.md`. ~10 UFs are server-rendered + simple GET (Tier 1 — quick to add once we have real chaves). 3 UFs use JSF/ASP.NET ViewState (Tier 2, more code). 5 UFs gate behind captcha (Tier 4, needs 2Captcha or similar). 1-2 are SPAs requiring a headless browser.
+- **Bottleneck**: not code, **data**. Adapters can't be written safely against synthetic chaves; each UF needs 1 real, recent (≤ 3 months) cupom HTML to develop selectors against. See `docs/MULTI_STATE_RECON.md` for the population coverage analysis (Tier 1 + Tier 2 = ~54% of Brazil) and recommended implementation order.
+- **Fix when ready**: collect chaves via e-CAC, state cashback portals, or contacts in each state; save HTML in `src/test/resources/fixtures/sefaz/<uf>/`; implement adapter following `SvrsSharedPortalAdapter` template.
+
+---
+
 ## Storage / infrastructure
 
 ### Profile picture storage = local disk
