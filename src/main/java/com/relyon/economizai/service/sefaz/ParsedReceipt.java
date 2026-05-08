@@ -14,6 +14,8 @@ public record ParsedReceipt(
         String marketAddress,
         LocalDateTime issuedAt,
         BigDecimal totalAmount,
+        BigDecimal approxTaxFederal,
+        BigDecimal approxTaxEstadual,
         String sourceUrl,
         String rawHtml,
         List<ParsedReceiptItem> items

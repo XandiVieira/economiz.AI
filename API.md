@@ -233,6 +233,15 @@ Two ways to mark an item excluded:
 - `totalAmount` — the original NF total. Never changes.
 - `householdTotalAmount` — sum of non-excluded items. Use this for "what we actually spent".
 
+**Approximate-tax fields (new)** — `ReceiptResponse` now also carries the IBPT-source tax disclosure required by Lei 12.741/2012:
+- `approxTaxFederal` — federal portion (BigDecimal, nullable)
+- `approxTaxEstadual` — estadual portion (BigDecimal, nullable)
+- `approxTaxTotal` — sum, derived; `null` when both source fields are null
+
+`ReceiptSummaryResponse` exposes `approxTaxTotal` only (federal/estadual breakdown lives on the detail endpoint to keep list payloads lean).
+
+These are **estimates from the IBPT national table** (taxes embedded in the retail prices: ICMS, IPI, PIS, COFINS, IOF) — NOT taxes the consumer paid separately, NOT what the merchant remitted. Always label as "imposto aproximado" / "estimativa IBPT" in the UX. The line is mandatory by law but not always present (some Simples Nacional micro-merchants skip it or declare R$ 0,00) — fields are `null` when absent. Aggregations like "% pago em impostos esse mês" must filter `WHERE approxTaxTotal IS NOT NULL`, otherwise missing-data receipts dilute the average.
+
 **Item-level promo flag (new)** — each `ReceiptResponse.items[*]` now carries `nfcePromoFlag: boolean`. True when the SEFAZ HTML signaled the line was on promo / discount (a discount cell was present, or the description carries stems like "OFERTA", "PROMO", "DESCONTO", "COMBO", "LEVE 3"). Use it for visual emphasis ("oferta!" badge) on receipt detail cards. Backend behavior: flagged items are excluded from baseline calcs in community-promo detection so we don't compare promos to historic promos.
 
 **Item-level category (new)** — each `ReceiptResponse.items[*]` now carries `category: string | null`. Resolved from the linked `Product` (when the item has been canonicalized). Values: `GROCERIES`, `BEVERAGES`, `PRODUCE`, `MEAT_DAIRY`, `BAKERY`, `CLEANING`, `PERSONAL_CARE`, `OTHER`. `null` when the item hasn't been linked to a Product yet, or the Product has no category set. Use it to show a category chip per line on the ReviewScreen / receipt detail without a follow-up `GET /products/{id}` call.
@@ -256,7 +265,7 @@ GET /api/v1/receipts
     &category=GROCERIES
     &q=leite condensado
     &page=0&size=20
-→ Page<ReceiptSummaryResponse>  (each row has marketName, issuedAt, totalAmount, itemCount, status)
+→ Page<ReceiptSummaryResponse>  (each row has marketName, issuedAt, totalAmount, householdTotalAmount, approxTaxTotal, itemCount, status)
 ```
 
 Default sort is `issuedAt DESC`. All filters optional.

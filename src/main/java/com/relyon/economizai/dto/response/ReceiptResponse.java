@@ -19,6 +19,9 @@ public record ReceiptResponse(
         LocalDateTime issuedAt,
         BigDecimal totalAmount,
         BigDecimal householdTotalAmount,
+        BigDecimal approxTaxFederal,
+        BigDecimal approxTaxEstadual,
+        BigDecimal approxTaxTotal,
         ReceiptStatus status,
         LocalDateTime confirmedAt,
         LocalDateTime createdAt,
@@ -39,10 +42,20 @@ public record ReceiptResponse(
                 receipt.getIssuedAt(),
                 receipt.getTotalAmount(),
                 householdTotal,
+                receipt.getApproxTaxFederal(),
+                receipt.getApproxTaxEstadual(),
+                approxTaxTotal(receipt),
                 receipt.getStatus(),
                 receipt.getConfirmedAt(),
                 receipt.getCreatedAt(),
                 receipt.getItems().stream().map(ReceiptItemResponse::from).toList()
         );
+    }
+
+    private static BigDecimal approxTaxTotal(Receipt receipt) {
+        var fed = receipt.getApproxTaxFederal();
+        var est = receipt.getApproxTaxEstadual();
+        if (fed == null && est == null) return null;
+        return (fed == null ? BigDecimal.ZERO : fed).add(est == null ? BigDecimal.ZERO : est);
     }
 }

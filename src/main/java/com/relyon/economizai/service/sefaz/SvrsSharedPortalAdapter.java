@@ -43,6 +43,12 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
     private static final DateTimeFormatter ISSUED_AT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
     private static final Pattern CNPJ = Pattern.compile("CNPJ\\s*:?\\s*([\\d./-]{14,18})", Pattern.CASE_INSENSITIVE);
     private static final Pattern EMISSION = Pattern.compile("Emiss[aã]o\\s*:?\\s*(\\d{2}/\\d{2}/\\d{4}\\s+\\d{2}:\\d{2}:\\d{2})", Pattern.CASE_INSENSITIVE);
+    // IBPT-source line required by Lei 12.741/2012. Format observed across SVRS:
+    //   "Trib aprox R$ 51,73 Federal, R$ 49,35 Estadual Fonte: IBPT B46141"
+    // Decimal separator is comma (pt-BR); thousands separator is dot.
+    private static final Pattern IBPT_TAX = Pattern.compile(
+            "Trib(?:utos)?\\s*aprox(?:imados)?\\s*R\\$?\\s*([\\d.,]+)\\s*Federal\\s*[,;]?\\s*R\\$?\\s*([\\d.,]+)\\s*Estadual",
+            Pattern.CASE_INSENSITIVE);
 
     private final RestClient restClient;
     private final Set<UnidadeFederativa> supportedStates;
@@ -113,6 +119,7 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
         }
         var totalAmount = parseTotal(document);
         items = reconcileItemsToTotal(items, totalAmount);
+        var tax = parseApproxTax(document);
         var parsed = ParsedReceipt.builder()
                 .chaveAcesso(chaveAcesso)
                 .cnpjEmitente(parseCnpj(document))
@@ -120,12 +127,15 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
                 .marketAddress(parseMarketAddress(document))
                 .issuedAt(parseIssuedAt(document))
                 .totalAmount(totalAmount)
+                .approxTaxFederal(tax.federal())
+                .approxTaxEstadual(tax.estadual())
                 .sourceUrl(sourceUrl)
                 .rawHtml(html)
                 .items(items)
                 .build();
-        log.info("Parsed SEFAZ receipt: market='{}', total={}, items={}",
-                parsed.marketName(), parsed.totalAmount(), items.size());
+        log.info("Parsed SEFAZ receipt: market='{}', total={}, items={}, taxFederal={}, taxEstadual={}",
+                parsed.marketName(), parsed.totalAmount(), items.size(),
+                parsed.approxTaxFederal(), parsed.approxTaxEstadual());
         return parsed;
     }
 
@@ -256,6 +266,22 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
         }
         return null;
     }
+
+    /**
+     * IBPT-table approximate taxes embedded in retail prices, as required by
+     * Lei 12.741/2012. Returned as (federal, estadual) — both null when the
+     * line is missing entirely (some MEIs / Simples Nacional skip it).
+     * Zero values are kept as zeros (the merchant explicitly declared 0,00).
+     */
+    static ApproxTax parseApproxTax(Document document) {
+        var matcher = IBPT_TAX.matcher(document.text());
+        if (matcher.find()) {
+            return new ApproxTax(parseDecimalOrNull(matcher.group(1)), parseDecimalOrNull(matcher.group(2)));
+        }
+        return new ApproxTax(null, null);
+    }
+
+    record ApproxTax(BigDecimal federal, BigDecimal estadual) {}
 
     private BigDecimal parseTotal(Document document) {
         var grandTotal = document.selectFirst(".totalNumb.txtMax");

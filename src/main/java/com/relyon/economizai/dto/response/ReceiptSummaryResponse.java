@@ -18,6 +18,9 @@ import java.util.UUID;
  *   <li>{@code householdTotalAmount} — sum of the items the household kept
  *       (excluded items removed). This is what they actually spent and the
  *       value the FE should display by default in lists / spend totals.</li>
+ *   <li>{@code approxTaxTotal} — IBPT-table approximate tax (federal +
+ *       estadual) embedded in the prices, when the merchant declared it.
+ *       Null when the receipt's HTML didn't carry the IBPT line.</li>
  * </ul>
  *
  * <p>For PENDING_CONFIRMATION receipts no items are excluded yet, so both
@@ -29,6 +32,7 @@ public record ReceiptSummaryResponse(
         LocalDateTime issuedAt,
         BigDecimal totalAmount,
         BigDecimal householdTotalAmount,
+        BigDecimal approxTaxTotal,
         int itemCount,
         ReceiptStatus status
 ) {
@@ -43,8 +47,16 @@ public record ReceiptSummaryResponse(
                 receipt.getIssuedAt(),
                 receipt.getTotalAmount(),
                 householdTotal,
+                approxTaxTotal(receipt),
                 receipt.getItems().size(),
                 receipt.getStatus()
         );
+    }
+
+    private static BigDecimal approxTaxTotal(Receipt receipt) {
+        var fed = receipt.getApproxTaxFederal();
+        var est = receipt.getApproxTaxEstadual();
+        if (fed == null && est == null) return null;
+        return (fed == null ? BigDecimal.ZERO : fed).add(est == null ? BigDecimal.ZERO : est);
     }
 }

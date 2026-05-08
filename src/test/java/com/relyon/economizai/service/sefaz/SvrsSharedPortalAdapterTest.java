@@ -132,6 +132,25 @@ class SvrsSharedPortalAdapterTest {
     }
 
     @Test
+    void parseHtml_extractsIbptApproxTaxWhenPresent() throws Exception {
+        // Zaffari fixture carries: "Trib aprox R$ 51,73 Federal, R$ 49,35 Estadual Fonte: IBPT"
+        var html = loadFixture("nfce-real-zaffari.html");
+        var parsed = adapter.parseHtml(html, "43260493015006005182651130003394021410514546", null);
+        assertEquals(0, parsed.approxTaxFederal().compareTo(new BigDecimal("51.73")));
+        assertEquals(0, parsed.approxTaxEstadual().compareTo(new BigDecimal("49.35")));
+    }
+
+    @Test
+    void parseHtml_returnsNullTaxWhenIbptLineMissing() throws Exception {
+        // Synthetic sample fixture has no IBPT line — both fields must be null
+        // so aggregations can filter receipts that didn't declare taxes.
+        var html = CpfMasker.strip(loadFixture());
+        var parsed = adapter.parseHtml(html, CHAVE_RS, null);
+        assertEquals(null, parsed.approxTaxFederal());
+        assertEquals(null, parsed.approxTaxEstadual());
+    }
+
+    @Test
     void parseHtml_stripsCpfBeforeStorage() throws Exception {
         var html = CpfMasker.strip(loadFixture());
         var parsed = adapter.parseHtml(html, CHAVE_RS, null);

@@ -64,6 +64,12 @@ public class Receipt extends BaseEntity {
     @Column(name = "total_amount", precision = 12, scale = 2)
     private BigDecimal totalAmount;
 
+    @Column(name = "approx_tax_federal", precision = 12, scale = 2)
+    private BigDecimal approxTaxFederal;
+
+    @Column(name = "approx_tax_estadual", precision = 12, scale = 2)
+    private BigDecimal approxTaxEstadual;
+
     @Column(name = "qr_payload", nullable = false, columnDefinition = "TEXT")
     private String qrPayload;
 

@@ -250,6 +250,8 @@ public class ReceiptService {
         receipt.setMarketAddress(parsed.marketAddress());
         receipt.setIssuedAt(parsed.issuedAt());
         receipt.setTotalAmount(parsed.totalAmount());
+        receipt.setApproxTaxFederal(parsed.approxTaxFederal());
+        receipt.setApproxTaxEstadual(parsed.approxTaxEstadual());
         receipt.setCnpjEmitente(parsed.cnpjEmitente());
         receipt.setStatus(ReceiptStatus.PENDING_CONFIRMATION);
         receipt.setConfirmedAt(null);
@@ -353,6 +355,8 @@ public class ReceiptService {
                 .marketAddress(parsed.marketAddress())
                 .issuedAt(parsed.issuedAt())
                 .totalAmount(parsed.totalAmount())
+                .approxTaxFederal(parsed.approxTaxFederal())
+                .approxTaxEstadual(parsed.approxTaxEstadual())
                 .qrPayload(qrPayload)
                 .sourceUrl(parsed.sourceUrl())
                 .rawHtml(parsed.rawHtml())

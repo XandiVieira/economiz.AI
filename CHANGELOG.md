@@ -10,6 +10,25 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-05-08 — approximate-tax (IBPT) extraction on every NFC-e
+
+Receipts now carry the IBPT-source approximate-tax disclosure that Brazilian merchants are required to print under Lei 12.741/2012. Surfaced so users can see the tax burden embedded in their groceries (Federal + Estadual taxes — ICMS, IPI, PIS, COFINS, IOF, …).
+
+**`GET /receipts/{id}` — three new fields (all nullable)**:
+- `approxTaxFederal` — federal portion (e.g. `15.13`)
+- `approxTaxEstadual` — estadual portion (e.g. `13.73`)
+- `approxTaxTotal` — sum, derived; `null` when both source fields are null
+
+**`GET /receipts` and dashboard `recentReceipts` — one new field**:
+- `approxTaxTotal` (BigDecimal, nullable) on each `ReceiptSummaryResponse`
+
+**Important caveats** (please surface in the UX, not just the API):
+- These are **estimates from the IBPT national table**, NOT taxes the consumer paid separately or what the merchant actually remitted. Label any number you show as `imposto aproximado` / `estimativa IBPT`.
+- The line is legally mandatory but in practice not always present — small operators / Simples Nacional sometimes leave it blank or declare `R$ 0,00`. When the receipt's HTML doesn't carry the IBPT line, all three fields are `null`. **Aggregations should filter out `null`-tax receipts** before computing percentages, otherwise the average is diluted by missing data.
+- Existing receipts in prod won't backfill — only newly ingested receipts after this deploy will have values populated. Old confirmed receipts stay null until reparsed.
+
+---
+
 ## 2026-05-06 — multi-state recon documented (no behavior change)
 
 Probed all 27 UFs' NFC-e portals empirically and saved the analysis under `docs/MULTI_STATE_RECON.md`. Bottom line: **end-to-end ingestion is verified for 1 UF (RS) today**; any other state still returns `UnsupportedStateException`. The doc maps each portal into tiers (simple GET / JSF stateful / XML / captcha / SPA / fetch issues) with effort estimates and a recommended implementation order.
