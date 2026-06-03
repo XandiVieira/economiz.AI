@@ -58,18 +58,54 @@ mirror entries here.
 
 ---
 
-## Hosting / cost
+## Hosting / access — self-hosted (replaced Render)
 
-### Render free tier sleeps after 15 min idle
-- **Now**: GitHub Actions cron pings `/legal/terms` every 14 min (`.github/workflows/keep-alive.yml`) so the JVM stays warm. 750 free hours/month covers always-on; bandwidth use is negligible.
-- **Why OK for dev**: zero cost, hides the cold-start UX from the FE dev.
-- **Why to revisit for prod**: paid Render plans don't sleep at all. Once we have organic traffic, the cron is just noise. Also the cron consumes GitHub Actions minutes (not many — but still).
-- **Fix when ready**: drop the workflow file when (a) we move off free tier, or (b) organic traffic is high enough to keep the service warm. ~30 sec.
+> **2026-06-03:** Render's free Postgres was **suspended** (free DBs get reaped),
+> which took the web service down. We moved the dev server **off Render to a
+> self-hosted machine**. The old `https://economiz-ai.onrender.com` URL is dead.
 
-### Render free Postgres has limits too
-- **Now**: free Postgres on Render — small storage cap, gets deleted after 90 days unless upgraded.
-- **Why NOT OK for prod**: you'd lose all user data after 90 days.
-- **Fix before any real users**: upgrade to a paid Postgres plan, or migrate to Supabase / Neon free tier (which doesn't expire). Document the chosen path. ~1 hr.
+### How to run it
+One file does both jobs via Compose profiles — `docker-compose.yml` at repo root.
+
+- **Backend-dev machine** (iterate fast — Postgres in Docker, app via Maven):
+  ```bash
+  docker compose up -d db          # Postgres only on :5432
+  ./mvnw spring-boot:run           # app on :8080
+  ```
+- **Server machine** (full stack for everyone):
+  ```bash
+  docker compose --profile server up -d --build   # Postgres + app
+  docker compose logs -f app                       # watch boot / Flyway
+  ```
+
+Defaults mirror `application.yaml` localhost fallbacks, so it runs with no `.env`.
+Drop a `.env` (gitignored) beside the compose file to override `DB_USERNAME`,
+`DB_PASSWORD`, `JWT_SECRET` (`openssl rand -hex 64`), `CORS_ORIGINS`.
+`ddl-auto: none` + Flyway → a **fresh empty volume rebuilds the whole schema** on
+first boot. No data to restore (Render data is gone).
+
+### How to access it
+- **Base URL (API):** `http://<server-LAN-IP>:8080/api/v1`
+- **Health:** `http://<server-LAN-IP>:8080/actuator/health` → `{"status":"UP"}`
+- **Swagger:** `http://<server-LAN-IP>:8080/swagger-ui/index.html`
+- Host `:8080` maps to the container's `:10000` (Dockerfile port). Postgres is on `:5432`.
+- The FE machine must be on the same LAN; the server's OS firewall must allow `:8080`.
+  Add the FE origin (and any public URL) to `CORS_ORIGINS`.
+- For off-LAN / public access, front it with a Cloudflare Tunnel or ngrok → add that
+  https URL to `CORS_ORIGINS`.
+
+### Ops
+- Stop / restart / wipe: `docker compose --profile server down` / `restart` /
+  `down -v` (the `-v` drops the `economizai-pgdata` volume → fresh schema next boot).
+- Services use `restart: unless-stopped`; ensure Docker starts on machine boot so the
+  stack returns after a reboot. Data persists in the named volume.
+- **Stale:** `.github/workflows/keep-alive.yml` still pings the dead Render URL —
+  disable or repoint it once the self-host is the canonical server.
+
+### Before prod (whenever that comes)
+- A self-hosted box on a home connection isn't a prod target (uptime, dynamic IP, TLS).
+  For real users: managed Postgres that doesn't expire (Neon / Supabase free, or paid)
+  + a proper host (Fly.io / Railway / paid Render / a VPS). Document the chosen path.
 
 ---
 
@@ -95,7 +131,7 @@ mirror entries here.
 
 ---
 
-## Last-checked: 2026-05-05
+## Last-checked: 2026-06-03
 
 When you take care of an item above, **delete it from this file** instead
 of marking it done — keep the file lean so what remains is what's
