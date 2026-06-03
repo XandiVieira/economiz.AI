@@ -1,0 +1,57 @@
+# economizai — local / self-hosted stack
+# ========================================
+# Two usages from ONE file, controlled by Compose profiles:
+#
+#   Backend-dev machine (this Mac) — Postgres only, run the app via Maven:
+#     docker compose up -d db
+#     ./mvnw spring-boot:run
+#
+#   Server machine (hosts backend for everyone) — full stack:
+#     docker compose --profile server up -d --build
+#
+# Defaults below mirror application.yaml's localhost fallbacks, so it runs
+# with no .env. Drop a .env next to this file to override (it's auto-loaded
+# and gitignored). Flyway rebuilds the whole schema on first boot — a fresh
+# empty volume is all you need.
+
+services:
+  db:
+    image: postgres:18-alpine
+    container_name: economizai-db
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-economizai}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-economizai}
+      POSTGRES_DB: economizai
+    ports:
+      - "5432:5432"
+    volumes:
+      - economizai-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-economizai} -d economizai"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    build: .
+    container_name: economizai-app
+    profiles: ["server"]            # only starts with: --profile server
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # inside the compose network the DB host is the service name `db`
+      DATABASE_URL: jdbc:postgresql://db:5432/economizai
+      DB_USERNAME: ${DB_USERNAME:-economizai}
+      DB_PASSWORD: ${DB_PASSWORD:-economizai}
+      JWT_SECRET: ${JWT_SECRET:-local-dev-only-secret-not-for-production-must-be-at-least-256-bits-long}
+      # add the FE dev machine + the server's own origin here (comma-separated)
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:8081}
+      NOTIFICATIONS_EMAIL_ENABLED: ${NOTIFICATIONS_EMAIL_ENABLED:-false}
+    ports:
+      - "8080:10000"                # host 8080 -> container 10000 (Dockerfile port)
+    restart: unless-stopped
+
+volumes:
+  economizai-pgdata:
