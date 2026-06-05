@@ -102,6 +102,47 @@ first boot. No data to restore (Render data is gone).
 - **Stale:** `.github/workflows/keep-alive.yml` still pings the dead Render URL —
   disable or repoint it once the self-host is the canonical server.
 
+### Windows server machine (2026-06-05) — LIVE
+The self-hosted dev server runs on a **Windows 11** box, **full stack in Docker**,
+never-sleep on AC, LAN-only. Static LAN IP: **`192.168.68.108`**.
+
+- **API base:** `http://192.168.68.108:8080/api/v1`
+- **Health:** `http://192.168.68.108:8080/actuator/health` → `{"status":"UP"}`
+- **Swagger:** `http://192.168.68.108:8080/swagger-ui/index.html`
+
+Helper scripts at repo root (run each in an **Administrator** PowerShell once):
+- `setup-firewall.ps1` — inbound allow rule, TCP 8080, Private profile.
+- `set-static-ip.ps1` — pins the Wi-Fi adapter to `192.168.68.108/24` (gw `192.168.68.1`).
+  Revert to DHCP: `netsh interface ip set address name="Wi-Fi" source=dhcp`.
+- `setup-autostart.ps1` — Scheduled Task to start Docker Desktop at logon so the stack
+  recovers after reboot (containers are `restart: unless-stopped`).
+
+**Gotchas learned setting this up (so we don't relive them):**
+- **`postgres:18` changed its data-dir convention.** Mount the volume at
+  `/var/lib/postgresql` (the parent), NOT `/var/lib/postgresql/data` — PG18 sees the
+  old path as an "unused mount/volume" and `initdb` refuses to run, leaving the
+  healthcheck stuck `unhealthy`. Fixed in `docker-compose.yml`.
+- **Orphaned Docker processes wedge the engine.** Symptom: Docker Desktop dialog
+  "Cannot start server … open `\\.\pipe\dockerExtensionManagerAPI`: Access is denied",
+  and `dockerd` runs but never opens its socket. Cause: a leftover `com.docker.extensions`
+  (or duplicate `com.docker.backend`) from a prior start still holds the pipe. Fix: kill
+  ALL `Docker Desktop` / `com.docker.*` / `docker-ai` processes, `wsl --shutdown`, then
+  start a single clean instance.
+- **`docker context` resets to `default` (dead `npipe:docker_engine`) on each Docker
+  restart.** If `docker` commands hang, run `docker context use desktop-linux`.
+- **WSL re-corrupted itself once** (`REGDB_E_CLASSNOTREG`) and self-repaired via
+  `wsl --update`. If it recurs and a repair doesn't stick → `winget install Microsoft.WSL`.
+
+**Known weak spots (revisit):**
+- **Mesh/extender network**: this box roamed `192.168.0.x` → `192.168.68.x` once. The
+  Windows static IP is tied to the `192.168.68.x` node — if it roams to the other node it
+  goes offline until reverted. Durable fix: **wired ethernet** or a **router DHCP
+  reservation** by MAC `44-AF-28-2B-02-A5`.
+- **Auto-start needs a user session**: Docker Desktop's WSL backend won't run with nobody
+  logged in. `setup-autostart.ps1` triggers at logon, so after an unattended reboot the
+  server is down until someone logs in. For true headless recovery, also enable auto-login
+  (`netplwiz`) — tradeoff: stored password, anyone with physical access gets in.
+
 ### Before prod (whenever that comes)
 - A self-hosted box on a home connection isn't a prod target (uptime, dynamic IP, TLS).
   For real users: managed Postgres that doesn't expire (Neon / Supabase free, or paid)
