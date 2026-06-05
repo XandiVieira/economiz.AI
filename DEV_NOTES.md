@@ -110,12 +110,26 @@ never-sleep on AC, LAN-only. Static LAN IP: **`192.168.68.108`**.
 - **Health:** `http://192.168.68.108:8080/actuator/health` → `{"status":"UP"}`
 - **Swagger:** `http://192.168.68.108:8080/swagger-ui/index.html`
 
+**Remote access:** a **Cloudflare quick-tunnel** exposes the API over HTTPS from any
+network. The live public URL is always in `current-tunnel-url.txt` at repo root.
+⚠️ The free `trycloudflare` URL **changes on every restart** — `start-tunnel.ps1`
+auto-updates `.env` CORS and restarts the app each time, but the FE must read the new
+URL from `current-tunnel-url.txt`. Upgrade to a **named tunnel** (stable URL) once a
+domain is on Cloudflare.
+
 Helper scripts at repo root (run each in an **Administrator** PowerShell once):
 - `setup-firewall.ps1` — inbound allow rule, TCP 8080, Private profile.
 - `set-static-ip.ps1` — pins the Wi-Fi adapter to `192.168.68.108/24` (gw `192.168.68.1`).
   Revert to DHCP: `netsh interface ip set address name="Wi-Fi" source=dhcp`.
-- `setup-autostart.ps1` — Scheduled Task to start Docker Desktop at logon so the stack
-  recovers after reboot (containers are `restart: unless-stopped`).
+- `make-always-on.ps1` — power (never sleep), Docker auto-start, container restart,
+  stack watchdog (startup + every 5 min via `stack-watchdog.ps1`).
+- `enable-autologin.ps1` — auto-login this local account so reboots are unattended
+  (flips Win11 Hello-only flag, sets Winlogon keys). Box is home-only/non-critical so
+  the stored-password tradeoff is accepted; BitLocker skipped.
+- `start-tunnel.ps1` — launches cloudflared, captures URL, syncs CORS, restarts app,
+  publishes URL to `current-tunnel-url.txt`. Runtime files (`*.log`, `current-tunnel-url.txt`)
+  are gitignored.
+- `setup-tunnel-autostart.ps1` — Scheduled Task to keep the tunnel up at logon.
 
 **Gotchas learned setting this up (so we don't relive them):**
 - **`postgres:18` changed its data-dir convention.** Mount the volume at

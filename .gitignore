@@ -32,3 +32,6 @@ build/
 .vscode/
 .env
 stack-watchdog.log
+cf-quick.log
+tunnel.log
+current-tunnel-url.txt
