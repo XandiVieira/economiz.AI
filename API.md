@@ -638,8 +638,8 @@ GET    /api/v1/admin/products/missing-brand    → Page<MissingBrandProductRespo
 PATCH  /api/v1/admin/products/{id}/brand       → 200 ProductResponse
 GET    /api/v1/admin/products/duplicates       → List<DuplicateProductGroupResponse>
 POST   /api/v1/admin/products/{id}/merge       → 200 ProductMergeResultResponse
-GET    /api/v1/admin/products/recategorize     → RecategorizeReportResponse (dry-run, read-only)
-POST   /api/v1/admin/products/recategorize     → RecategorizeResultResponse (apply)
+GET    /api/v1/admin/products/recategorize        → RecategorizeReportResponse (dry-run, read-only)
+POST   /api/v1/admin/products/recategorize?includeMl=false → RecategorizeResultResponse (apply)
 ```
 
 - **Users list** — `q` does substring match on email + name (case-insensitive). Sorted by `createdAt` desc by default.
@@ -652,7 +652,7 @@ POST   /api/v1/admin/products/recategorize     → RecategorizeResultResponse (a
 - **Set product brand** — body `{ "brand": "Tio João" }`. Lightweight PATCH that only sets `brand`. Returns the updated `ProductResponse`. Use after the missing-brand listing to fill catalog gaps; subsequent canonicalization for items of this product (and the metadata-dedup gate) become more accurate as soon as brand is set.
 - **Products duplicates** — returns groups of products that share an exact `(genericName, brand, packSize, packUnit)` profile and are therefore probable duplicates. Each group: `{ genericName, brand, packSize, packUnit, category, products: [ProductResponse] }`. Only products with all four metadata dimensions populated are eligible. Within a group, the oldest product appears first — a natural default survivor.
 - **Merge product** — body `{ "absorbedId": "<uuid>", "dryRun": false }`. The `{id}` in the path is the **survivor**. Migrates all aliases, receipt items, price observations, manual purchases, shopping-list items, household aliases (drops where survivor already has one for the household), and consumption snoozes (same conflict logic) from `absorbed` to the survivor; deletes `absorbed`. Set `dryRun: true` to get the migration counts without applying any change — the only undo is to **not** apply. Returns `ProductMergeResultResponse` with per-table counts.
-- **Recategorize catalog** — re-runs the extraction cascade over every product's stored description and compares to what's stored. `GET` = dry-run report `{ totalProducts, mismatchCount, applicable, skippedUserOverrides, mismatches:[{productId, normalizedName, ean, currentCategory, currentSource, suggestedCategory, suggestedSource, userOverride}] }`. `POST` = apply: updates products where the suggestion differs, **skipping** manual (`source=USER`) categories and products with no suggestion (null category never downgrades). Use after editing the dictionary to fix already-ingested products (categorization otherwise only runs once per product, at creation).
+- **Recategorize catalog** — re-runs the extraction cascade over every product's stored description and compares to what's stored. `GET` = dry-run report `{ totalProducts, mismatchCount, applicableFromDictionary, mlSuggestions, skippedUserOverrides, mismatches:[{productId, normalizedName, ean, currentCategory, currentSource, suggestedCategory, suggestedSource, userOverride}] }`. `POST` = apply: by **default applies only trusted dictionary suggestions** (the ML layer is currently unreliable), skipping manual (`source=USER`) categories and null suggestions. Pass `?includeMl=true` to also apply ML suggestions. Use after editing the dictionary to fix already-ingested products (categorization otherwise only runs once per product, at creation).
 
 All require a JWT for a user with `Role.ADMIN`. Regular users hit 403.
 
@@ -684,10 +684,13 @@ DELETE /api/v1/alerts/{id}     → 204 (404 if not the caller's)
 ```
 GET  /api/v1/categorizer/classify?description=Milho&description=Lays
                                        → dry-run: how each term would be categorized (no persist)
+GET  /api/v1/categorizer/benchmark     → categorization accuracy % over the golden set
 GET  /api/v1/categorizer/status        → ML model state
 POST /api/v1/categorizer/retrain       → trigger retraining manually
 POST /api/v1/categorizer/auto-promote  → trigger learned-dictionary promotion
 ```
+
+**`/benchmark` (quality metric)** — runs the cascade over `seed/categorization-benchmark.csv` (curated description → true category) and returns `{ total, correct, accuracyPct, wrong, uncategorized, failures:[{description, expected, got, source}] }`. Track `accuracyPct` after each dictionary/model change. (Live = dictionary + trained ML; the CI test measures dictionary-only.)
 
 Mostly for ops. Categorization runs automatically on receipt confirm.
 

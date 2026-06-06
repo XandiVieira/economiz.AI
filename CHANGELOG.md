@@ -16,6 +16,18 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-06 — categorization quality: tracked metric + dictionary expansion
+
+Product categories get more accurate, and we can now **measure** it.
+
+- **Quality metric:** `GET /api/v1/categorizer/benchmark` runs the categorizer over a curated golden set and returns `accuracyPct` (+ the failing cases). Run it after each enhancement to see if we're improving. Dictionary-only accuracy is now **100%** on the golden set (was the goal of this pass).
+- **Dictionary expanded** with the NFC-e abbreviations and compound terms that were mis-categorizing (`milho`, `batata frita`, `lays`/`salgadinho`, `bisc`, `ling`, `vh`, `abs`, `lav louca`, …). Compound phrases now win over bare tokens (so `batata frita` → GROCERIES, not PRODUCE via bare `batata`). This improves **new** scans going forward.
+- **Backfill is gated for safety:** admin `POST /admin/products/recategorize` now applies **dictionary suggestions only by default** (the ML layer is currently unreliable — it was confidently mis-labeling, e.g. plates/glue → BAKERY). `?includeMl=true` to override. Existing products aren't changed until we run it.
+
+(No FE contract change — categories just get better. The ML model quality is a separate follow-up.)
+
+---
+
 ## 2026-06-06 — categorization dry-run / debug endpoint
 
 New: `GET /api/v1/categorizer/classify?description=Milho&description=Lays` returns, for each term, **how the cascade would categorize it** — without persisting anything. Use it to debug wrong categories.

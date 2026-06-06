@@ -1891,6 +1891,32 @@
           "response": []
         },
         {
+          "name": "Benchmark (categorization accuracy %)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categorizer/benchmark",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "categorizer",
+                "benchmark"
+              ]
+            },
+            "description": "Runs the categorizer over the golden set and returns accuracyPct (+ failing cases). Track it after each dictionary/model change to see if quality is improving."
+          },
+          "response": []
+        },
+        {
           "name": "Classifier status",
           "request": {
             "method": "GET",
@@ -5369,11 +5395,14 @@
               {"key": "Accept-Language", "value": "pt"}
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/admin/products/recategorize",
+              "raw": "{{baseUrl}}/api/v1/admin/products/recategorize?includeMl=false",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "admin", "products", "recategorize"]
+              "path": ["api", "v1", "admin", "products", "recategorize"],
+              "query": [
+                {"key": "includeMl", "value": "false"}
+              ]
             },
-            "description": "APPLIES re-categorization: updates products whose freshly extracted category differs, skipping manual (source=USER) categories and products with no suggestion. Run the dictionary fixes first, then this."
+            "description": "APPLIES re-categorization. By default only trusted dictionary suggestions are applied (ML is currently unreliable); skips manual (source=USER) categories and null suggestions. Pass includeMl=true to also apply ML. Run the dictionary fixes first, then this."
           },
           "response": []
         }
