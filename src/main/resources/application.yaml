@@ -39,6 +39,10 @@ economizai:
   cors:
     allowed-origins: ${CORS_ORIGINS:http://localhost:3000,http://localhost:5173,http://localhost:8081}
   default-locale: pt
+  admin:
+    # Comma-separated emails promoted to ROLE_ADMIN on startup (idempotent).
+    # The account must already exist (registered via the app); empty = no-op.
+    emails: ${ADMIN_EMAILS:}
   privacy:
     k-anonymity: 3
   ingestion:
