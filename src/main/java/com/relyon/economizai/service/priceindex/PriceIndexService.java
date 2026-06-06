@@ -6,6 +6,7 @@ import com.relyon.economizai.model.PriceObservationAudit;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.repository.PriceObservationAuditRepository;
 import com.relyon.economizai.repository.PriceObservationRepository;
+import com.relyon.economizai.service.alerts.PriceAlertService;
 import com.relyon.economizai.service.geo.DistanceCalculator;
 import com.relyon.economizai.service.geo.MarketLocationService;
 import lombok.RequiredArgsConstructor;
@@ -54,6 +55,7 @@ public class PriceIndexService {
     private final PriceObservationAuditRepository auditRepository;
     private final CollaborativeProperties properties;
     private final MarketLocationService marketLocationService;
+    private final PriceAlertService priceAlertService;
 
     @Transactional
     public int recordContributions(Receipt receipt) {
@@ -84,7 +86,7 @@ public class PriceIndexService {
         var city = marketLoc != null ? marketLoc.getCity() : null;
         var state = marketLoc != null ? marketLoc.getState() : null;
 
-        var written = 0;
+        var contributed = new ArrayList<PriceObservation>();
         for (var item : receipt.getItems()) {
             if (item.isExcluded()) continue;
             if (item.getProduct() == null || item.getUnitPrice() == null) continue;
@@ -117,11 +119,15 @@ public class PriceIndexService {
                     .householdId(receipt.getHousehold().getId())
                     .contributedAt(LocalDateTime.now())
                     .build());
-            written++;
+            contributed.add(saved);
         }
         log.info("price_index.write.done receipt={} contributed={} marketCnpj={}",
-                receipt.getId(), written, receipt.getCnpjEmitente());
-        return written;
+                receipt.getId(), contributed.size(), receipt.getCnpjEmitente());
+
+        // Community retention loop: this household's prices may satisfy other
+        // households' "avise-me quando" rules. Skips the contributor's own.
+        priceAlertService.evaluate(contributed, receipt.getHousehold().getId());
+        return contributed.size();
     }
 
     @Transactional(readOnly = true)
