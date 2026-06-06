@@ -157,6 +157,16 @@ Helper scripts at repo root (run each in an **Administrator** PowerShell once):
   restart.** If `docker` commands hang, run `docker context use desktop-linux`.
 - **WSL re-corrupted itself once** (`REGDB_E_CLASSNOTREG`) and self-repaired via
   `wsl --update`. If it recurs and a repair doesn't stick → `winget install Microsoft.WSL`.
+- **Docker Desktop didn't auto-start the engine after a reboot (2026-06-06).** The GUI
+  launched at logon but came up as a white/hung window; `com.docker.service` was Stopped
+  (StartType=Manual) and stale `com.docker.backend` processes from boot held the pipe.
+  The old "start Docker engine" task just ran `Docker Desktop.exe` once with no retry — a
+  hung window counts as "running", so it never recovered. **Fixes applied:** (1) service
+  set to **Automatic** start; (2) the logon task now runs **`start-docker-wait.ps1`**, a
+  wait-for-healthy wrapper that polls `docker version` and relaunches a CLEAN instance (kill
+  all docker procs + `wsl --shutdown` + restart service) up to 4 times. Recovery actions are
+  logged to `logs\docker-recovery.log`. Manual recovery if it ever wedges again: just run
+  `start-docker-wait.ps1` (elevated, so it can kill the protected processes).
 
 **Known weak spots (revisit):**
 - **Mesh/extender network**: this box roamed `192.168.0.x` → `192.168.68.x` once. The
