@@ -1,10 +1,10 @@
 # Auto-deploy to the self-hosted dev server on every push to `development`.
 #
-# Runs on a self-hosted GitHub Actions runner installed on the dev machine
-# (label: economizai-dev). The runner dials OUT to GitHub, so nothing extra is
-# exposed on the box. On push it pulls + rebuilds + restarts the app in the
-# machine's existing clone (which holds the gitignored .env). The Postgres
-# volume is untouched, so data is preserved.
+# Runs on a self-hosted GitHub Actions runner (label: economizai-dev) on the
+# dev machine. Uses the runner's OWN fresh checkout (always matches the pushed
+# commit, no git-state fragility), copies in the gitignored .env from the
+# machine's clone, then rebuilds + restarts. Postgres volume is untouched, so
+# data is preserved.
 name: deploy-dev-server
 
 on:
@@ -20,16 +20,22 @@ jobs:
   deploy:
     runs-on: [self-hosted, economizai-dev]
     steps:
-      # Operate on the machine's real clone (has .env), NOT the runner work dir.
-      - name: Pull + rebuild + restart in the dev clone
+      - name: Checkout pushed commit
+        uses: actions/checkout@v4
+
+      - name: Copy gitignored .env into the checkout
         shell: powershell
         run: |
-          $repo = "C:\Users\Xandi\OneDrive\Documents\projects\economiz.AI"
-          Set-Location $repo
+          $src = "C:\Users\Xandi\OneDrive\Documents\projects\economiz.AI\.env"
+          if (Test-Path $src) { Copy-Item $src ".env" -Force; Write-Host "copied .env" }
+          else { Write-Error ".env not found at $src"; exit 1 }
+
+      - name: Rebuild and restart the stack
+        shell: powershell
+        run: |
           docker context use desktop-linux 2>$null
-          git fetch origin development
-          git merge --ff-only origin/development
           docker compose --profile server up -d --build
+          if ($LASTEXITCODE -ne 0) { Write-Error "compose up failed"; exit 1 }
 
       - name: Verify health
         shell: powershell
@@ -43,4 +49,4 @@ jobs:
             Start-Sleep -Seconds 6
           }
           if (-not $ok) { Write-Error "App did not become healthy after deploy"; exit 1 }
-          Write-Host "Dev server healthy on new code."
+          Write-Host "Dev server healthy on the newly pushed code."
