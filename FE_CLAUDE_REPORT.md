@@ -10,6 +10,18 @@ contract see [API.md](./API.md); for the running diary see [CHANGELOG.md](./CHAN
 
 ---
 
+## Implementation status
+
+| Feature | Date | FE status |
+|---|---|---|
+| ETags + caching on `/dashboard` and `/insights/spend` | 2026-06-06 | ✅ Done — `requestConditional`, `homeCache` stores ETags, cache-bust on mutations |
+| Items by category screen | 2026-06-06 | ✅ Done — `ItemsByCategoryScreen` + `itemsService` |
+| Price alerts screen | 2026-06-06 | ✅ Done — `PriceAlertsScreen` + `alertsService` |
+| Category chip on receipt items | 2026-05-04 (BE) / 2026-06-06 (FE) | ✅ Done — `ReviewScreen` reads `category` from `ReceiptItemResponse` |
+| `PRICE_DROP` notification type | 2026-06-06 | ✅ Done — `NotificationsScreen` TYPE_CONFIG includes it |
+
+---
+
 ## 2026-06-06 — Categorization debug endpoint (for reporting bad categories)
 
 If you spot a wrong category (e.g. "Milho" showing as Higiene), check it directly:
@@ -21,7 +33,9 @@ to give the backend exact terms + what they resolve to instead of screenshots.
 
 ## 2026-06-06 — Caching + ETags on /dashboard and /insights/spend (FE can lean on it)
 
-The backend now caches these two heavy calls and supports conditional requests. **No contract change** — just do this to get the win:
+> ✅ **FE implemented 2026-06-06.** See `src/services/api.ts` (`requestConditional`), `src/services/homeCache.ts` (ETag storage + `invalidateDashboardAndInsights`), `src/services/dashboardService.ts`, `src/services/insightsService.ts`, `src/screens/HomeScreen.tsx` (sends cached ETag, skips update on 304), `src/screens/ReviewScreen.tsx` (busts cache after confirm/reject/delete).
+
+The backend now caches these two heavy calls and supports conditional requests. **No contract change** — same endpoints, same response shapes. What changed is how fast/cheap they are:
 
 1. **Send `If-None-Match`.** Store the `ETag` header from each `/dashboard` and `/insights/spend` response; on the next call send it back as `If-None-Match`. If unchanged you get **`304 Not Modified` with no body** — keep your last good payload and reuse it (don't try to parse the empty 304 body).
 2. **You can keep your own TTL cache** (2 min / 5 min) — it now stacks with the server's. But you can also be less conservative: after a mutation (confirm/reject/delete a receipt, add/edit an item) the server cache is invalidated instantly, so a refetch returns fresh data immediately — no need to wait out your TTL. Recommended: **bust your local cache for dashboard+insights right after those mutations** and refetch.
@@ -31,6 +45,8 @@ The backend now caches these two heavy calls and supports conditional requests. 
 ---
 
 ## 2026-06-06 — Filter items by category (new screen)
+
+> ✅ **FE implemented 2026-06-06.** `ItemsByCategoryScreen` with horizontal category chip strip, infinite-scroll FlatList, PROMO badge, empty state. `itemsService.getItems(filters, token)` builds the query params handling multi-value arrays. Entry point: tapping a category row in `CategoryBreakdown` on `HomeScreen` (`onCategoryPress` prop). `PriceAlertsScreen` is reachable from `SettingsScreen`.
 
 **Goal:** user taps a category (e.g. "Carnes e Laticínios") → sees every item
 they've bought in that category, across all receipts.
@@ -98,10 +114,11 @@ Other filters you can pass (same query for many screens — don't make new calls
 
 ---
 
-## 2026-06-06 — Price alerts ("avise-me quando") (new screen, if not done yet)
+## 2026-06-06 — Price alerts ("avise-me quando") (new screen)
 
-Backend shipped; FE screen may still be pending. Lets a user be notified when a
-product drops below a price.
+> ✅ **FE implemented 2026-06-06.** `PriceAlertsScreen` lists alerts (GET), deletes (DELETE), and creates via bottom-sheet modal with debounced product search + threshold price entry (POST). `alertsService` wraps all three endpoints. Entry from `SettingsScreen` → "Alertas de Preço". `PRICE_DROP` notification type added to `NotificationsScreen` TYPE_CONFIG.
+
+Lets a user be notified when a product drops below a price.
 
 ```
 POST   /api/v1/alerts      { "productId": "<uuid>", "thresholdPrice": 5.99, "radiusKm"?: 5, "active"?: true }  → 201
@@ -113,6 +130,14 @@ DELETE /api/v1/alerts/{id} → 204
 - `radiusKm` optional (from the user's home); omit for "anywhere".
 - When a rule fires it creates a notification of type **`PRICE_DROP`** — it shows up in the existing notifications inbox (`GET /notifications`) and is pushed if a push token is registered. No separate fetch needed beyond the inbox you already have.
 - Full contract: API.md §10e.
+
+---
+
+## 2026-05-04 — `category` on receipt items (FE catch-up)
+
+> ✅ **FE implemented 2026-06-06.** `ReceiptItemResponse.category: string | null` added to the type. `ReviewScreen` reads it and renders a small colored chip (using `CATEGORY_CONFIG`) on the quantity line of each item row. Items with `category: null` or that are excluded show no chip.
+
+The backend has been returning `category` on `ReceiptResponse.items[*]` since 2026-05-04. This is the item-level `ProductCategory` (`GROCERIES`, `BEVERAGES`, …) or `null` when the item hasn't been canonicalized yet. The FE was not yet reading or displaying it.
 
 ---
 
