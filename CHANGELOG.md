@@ -10,6 +10,23 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-06 — items endpoint (filter purchased items, e.g. by category)
+
+New top-level resource: `GET /api/v1/items` returns your **purchased line items** flattened across all receipts, filterable and paginated. This is what to call for "tap a category → show every item I bought in it" (and "all purchases of product X", "items at market Y", etc.) — one endpoint, filters via query params.
+
+It's the **item-level companion** to the two endpoints you already have:
+- `/receipts` → receipt-level rows
+- `/insights/query` → aggregates/rollups
+- `/items` → individual line items ← new
+
+**Filters (all optional, same vocabulary as `/insights/query`):** `from`, `to`, `marketCnpj[]`, `marketCnpjRoot[]`, `category[]`, `productId[]`, `ean[]`, `minReceiptTotal`, `maxReceiptTotal`, plus `page`/`size`. Multi-value filters OR within a dimension, AND across dimensions.
+
+**Returns** `Page<PurchasedItemResponse>` — each row has item facts (`itemId`, `productId`, `category`, `displayDescription`, `quantity`, `unitPrice`, `totalPrice`, `nfcePromoFlag`, …) **plus the receipt context inline** (`receiptId`, `marketName`, `marketCnpj`, `purchasedAt`), so no second fetch is needed to render a list.
+
+**Scope:** CONFIRMED receipts only, excluded items dropped (real purchases). Default sort `purchasedAt` desc. Empty = empty page, not 404.
+
+Category values for the FE filter chips: `GROCERIES, BEVERAGES, PRODUCE, MEAT_DAIRY, BAKERY, CLEANING, PERSONAL_CARE, OTHER`. No data-model change — items are still children of receipts; this is just a new read view. Full contract in API.md §4b.
+
 ## 2026-06-06 — price-drop alerts ("avise-me quando")
 
 New feature: a user can ask to be notified when a product's price drops. The rule fires when **any household** in the network confirms a receipt that contributes an observation at or below the threshold — one person's receipt benefits another. This is the community retention loop.

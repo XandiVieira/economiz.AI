@@ -378,6 +378,60 @@ The legacy `/insights/spend`, `/markets/top`, `/categories/top`, `/products/{id}
 
 ---
 
+## 4b. Items (purchased line items)
+
+When you want the **actual items**, not aggregates — e.g. "tap a category → list every item I bought in it". This is the item-level companion to `/receipts` (receipt rows) and `/insights/query` (aggregates): **same filter vocabulary**, but it returns raw line items, paginated, newest first.
+
+```
+GET /api/v1/items
+    ?from=2026-04-01T00:00:00
+    &to=2026-04-30T23:59:59
+    &marketCnpj=93015006005182        ← list-typed (repeat for OR)
+    &marketCnpjRoot=93015006          ← chain-level, list-typed
+    &category=MEAT_DAIRY              ← list-typed (repeat for OR)
+    &productId=<uuid>                 ← list-typed
+    &ean=7891234567890                ← list-typed
+    &minReceiptTotal=100.00           ← receipt-total range
+    &maxReceiptTotal=500.00
+    &page=0&size=20                   ← standard Spring pagination
+```
+
+Returns a Spring `Page<PurchasedItemResponse>`:
+```json
+{
+  "content": [
+    {
+      "itemId": "uuid",
+      "productId": "uuid|null",
+      "category": "MEAT_DAIRY|null",
+      "displayDescription": "Leite Italac 1L",
+      "rawDescription": "LEITE ITALAC 1L",
+      "friendlyDescription": "Leite Italac 1L|null",
+      "ean": "7891234567890|null",
+      "quantity": 1.000,
+      "unit": "UN",
+      "unitPrice": 5.49,
+      "totalPrice": 5.49,
+      "nfcePromoFlag": false,
+      "receiptId": "uuid",
+      "marketName": "Zaffari",
+      "marketCnpj": "93015006005182",
+      "purchasedAt": "2026-05-15T10:00:00"
+    }
+  ],
+  "totalElements": 42, "totalPages": 3, "number": 0, "size": 20
+}
+```
+
+**Conventions** (same as `/insights/query`):
+- All filters optional; multi-value filters OR within a dimension, AND across dimensions.
+- Scope is **CONFIRMED receipts, excluded items dropped** — i.e. real purchases (matches the analytics scope).
+- Default sort: `purchasedAt` desc (receipt issue date), then item id. Empty result is an empty page, not a 404.
+- The category enum values: `GROCERIES, BEVERAGES, PRODUCE, MEAT_DAIRY, BAKERY, CLEANING, PERSONAL_CARE, OTHER`. The FE maps these to PT labels (e.g. `MEAT_DAIRY` → "Carnes e Laticínios").
+- Natural drill-down target: take a bucket `key` from `/insights/query` (a productId, a category, a CNPJ) and pass it here to list the underlying items.
+
+---
+
 ## 5. Products
 
 ```

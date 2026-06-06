@@ -2241,6 +2241,106 @@
       ]
     },
     {
+      "name": "Items",
+      "description": "Purchased line items flattened across all receipts. Item-level companion to Receipts (receipt rows) and Insights (aggregates). Same filter vocabulary as /insights/query — every filter optional, multi-value filters OR internally. CONFIRMED purchases only, newest first, paginated.",
+      "item": [
+        {
+          "name": "List items (all, paginated)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/items?page=0&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "items"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List items by category",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/items?category=MEAT_DAIRY",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "items"
+              ],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "MEAT_DAIRY"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List items by product",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/items?productId={{productId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "items"
+              ],
+              "query": [
+                {
+                  "key": "productId",
+                  "value": "{{productId}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Consumption (Phase 3)",
       "description": "Predictive purchase intelligence per household — when products will run out, suggested shopping list. Volume-gated: products with fewer than 2 prior purchases are silently skipped.",
       "item": [
@@ -4804,7 +4904,54 @@
           ]
         },
         {
-          "name": "43. LGPD: delete my account (idempotent terminator)",
+          "name": "43. List items for the created product",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/items?productId={{e2eProductId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "items"
+              ],
+              "query": [
+                {
+                  "key": "productId",
+                  "value": "{{e2eProductId}}"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('e2eProductId')) { pm.test.skip('No product id — skipping'); return; }",
+                  "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+                  "var page = pm.response.json();",
+                  "pm.test('Paginated item list', function () { pm.expect(page.content).to.be.an('array'); });",
+                  "pm.test('Every row is for the requested product', function () {",
+                  "    page.content.forEach(function (i) { pm.expect(i.productId).to.eql(pm.collectionVariables.get('e2eProductId')); });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "44. LGPD: delete my account (idempotent terminator)",
           "request": {
             "method": "DELETE",
             "header": [
