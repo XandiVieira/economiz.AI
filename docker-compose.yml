@@ -25,7 +25,9 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - economizai-pgdata:/var/lib/postgresql/data
+      # postgres:18+ stores data in a major-version subdir; mount the parent,
+      # not /var/lib/postgresql/data (the old <=17 convention), or initdb refuses to run.
+      - economizai-pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-economizai} -d economizai"]
       interval: 5s

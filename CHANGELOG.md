@@ -5,8 +5,22 @@ changes, behavior changes, gotchas worth knowing about. **Newest at the top.**
 Skim from the top until you hit a date you've already read.
 
 For the complete API contract see [API.md](./API.md) (walk-through) or
-`/swagger-ui` on whichever environment you're hitting. Production:
-`https://economiz-ai.onrender.com`.
+`/swagger-ui` on whichever environment you're hitting. Dev server (current):
+`http://192.168.68.108:8080` (LAN-only — must be on the same Wi-Fi).
+
+---
+
+## 2026-06-05 — dev server moved to self-hosted LAN box
+
+The old Render URL (`https://economiz-ai.onrender.com`) is **dead** (free DB reaped).
+The dev backend now runs on a self-hosted Windows machine on the LAN.
+
+- **API base:** `http://192.168.68.108:8080/api/v1`
+- **Health:** `http://192.168.68.108:8080/actuator/health` → `{"status":"UP"}`
+- **Swagger:** `http://192.168.68.108:8080/swagger-ui/index.html`
+- **You must be on the same Wi-Fi.** Off-LAN access isn't available yet (ask for a tunnel).
+- **Browser-based FE (incl. Expo Web):** your dev-server origin must be CORS-allowed —
+  send your laptop's LAN IP to get it whitelisted. Native Expo Go on a phone needs nothing.
 
 ---
 

@@ -31,3 +31,11 @@ build/
 ### VS Code ###
 .vscode/
 .env
+stack-watchdog.log
+cf-quick.log
+tunnel.log
+current-tunnel-url.txt
+update-server.log
+db-backups/
+db-backup.log
+tunnel-proxy-worker/.wrangler/
