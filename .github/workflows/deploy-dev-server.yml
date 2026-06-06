@@ -1,16 +1,15 @@
 # Auto-deploy to the self-hosted dev server on every push to `development`.
 #
 # Runs on a self-hosted GitHub Actions runner (label: economizai-dev) on the
-# dev machine. Uses the runner's OWN fresh checkout (always matches the pushed
-# commit, no git-state fragility), copies in the gitignored .env from the
-# machine's clone, then rebuilds + restarts. Postgres volume is untouched, so
-# data is preserved.
+# dev machine. Uses the runner's OWN fresh checkout of the pushed commit and
+# invokes ci-deploy.ps1 (single script: copies .env, rebuilds, verifies).
+# Postgres volume is untouched, so data is preserved.
 name: deploy-dev-server
 
 on:
   push:
     branches: [development]
-  workflow_dispatch:   # manual redeploy button in the Actions tab
+  workflow_dispatch:
 
 concurrency:
   group: dev-server-deploy
@@ -23,38 +22,6 @@ jobs:
       - name: Checkout pushed commit
         uses: actions/checkout@v4
 
-      - name: Copy gitignored .env into the checkout
+      - name: Deploy (copy .env, rebuild, verify health)
         shell: powershell
-        run: |
-          $ErrorActionPreference = "Continue"
-          $src = "C:\actions-runner\.env"
-          Write-Host "cwd: $(Get-Location)"
-          Write-Host "src exists: $(Test-Path $src)"
-          try {
-            Copy-Item -LiteralPath $src -Destination (Join-Path (Get-Location) ".env") -Force
-            Write-Host "copied .env -> $(Test-Path '.env')"
-          } catch {
-            Write-Host "COPY FAILED: $($_.Exception.Message)"
-            exit 1
-          }
-
-      - name: Rebuild and restart the stack
-        shell: powershell
-        run: |
-          docker context use desktop-linux 2>$null
-          docker compose --profile server up -d --build
-          if ($LASTEXITCODE -ne 0) { Write-Error "compose up failed"; exit 1 }
-
-      - name: Verify health
-        shell: powershell
-        run: |
-          $ok = $false
-          for ($i=0; $i -lt 20; $i++) {
-            try {
-              $code = (Invoke-WebRequest "http://localhost:8080/actuator/health" -UseBasicParsing -TimeoutSec 8).StatusCode
-              if ($code -eq 200) { $ok = $true; break }
-            } catch { }
-            Start-Sleep -Seconds 6
-          }
-          if (-not $ok) { Write-Error "App did not become healthy after deploy"; exit 1 }
-          Write-Host "Dev server healthy on the newly pushed code."
+        run: .\ci-deploy.ps1
