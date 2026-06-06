@@ -1,6 +1,8 @@
 package com.relyon.economizai.controller;
 
+import com.relyon.economizai.dto.response.CategorizationExplanation;
 import com.relyon.economizai.service.extraction.AutoPromotionService;
+import com.relyon.economizai.service.extraction.CategorizationDebugService;
 import com.relyon.economizai.service.extraction.ml.MlClassifierService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -8,9 +10,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -26,6 +30,17 @@ public class CategorizerController {
 
     private final MlClassifierService mlClassifier;
     private final AutoPromotionService autoPromotionService;
+    private final CategorizationDebugService categorizationDebugService;
+
+    /**
+     * Dry-run: see exactly how one or more raw descriptions would be categorized,
+     * with a per-layer breakdown (dictionary vs ML). Nothing is persisted.
+     * Repeat the param for several terms: {@code ?description=Milho&description=Lays}.
+     */
+    @GetMapping("/classify")
+    public ResponseEntity<List<CategorizationExplanation>> classify(@RequestParam List<String> description) {
+        return ResponseEntity.ok(categorizationDebugService.explainAll(description));
+    }
 
     @GetMapping("/status")
     public ResponseEntity<Map<String, Object>> status() {
