@@ -17,7 +17,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $runnerDir = "C:\actions-runner"
-$version   = "2.321.0"   # bump if GitHub requires newer; config will tell you
+$version   = "2.334.0"   # bump if GitHub requires newer; config will tell you
 $zip       = "actions-runner-win-x64-$version.zip"
 $url       = "https://github.com/actions/runner/releases/download/v$version/$zip"
 
