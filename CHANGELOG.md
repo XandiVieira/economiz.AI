@@ -16,6 +16,12 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-06 — `/receipts` category filter is now multi-value
+
+`GET /receipts?category=` (and admin `GET /admin/receipts?category=`) now accepts **multiple** categories — `?category=GROCERIES&category=CLEANING` returns receipts matching either. **Backward-compatible:** a single `?category=X` works exactly as before. This aligns it with `/items` and `/insights/query`, which already took category lists — so the FE can use one category-filter component across all three.
+
+---
+
 ## 2026-06-06 — server-side caching + ETags on /dashboard and /insights
 
 Performance for the two heaviest home-screen calls. **No contract change** — same endpoints, same response shapes. What changed is how fast/cheap they are:

@@ -262,13 +262,13 @@ GET /api/v1/receipts
     ?from=2026-04-01T00:00:00
     &to=2026-04-30T23:59:59
     &marketCnpj=83261420003255
-    &category=GROCERIES
+    &category=GROCERIES               ← multi-value: repeat for OR (?category=GROCERIES&category=CLEANING)
     &q=leite condensado
     &page=0&size=20
 → Page<ReceiptSummaryResponse>  (each row has marketName, issuedAt, totalAmount, householdTotalAmount, approxTaxTotal, itemCount, status)
 ```
 
-Default sort is `issuedAt DESC`. All filters optional.
+Default sort is `issuedAt DESC`. All filters optional. `category` accepts one or many (same as `/items` and `/insights/query`).
 
 **Content search (`q`)** — case-insensitive substring match against `rawDescription`, `friendlyDescription`, the linked product's normalized name, AND the receipt's market name. So `q=leite` finds every receipt that includes a milk item OR was issued by a market with "leite" in the name. Combine with `from`/`to`/`category` freely.
 

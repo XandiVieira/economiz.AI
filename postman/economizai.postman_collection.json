@@ -1253,7 +1253,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/receipts?q=leite condensado&from=2026-04-01T00:00:00&category=GROCERIES&page=0&size=20",
+              "raw": "{{baseUrl}}/api/v1/receipts?q=leite condensado&from=2026-04-01T00:00:00&category=GROCERIES&category=CLEANING&page=0&size=20",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -1276,6 +1276,10 @@
                   "value": "GROCERIES"
                 },
                 {
+                  "key": "category",
+                  "value": "CLEANING"
+                },
+                {
                   "key": "page",
                   "value": "0"
                 },
@@ -1285,7 +1289,7 @@
                 }
               ]
             },
-            "description": "`q` does case-insensitive substring match on rawDescription, friendlyDescription, the linked product's normalized name, and the receipt's market name."
+            "description": "`q` does case-insensitive substring match on rawDescription, friendlyDescription, the linked product's normalized name, and the receipt's market name. `category` is multi-value — repeat it for OR (here: GROCERIES or CLEANING)."
           },
           "response": []
         }

@@ -99,8 +99,6 @@ first boot. No data to restore (Render data is gone).
   `down -v` (the `-v` drops the `economizai-pgdata` volume → fresh schema next boot).
 - Services use `restart: unless-stopped`; ensure Docker starts on machine boot so the
   stack returns after a reboot. Data persists in the named volume.
-- **Stale:** `.github/workflows/keep-alive.yml` still pings the dead Render URL —
-  disable or repoint it once the self-host is the canonical server.
 
 ### Windows server machine (2026-06-05) — LIVE
 The self-hosted dev server runs on a **Windows 11** box, **full stack in Docker**,
