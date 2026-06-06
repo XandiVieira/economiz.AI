@@ -53,6 +53,21 @@ public class CategorizationQualitySnapshot extends BaseEntity {
     @Column(name = "catalog_coverage_pct", nullable = false, precision = 5, scale = 2)
     private BigDecimal catalogCoveragePct;
 
+    /** Golden-set accuracy of brand extraction (over rows that declare a brand). */
+    @Column(name = "brand_accuracy_pct", nullable = false, precision = 5, scale = 2)
+    @lombok.Builder.Default
+    private BigDecimal brandAccuracyPct = BigDecimal.ZERO;
+
+    /** Golden-set accuracy of quantity (pack size + unit) extraction. */
+    @Column(name = "quantity_accuracy_pct", nullable = false, precision = 5, scale = 2)
+    @lombok.Builder.Default
+    private BigDecimal quantityAccuracyPct = BigDecimal.ZERO;
+
+    /** Shadow accuracy of the ML model alone (even while gated out of the cascade). */
+    @Column(name = "ml_accuracy_pct", nullable = false, precision = 5, scale = 2)
+    @lombok.Builder.Default
+    private BigDecimal mlAccuracyPct = BigDecimal.ZERO;
+
     @Column(name = "ml_ready", nullable = false)
     private boolean mlReady;
 }

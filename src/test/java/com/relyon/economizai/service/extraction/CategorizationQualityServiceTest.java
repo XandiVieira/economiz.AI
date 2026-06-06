@@ -32,28 +32,40 @@ class CategorizationQualityServiceTest {
         return new CategorizationQualityService(benchmarkService, productRepository, mlClassifier, snapshotRepository);
     }
 
+    /** Golden-set report: category accuracyPct + brand/quantity/ml shadow %s. */
+    private CategorizationBenchmarkResponse report(double categoryPct, double brandPct,
+                                                  double quantityPct, double mlPct) {
+        return new CategorizationBenchmarkResponse(
+                10, (int) Math.round(categoryPct / 10), categoryPct, 0, 0,
+                5, (int) Math.round(brandPct / 20), brandPct,
+                5, (int) Math.round(quantityPct / 20), quantityPct,
+                10, (int) Math.round(mlPct / 10), mlPct,
+                List.of());
+    }
+
     @Test
-    void record_persistsAccuracyAndComputesCoverage() {
-        var report = new CategorizationBenchmarkResponse(34, 34, 100.0, 0, 0, List.of());
+    void record_persistsAllFieldAccuraciesAndCoverage() {
         when(productRepository.count()).thenReturn(200L);
         when(productRepository.countByCategoryNotNull()).thenReturn(150L);
         when(mlClassifier.isReady()).thenReturn(true);
         when(snapshotRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        var response = service().record(CategorizationQualityTrigger.BENCHMARK, report);
+        var response = service().record(CategorizationQualityTrigger.BENCHMARK, report(100.0, 80.0, 90.0, 40.0));
 
         var captor = ArgumentCaptor.forClass(CategorizationQualitySnapshot.class);
         verify(snapshotRepository).save(captor.capture());
         var saved = captor.getValue();
         assertEquals(0, new BigDecimal("100.00").compareTo(saved.getAccuracyPct()));
         assertEquals(0, new BigDecimal("75.00").compareTo(saved.getCatalogCoveragePct())); // 150/200
+        assertEquals(0, new BigDecimal("80.00").compareTo(saved.getBrandAccuracyPct()));
+        assertEquals(0, new BigDecimal("90.00").compareTo(saved.getQuantityAccuracyPct()));
+        assertEquals(0, new BigDecimal("40.00").compareTo(saved.getMlAccuracyPct()));
         assertEquals(CategorizationQualityTrigger.BENCHMARK, saved.getTrigger());
-        assertEquals(0, new BigDecimal("75.00").compareTo(response.catalogCoveragePct()));
     }
 
     @Test
     void measureAndRecord_runsBenchmark() {
-        when(benchmarkService.run()).thenReturn(new CategorizationBenchmarkResponse(10, 9, 90.0, 1, 0, List.of()));
+        when(benchmarkService.run()).thenReturn(report(90.0, 0.0, 0.0, 0.0));
         when(productRepository.count()).thenReturn(0L);
         when(snapshotRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -68,8 +80,7 @@ class CategorizationQualityServiceTest {
         when(productRepository.count()).thenReturn(0L);
         when(snapshotRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        var response = service().record(CategorizationQualityTrigger.BENCHMARK,
-                new CategorizationBenchmarkResponse(0, 0, 0.0, 0, 0, List.of()));
+        var response = service().record(CategorizationQualityTrigger.BENCHMARK, report(0.0, 0.0, 0.0, 0.0));
 
         assertEquals(0, BigDecimal.ZERO.compareTo(response.catalogCoveragePct()));
     }

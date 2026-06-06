@@ -59,6 +59,9 @@ public class CategorizationQualityService {
                 .catalogProducts((int) catalogProducts)
                 .catalogCategorized((int) catalogCategorized)
                 .catalogCoveragePct(coveragePct)
+                .brandAccuracyPct(BigDecimal.valueOf(report.brandAccuracyPct()).setScale(2, RoundingMode.HALF_UP))
+                .quantityAccuracyPct(BigDecimal.valueOf(report.quantityAccuracyPct()).setScale(2, RoundingMode.HALF_UP))
+                .mlAccuracyPct(BigDecimal.valueOf(report.mlCategoryAccuracyPct()).setScale(2, RoundingMode.HALF_UP))
                 .mlReady(mlClassifier.isReady())
                 .build();
         var saved = snapshotRepository.save(snapshot);
