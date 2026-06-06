@@ -172,7 +172,7 @@ class ReceiptControllerTest {
         var summary = new ReceiptSummaryResponse(UUID.randomUUID(), "Mercado X", LocalDateTime.now(),
                 new BigDecimal("57.80"), new BigDecimal("57.80"), null, 1, ReceiptStatus.CONFIRMED);
         Page<ReceiptSummaryResponse> page = new PageImpl<>(List.of(summary));
-        when(receiptService.list(any(User.class), isNull(), isNull(), isNull(), isNull(ProductCategory.class), isNull(), any(Pageable.class)))
+        when(receiptService.list(any(User.class), isNull(), isNull(), isNull(), isNull(List.class), isNull(), any(Pageable.class)))
                 .thenReturn(page);
 
         mockMvc.perform(get("/api/v1/receipts")

@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -40,7 +41,7 @@ public class AdminReceiptService {
     public Page<ReceiptSummaryResponse> list(LocalDateTime from,
                                              LocalDateTime to,
                                              String marketCnpj,
-                                             ProductCategory category,
+                                             List<ProductCategory> categories,
                                              String search,
                                              UUID householdId,
                                              Pageable pageable) {
@@ -51,7 +52,7 @@ public class AdminReceiptService {
                 : pageable;
         // Admin sees FAILED_PARSE rows too — useful for parser triage.
         var spec = ReceiptSpecifications.forSearch(
-                householdId, from, to, trimmedCnpj, category, trimmedSearch, false);
+                householdId, from, to, trimmedCnpj, categories, trimmedSearch, false);
         return receiptRepository.findAll(spec, sortedPageable).map(ReceiptSummaryResponse::from);
     }
 

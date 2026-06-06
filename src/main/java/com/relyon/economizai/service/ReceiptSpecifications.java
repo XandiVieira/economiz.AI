@@ -9,6 +9,7 @@ import org.springframework.data.jpa.domain.Specification;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -31,7 +32,7 @@ public final class ReceiptSpecifications {
                                                    LocalDateTime from,
                                                    LocalDateTime to,
                                                    String cnpj,
-                                                   ProductCategory category,
+                                                   List<ProductCategory> categories,
                                                    String search,
                                                    boolean hideFailedParse) {
         return (root, query, cb) -> {
@@ -50,12 +51,13 @@ public final class ReceiptSpecifications {
             if (cnpj != null) predicates.add(cb.equal(root.get("cnpjEmitente"), cnpj));
             // category + search both require joining items, so do it once and
             // reuse — apply distinct, since a receipt can have many matching items.
-            if (category != null || search != null) {
+            var hasCategories = categories != null && !categories.isEmpty();
+            if (hasCategories || search != null) {
                 if (query != null) query.distinct(true);
                 var items = root.join("items", JoinType.INNER);
-                if (category != null) {
+                if (hasCategories) {
                     var product = items.join("product", JoinType.INNER);
-                    predicates.add(cb.equal(product.get("category"), category));
+                    predicates.add(product.get("category").in(categories));
                 }
                 if (search != null) {
                     var like = "%" + search.toLowerCase() + "%";
