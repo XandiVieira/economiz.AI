@@ -10,6 +10,17 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-06 — server-side caching + ETags on /dashboard and /insights
+
+Performance for the two heaviest home-screen calls. **No contract change** — same endpoints, same response shapes. What changed is how fast/cheap they are:
+
+- **Server cache:** `GET /dashboard` (2 min) and `GET /insights/spend` (5 min) are cached per household. **Invalidated immediately** when you confirm/reject/delete/reparse a receipt or add/edit an item — so post-action data is never stale despite the TTL. Keep your front-end TTLs; they now compound with the server's.
+- **ETags / `304 Not Modified`:** both endpoints return an `ETag` header. Send it back as `If-None-Match` on the next call — if nothing changed you get **`304` with no body** (saves bandwidth + parsing on silent background refreshes). Standard HTTP; most fetch libers handle it, but for `fetch()` note a 304 won't carry a body, so keep your last good payload cached client-side and reuse it on 304.
+- **Unread badge stays live:** the dashboard's `unreadNotificationCount` is *not* cached — it's always current, so reading notifications updates the badge without waiting for cache expiry.
+- Caveat: the dashboard's `communityPromosNearby` reflects network-wide activity, so it can be up to 2 min stale (bounded by TTL). Everything driven by your own actions is instant.
+
+---
+
 ## 2026-06-05 — dev server moved to self-hosted LAN box
 
 The old Render URL (`https://economiz-ai.onrender.com`) is **dead** (free DB reaped).

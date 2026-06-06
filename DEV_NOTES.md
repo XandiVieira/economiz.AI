@@ -184,9 +184,15 @@ Helper scripts at repo root (run each in an **Administrator** PowerShell once):
 - **Now**: Render captures stdout. Searchable in their dashboard but no retention beyond the free-tier window.
 - **Fix before serious ops**: ship logs to BetterStack, Loki, or Papertrail. Render has add-ons for this. ~1 hr.
 
+### Read caches (dashboard / insights) are in-process
+- **Now**: `dashboard` (2 min) + `insightsSpend` (5 min) are cached in-memory via Caffeine (`CachingConfig`), keyed by household with a per-household generation counter (`HouseholdCacheGen`) bumped on receipt mutations. ETags via `ShallowEtagHeaderFilter`.
+- **Why OK for dev**: single instance, so one in-process cache is the whole truth; generation counter resets on restart (at worst one recompute).
+- **Why NOT OK at scale**: multi-instance would give each node its own cache + its own generation map → a mutation on node A wouldn't invalidate node B's cache (stale reads up to TTL). The ETag filter is shallow (still computes the body), so no compute savings either.
+- **Fix before multi-instance**: move the cache + generation counter to a shared store (Redis). ~half a day. Single instance is fine until then.
+
 ---
 
-## Last-checked: 2026-06-03
+## Last-checked: 2026-06-06
 
 When you take care of an item above, **delete it from this file** instead
 of marking it done — keep the file lean so what remains is what's

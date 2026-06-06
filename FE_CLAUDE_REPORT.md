@@ -10,6 +10,17 @@ contract see [API.md](./API.md); for the running diary see [CHANGELOG.md](./CHAN
 
 ---
 
+## 2026-06-06 — Caching + ETags on /dashboard and /insights/spend (FE can lean on it)
+
+The backend now caches these two heavy calls and supports conditional requests. **No contract change** — just do this to get the win:
+
+1. **Send `If-None-Match`.** Store the `ETag` header from each `/dashboard` and `/insights/spend` response; on the next call send it back as `If-None-Match`. If unchanged you get **`304 Not Modified` with no body** — keep your last good payload and reuse it (don't try to parse the empty 304 body).
+2. **You can keep your own TTL cache** (2 min / 5 min) — it now stacks with the server's. But you can also be less conservative: after a mutation (confirm/reject/delete a receipt, add/edit an item) the server cache is invalidated instantly, so a refetch returns fresh data immediately — no need to wait out your TTL. Recommended: **bust your local cache for dashboard+insights right after those mutations** and refetch.
+3. **Unread badge is always live** — `dashboard.unreadNotificationCount` is never cached, so it's correct even on a cache hit.
+4. Minor: the dashboard's `communityPromosNearby` can be up to ~2 min stale (network-wide data). Everything from your own actions is instant.
+
+---
+
 ## 2026-06-06 — Filter items by category (new screen)
 
 **Goal:** user taps a category (e.g. "Carnes e Laticínios") → sees every item

@@ -276,6 +276,8 @@ Default sort is `issuedAt DESC`. All filters optional.
 
 ## 4. Insights / dashboards
 
+> **Caching (perf):** `GET /dashboard` and `GET /insights/spend` are cached server-side (2 min / 5 min, per household) and **auto-invalidated on any receipt mutation** (confirm/reject/delete/reparse/add/edit item) — so they're fast but never stale after your own action. Both return an `ETag`; send it as `If-None-Match` to get `304 Not Modified` (no body) when nothing changed. The dashboard's `unreadNotificationCount` is always live (not cached).
+
 ```
 GET /api/v1/insights/spend?from=&to=
 ```
