@@ -1,7 +1,9 @@
 package com.relyon.economizai.controller;
 
+import com.relyon.economizai.dto.response.CategorizationBenchmarkResponse;
 import com.relyon.economizai.dto.response.CategorizationExplanation;
 import com.relyon.economizai.service.extraction.AutoPromotionService;
+import com.relyon.economizai.service.extraction.CategorizationBenchmarkService;
 import com.relyon.economizai.service.extraction.CategorizationDebugService;
 import com.relyon.economizai.service.extraction.ml.MlClassifierService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -31,6 +33,13 @@ public class CategorizerController {
     private final MlClassifierService mlClassifier;
     private final AutoPromotionService autoPromotionService;
     private final CategorizationDebugService categorizationDebugService;
+    private final CategorizationBenchmarkService categorizationBenchmarkService;
+
+    /** Categorization quality over the golden set — track accuracyPct after each enhancement. */
+    @GetMapping("/benchmark")
+    public ResponseEntity<CategorizationBenchmarkResponse> benchmark() {
+        return ResponseEntity.ok(categorizationBenchmarkService.run());
+    }
 
     /**
      * Dry-run: see exactly how one or more raw descriptions would be categorized,
