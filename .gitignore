@@ -35,3 +35,4 @@ stack-watchdog.log
 cf-quick.log
 tunnel.log
 current-tunnel-url.txt
+update-server.log
