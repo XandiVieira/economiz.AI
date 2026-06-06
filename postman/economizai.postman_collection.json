@@ -5342,6 +5342,40 @@
             "description": "APPLIES the merge. Migrates aliases, receipt items, price observations, manual purchases, shopping-list items, household aliases and consumption snoozes from absorbed → survivor, then deletes absorbed. NO undo."
           },
           "response": []
+        },
+        {
+          "name": "Recategorize catalog (admin, dry-run report)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"},
+              {"key": "Accept-Language", "value": "pt"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/products/recategorize",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "products", "recategorize"]
+            },
+            "description": "Read-only: re-runs the categorizer over every product and lists where the stored category differs from the freshly extracted one. Preview before POSTing to apply."
+          },
+          "response": []
+        },
+        {
+          "name": "Recategorize catalog (admin, apply)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"},
+              {"key": "Accept-Language", "value": "pt"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/products/recategorize",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "products", "recategorize"]
+            },
+            "description": "APPLIES re-categorization: updates products whose freshly extracted category differs, skipping manual (source=USER) categories and products with no suggestion. Run the dictionary fixes first, then this."
+          },
+          "response": []
         }
       ]
     }
