@@ -18,9 +18,13 @@ Copy-Item -LiteralPath $src -Destination (Join-Path (Get-Location) ".env") -Forc
 Write-Host "copied .env (exists: $(Test-Path '.env'))"
 
 # 2) Rebuild + restart. Pin docker context (resets to 'default' across restarts).
-#    Merge stderr->stdout so docker's chatty status lines don't look like errors.
-& docker context use desktop-linux 2>&1 | Out-Host
-& docker compose --profile server up -d --build 2>&1 | Out-Host
+#    docker writes normal status to stderr; capture it to a string (so it never
+#    propagates as an error to a parent shell running with ErrorActionPreference
+#    Stop) and only judge success by $LASTEXITCODE.
+$ctxOut = (& cmd /c "docker context use desktop-linux 2>&1")
+Write-Host "context: $ctxOut"
+$buildOut = (& cmd /c "docker compose --profile server up -d --build 2>&1")
+$buildOut | ForEach-Object { Write-Host $_ }
 if ($LASTEXITCODE -ne 0) { Write-Host "::error::docker compose up failed (exit $LASTEXITCODE)"; exit 1 }
 
 # 3) Verify health.
