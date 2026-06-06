@@ -24,4 +24,4 @@ jobs:
 
       - name: Deploy (copy .env, rebuild, verify health)
         shell: powershell
-        run: .\ci-deploy.ps1
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\ci-deploy.ps1
