@@ -36,3 +36,5 @@ cf-quick.log
 tunnel.log
 current-tunnel-url.txt
 update-server.log
+db-backups/
+db-backup.log
