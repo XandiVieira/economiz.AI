@@ -156,3 +156,46 @@ protetor solar,Protetor Solar,PERSONAL_CARE
 algodao,Algodão,PERSONAL_CARE
 cotonete,Cotonete,PERSONAL_CARE
 lenco umedecido,Lenço Umedecido,PERSONAL_CARE
+
+# --- 2026-06 enhancement: NFC-e abbreviations + snacks/compounds that bare
+# tokens were mis-matching (e.g. "batata frita" -> PRODUCE). Multi-token phrases
+# win over single tokens (longest-phrase-first), so these override bad fallbacks.
+milho,Milho,GROCERIES
+milho verde,Milho Verde,GROCERIES
+batata frita,Batata Frita,GROCERIES
+batata palha,Batata Palha,GROCERIES
+salgadinho,Salgadinho,GROCERIES
+salg,Salgadinho,GROCERIES
+lays,Salgadinho,GROCERIES
+doritos,Salgadinho,GROCERIES
+chips,Salgadinho,GROCERIES
+pipoca,Pipoca,GROCERIES
+bisc,Biscoito,GROCERIES
+oreo,Biscoito,GROCERIES
+club social,Biscoito,GROCERIES
+wafer,Wafer,GROCERIES
+waf,Wafer,GROCERIES
+pizza,Pizza,GROCERIES
+passata,Passata de Tomate,GROCERIES
+alga,Alga Marinha,GROCERIES
+bala,Bala,GROCERIES
+trufa,Trufa,GROCERIES
+confeito,Confeito,GROCERIES
+ling,Linguiça,MEAT_DAIRY
+fraldinha,Fraldinha,MEAT_DAIRY
+nata,Nata,MEAT_DAIRY
+cream cheese,Cream Cheese,MEAT_DAIRY
+cream ch,Cream Cheese,MEAT_DAIRY
+flan,Flan,MEAT_DAIRY
+salsa,Salsa,PRODUCE
+cebolinha,Cebolinha,PRODUCE
+maracuja,Maracujá,PRODUCE
+moranga,Moranga,PRODUCE
+coco seco,Coco,PRODUCE
+vh,Vinho,BEVERAGES
+abs,Absorvente,PERSONAL_CARE
+des dove,Desodorante,PERSONAL_CARE
+lava loucas,Lava-louças,CLEANING
+lav louca,Lava-louças,CLEANING
+lava roupas,Lava-roupas,CLEANING
+amaciante,Amaciante,CLEANING
