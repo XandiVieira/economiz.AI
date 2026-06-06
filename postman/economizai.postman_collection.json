@@ -1848,8 +1848,48 @@
     },
     {
       "name": "Categorizer",
-      "description": "ML classifier status + manual triggers. Authenticated.",
+      "description": "ML classifier status + manual triggers + categorization dry-run. Authenticated.",
       "item": [
+        {
+          "name": "Classify (dry-run, debug categories)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categorizer/classify?description=Milho&description=Biscoito de manteiga&description=Batata frita",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "categorizer",
+                "classify"
+              ],
+              "query": [
+                {
+                  "key": "description",
+                  "value": "Milho"
+                },
+                {
+                  "key": "description",
+                  "value": "Biscoito de manteiga"
+                },
+                {
+                  "key": "description",
+                  "value": "Batata frita"
+                }
+              ]
+            },
+            "description": "Dry-run: how each term would be categorized, with per-layer breakdown (dictionary vs ML) and the deciding source. Nothing is persisted."
+          },
+          "response": []
+        },
         {
           "name": "Classifier status",
           "request": {

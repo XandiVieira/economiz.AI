@@ -10,6 +10,15 @@ contract see [API.md](./API.md); for the running diary see [CHANGELOG.md](./CHAN
 
 ---
 
+## 2026-06-06 — Categorization debug endpoint (for reporting bad categories)
+
+If you spot a wrong category (e.g. "Milho" showing as Higiene), check it directly:
+`GET /api/v1/categorizer/classify?description=Milho&description=Lays` → per-term result with
+the deciding `source` (DICTIONARY vs ML) + the dictionary/ML breakdown. No persist. Use this
+to give the backend exact terms + what they resolve to instead of screenshots.
+
+---
+
 ## 2026-06-06 — Caching + ETags on /dashboard and /insights/spend (FE can lean on it)
 
 The backend now caches these two heavy calls and supports conditional requests. **No contract change** — just do this to get the win:

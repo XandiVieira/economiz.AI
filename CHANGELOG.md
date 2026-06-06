@@ -16,6 +16,14 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-06 — categorization dry-run / debug endpoint
+
+New: `GET /api/v1/categorizer/classify?description=Milho&description=Lays` returns, for each term, **how the cascade would categorize it** — without persisting anything. Use it to debug wrong categories.
+
+Each result has the final decision (`category`, `genericName`, `brand`, `packSize`, `source`) **plus a per-layer breakdown**: `dictionary` (what the curated/learned dictionary matched) and `mlCategory`/`mlGenericName` (the ML guess + `confidence` + `meetsThreshold`). The `source` field (`DICTIONARY` / `LEARNED_DICTIONARY` / `ML` / `NONE`) tells you which layer decided — so a wrong category is immediately traceable to a bad dictionary entry vs an over-confident ML guess.
+
+---
+
 ## 2026-06-06 — `/receipts` category filter is now multi-value
 
 `GET /receipts?category=` (and admin `GET /admin/receipts?category=`) now accepts **multiple** categories — `?category=GROCERIES&category=CLEANING` returns receipts matching either. **Backward-compatible:** a single `?category=X` works exactly as before. This aligns it with `/items` and `/insights/query`, which already took category lists — so the FE can use one category-filter component across all three.

@@ -679,12 +679,29 @@ DELETE /api/v1/alerts/{id}     → 204 (404 if not the caller's)
 ## 11. Categorizer admin (rarely needed by the FE)
 
 ```
+GET  /api/v1/categorizer/classify?description=Milho&description=Lays
+                                       → dry-run: how each term would be categorized (no persist)
 GET  /api/v1/categorizer/status        → ML model state
 POST /api/v1/categorizer/retrain       → trigger retraining manually
 POST /api/v1/categorizer/auto-promote  → trigger learned-dictionary promotion
 ```
 
 Mostly for ops. Categorization runs automatically on receipt confirm.
+
+**`/classify` (debug)** — repeat `description` for multiple terms. Each result:
+```json
+{
+  "input": "Batata Frita",
+  "category": "PRODUCE", "genericName": "Batata", "brand": null,
+  "packSize": null, "packUnit": null,
+  "source": "DICTIONARY",
+  "dictionary": { "genericName": "Batata", "category": "PRODUCE", "source": "DICTIONARY" },
+  "mlCategory": { "label": "GROCERIES", "confidence": 0.40, "meetsThreshold": false },
+  "mlGenericName": { "label": "Salgadinho", "confidence": 0.40, "meetsThreshold": false },
+  "mlReady": true, "mlConfidenceThreshold": 0.75
+}
+```
+`source` says which layer won (`DICTIONARY`/`LEARNED_DICTIONARY`/`ML`/`NONE`) — the fast way to tell a bad dictionary entry from an over-confident ML guess.
 
 ---
 
