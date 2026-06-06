@@ -22,7 +22,7 @@ jobs:
     steps:
       # Operate on the machine's real clone (has .env), NOT the runner work dir.
       - name: Pull + rebuild + restart in the dev clone
-        shell: pwsh
+        shell: powershell
         run: |
           $repo = "C:\Users\Xandi\OneDrive\Documents\projects\economiz.AI"
           Set-Location $repo
@@ -32,7 +32,7 @@ jobs:
           docker compose --profile server up -d --build
 
       - name: Verify health
-        shell: pwsh
+        shell: powershell
         run: |
           $ok = $false
           for ($i=0; $i -lt 20; $i++) {
