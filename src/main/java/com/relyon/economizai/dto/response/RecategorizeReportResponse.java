@@ -14,8 +14,9 @@ import java.util.UUID;
 public record RecategorizeReportResponse(
         long totalProducts,
         int mismatchCount,
-        int applicable,           // mismatches that POST would change (suggestion present, not USER-locked)
-        int skippedUserOverrides, // mismatches kept because the category was set manually (source=USER)
+        int applicableFromDictionary, // trusted suggestions POST applies by default (DICTIONARY/LEARNED, not USER)
+        int mlSuggestions,            // ML-sourced suggestions — shown but NOT applied unless includeMl=true
+        int skippedUserOverrides,     // mismatches kept because the category was set manually (source=USER)
         List<Row> mismatches
 ) {
     public record Row(

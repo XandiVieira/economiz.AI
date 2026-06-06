@@ -79,41 +79,54 @@ public class AdminProductService {
      * what's stored. Same extractor ingestion uses, so this previews exactly
      * what {@link #recategorizeApply()} would change. Read-only.
      */
+    private static boolean isTrusted(CategorizationSource source) {
+        return source == CategorizationSource.DICTIONARY || source == CategorizationSource.LEARNED_DICTIONARY;
+    }
+
     @Transactional(readOnly = true)
     public RecategorizeReportResponse recategorizeReport() {
         var products = productRepository.findAll();
         var mismatches = new ArrayList<RecategorizeReportResponse.Row>();
-        var applicable = 0;
+        var applicableFromDictionary = 0;
+        var mlSuggestions = 0;
         var skippedUser = 0;
         for (var product : products) {
             var suggested = productExtractor.extract(product.getNormalizedName());
             var suggestedCategory = suggested.category();
             if (suggestedCategory == null || suggestedCategory == product.getCategory()) continue;
             var userOverride = product.getCategorizationSource() == CategorizationSource.USER;
-            if (userOverride) skippedUser++; else applicable++;
+            if (userOverride) {
+                skippedUser++;
+            } else if (isTrusted(suggested.categorizationSource())) {
+                applicableFromDictionary++;
+            } else {
+                mlSuggestions++;
+            }
             mismatches.add(new RecategorizeReportResponse.Row(
                     product.getId(), product.getNormalizedName(), product.getEan(),
                     product.getCategory(), product.getCategorizationSource(),
                     suggestedCategory, suggested.categorizationSource(),
                     userOverride));
         }
-        log.info("admin.product.recategorize.report total={} mismatches={} applicable={} skippedUser={}",
-                products.size(), mismatches.size(), applicable, skippedUser);
-        return new RecategorizeReportResponse(products.size(), mismatches.size(), applicable, skippedUser, mismatches);
+        log.info("admin.product.recategorize.report total={} mismatches={} dict={} ml={} skippedUser={}",
+                products.size(), mismatches.size(), applicableFromDictionary, mlSuggestions, skippedUser);
+        return new RecategorizeReportResponse(products.size(), mismatches.size(),
+                applicableFromDictionary, mlSuggestions, skippedUser, mismatches);
     }
 
     /**
-     * Apply re-categorization: for every product whose freshly extracted
-     * category differs from the stored one, update it — UNLESS the category was
-     * set manually (source=USER, never clobbered) or the extractor has no
-     * suggestion (null category, never downgraded). Updates category +
-     * categorizationSource to reflect the layer that decided.
+     * Apply re-categorization. By default only **trusted** suggestions
+     * (DICTIONARY / LEARNED_DICTIONARY) are applied — the ML layer is currently
+     * unreliable, so its suggestions are reported but skipped unless
+     * {@code includeMl} is true. Never clobbers a manual category (source=USER)
+     * and never downgrades to no-category (null suggestion).
      */
     @Transactional
-    public RecategorizeResultResponse recategorizeApply() {
+    public RecategorizeResultResponse recategorizeApply(boolean includeMl) {
         var products = productRepository.findAll();
         var updated = 0;
         var skippedUser = 0;
+        var skippedMl = 0;
         var unchanged = 0;
         for (var product : products) {
             var suggested = productExtractor.extract(product.getNormalizedName());
@@ -126,13 +139,17 @@ public class AdminProductService {
                 skippedUser++;
                 continue;
             }
+            if (!isTrusted(suggested.categorizationSource()) && !includeMl) {
+                skippedMl++;
+                continue;
+            }
             product.setCategory(suggestedCategory);
             product.setCategorizationSource(suggested.categorizationSource());
             updated++;
         }
-        log.info("admin.product.recategorize.applied total={} updated={} skippedUser={} unchanged={}",
-                products.size(), updated, skippedUser, unchanged);
-        return new RecategorizeResultResponse(products.size(), updated, skippedUser, unchanged);
+        log.info("admin.product.recategorize.applied total={} updated={} skippedUser={} skippedMl={} unchanged={} includeMl={}",
+                products.size(), updated, skippedUser, skippedMl, unchanged, includeMl);
+        return new RecategorizeResultResponse(products.size(), updated, skippedUser, skippedMl, unchanged);
     }
 
     @Transactional

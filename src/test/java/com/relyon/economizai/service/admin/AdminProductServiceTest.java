@@ -65,42 +65,61 @@ class AdminProductServiceTest {
     }
 
     @Test
-    void recategorizeReport_listsMismatchesAndFlagsUserOverrides() {
-        var ml = product("MILHO", ProductCategory.PERSONAL_CARE, CategorizationSource.ML);          // wrong, fixable
-        var userLocked = product("BATATA", ProductCategory.PERSONAL_CARE, CategorizationSource.USER); // wrong but locked
-        var ok = product("ARROZ", ProductCategory.GROCERIES, CategorizationSource.DICTIONARY);       // already right
-        when(productRepository.findAll()).thenReturn(List.of(ml, userLocked, ok));
-        when(productExtractor.extract("MILHO")).thenReturn(extracted(ProductCategory.GROCERIES, CategorizationSource.DICTIONARY));
-        when(productExtractor.extract("BATATA")).thenReturn(extracted(ProductCategory.GROCERIES, CategorizationSource.DICTIONARY));
+    void recategorizeReport_splitsDictionaryVsMlAndFlagsUserOverrides() {
+        var dictFix = product("LIMP VEJA", null, CategorizationSource.NONE);              // dict suggestion
+        var mlOnly = product("PRATO", null, CategorizationSource.NONE);                    // ML suggestion
+        var userLocked = product("ABS", ProductCategory.PERSONAL_CARE, CategorizationSource.USER);
+        var ok = product("ARROZ", ProductCategory.GROCERIES, CategorizationSource.DICTIONARY);
+        when(productRepository.findAll()).thenReturn(List.of(dictFix, mlOnly, userLocked, ok));
+        when(productExtractor.extract("LIMP VEJA")).thenReturn(extracted(ProductCategory.CLEANING, CategorizationSource.DICTIONARY));
+        when(productExtractor.extract("PRATO")).thenReturn(extracted(ProductCategory.BAKERY, CategorizationSource.ML));
+        when(productExtractor.extract("ABS")).thenReturn(extracted(ProductCategory.BAKERY, CategorizationSource.ML));
         when(productExtractor.extract("ARROZ")).thenReturn(extracted(ProductCategory.GROCERIES, CategorizationSource.DICTIONARY));
 
         var report = service.recategorizeReport();
 
-        assertEquals(3, report.totalProducts());
-        assertEquals(2, report.mismatchCount());      // ml + userLocked differ from suggestion
-        assertEquals(1, report.applicable());         // only the ML one would change
+        assertEquals(3, report.mismatchCount());
+        assertEquals(1, report.applicableFromDictionary());
+        assertEquals(1, report.mlSuggestions());
         assertEquals(1, report.skippedUserOverrides());
     }
 
     @Test
-    void recategorizeApply_updatesFixableSkipsUserAndNullSuggestions() {
-        var ml = product("MILHO", ProductCategory.PERSONAL_CARE, CategorizationSource.ML);
-        var userLocked = product("BATATA", ProductCategory.PERSONAL_CARE, CategorizationSource.USER);
+    void recategorizeApply_default_appliesOnlyDictionarySkipsMlUserAndNull() {
+        var dictFix = product("LIMP VEJA", null, CategorizationSource.NONE);
+        var mlOnly = product("PRATO", null, CategorizationSource.NONE);
+        var userLocked = product("ABS", ProductCategory.PERSONAL_CARE, CategorizationSource.USER);
         var noSuggestion = product("XYZ", ProductCategory.BEVERAGES, CategorizationSource.ML);
-        when(productRepository.findAll()).thenReturn(List.of(ml, userLocked, noSuggestion));
-        when(productExtractor.extract("MILHO")).thenReturn(extracted(ProductCategory.GROCERIES, CategorizationSource.DICTIONARY));
-        when(productExtractor.extract("BATATA")).thenReturn(extracted(ProductCategory.GROCERIES, CategorizationSource.DICTIONARY)); // mismatch but USER-locked
-        when(productExtractor.extract("XYZ")).thenReturn(extracted(null, CategorizationSource.NONE)); // no suggestion → don't downgrade
+        when(productRepository.findAll()).thenReturn(List.of(dictFix, mlOnly, userLocked, noSuggestion));
+        when(productExtractor.extract("LIMP VEJA")).thenReturn(extracted(ProductCategory.CLEANING, CategorizationSource.DICTIONARY));
+        when(productExtractor.extract("PRATO")).thenReturn(extracted(ProductCategory.BAKERY, CategorizationSource.ML));
+        when(productExtractor.extract("ABS")).thenReturn(extracted(ProductCategory.BAKERY, CategorizationSource.ML));
+        when(productExtractor.extract("XYZ")).thenReturn(extracted(null, CategorizationSource.NONE));
 
-        var result = service.recategorizeApply();
+        var result = service.recategorizeApply(false);
 
         assertEquals(1, result.updated());
+        assertEquals(1, result.skippedMl());
         assertEquals(1, result.skippedUserOverrides());
         assertEquals(1, result.unchanged());
-        assertEquals(ProductCategory.GROCERIES, ml.getCategory());
-        assertEquals(CategorizationSource.DICTIONARY, ml.getCategorizationSource());
+        assertEquals(ProductCategory.CLEANING, dictFix.getCategory());
+        assertEquals(CategorizationSource.DICTIONARY, dictFix.getCategorizationSource());
+        assertEquals(null, mlOnly.getCategory(), "ML suggestion not applied by default");
         assertEquals(ProductCategory.PERSONAL_CARE, userLocked.getCategory(), "USER override untouched");
         assertEquals(ProductCategory.BEVERAGES, noSuggestion.getCategory(), "null suggestion not downgraded");
+    }
+
+    @Test
+    void recategorizeApply_includeMl_alsoAppliesMlSuggestions() {
+        var mlOnly = product("PRATO", null, CategorizationSource.NONE);
+        when(productRepository.findAll()).thenReturn(List.of(mlOnly));
+        when(productExtractor.extract("PRATO")).thenReturn(extracted(ProductCategory.BAKERY, CategorizationSource.ML));
+
+        var result = service.recategorizeApply(true);
+
+        assertEquals(1, result.updated());
+        assertEquals(0, result.skippedMl());
+        assertEquals(ProductCategory.BAKERY, mlOnly.getCategory());
     }
 
     @Test

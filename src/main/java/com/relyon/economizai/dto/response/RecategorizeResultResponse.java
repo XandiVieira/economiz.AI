@@ -10,5 +10,6 @@ public record RecategorizeResultResponse(
         long totalProducts,
         int updated,
         int skippedUserOverrides,
+        int skippedMl,        // ML suggestions left untouched (default; unless includeMl=true)
         int unchanged
 ) {}

@@ -125,9 +125,14 @@ public class AdminController {
         return ResponseEntity.ok(adminProductService.recategorizeReport());
     }
 
-    /** Apply re-categorization: update mismatched products (skips USER-locked + no-suggestion). */
+    /**
+     * Apply re-categorization. Default applies only trusted (dictionary)
+     * suggestions; pass {@code includeMl=true} to also apply ML suggestions.
+     * Always skips USER-locked categories and null suggestions.
+     */
     @PostMapping("/products/recategorize")
-    public ResponseEntity<RecategorizeResultResponse> recategorizeApply() {
-        return ResponseEntity.ok(adminProductService.recategorizeApply());
+    public ResponseEntity<RecategorizeResultResponse> recategorizeApply(
+            @RequestParam(defaultValue = "false") boolean includeMl) {
+        return ResponseEntity.ok(adminProductService.recategorizeApply(includeMl));
     }
 }
