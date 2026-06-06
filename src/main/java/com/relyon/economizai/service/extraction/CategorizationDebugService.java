@@ -61,12 +61,13 @@ public class CategorizationDebugService {
         return descriptions.stream().filter(Objects::nonNull).map(this::explain).toList();
     }
 
-    private static MlGuess categoryGuess(MlPrediction<ProductCategory> p, double threshold) {
-        var label = p.label() == null ? null : p.label().name();
-        return new MlGuess(label, label == null ? null : p.confidence(), p.isConfident(threshold));
+    private static MlGuess categoryGuess(MlPrediction<ProductCategory> prediction, double threshold) {
+        var label = prediction.label() == null ? null : prediction.label().name();
+        return new MlGuess(label, label == null ? null : prediction.confidence(), prediction.isConfident(threshold));
     }
 
-    private static MlGuess genericNameGuess(MlPrediction<String> p, double threshold) {
-        return new MlGuess(p.label(), p.label() == null ? null : p.confidence(), p.isConfident(threshold));
+    private static MlGuess genericNameGuess(MlPrediction<String> prediction, double threshold) {
+        return new MlGuess(prediction.label(), prediction.label() == null ? null : prediction.confidence(),
+                prediction.isConfident(threshold));
     }
 }

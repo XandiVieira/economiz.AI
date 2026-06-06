@@ -85,15 +85,15 @@ public class AdminProductService {
         var mismatches = new ArrayList<RecategorizeReportResponse.Row>();
         var applicable = 0;
         var skippedUser = 0;
-        for (var p : products) {
-            var suggested = productExtractor.extract(p.getNormalizedName());
+        for (var product : products) {
+            var suggested = productExtractor.extract(product.getNormalizedName());
             var suggestedCategory = suggested.category();
-            if (suggestedCategory == null || suggestedCategory == p.getCategory()) continue;
-            var userOverride = p.getCategorizationSource() == CategorizationSource.USER;
+            if (suggestedCategory == null || suggestedCategory == product.getCategory()) continue;
+            var userOverride = product.getCategorizationSource() == CategorizationSource.USER;
             if (userOverride) skippedUser++; else applicable++;
             mismatches.add(new RecategorizeReportResponse.Row(
-                    p.getId(), p.getNormalizedName(), p.getEan(),
-                    p.getCategory(), p.getCategorizationSource(),
+                    product.getId(), product.getNormalizedName(), product.getEan(),
+                    product.getCategory(), product.getCategorizationSource(),
                     suggestedCategory, suggested.categorizationSource(),
                     userOverride));
         }
@@ -115,19 +115,19 @@ public class AdminProductService {
         var updated = 0;
         var skippedUser = 0;
         var unchanged = 0;
-        for (var p : products) {
-            var suggested = productExtractor.extract(p.getNormalizedName());
+        for (var product : products) {
+            var suggested = productExtractor.extract(product.getNormalizedName());
             var suggestedCategory = suggested.category();
-            if (suggestedCategory == null || suggestedCategory == p.getCategory()) {
+            if (suggestedCategory == null || suggestedCategory == product.getCategory()) {
                 unchanged++;
                 continue;
             }
-            if (p.getCategorizationSource() == CategorizationSource.USER) {
+            if (product.getCategorizationSource() == CategorizationSource.USER) {
                 skippedUser++;
                 continue;
             }
-            p.setCategory(suggestedCategory);
-            p.setCategorizationSource(suggested.categorizationSource());
+            product.setCategory(suggestedCategory);
+            product.setCategorizationSource(suggested.categorizationSource());
             updated++;
         }
         log.info("admin.product.recategorize.applied total={} updated={} skippedUser={} unchanged={}",
