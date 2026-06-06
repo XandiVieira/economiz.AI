@@ -21,6 +21,7 @@ import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.repository.ReceiptRepository;
+import com.relyon.economizai.service.cache.HouseholdCacheGen;
 import com.relyon.economizai.service.canonicalization.CanonicalizationService;
 import com.relyon.economizai.service.geo.MarketLocationService;
 import com.relyon.economizai.service.notifications.NotificationPayload;
@@ -64,6 +65,7 @@ public class ReceiptService {
     private final MarketLocationService marketLocationService;
     private final NotificationService notificationService;
     private final HouseholdProductAliasService householdProductAliasService;
+    private final HouseholdCacheGen householdCacheGen;
 
     @Transactional
     public ReceiptResponse submit(User user, SubmitReceiptRequest request) {
@@ -166,6 +168,7 @@ public class ReceiptService {
         marketLocationService.registerMarketFromReceipt(receipt);
         notifyPersonalPromos(user, receipt, personalPromos);
         var saved = receiptRepository.save(receipt);
+        householdCacheGen.bump(receipt.getHousehold().getId());
         log.info("confirm ok status=CONFIRMED personalPromos={}", personalPromos.size());
         return new ConfirmReceiptResponse(ReceiptResponse.from(saved), personalPromos);
     }
@@ -205,7 +208,9 @@ public class ReceiptService {
     public void delete(User user, UUID receiptId) {
         MDC.put(MdcContextFilter.RECEIPT_ID, abbrev(receiptId));
         var receipt = loadOwned(user, receiptId);
+        var householdId = receipt.getHousehold().getId();
         receiptRepository.delete(receipt);
+        householdCacheGen.bump(householdId);
         log.info("delete ok status_was={}", receipt.getStatus());
     }
 
@@ -257,6 +262,7 @@ public class ReceiptService {
         receipt.setConfirmedAt(null);
         receipt.setParseErrorReason(null);
         var saved = receiptRepository.save(receipt);
+        householdCacheGen.bump(receipt.getHousehold().getId());
         log.info("reparse ok items={} total={} market='{}'",
                 saved.getItems().size(), saved.getTotalAmount(), saved.getMarketName());
         return ReceiptResponse.from(saved);
@@ -269,6 +275,7 @@ public class ReceiptService {
         requirePending(receipt);
         receipt.setStatus(ReceiptStatus.REJECTED);
         var saved = receiptRepository.save(receipt);
+        householdCacheGen.bump(receipt.getHousehold().getId());
         log.info("reject ok status=REJECTED");
         return ReceiptResponse.from(saved);
     }
@@ -288,6 +295,7 @@ public class ReceiptService {
         // Remember the friendly name household-wide so future receipts of
         // the same Product inherit it. No-op when item isn't linked yet.
         householdProductAliasService.rememberFromItem(receipt.getHousehold(), item);
+        householdCacheGen.bump(receipt.getHousehold().getId());
         log.info("item.updated description='{}' qty={} totalPrice={}",
                 item.getRawDescription(), item.getQuantity(), item.getTotalPrice());
         return ReceiptResponse.from(receipt);
@@ -320,6 +328,7 @@ public class ReceiptService {
                 .build();
         receipt.addItem(item);
         receiptItemRepository.save(item);
+        householdCacheGen.bump(receipt.getHousehold().getId());
         log.info("item.added line={} description='{}' qty={} totalPrice={}",
                 nextLine, item.getRawDescription(), item.getQuantity(), item.getTotalPrice());
         return ReceiptResponse.from(receipt);

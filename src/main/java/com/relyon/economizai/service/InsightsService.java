@@ -5,10 +5,12 @@ import com.relyon.economizai.dto.response.SpendInsightsResponse;
 import com.relyon.economizai.exception.ProductNotFoundException;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.ProductCategory;
+import com.relyon.economizai.config.CachingConfig;
 import com.relyon.economizai.repository.InsightsRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +31,8 @@ public class InsightsService {
     private final ProductRepository productRepository;
 
     @Transactional(readOnly = true)
+    @Cacheable(value = CachingConfig.INSIGHTS_SPEND_CACHE,
+            key = "#user.household.id + ':' + @householdCacheGen.get(#user.household.id) + ':' + #from + ':' + #to")
     public SpendInsightsResponse spend(User user, LocalDateTime from, LocalDateTime to) {
         var householdId = user.getHousehold().getId();
         var fromBound = from != null ? from : EPOCH_FLOOR;
