@@ -691,9 +691,9 @@ POST /api/v1/categorizer/retrain       → trigger retraining manually
 POST /api/v1/categorizer/auto-promote  → trigger learned-dictionary promotion
 ```
 
-**`/benchmark` (quality metric)** — runs the cascade over `seed/categorization-benchmark.csv` (curated description → true category) and returns `{ total, correct, accuracyPct, wrong, uncategorized, failures:[{description, expected, got, source}] }`. Track `accuracyPct` after each dictionary/model change. (Live = dictionary + trained ML; the CI test measures dictionary-only.) Each call also **records a snapshot** to the quality history.
+**`/benchmark` (quality metric)** — runs the cascade over `seed/categorization-benchmark.csv` (curated description → true category/brand/quantity) and returns per-field accuracy: `{ total, correct, accuracyPct (category), wrong, uncategorized, brandChecked, brandCorrect, brandAccuracyPct, quantityChecked, quantityCorrect, quantityAccuracyPct, mlCategoryChecked, mlCategoryCorrect, mlCategoryAccuracyPct, failures:[{description, field, expected, got, source}] }`. Brand/quantity are scored only on golden rows that declare them. `mlCategory*` is the ML model measured **alone** (shadow) — it's currently gated OUT of the live cascade (`category-apply-enabled=false`); watch `mlCategoryAccuracyPct` to decide when to re-enable. Each call records a snapshot.
 
-**`/quality/history`** — the trend: snapshots (newest first) written on every benchmark run and every backfill. Each: `{ recordedAt, trigger, accuracyPct, benchmarkCorrect, benchmarkTotal, catalogProducts, catalogCategorized, catalogCoveragePct, mlReady }`. `accuracyPct` = rule correctness on the golden set; `catalogCoveragePct` = % of real products that have a category.
+**`/quality/history`** — the trend: snapshots (newest first) from benchmark runs + backfills. Each: `{ recordedAt, trigger, accuracyPct, benchmarkCorrect, benchmarkTotal, catalogProducts, catalogCategorized, catalogCoveragePct, brandAccuracyPct, quantityAccuracyPct, mlAccuracyPct, mlReady }`.
 
 Mostly for ops. Categorization runs automatically on receipt confirm.
 

@@ -187,6 +187,15 @@ Helper scripts at repo root (run each in an **Administrator** PowerShell once):
 
 ## Data correctness
 
+### ML categorization gated OFF (dictionary-only for now)
+- **Now**: `economizai.ml.category-apply-enabled=false`. The cascade applies dictionary entries only; the ML model is confidently wrong at current data volume (~hundreds of products), so its predictions aren't written. It's still trained + measured (shadow) via `/categorizer/benchmark`.
+- **Why OK for dev**: dictionary-only is deterministic and currently 100% on the golden set; uncategorized is better than confidently-wrong.
+- **Fix / revisit**: once `mlCategoryAccuracyPct` (shadow) is consistently high — after the catalog has thousands of trusted labels — flip `ML_CATEGORY_APPLY_ENABLED=true` and watch the benchmark. Track via `/categorizer/quality/history`.
+
+### User corrections are global (should be per-household) — see HELP.md "Planned"
+- **Now**: `PATCH /products/{id}` mutates the shared canonical product; any authenticated user changes categories/brand for everyone, and it's not admin-gated.
+- **Fix before real multi-user volume**: household-scoped overrides + corrections-as-votes (design in HELP.md). Interim: gate `PATCH /products/**` to ADMIN.
+
 ### IBGE municipality code missing
 - **Now**: `PriceObservation` carries `city` (string from Nominatim) + `state` (UF) but not the IBGE 7-digit municipality code that the FE spec wanted (PRO-53/54).
 - **Why OK for dev**: city + state is enough for "show me everything in Porto Alegre".

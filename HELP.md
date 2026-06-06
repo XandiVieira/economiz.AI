@@ -765,6 +765,20 @@ auto-categorizations, more risk of wrong categories).
    `learned_dictionary` table; will be re-evaluated on next promotion
    pass (and re-promoted only if criteria still hold).
 
+### Quality tracking + ML status (2026-06-06)
+
+- **ML is gated OFF in the live cascade** (`economizai.ml.category-apply-enabled=false`). It's still **trained** every cycle and still **measured** (shadow) by the benchmark, so we keep validating it. Flip it back on (env `ML_CATEGORY_APPLY_ENABLED=true`) once the benchmark's `mlCategoryAccuracyPct` is consistently high. Until then the cascade is dictionary-only (deterministic), which is the right call at current data volume.
+- **Quality is measured + tracked over time.** `GET /categorizer/benchmark` reports per-field accuracy (category, brand, quantity) + ML shadow accuracy over `seed/categorization-benchmark.csv`. Every benchmark run and every backfill writes a row to `categorization_quality_snapshots`; `GET /categorizer/quality/history` is the trend. Add golden rows whenever a new failure surfaces.
+
+### Planned (documented, NOT built — avoid complexity until categorization is mature)
+
+These are deliberately deferred. Capturing the intended design so we build it right later:
+
+1. **User corrections should be per-household, not global.** Today `PATCH /products/{id}` mutates the **shared** canonical product (any logged-in user changes it for everyone). Intended model: a user's category/brand/quantity correction writes a **household-scoped override** (mirror `HouseholdProductAlias`), so it only affects that household's view. Reads (items / receipt detail / dashboard) apply the override when present.
+   - *Interim guardrail:* consider restricting `PATCH /products/**` to `ROLE_ADMIN` until the per-household path exists, so end users can't mutate the global catalog.
+2. **Corrections should "count" toward learning (not overwrite).** Instead of one USER row flipping the global category, aggregate household overrides as **votes** that raise the probability of a label — feed that aggregate into the dictionary/ML training signal. More households correcting product X → category Y ⇒ stronger signal.
+3. **Custom (user-defined) categories.** Allow households to create their own categories beyond the global enum, affecting only their own products, with the ability to **migrate items between categories**. Keep the global enum as the shared baseline; custom categories are an overlay. Do this only once the core categorization is mature.
+
 ## Suggested Additions (Beyond the Spec)
 
 These came up while structuring the project — open for discussion:

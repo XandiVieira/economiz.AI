@@ -16,6 +16,15 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-06 — ML benched + brand/quantity quality tracking
+
+- **AI categorization is gated OFF** in the live cascade (it was confidently wrong at current data volume). New items are categorized by the **dictionary only** (deterministic) or left uncategorized — no more confidently-wrong AI labels. The model is still trained and measured so we can switch it back on when it's good enough (env `ML_CATEGORY_APPLY_ENABLED`).
+- **Quality tracking now covers brand + quantity too**, not just category. `GET /categorizer/benchmark` returns per-field accuracy (category / brand / quantity) plus a **shadow** ML accuracy (the model measured even while benched). `/categorizer/quality/history` snapshots now record `brandAccuracyPct`, `quantityAccuracyPct`, `mlAccuracyPct`.
+
+No FE contract change.
+
+---
+
 ## 2026-06-06 — categorization quality history (trend over time)
 
 The quality metric is now **persisted**, so we can see if categorization is improving or regressing over time. A snapshot is written on every benchmark run and every backfill (`V31` table `categorization_quality_snapshots`).
