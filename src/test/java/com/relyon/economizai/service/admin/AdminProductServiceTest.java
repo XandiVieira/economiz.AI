@@ -6,6 +6,10 @@ import com.relyon.economizai.exception.InvalidProductMergeException;
 import com.relyon.economizai.exception.ProductNotFoundException;
 import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.ProductAlias;
+import com.relyon.economizai.model.enums.CategorizationSource;
+import com.relyon.economizai.model.enums.ProductCategory;
+import com.relyon.economizai.service.extraction.ProductExtraction;
+import com.relyon.economizai.service.extraction.ProductExtractor;
 import com.relyon.economizai.repository.ConsumptionSnoozeRepository;
 import com.relyon.economizai.repository.HouseholdProductAliasRepository;
 import com.relyon.economizai.repository.ManualPurchaseRepository;
@@ -47,8 +51,57 @@ class AdminProductServiceTest {
     @Mock private ShoppingListItemRepository shoppingListItemRepository;
     @Mock private HouseholdProductAliasRepository householdProductAliasRepository;
     @Mock private ConsumptionSnoozeRepository consumptionSnoozeRepository;
+    @Mock private ProductExtractor productExtractor;
 
     @InjectMocks private AdminProductService service;
+
+    private Product product(String name, ProductCategory current, CategorizationSource source) {
+        return Product.builder().id(UUID.randomUUID()).normalizedName(name)
+                .category(current).categorizationSource(source).build();
+    }
+
+    private ProductExtraction extracted(ProductCategory category, CategorizationSource source) {
+        return new ProductExtraction(null, null, null, null, category, source);
+    }
+
+    @Test
+    void recategorizeReport_listsMismatchesAndFlagsUserOverrides() {
+        var ml = product("MILHO", ProductCategory.PERSONAL_CARE, CategorizationSource.ML);          // wrong, fixable
+        var userLocked = product("BATATA", ProductCategory.PERSONAL_CARE, CategorizationSource.USER); // wrong but locked
+        var ok = product("ARROZ", ProductCategory.GROCERIES, CategorizationSource.DICTIONARY);       // already right
+        when(productRepository.findAll()).thenReturn(List.of(ml, userLocked, ok));
+        when(productExtractor.extract("MILHO")).thenReturn(extracted(ProductCategory.GROCERIES, CategorizationSource.DICTIONARY));
+        when(productExtractor.extract("BATATA")).thenReturn(extracted(ProductCategory.GROCERIES, CategorizationSource.DICTIONARY));
+        when(productExtractor.extract("ARROZ")).thenReturn(extracted(ProductCategory.GROCERIES, CategorizationSource.DICTIONARY));
+
+        var report = service.recategorizeReport();
+
+        assertEquals(3, report.totalProducts());
+        assertEquals(2, report.mismatchCount());      // ml + userLocked differ from suggestion
+        assertEquals(1, report.applicable());         // only the ML one would change
+        assertEquals(1, report.skippedUserOverrides());
+    }
+
+    @Test
+    void recategorizeApply_updatesFixableSkipsUserAndNullSuggestions() {
+        var ml = product("MILHO", ProductCategory.PERSONAL_CARE, CategorizationSource.ML);
+        var userLocked = product("BATATA", ProductCategory.PERSONAL_CARE, CategorizationSource.USER);
+        var noSuggestion = product("XYZ", ProductCategory.BEVERAGES, CategorizationSource.ML);
+        when(productRepository.findAll()).thenReturn(List.of(ml, userLocked, noSuggestion));
+        when(productExtractor.extract("MILHO")).thenReturn(extracted(ProductCategory.GROCERIES, CategorizationSource.DICTIONARY));
+        when(productExtractor.extract("BATATA")).thenReturn(extracted(ProductCategory.GROCERIES, CategorizationSource.DICTIONARY)); // mismatch but USER-locked
+        when(productExtractor.extract("XYZ")).thenReturn(extracted(null, CategorizationSource.NONE)); // no suggestion → don't downgrade
+
+        var result = service.recategorizeApply();
+
+        assertEquals(1, result.updated());
+        assertEquals(1, result.skippedUserOverrides());
+        assertEquals(1, result.unchanged());
+        assertEquals(ProductCategory.GROCERIES, ml.getCategory());
+        assertEquals(CategorizationSource.DICTIONARY, ml.getCategorizationSource());
+        assertEquals(ProductCategory.PERSONAL_CARE, userLocked.getCategory(), "USER override untouched");
+        assertEquals(ProductCategory.BEVERAGES, noSuggestion.getCategory(), "null suggestion not downgraded");
+    }
 
     @Test
     void listMissingBrandReturnsProductsWithSampleAliases() {

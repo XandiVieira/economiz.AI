@@ -8,6 +8,8 @@ import com.relyon.economizai.dto.response.AdminUserSummaryResponse;
 import com.relyon.economizai.dto.response.DuplicateProductGroupResponse;
 import com.relyon.economizai.dto.response.MissingBrandProductResponse;
 import com.relyon.economizai.dto.response.ProductMergeResultResponse;
+import com.relyon.economizai.dto.response.RecategorizeReportResponse;
+import com.relyon.economizai.dto.response.RecategorizeResultResponse;
 import com.relyon.economizai.dto.response.ProductResponse;
 import com.relyon.economizai.dto.response.ReceiptResponse;
 import com.relyon.economizai.dto.response.ReceiptSummaryResponse;
@@ -115,5 +117,17 @@ public class AdminController {
     public ResponseEntity<ProductMergeResultResponse> mergeProduct(
             @PathVariable UUID id, @Valid @RequestBody MergeProductRequest request) {
         return ResponseEntity.ok(adminProductService.merge(id, request));
+    }
+
+    /** Dry-run: re-run the categorizer over the whole catalog and list mismatches (read-only). */
+    @GetMapping("/products/recategorize")
+    public ResponseEntity<RecategorizeReportResponse> recategorizeReport() {
+        return ResponseEntity.ok(adminProductService.recategorizeReport());
+    }
+
+    /** Apply re-categorization: update mismatched products (skips USER-locked + no-suggestion). */
+    @PostMapping("/products/recategorize")
+    public ResponseEntity<RecategorizeResultResponse> recategorizeApply() {
+        return ResponseEntity.ok(adminProductService.recategorizeApply());
     }
 }
