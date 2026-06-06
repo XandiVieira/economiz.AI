@@ -684,13 +684,16 @@ DELETE /api/v1/alerts/{id}     → 204 (404 if not the caller's)
 ```
 GET  /api/v1/categorizer/classify?description=Milho&description=Lays
                                        → dry-run: how each term would be categorized (no persist)
-GET  /api/v1/categorizer/benchmark     → categorization accuracy % over the golden set
+GET  /api/v1/categorizer/benchmark     → categorization accuracy % over the golden set (records a snapshot)
+GET  /api/v1/categorizer/quality/history?limit=50 → quality trend over time (snapshots)
 GET  /api/v1/categorizer/status        → ML model state
 POST /api/v1/categorizer/retrain       → trigger retraining manually
 POST /api/v1/categorizer/auto-promote  → trigger learned-dictionary promotion
 ```
 
-**`/benchmark` (quality metric)** — runs the cascade over `seed/categorization-benchmark.csv` (curated description → true category) and returns `{ total, correct, accuracyPct, wrong, uncategorized, failures:[{description, expected, got, source}] }`. Track `accuracyPct` after each dictionary/model change. (Live = dictionary + trained ML; the CI test measures dictionary-only.)
+**`/benchmark` (quality metric)** — runs the cascade over `seed/categorization-benchmark.csv` (curated description → true category) and returns `{ total, correct, accuracyPct, wrong, uncategorized, failures:[{description, expected, got, source}] }`. Track `accuracyPct` after each dictionary/model change. (Live = dictionary + trained ML; the CI test measures dictionary-only.) Each call also **records a snapshot** to the quality history.
+
+**`/quality/history`** — the trend: snapshots (newest first) written on every benchmark run and every backfill. Each: `{ recordedAt, trigger, accuracyPct, benchmarkCorrect, benchmarkTotal, catalogProducts, catalogCategorized, catalogCoveragePct, mlReady }`. `accuracyPct` = rule correctness on the golden set; `catalogCoveragePct` = % of real products that have a category.
 
 Mostly for ops. Categorization runs automatically on receipt confirm.
 

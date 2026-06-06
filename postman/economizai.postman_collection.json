@@ -1912,7 +1912,40 @@
                 "benchmark"
               ]
             },
-            "description": "Runs the categorizer over the golden set and returns accuracyPct (+ failing cases). Track it after each dictionary/model change to see if quality is improving."
+            "description": "Runs the categorizer over the golden set and returns accuracyPct (+ failing cases). Track it after each dictionary/model change to see if quality is improving. Also records a snapshot to the quality history."
+          },
+          "response": []
+        },
+        {
+          "name": "Quality history (trend over time)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categorizer/quality/history?limit=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "categorizer",
+                "quality",
+                "history"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": "Snapshots (newest first) from benchmark runs + backfills: accuracyPct (rule correctness) + catalogCoveragePct (how much of the catalog is categorized) over time."
           },
           "response": []
         },

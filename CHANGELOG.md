@@ -16,6 +16,15 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-06 — categorization quality history (trend over time)
+
+The quality metric is now **persisted**, so we can see if categorization is improving or regressing over time. A snapshot is written on every benchmark run and every backfill (`V31` table `categorization_quality_snapshots`).
+
+- `GET /api/v1/categorizer/quality/history?limit=50` → snapshots newest-first: `{ recordedAt, trigger (BENCHMARK|BACKFILL), accuracyPct, benchmarkCorrect/Total, catalogProducts, catalogCategorized, catalogCoveragePct, mlReady }`.
+- Each snapshot pairs **golden-set accuracy** (cascade correctness) with **catalog coverage** (% of real products that have a category) — so both "are our rules right" and "how much of the catalog is categorized" are tracked.
+
+---
+
 ## 2026-06-06 — categorization quality: tracked metric + dictionary expansion
 
 Product categories get more accurate, and we can now **measure** it.
