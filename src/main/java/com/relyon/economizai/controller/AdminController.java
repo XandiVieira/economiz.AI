@@ -13,12 +13,14 @@ import com.relyon.economizai.dto.response.RecategorizeResultResponse;
 import com.relyon.economizai.dto.response.ProductResponse;
 import com.relyon.economizai.dto.response.ReceiptResponse;
 import com.relyon.economizai.dto.response.ReceiptSummaryResponse;
+import com.relyon.economizai.model.enums.CategorizationQualityTrigger;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.service.ReceiptService;
 import com.relyon.economizai.service.admin.AdminNotificationService;
 import com.relyon.economizai.service.admin.AdminProductService;
 import com.relyon.economizai.service.admin.AdminReceiptService;
 import com.relyon.economizai.service.admin.AdminUserService;
+import com.relyon.economizai.service.extraction.CategorizationQualityService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -55,6 +57,7 @@ public class AdminController {
     private final AdminReceiptService adminReceiptService;
     private final AdminNotificationService adminNotificationService;
     private final AdminProductService adminProductService;
+    private final CategorizationQualityService categorizationQualityService;
 
     @PostMapping("/receipts/{id}/reparse")
     public ResponseEntity<ReceiptResponse> reparseReceipt(@PathVariable UUID id) {
@@ -128,11 +131,14 @@ public class AdminController {
     /**
      * Apply re-categorization. Default applies only trusted (dictionary)
      * suggestions; pass {@code includeMl=true} to also apply ML suggestions.
-     * Always skips USER-locked categories and null suggestions.
+     * Always skips USER-locked categories and null suggestions. Records a
+     * quality snapshot afterwards so the backfill shows up in the trend.
      */
     @PostMapping("/products/recategorize")
     public ResponseEntity<RecategorizeResultResponse> recategorizeApply(
             @RequestParam(defaultValue = "false") boolean includeMl) {
-        return ResponseEntity.ok(adminProductService.recategorizeApply(includeMl));
+        var result = adminProductService.recategorizeApply(includeMl);
+        categorizationQualityService.measureAndRecord(CategorizationQualityTrigger.BACKFILL);
+        return ResponseEntity.ok(result);
     }
 }

@@ -16,6 +16,9 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
 
     Optional<Product> findByEan(String ean);
 
+    /** Products that have any category assigned — for catalog coverage metrics. */
+    long countByCategoryNotNull();
+
     @Query("""
         SELECT p FROM Product p
         WHERE (:query IS NULL OR LOWER(p.normalizedName) LIKE LOWER(CONCAT('%', :query, '%')) OR p.ean = :query)

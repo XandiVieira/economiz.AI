@@ -8,6 +8,7 @@ import com.relyon.economizai.service.LocalizedMessageService;
 import com.relyon.economizai.service.extraction.AutoPromotionService;
 import com.relyon.economizai.service.extraction.CategorizationBenchmarkService;
 import com.relyon.economizai.service.extraction.CategorizationDebugService;
+import com.relyon.economizai.service.extraction.CategorizationQualityService;
 import com.relyon.economizai.service.extraction.ml.MlClassifierService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,6 +39,7 @@ class CategorizerControllerTest {
     @MockitoBean private AutoPromotionService autoPromotionService;
     @MockitoBean private CategorizationDebugService categorizationDebugService;
     @MockitoBean private CategorizationBenchmarkService categorizationBenchmarkService;
+    @MockitoBean private CategorizationQualityService categorizationQualityService;
     @MockitoBean private JwtService jwtService;
     @MockitoBean private UserDetailsService userDetailsService;
     @MockitoBean private LocalizedMessageService localizedMessageService;

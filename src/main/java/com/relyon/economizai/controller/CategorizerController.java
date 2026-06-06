@@ -2,9 +2,12 @@ package com.relyon.economizai.controller;
 
 import com.relyon.economizai.dto.response.CategorizationBenchmarkResponse;
 import com.relyon.economizai.dto.response.CategorizationExplanation;
+import com.relyon.economizai.dto.response.CategorizationQualitySnapshotResponse;
+import com.relyon.economizai.model.enums.CategorizationQualityTrigger;
 import com.relyon.economizai.service.extraction.AutoPromotionService;
 import com.relyon.economizai.service.extraction.CategorizationBenchmarkService;
 import com.relyon.economizai.service.extraction.CategorizationDebugService;
+import com.relyon.economizai.service.extraction.CategorizationQualityService;
 import com.relyon.economizai.service.extraction.ml.MlClassifierService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -34,11 +37,24 @@ public class CategorizerController {
     private final AutoPromotionService autoPromotionService;
     private final CategorizationDebugService categorizationDebugService;
     private final CategorizationBenchmarkService categorizationBenchmarkService;
+    private final CategorizationQualityService categorizationQualityService;
 
-    /** Categorization quality over the golden set — track accuracyPct after each enhancement. */
+    /**
+     * Categorization quality over the golden set. Returns the detailed report
+     * (accuracyPct + failing cases) AND records a snapshot so the trend is kept.
+     */
     @GetMapping("/benchmark")
     public ResponseEntity<CategorizationBenchmarkResponse> benchmark() {
-        return ResponseEntity.ok(categorizationBenchmarkService.run());
+        var report = categorizationBenchmarkService.run();
+        categorizationQualityService.record(CategorizationQualityTrigger.BENCHMARK, report);
+        return ResponseEntity.ok(report);
+    }
+
+    /** Quality trend — recent snapshots (newest first) from benchmark runs + backfills. */
+    @GetMapping("/quality/history")
+    public ResponseEntity<List<CategorizationQualitySnapshotResponse>> qualityHistory(
+            @RequestParam(defaultValue = "50") int limit) {
+        return ResponseEntity.ok(categorizationQualityService.history(limit));
     }
 
     /**
