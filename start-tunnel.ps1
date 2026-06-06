@@ -44,28 +44,24 @@ for ($i=0; $i -lt 20; $i++) {
 if (-not $url) { Log "no tunnel URL after ~40s; leaving cloudflared running anyway"; }
 else {
     Log "tunnel URL = $url"
-    # 3) Publish the URL.
+    # 3) Publish the raw tunnel URL locally (for reference/debugging).
     Set-Content -Path $urlFile -Value $url -Encoding ascii
 
-    # 4) Update CORS_ORIGINS: keep non-tunnel entries, add the new tunnel URL.
-    if (Test-Path $envFile) {
-        $lines = Get-Content $envFile
-        $newLines = foreach ($line in $lines) {
-            if ($line -match '^CORS_ORIGINS=') {
-                $val = $line.Substring('CORS_ORIGINS='.Length)
-                $parts = $val.Split(',') | Where-Object { $_ -notmatch 'trycloudflare\.com' -and $_ -ne '' }
-                $parts += $url
-                'CORS_ORIGINS=' + ($parts -join ',')
-            } else { $line }
-        }
-        Set-Content -Path $envFile -Value $newLines -Encoding ascii
-        Log "CORS_ORIGINS updated with $url"
-
-        # 5) Restart the app so it picks up the new CORS origin.
-        & docker context use desktop-linux *> $null
-        & cmd /c "docker compose --profile server up -d 2>&1" | Out-Null
-        Log "app container recreated for new CORS"
+    # 4) Push the new tunnel URL into the Worker's KV ("origin" key). The Worker
+    #    proxies the PERMANENT https://economizai.economizai.workers.dev URL to
+    #    whatever is stored here, so the public link auto-follows the tunnel and
+    #    the FE never sees a change.
+    $worker = Join-Path $repo "tunnel-proxy-worker"
+    if (Test-Path $worker) {
+        Push-Location $worker
+        & cmd /c ('npx --yes wrangler kv key put --binding TUNNEL --remote origin "' + $url + '" 2>&1') | Out-Null
+        Pop-Location
+        Log "KV origin updated -> $url (permanent URL now follows this tunnel)"
+    } else {
+        Log "tunnel-proxy-worker folder missing; skipped KV update"
     }
+    # NOTE: CORS does NOT need updating per-restart. The FE always uses the
+    # permanent workers.dev URL, which is a fixed CORS origin set once in .env.
 }
 
 # 6) Block on cloudflared so the Scheduled Task treats it as long-running.
