@@ -5,8 +5,14 @@ changes, behavior changes, gotchas worth knowing about. **Newest at the top.**
 Skim from the top until you hit a date you've already read.
 
 For the complete API contract see [API.md](./API.md) (walk-through) or
-`/swagger-ui` on whichever environment you're hitting. Dev server (current):
-`http://192.168.68.108:8080` (LAN-only — must be on the same Wi-Fi).
+`/swagger-ui` on whichever environment you're hitting.
+
+**Dev server (use from anywhere):**
+- API: `https://economizai.economizai.workers.dev/api/v1`
+- Swagger: `https://economizai.economizai.workers.dev/swagger-ui/index.html`
+- Health: `https://economizai.economizai.workers.dev/actuator/health`
+
+(Full infra + links: [INFRASTRUCTURE.md](./INFRASTRUCTURE.md).)
 
 ---
 
