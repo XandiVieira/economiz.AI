@@ -38,3 +38,4 @@ current-tunnel-url.txt
 update-server.log
 db-backups/
 db-backup.log
+tunnel-proxy-worker/.wrangler/
