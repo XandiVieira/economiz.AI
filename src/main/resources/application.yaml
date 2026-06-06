@@ -66,6 +66,12 @@ economizai:
     community-promo-threshold-pct: 15          # current price < (median - X%) → community promo
     community-promo-recent-window-days: 7      # last N days = "recent" sample; older rows are baseline
     lookback-days: 90                          # observations older than this are excluded from reference + promo calcs
+  ml:
+    # Cascade applies ML category/genericName only when true. Currently OFF —
+    # the model is still trained + measured (shadow) via the benchmark, but its
+    # (unreliable) predictions are not written to products. Flip on once the
+    # benchmark's mlCategoryAccuracyPct is good enough.
+    category-apply-enabled: ${ML_CATEGORY_APPLY_ENABLED:false}
   personal-promo:
     threshold-pct: 10                          # personal promo if price < (user's own median - X%)
     min-purchases-for-baseline: 3              # need this many prior purchases to detect personal promos

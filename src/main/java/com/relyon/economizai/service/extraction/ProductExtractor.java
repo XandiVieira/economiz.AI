@@ -44,7 +44,8 @@ public class ProductExtractor {
                 ? dictHit.source()
                 : CategorizationSource.NONE;
 
-        if (category == null && mlClassifier.isReady()) {
+        var applyMl = mlClassifier.isReady() && mlClassifier.isCategoryApplyEnabled();
+        if (category == null && applyMl) {
             var prediction = mlClassifier.predictCategory(rawDescription);
             if (prediction.isConfident(mlClassifier.getConfidenceThreshold())) {
                 category = prediction.label();
@@ -58,7 +59,7 @@ public class ProductExtractor {
             }
         }
 
-        if (genericName == null && mlClassifier.isReady()) {
+        if (genericName == null && applyMl) {
             var prediction = mlClassifier.predictGenericName(rawDescription);
             if (prediction.isConfident(mlClassifier.getConfidenceThreshold())) {
                 genericName = prediction.label();

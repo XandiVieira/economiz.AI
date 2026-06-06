@@ -44,6 +44,15 @@ public class MlClassifierService {
     @Value("${economizai.ml.confidence-threshold:0.75}")
     private double confidenceThreshold;
 
+    /**
+     * When false, the cascade does NOT apply ML predictions to products — but
+     * the model is still trained and still measurable (shadow) via the
+     * benchmark. Lets us bench an unreliable model without losing the training
+     * loop, and flip it back on once the benchmark says it's good enough.
+     */
+    @Value("${economizai.ml.category-apply-enabled:false}")
+    private boolean categoryApplyEnabled;
+
     private final MultinomialNaiveBayes<ProductCategory> categoryModel = new MultinomialNaiveBayes<>();
     private final MultinomialNaiveBayes<String> genericNameModel = new MultinomialNaiveBayes<>();
     private volatile boolean ready = false;
@@ -107,6 +116,11 @@ public class MlClassifierService {
 
     public boolean isReady() {
         return ready;
+    }
+
+    /** Whether the cascade should apply ML predictions (vs. train/measure only). */
+    public boolean isCategoryApplyEnabled() {
+        return categoryApplyEnabled;
     }
 
     public LocalDateTime getLastTrainedAt() {
