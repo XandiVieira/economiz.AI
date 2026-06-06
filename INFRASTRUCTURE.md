@@ -1,0 +1,220 @@
+# economizai — Dev Server Infrastructure
+
+## 🔗 Quick Links (dev environment)
+
+| What | Link | Notes |
+|---|---|---|
+| **API base** | https://economizai.economizai.workers.dev/api/v1 | from anywhere |
+| **Swagger** | https://economizai.economizai.workers.dev/swagger-ui/index.html | from anywhere |
+| **Health check** | https://economizai.economizai.workers.dev/actuator/health | should return `{"status":"UP"}` |
+| **OpenAPI JSON** | https://economizai.economizai.workers.dev/v3/api-docs | for codegen/import |
+| **Logs (Dozzle UI)** | http://192.168.68.108:9999 | **same Wi-Fi only** (not public) |
+| **CI / deploy runs** | https://github.com/XandiVieira/economiz.AI/actions | auto-deploy status |
+| **Uptime monitor** | https://uptimerobot.com (dashboard) | down/up alerts |
+
+**On the LAN (same Wi-Fi), the API is also at** `http://192.168.68.108:8080/api/v1`
+(health `…/actuator/health`, swagger `…/swagger-ui/index.html`).
+
+---
+
+Single source of truth for how the **self-hosted dev environment** runs. This is
+a home Windows 11 box acting as the dev backend for the team (replaced Render).
+Every column has a **"→ prod"** note so we know what to swap when we get there.
+
+> Scope: this is a **dev** environment — fine for the team + early data, NOT a
+> production target (home connection, no HA, no TLS-at-origin, single disk).
+> See the "Going to prod" section at the bottom for the migration map.
+
+---
+
+## TL;DR — what's where
+
+| Thing | Value |
+|---|---|
+| Host machine | Windows 11, user `Xandi`, computer `DESKTOP-PLT5POI` |
+| Repo clone | `C:\Users\Xandi\OneDrive\Documents\projects\economiz.AI` |
+| LAN IP (static) | `192.168.68.108` |
+| **Public API (FE uses this)** | `https://economizai.economizai.workers.dev/api/v1` |
+| Health | `…/actuator/health` · Swagger `…/swagger-ui/index.html` |
+| Log UI (LAN only) | `http://192.168.68.108:9999` (Dozzle) |
+| Branch deployed | `development` (auto-deploys on push) |
+
+---
+
+## The stack (Docker, via `docker-compose.yml`, `--profile server`)
+
+| Container | Port (host→container) | Role |
+|---|---|---|
+| `economizai-app` | 8080 → 10000 | Spring Boot API |
+| `economizai-db` | 5432 → 5432 | PostgreSQL 18 |
+| `economizai-logs` | 9999 → 8080 | Dozzle (live log web UI) |
+
+- Data lives in the named volume `economizai_economizai-pgdata` (schema rebuilt by
+  Flyway on a fresh volume). **`docker compose down -v` wipes it** — don't, unless intended.
+- Bring up: `docker compose --profile server up -d --build`
+- `restart: unless-stopped` on all; Docker `json-file` logs capped (app 20MBx10, db 10MBx3).
+
+---
+
+## How traffic reaches the box (the "from anywhere" path)
+
+```
+FE anywhere ──https──▶ economizai.economizai.workers.dev   (permanent URL, free)
+                          │  Cloudflare Worker reads current tunnel URL from KV
+                          ▼
+                  https://<random>.trycloudflare.com        (changes per restart)
+                          │  cloudflared quick-tunnel (dials OUT, no open ports)
+                          ▼
+                  localhost:8080  ──▶ economizai-app
+```
+
+- **Worker** (`tunnel-proxy-worker/`): permanent front door. Deployed to Cloudflare
+  (free account `alexandrecvieiracolorado@…`). Reads the live tunnel URL from a KV
+  namespace (`TUNNEL`, key `origin`).
+- **Tunnel** (`start-tunnel.ps1`): on each start it captures the new `trycloudflare`
+  URL, **writes it into the Worker's KV** (so the permanent URL auto-follows), and
+  publishes it to `current-tunnel-url.txt`. Kept alive by a logon task.
+- **LAN path** (no internet needed): `http://192.168.68.108:8080` — needs same Wi-Fi +
+  the firewall rule (TCP 8080, Private).
+- **→ prod:** replace the quick-tunnel + Worker with a **named Cloudflare tunnel on a
+  real domain** (stable URL, no KV indirection), or put the app behind a proper
+  load balancer / reverse proxy with TLS.
+
+---
+
+## Always-on / self-recovery
+
+| Mechanism | Script / setting | What it covers |
+|---|---|---|
+| Never sleep/hibernate | `make-always-on.ps1` (powercfg) | idle, lid close, unplug |
+| Auto-login | `enable-autologin.ps1` | unattended reboot → user session starts |
+| Docker auto-start | task `economizai - start Docker engine` (at logon) | reboot → engine up |
+| Containers restart | `restart: unless-stopped` | container/app crash |
+| Stack watchdog | task `economizai - stack watchdog` (startup + every 5 min) → `stack-watchdog.ps1` | engine wedge / failed boot — re-runs `compose up` if health ≠ 200 |
+| Tunnel keep-alive | task `economizai - cloudflare tunnel` (logon) → `start-tunnel.ps1` | tunnel reconnect after reboot |
+
+- **Not covered:** power outage (needs BIOS "Restore on AC Power Loss = ON") and
+  mesh-Wi-Fi roaming to the other subnet (prefer wired ethernet).
+- **→ prod:** a managed host (Fly.io / Railway / VPS) handles all of this natively —
+  none of these scripts are needed; they exist only because it's a home Windows box.
+
+---
+
+## Auto-deploy (push → live)
+
+- **Trigger:** push to `development` → `.github/workflows/deploy-dev-server.yml`.
+- **Runs on:** a **self-hosted GitHub Actions runner** (`C:\actions-runner`, Windows
+  service, runs as `Xandi`, label `economizai-dev`). Dials OUT — nothing exposed.
+- **Does:** checkout pushed commit → `ci-deploy.ps1` (copy `.env`, `compose up -d --build`,
+  verify health). Postgres volume untouched → data preserved. ~1–2 min, ~30–60s API blip.
+- **Watch runs:** repo → Actions tab.
+- **Setup scripts:** `setup-github-runner.ps1` / `install-runner-service.ps1`.
+- **Quirks baked in (Windows):** uses `shell: cmd` (not PowerShell — avoids
+  ErrorActionPreference choking on docker stderr); script invoked with
+  `-ExecutionPolicy Bypass`; runner has Windows PowerShell 5.1 only (no `pwsh`).
+- **→ prod:** replace the self-hosted runner with the host's native CI/CD (GitHub
+  Actions on cloud runners + the platform's deploy hook). Drop `ci-deploy.ps1`.
+
+---
+
+## Config & secrets (`.env`)
+
+- `.env` at repo root (gitignored): `DB_USERNAME/PASSWORD`, `JWT_SECRET` (CSPRNG),
+  `CORS_ORIGINS` (localhost + LAN IP + the workers.dev URL), `NOTIFICATIONS_EMAIL_ENABLED`.
+- **⚠️ Two copies:** the runner service can't reliably read the OneDrive path, so a
+  copy lives at **`C:\actions-runner\.env`**. **If you change `.env`, update BOTH** or
+  auto-deploy uses stale values.
+- **→ prod:** move secrets to the platform's secret manager; generate a fresh
+  `JWT_SECRET`; drop localhost/LAN entries from `CORS_ORIGINS`; real SMTP creds; the
+  dev shortcuts in `DEV_NOTES.md` (local-disk profile pics, etc.) must be addressed.
+
+---
+
+## Backups
+
+- **DB:** `backup-db.ps1` → compressed `pg_dump` to `db-backups\` (OneDrive-synced,
+  14-day retention, monthly anchors). Daily 03:00 via task `economizai - daily db backup`.
+  Verified restorable. Restore: `pg_restore -d <db> <file>.dump`.
+- **Logs:** `logs.ps1 -Save` → dated files in `logs\` (14-day). Daily 02:55 via task
+  `economizai - daily log save`.
+- **⚠️ Single-machine risk:** OneDrive sync is the only off-box copy. For real safety,
+  add a second destination (external drive / cloud bucket).
+- **→ prod:** managed Postgres with automated backups + PITR; ship logs to a real
+  aggregator.
+
+---
+
+## Logging / debugging
+
+- **Live UI:** Dozzle at `http://192.168.68.108:9999` (LAN only — not on the public
+  tunnel, since logs can contain sensitive data). Search/filter/follow `economizai-*`.
+- **CLI:** `logs.ps1` — `-Errors`, `-Grep rcpt=xxx`, `-Db`, `-Save`, `-Since 30m`.
+  App logs carry MDC `req= user= rcpt= item=` — grep by `rcpt=<id>` to trace one
+  receipt end-to-end.
+- **History:** `logs\*.log` (14-day, OneDrive-synced).
+- **→ prod:** centralized logging (Loki/Grafana, Better Stack, New Relic) with longer
+  retention + alerting; protect/disable Dozzle.
+
+---
+
+## Monitoring
+
+- **UptimeRobot** (free) pings `…/actuator/health` every 5 min, emails/pushes on
+  down/up. Catches outages the watchdog can't self-heal (machine off, internet down).
+- **→ prod:** add latency/error-rate alerting, status page, on-call.
+
+---
+
+## All scheduled tasks (admin-registered)
+
+| Task | When | Script |
+|---|---|---|
+| `economizai - start Docker engine` | at logon | starts Docker Desktop |
+| `economizai - stack watchdog` | startup + every 5 min | `stack-watchdog.ps1` |
+| `economizai - cloudflare tunnel` | at logon | `start-tunnel.ps1` |
+| `economizai - daily db backup` | daily 03:00 | `backup-db.ps1` |
+| `economizai - daily log save` | daily 02:55 | `logs.ps1 -Save` |
+
+Plus the **GitHub runner** Windows service (`actions.runner.XandiVieira-economiz.AI.economizai-dev-box`).
+
+---
+
+## Setup scripts index (all at repo root, run in **Administrator** PowerShell unless noted)
+
+| Script | Purpose |
+|---|---|
+| `make-always-on.ps1` | power settings + Docker autostart + watchdog task |
+| `enable-autologin.ps1` | unattended-boot auto-login |
+| `set-static-ip.ps1` | pin LAN IP (revert: `netsh interface ip set address name="Wi-Fi" source=dhcp`) |
+| `setup-firewall.ps1` | inbound TCP 8080 (Private) |
+| `start-tunnel.ps1` / `setup-tunnel-autostart.ps1` | Cloudflare tunnel + KV sync + autostart |
+| `setup-github-runner.ps1` / `install-runner-service.ps1` | self-hosted CI runner |
+| `ci-deploy.ps1` | invoked by the deploy workflow (don't run by hand normally) |
+| `update-server.ps1` | manual pull+rebuild fallback |
+| `backup-db.ps1` / `setup-backup-schedule.ps1` | DB backup + daily schedule |
+| `logs.ps1` / `setup-logsave-schedule.ps1` | log viewing/saving + daily schedule |
+| `tunnel-proxy-worker/` | Cloudflare Worker (permanent URL) — `wrangler deploy` |
+
+---
+
+## Going to prod — the migration map
+
+When the time comes, this is the dev→prod swap (most are "delete the home-box
+workaround, use the platform feature"):
+
+1. **Host:** home Windows box → managed platform (Fly.io / Railway / paid Render / VPS).
+   Deletes: all scheduled tasks, the self-hosted runner, the always-on scripts.
+2. **DB:** Docker Postgres on one disk → managed Postgres (Neon/Supabase/RDS) with
+   automated backups + PITR. Migrate data with `pg_dump`/`pg_restore`.
+3. **Public URL:** quick-tunnel + Worker + KV → a real domain with TLS (named tunnel
+   or the platform's ingress). One stable origin, drop the KV indirection.
+4. **CI/CD:** self-hosted runner + `ci-deploy.ps1` → cloud runners + platform deploy.
+5. **Secrets:** `.env` (x2 copies) → platform secret manager; rotate `JWT_SECRET`;
+   tighten `CORS_ORIGINS`.
+6. **Dev shortcuts (see `DEV_NOTES.md`):** local-disk profile pics → S3/Cloudinary;
+   SMTP enabled; `/actuator/prometheus` secured; etc.
+7. **Logs/monitoring:** Dozzle/files → centralized aggregator + alerting.
+
+---
+
+_Last updated: 2026-06-06. Keep this in sync when infra changes._

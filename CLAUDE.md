@@ -112,6 +112,7 @@ GitHub repo: `economiz.AI` (https://github.com/XandiVieira/economiz.AI.git)
 - `API.md` is the FE-facing endpoint walk-through. Update when endpoints/payloads change.
 - `CHANGELOG.md` is the FE-facing **diary** of meaningful changes — new endpoints, response-shape changes, behavior changes the FE needs to know about. **Newest entry always at the top.** Add an entry on every meaningful change (a feature shipped, a contract change, a bug the FE was likely tripping on). NOT every commit — only the user-visible / FE-visible deltas. Date stamp every entry. This is read by the FE's tooling to understand "what changed since I last looked."
 - `DEV_NOTES.md` lists shortcuts/hacks that are fine for dev but must be revisited before prod (local-disk storage, stub services, weak secrets, etc). Add an entry whenever you ship a "good enough for dev" choice with a known prod gap.
+- `INFRASTRUCTURE.md` is the single source of truth for the **self-hosted dev server** (Quick Links to API/Swagger/health/logs at the top; the full stack, auto-deploy, backups, monitoring, and a dev→prod migration map). Update when infra changes.
 
 ## Build & Run
 ```bash

@@ -34,6 +34,12 @@ services:
       timeout: 3s
       retries: 10
     restart: unless-stopped
+    # cap container log size so a 24/7 box can't fill the disk (3 x 10MB = 30MB)
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   app:
     build: .
@@ -53,6 +59,29 @@ services:
       NOTIFICATIONS_EMAIL_ENABLED: ${NOTIFICATIONS_EMAIL_ENABLED:-false}
     ports:
       - "8080:10000"                # host 8080 -> container 10000 (Dockerfile port)
+    restart: unless-stopped
+    # keep more app history on disk (10 x 20MB = 200MB) since this is what you debug
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "10"
+
+  # Dozzle — local web UI to view / search / follow container logs in real time.
+  # http://<server>:9999  (LAN-reachable too). Read-only, no log storage of its own.
+  logs:
+    image: amir20/dozzle:latest
+    container_name: economizai-logs
+    profiles: ["server"]
+    volumes:
+      # read-only access to the Docker socket so it can stream container logs
+      - //var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "9999:8080"
+    environment:
+      DOZZLE_NO_ANALYTICS: "true"
+      # only show this project's containers, not every container on the host
+      DOZZLE_FILTER: "name=economizai-"
     restart: unless-stopped
 
 volumes:

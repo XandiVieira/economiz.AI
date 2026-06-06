@@ -131,6 +131,19 @@ Helper scripts at repo root (run each in an **Administrator** PowerShell once):
   are gitignored.
 - `setup-tunnel-autostart.ps1` — Scheduled Task to keep the tunnel up at logon.
 
+**Logs / debugging:**
+- **Dozzle** (live web UI): `http://192.168.68.108:9999` (LAN) — view/search/follow
+  container logs in the browser, filtered to `economizai-*`. Runs as the compose `logs`
+  service. (Not exposed via the public tunnel — LAN only.)
+- **`logs.ps1`** helper: `.\logs.ps1` (tail+follow app), `-Errors` (WARN/ERROR only),
+  `-Grep rcpt=xxx` (filter by req/rcpt/user/item id), `-Db` (database), `-Save` (snapshot
+  to `logs\`), `-Since 30m`. Logs use the MDC pattern `req= user= rcpt= item=` so grep is
+  powerful.
+- **File history:** `logs\app-YYYY-MM-DD.log` (+ db), 14-day retention, OneDrive-synced.
+  Written daily 02:55 by the "economizai - daily log save" task (`setup-logsave-schedule.ps1`).
+- **Disk safety:** Docker `json-file` log caps in compose (app 20MBx10, db 10MBx3) so a
+  24/7 box can't fill the disk. `logs\` is gitignored.
+
 **Gotchas learned setting this up (so we don't relive them):**
 - **`postgres:18` changed its data-dir convention.** Mount the volume at
   `/var/lib/postgresql` (the parent), NOT `/var/lib/postgresql/data` — PG18 sees the

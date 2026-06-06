@@ -39,3 +39,5 @@ update-server.log
 db-backups/
 db-backup.log
 tunnel-proxy-worker/.wrangler/
+postman/live.postman_environment.json
+logs/
