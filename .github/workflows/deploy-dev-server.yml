@@ -23,5 +23,5 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Deploy (copy .env, rebuild, verify health)
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\ci-deploy.ps1
+        shell: cmd
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File ci-deploy.ps1 > C:\actions-runner\last-deploy.log 2>&1
