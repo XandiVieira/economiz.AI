@@ -137,10 +137,16 @@ second loop is where retention becomes structural rather than feature-based.
    solve: "go to market A for these 4 items, market B for these 3, save R$Y vs.
    buying everything at one place." The math is simple; the value is huge.
    Requires Phase 3 (done) + price index (done) + watched markets (done).
-3. **Price-drop alerts ("avise-me quando").** User says "alert me when leite
-   Italac drops below R$6 within 5km of home." Alerts fire when a confirmed
-   receipt anywhere in the network triggers the rule. Pure community value:
-   one user's confirmed receipt benefits another. **The retention loop.**
+3. **Price-drop alerts ("avise-me quando").** ✅ **SHIPPED (2026-06-06).**
+   User says "alert me when leite Italac drops below R$6 within 5km of home."
+   Alerts fire when a confirmed receipt anywhere in the network triggers the
+   rule. Pure community value: one user's confirmed receipt benefits another.
+   **The retention loop.** `PriceAlert` entity + `/api/v1/alerts` CRUD;
+   evaluated on the price-index write path (`PriceIndexService.recordContributions`
+   → `PriceAlertService.evaluate`), delivers a `PRICE_DROP` notification.
+   24h per-rule cooldown, skips the contributor's own household, honors
+   optional home-radius. Stockout/community-promo triggers (enum values) still
+   unwired.
 4. **Inflation heat map per neighborhood.** Visualize price change % per
    `cep` prefix or city zone. K-anon protected (won't render zones with <3
    households). Both consumer-facing ("see your zone vs. neighbors") and B2B-sellable.

@@ -2154,6 +2154,93 @@
       ]
     },
     {
+      "name": "Price Alerts",
+      "description": "User price-drop alerts ('avise-me quando'). A rule fires when any household's confirmed receipt contributes an observation at or below the threshold (optionally within radiusKm of home). Delivers a PRICE_DROP notification to the inbox + push. One rule per (user, product) — re-posting updates it.",
+      "item": [
+        {
+          "name": "Create / update a price alert",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/alerts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "alerts"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"thresholdPrice\": 5.99,\n  \"radiusKm\": 5\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List my price alerts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/alerts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "alerts"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete a price alert",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/alerts/{{alertId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "alerts",
+                "{{alertId}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Consumption (Phase 3)",
       "description": "Predictive purchase intelligence per household — when products will run out, suggested shopping list. Volume-gated: products with fewer than 2 prior purchases are silently skipped.",
       "item": [
@@ -4590,7 +4677,134 @@
           ]
         },
         {
-          "name": "40. LGPD: delete my account (idempotent terminator)",
+          "name": "40. Create price alert (uses created product)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/alerts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "alerts"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{e2eProductId}}\",\n  \"thresholdPrice\": 5.99,\n  \"radiusKm\": 5\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('e2eProductId')) { pm.test.skip('No product id — skipping'); return; }",
+                  "pm.test('Returns 201', function () { pm.response.to.have.status(201); });",
+                  "var d = pm.response.json();",
+                  "pm.collectionVariables.set('e2eAlertId', d.id);",
+                  "pm.test('Echoes threshold + product', function () {",
+                  "    pm.expect(d.productId).to.eql(pm.collectionVariables.get('e2eProductId'));",
+                  "    pm.expect(d.active).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "41. List price alerts includes the new one",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/alerts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "alerts"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('e2eAlertId')) { pm.test.skip('No alert id — skipping'); return; }",
+                  "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+                  "var list = pm.response.json();",
+                  "pm.test('Contains the created alert', function () {",
+                  "    pm.expect(list.map(function (a) { return a.id; })).to.include(pm.collectionVariables.get('e2eAlertId'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "42. Delete price alert",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/alerts/{{e2eAlertId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "alerts",
+                "{{e2eAlertId}}"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('e2eAlertId')) { pm.test.skip('No alert id — skipping'); return; }",
+                  "pm.test('Returns 204', function () { pm.response.to.have.status(204); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "43. LGPD: delete my account (idempotent terminator)",
           "request": {
             "method": "DELETE",
             "header": [
@@ -4625,6 +4839,7 @@
                   "pm.collectionVariables.set('e2eReceiptId', '');",
                   "pm.collectionVariables.set('e2eReceiptItemId', '');",
                   "pm.collectionVariables.set('e2eProductId', '');",
+                  "pm.collectionVariables.set('e2eAlertId', '');",
                   "pm.collectionVariables.set('e2eHouseholdId', '');",
                   "pm.collectionVariables.set('e2eMarketCnpj', '');"
                 ]

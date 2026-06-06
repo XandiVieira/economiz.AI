@@ -539,7 +539,7 @@ POST /api/v1/notifications/{id}/read         → mark single as read
 POST /api/v1/notifications/mark-all-read     → { "marked": N }
 ```
 
-Each `NotificationResponse` carries `payload` — the JSON we attached when we generated the notification (`receiptId`, `productId`, `savingsPct`, etc) so cards can deep-link.
+Each `NotificationResponse` carries `payload` — the JSON we attached when we generated the notification (`receiptId`, `productId`, `savingsPct`, etc) so cards can deep-link. `type` is one of `PROMO_PERSONAL`, `PRICE_DROP` (see §10e), `SYSTEM` (others reserved).
 
 ---
 
@@ -596,6 +596,27 @@ POST   /api/v1/admin/products/{id}/merge       → 200 ProductMergeResultRespons
 - **Merge product** — body `{ "absorbedId": "<uuid>", "dryRun": false }`. The `{id}` in the path is the **survivor**. Migrates all aliases, receipt items, price observations, manual purchases, shopping-list items, household aliases (drops where survivor already has one for the household), and consumption snoozes (same conflict logic) from `absorbed` to the survivor; deletes `absorbed`. Set `dryRun: true` to get the migration counts without applying any change — the only undo is to **not** apply. Returns `ProductMergeResultResponse` with per-table counts.
 
 All require a JWT for a user with `Role.ADMIN`. Regular users hit 403.
+
+---
+
+## 10e. Price alerts ("avise-me quando")
+
+User-curated price-drop rules. A rule fires when **any** household's confirmed receipt contributes a matching low price to the collaborative index — the community retention loop.
+
+```
+POST   /api/v1/alerts          → 201 PriceAlertResponse
+       { "productId": "<uuid>", "thresholdPrice": 5.99, "radiusKm"?: 5, "active"?: true }
+GET    /api/v1/alerts          → 200 List<PriceAlertResponse> (newest first)
+DELETE /api/v1/alerts/{id}     → 204 (404 if not the caller's)
+```
+
+`PriceAlertResponse`: `{ id, productId, productName, thresholdPrice, radiusKm, active, lastFiredAt, createdAt }`.
+
+- **Upsert semantics:** one rule per (user, product). Re-`POST`ing the same `productId` updates the existing rule's threshold/radius/active — no duplicates, no 409.
+- **`radiusKm`** is measured from the user's home. If set but home or market coordinates are unknown, the rule does **not** fire (constraint honored). Omit it to match anywhere in the network.
+- **No self-notify:** a rule never fires for the contributor's own household.
+- **Cooldown:** at most one fire per rule per 24h.
+- **Delivery:** fires a `PRICE_DROP` notification (see §10b) with `payload = { alertId, productId, observedPrice, thresholdPrice, marketCnpj, marketName }`.
 
 ---
 

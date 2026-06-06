@@ -10,6 +10,25 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-06 — price-drop alerts ("avise-me quando")
+
+New feature: a user can ask to be notified when a product's price drops. The rule fires when **any household** in the network confirms a receipt that contributes an observation at or below the threshold — one person's receipt benefits another. This is the community retention loop.
+
+**New endpoints — `/api/v1/alerts`:**
+- `POST /alerts` → `201` with the created `PriceAlertResponse`. Body: `{ productId (UUID, required), thresholdPrice (BigDecimal, required), radiusKm (Double, optional), active (Boolean, optional — defaults true) }`. One rule per (user, product): re-posting the same product **updates** the existing rule (no duplicates, no 409).
+- `GET /alerts` → `200` list of the caller's `PriceAlertResponse` (newest first).
+- `DELETE /alerts/{id}` → `204`. `404 pricealert.not.found` if it isn't the caller's.
+
+**`PriceAlertResponse` shape:** `{ id, productId, productName, thresholdPrice, radiusKm, active, lastFiredAt, createdAt }`.
+
+**When a rule fires** it delivers a notification of the **new type `PRICE_DROP`** through the existing pipeline — it lands in `GET /notifications` (inbox) and is pushed if the user has a push token. Notification `payload` carries `{ alertId, productId, observedPrice, thresholdPrice, marketCnpj, marketName }`.
+
+**Behavior worth knowing:**
+- `radiusKm` is measured from the user's home (`homeLatitude/Longitude`). If set but either the home or the market has no coordinates, the rule **does not** fire (the geo constraint is honored, not ignored).
+- A rule won't fire for the contributor's **own household** (you don't get pinged about your own receipt).
+- **Cooldown:** a given rule fires at most once per 24h, so a flurry of cheap receipts won't spam the user.
+- Only fires on receipts that actually contribute to the index (contributor opted in + master switch on). Opt-out receipts trigger nothing.
+
 ## 2026-05-08 — approximate-tax (IBPT) extraction on every NFC-e
 
 Receipts now carry the IBPT-source approximate-tax disclosure that Brazilian merchants are required to print under Lei 12.741/2012. Surfaced so users can see the tax burden embedded in their groceries (Federal + Estadual taxes — ICMS, IPI, PIS, COFINS, IOF, …).
