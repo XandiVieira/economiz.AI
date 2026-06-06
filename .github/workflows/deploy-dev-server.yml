@@ -26,9 +26,12 @@ jobs:
       - name: Copy gitignored .env into the checkout
         shell: powershell
         run: |
-          $src = "C:\Users\Xandi\OneDrive\Documents\projects\economiz.AI\.env"
-          if (Test-Path $src) { Copy-Item $src ".env" -Force; Write-Host "copied .env" }
-          else { Write-Error ".env not found at $src"; exit 1 }
+          # .env is kept at C:\actions-runner\.env (outside OneDrive, which the
+          # runner service account can't reliably read). Keep that copy in sync
+          # when .env changes.
+          $src = "C:\actions-runner\.env"
+          if (Test-Path $src) { Copy-Item $src ".env" -Force; Write-Host "copied .env from $src" }
+          else { Write-Host "::error::.env not found at $src"; exit 1 }
 
       - name: Rebuild and restart the stack
         shell: powershell
