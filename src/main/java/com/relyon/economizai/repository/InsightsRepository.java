@@ -66,8 +66,13 @@ public interface InsightsRepository extends JpaRepository<Receipt, UUID> {
                                  @Param("from") LocalDateTime from,
                                  @Param("to") LocalDateTime to);
 
+    // COALESCE must yield the ProductCategory ENUM (the result is cast to
+    // ProductCategory in InsightsService), so the null fallback needs the
+    // fully-qualified enum literal — a string literal makes the projection a
+    // String and breaks both the cast and Postgres enum/text unification.
+    // This is the rare JPQL type-inference exception to the no-FQN rule.
     @Query("""
-        SELECT COALESCE(p.category, 'OTHER') AS category,
+        SELECT COALESCE(p.category, com.relyon.economizai.model.enums.ProductCategory.OTHER) AS category,
                COALESCE(SUM(ri.totalPrice), 0) AS total,
                COUNT(ri) AS itemCount
         FROM ReceiptItem ri
@@ -78,7 +83,7 @@ public interface InsightsRepository extends JpaRepository<Receipt, UUID> {
           AND ri.excluded = false
           AND r.issuedAt >= :from
           AND r.issuedAt <= :to
-        GROUP BY COALESCE(p.category, 'OTHER')
+        GROUP BY COALESCE(p.category, com.relyon.economizai.model.enums.ProductCategory.OTHER)
         ORDER BY total DESC
     """)
     List<Object[]> spendByCategory(@Param("householdId") UUID householdId,
