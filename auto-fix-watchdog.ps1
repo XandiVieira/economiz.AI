@@ -99,8 +99,18 @@ Log ("watchdog.start dryRun={0} branch={1} maxFixesPerHour={2}" -f $DryRun, $Bra
 
 $seen     = @{}
 $failCount = @{}   # signature -> how many times an autonomous fix has FAILED for it
+$transientHits = @{}   # signature -> ArrayList of timestamps (for transient recurrence gate)
 $fixTimes = New-Object System.Collections.ArrayList
 $lastLogTime = Get-Date
+
+# Errors from known external services (SEFAZ, geocoder, network) are often
+# transient - they fail once then succeed on retry. We must NOT change code for
+# those; we wait for them to RECUR before treating them as a real bug.
+$TransientThreshold = 3                       # need this many hits...
+$TransientWindow    = New-TimeSpan -Minutes 10 # ...within this window to act
+function IsTransient([string]$line) {
+    return ($line -match 'SEFAZ|Sefaz|Svrs|Nominatim|geocode|SocketTimeout|ConnectException|UnknownHost|Read timed out|Connection reset|503|502|504|HttpServerErrorException|ResourceAccessException|RestClientException')
+}
 
 while ($true) {
     $cutoff = (Get-Date).AddHours(-1)
@@ -112,6 +122,7 @@ while ($true) {
         break
     }
 
+  try {
     $since = $lastLogTime.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
     $lastLogTime = Get-Date
     $raw = & docker logs --since $since $container 2>&1
@@ -128,6 +139,24 @@ while ($true) {
 
         $shortSig = $sig.Substring(0, [Math]::Min(60, $sig.Length))
         Log ("detect new signature: {0}" -f $shortSig)
+
+        # Transient-error gate: a known external/network error must RECUR
+        # ($TransientThreshold times within $TransientWindow) before we attempt a
+        # code fix. A one-off SEFAZ blip is logged and skipped - retry will likely
+        # succeed. Recurrence means it's a real bug, not the service hiccuping.
+        if (IsTransient $line) {
+            if (-not $transientHits.ContainsKey($sig)) { $transientHits[$sig] = New-Object System.Collections.ArrayList }
+            $cut = (Get-Date) - $TransientWindow
+            $transientHits[$sig] = [System.Collections.ArrayList]@($transientHits[$sig] | Where-Object { $_ -gt $cut })
+            [void]$transientHits[$sig].Add((Get-Date))
+            $hits = $transientHits[$sig].Count
+            if ($hits -lt $TransientThreshold) {
+                Log ("transient.skip {0} hits={1}/{2} (likely a retry-able blip, not fixing)" -f $shortSig, $hits, $TransientThreshold)
+                $seen.Remove($sig)   # let it be re-evaluated next time it appears
+                continue
+            }
+            Log ("transient.recurring {0} hits={1} >= {2}; treating as real bug" -f $shortSig, $hits, $TransientThreshold)
+        }
 
         $prompt = @'
 You are running NON-INTERACTIVELY as an autonomous bug-fixer for the economizai
@@ -146,7 +175,37 @@ Rules:
 '@
         $prompt = $prompt.Replace('__ERRLINE__', $line)
 
-        $claudeOut = ($prompt | & claude -p --dangerously-skip-permissions --output-format text 2>&1 | Out-String).Trim()
+        # Call the headless fixer in a child job so a HANG can't freeze the loop,
+        # and wrap in try/catch so a crash logs + skips instead of killing us.
+        # (A single un-timed `claude -p` previously took the whole watchdog down.)
+        $ClaudeTimeoutSec = 600
+        $claudeOut = ""
+        try {
+            $job = Start-Job -ScriptBlock {
+                param($p)
+                $p | & claude -p --dangerously-skip-permissions --output-format text 2>&1 | Out-String
+            } -ArgumentList $prompt
+            if (Wait-Job $job -Timeout $ClaudeTimeoutSec) {
+                $claudeOut = (Receive-Job $job | Out-String).Trim()
+            } else {
+                Stop-Job $job -ErrorAction SilentlyContinue
+                Log ("claude.timeout {0} after {1}s; skipping (loop stays up)" -f $shortSig, $ClaudeTimeoutSec)
+                $failCount[$sig] = ([int]$failCount[$sig]) + 1
+                Ledger ("### [{0}] ⚠️ NEEDS-HUMAN · CLAUDE-TIMEOUT (attempt {1}x) - {2}`r`n- **Error:** ``{3}```r`n- **Outcome:** the fixer call exceeded {4}s and was killed; no change made.`r`n- **Note for human:** bug still live; autonomous diagnosis timed out - needs eyes." -f (Stamp), $failCount[$sig], $shortSig, $line, $ClaudeTimeoutSec)
+                Remove-Job $job -Force -ErrorAction SilentlyContinue
+                continue
+            }
+            Remove-Job $job -Force -ErrorAction SilentlyContinue
+        } catch {
+            Log ("claude.error {0}: {1}; skipping (loop stays up)" -f $shortSig, $_.Exception.Message)
+            $failCount[$sig] = ([int]$failCount[$sig]) + 1
+            Ledger ("### [{0}] ⚠️ NEEDS-HUMAN · CLAUDE-ERROR (attempt {1}x) - {2}`r`n- **Error:** ``{3}```r`n- **Outcome:** the fixer call threw: {4}`r`n- **Note for human:** bug still live; autonomous diagnosis errored out - needs eyes." -f (Stamp), $failCount[$sig], $shortSig, $line, $_.Exception.Message)
+            continue
+        }
+        if ([string]::IsNullOrWhiteSpace($claudeOut)) {
+            Log ("claude.empty {0}; skipping" -f $shortSig)
+            continue
+        }
         Log ("claude.reply {0}" -f $claudeOut.Substring(0, [Math]::Min(160, $claudeOut.Length)))
 
         if ($claudeOut -match 'NO_FIX_FOUND') {
@@ -199,6 +258,11 @@ Rules:
             $seen.Remove($sig)
         }
     }
+  } catch {
+    # Any unexpected error in one poll cycle (docker hiccup, git, etc.) must NOT
+    # kill the watchdog. Log it and keep going.
+    Log ("loop.error {0}; continuing" -f $_.Exception.Message)
+  }
 
     Start-Sleep -Seconds $PollSeconds
 }
