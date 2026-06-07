@@ -4,6 +4,7 @@ import com.relyon.economizai.dto.request.MergeProductRequest;
 import com.relyon.economizai.dto.request.SendTestNotificationRequest;
 import com.relyon.economizai.dto.request.SetProductBrandRequest;
 import com.relyon.economizai.dto.response.AdminUserDetailResponse;
+import com.relyon.economizai.dto.response.BrandBackfillResponse;
 import com.relyon.economizai.dto.response.AdminUserSummaryResponse;
 import com.relyon.economizai.dto.response.DuplicateProductGroupResponse;
 import com.relyon.economizai.dto.response.MissingBrandProductResponse;
@@ -103,6 +104,12 @@ public class AdminController {
     @GetMapping("/products")
     public ResponseEntity<Page<ProductResponse>> listProducts(@PageableDefault(size = 50) Pageable pageable) {
         return ResponseEntity.ok(adminProductService.listAll(pageable));
+    }
+
+    /** Re-run brand extraction to fill products missing a brand (after registry edits). */
+    @PostMapping("/products/refresh-brands")
+    public ResponseEntity<BrandBackfillResponse> refreshBrands() {
+        return ResponseEntity.ok(adminProductService.backfillBrands());
     }
 
     @GetMapping("/products/missing-brand")

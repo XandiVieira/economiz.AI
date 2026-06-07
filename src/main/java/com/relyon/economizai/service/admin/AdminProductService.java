@@ -4,6 +4,7 @@ import com.relyon.economizai.dto.request.MergeProductRequest;
 import com.relyon.economizai.dto.request.SetProductBrandRequest;
 import com.relyon.economizai.dto.response.DuplicateProductGroupResponse;
 import com.relyon.economizai.dto.response.MissingBrandProductResponse;
+import com.relyon.economizai.dto.response.BrandBackfillResponse;
 import com.relyon.economizai.dto.response.ProductMergeResultResponse;
 import com.relyon.economizai.dto.response.ProductResponse;
 import com.relyon.economizai.dto.response.RecategorizeReportResponse;
@@ -13,6 +14,7 @@ import com.relyon.economizai.exception.ProductNotFoundException;
 import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.ProductAlias;
 import com.relyon.economizai.model.enums.CategorizationSource;
+import com.relyon.economizai.service.extraction.BrandExtractor;
 import com.relyon.economizai.service.extraction.ProductExtractor;
 import com.relyon.economizai.repository.ConsumptionSnoozeRepository;
 import com.relyon.economizai.repository.HouseholdProductAliasRepository;
@@ -58,11 +60,38 @@ public class AdminProductService {
     private final HouseholdProductAliasRepository householdProductAliasRepository;
     private final ConsumptionSnoozeRepository consumptionSnoozeRepository;
     private final ProductExtractor productExtractor;
+    private final BrandExtractor brandExtractor;
 
     /** Full catalog (paged) — for curating the dictionary/brands against real data. */
     @Transactional(readOnly = true)
     public Page<ProductResponse> listAll(Pageable pageable) {
         return productRepository.findAll(pageable).map(ProductResponse::from);
+    }
+
+    /**
+     * Re-run brand extraction over products that have no brand, filling it from
+     * the (now larger) brand registry. Fill-only: never overwrites an existing
+     * brand. Run after adding entries to brand-registry.csv to fix already-
+     * ingested products (brand is otherwise set only once, at creation).
+     */
+    @Transactional
+    public BrandBackfillResponse backfillBrands() {
+        var products = productRepository.findAll();
+        var filled = 0;
+        var stillMissing = 0;
+        for (var product : products) {
+            if (product.getBrand() != null) continue;
+            var brand = brandExtractor.find(product.getNormalizedName());
+            if (brand != null) {
+                product.setBrand(brand);
+                filled++;
+            } else {
+                stillMissing++;
+            }
+        }
+        log.info("admin.product.backfill_brands total={} filled={} stillMissing={}",
+                products.size(), filled, stillMissing);
+        return new BrandBackfillResponse(products.size(), filled, stillMissing);
     }
 
     @Transactional(readOnly = true)

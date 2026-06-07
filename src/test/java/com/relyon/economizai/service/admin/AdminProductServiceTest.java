@@ -8,6 +8,7 @@ import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.ProductAlias;
 import com.relyon.economizai.model.enums.CategorizationSource;
 import com.relyon.economizai.model.enums.ProductCategory;
+import com.relyon.economizai.service.extraction.BrandExtractor;
 import com.relyon.economizai.service.extraction.ProductExtraction;
 import com.relyon.economizai.service.extraction.ProductExtractor;
 import com.relyon.economizai.repository.ConsumptionSnoozeRepository;
@@ -52,6 +53,7 @@ class AdminProductServiceTest {
     @Mock private HouseholdProductAliasRepository householdProductAliasRepository;
     @Mock private ConsumptionSnoozeRepository consumptionSnoozeRepository;
     @Mock private ProductExtractor productExtractor;
+    @Mock private BrandExtractor brandExtractor;
 
     @InjectMocks private AdminProductService service;
 
@@ -62,6 +64,23 @@ class AdminProductServiceTest {
 
     private ProductExtraction extracted(ProductCategory category, CategorizationSource source) {
         return new ProductExtraction(null, null, null, null, category, source);
+    }
+
+    @Test
+    void backfillBrands_fillsMissingOnlyNeverOverwrites() {
+        var missing = Product.builder().id(UUID.randomUUID()).normalizedName("AZ ARG D'AGUIRRE EV").build();
+        var hasBrand = Product.builder().id(UUID.randomUUID()).normalizedName("ARROZ TIO J").brand("Tio João").build();
+        var noMatch = Product.builder().id(UUID.randomUUID()).normalizedName("XYZ GENERICO").build();
+        when(productRepository.findAll()).thenReturn(List.of(missing, hasBrand, noMatch));
+        when(brandExtractor.find("AZ ARG D'AGUIRRE EV")).thenReturn("D'Aguirre");
+        when(brandExtractor.find("XYZ GENERICO")).thenReturn(null);
+
+        var result = service.backfillBrands();
+
+        assertEquals(1, result.filled());
+        assertEquals(1, result.stillMissing());
+        assertEquals("D'Aguirre", missing.getBrand());
+        assertEquals("Tio João", hasBrand.getBrand(), "existing brand not overwritten");
     }
 
     @Test
