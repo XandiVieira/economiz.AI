@@ -4419,7 +4419,7 @@
      ]
     },
     {
-     "name": "23. Trigger ML retrain",
+     "name": "23. ML retrain is ADMIN-only (403 for normal user)",
      "request": {
       "method": "POST",
       "header": [
@@ -4448,16 +4448,14 @@
        "script": {
         "type": "text/javascript",
         "exec": [
-         "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
-         "var d = pm.response.json();",
-         "pm.test('Has trained flag', function () { pm.expect(d).to.have.property('trained'); });"
+         "pm.test('Forbidden for non-admin (training endpoint is ADMIN-only)', function () { pm.response.to.have.status(403); });"
         ]
        }
       }
      ]
     },
     {
-     "name": "24. Trigger learned-dictionary auto-promotion",
+     "name": "24. Auto-promotion is ADMIN-only (403 for normal user)",
      "request": {
       "method": "POST",
       "header": [
@@ -4486,12 +4484,7 @@
        "script": {
         "type": "text/javascript",
         "exec": [
-         "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
-         "var d = pm.response.json();",
-         "pm.test('Has promoted/learnedTotal counters', function () {",
-         "    pm.expect(d).to.have.property('promoted');",
-         "    pm.expect(d).to.have.property('learnedTotal');",
-         "});"
+         "pm.test('Forbidden for non-admin (training endpoint is ADMIN-only)', function () { pm.response.to.have.status(403); });"
         ]
        }
       }

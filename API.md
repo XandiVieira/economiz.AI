@@ -182,7 +182,7 @@ de acesso server-side. Pass exactly what the QR scanner returned:
 |---|---|
 | 400 `receipt.qr.invalid` | Couldn't extract a 44-digit chave from the input |
 | 400 `receipt.state.unsupported` | Chave is from a state we don't have a SEFAZ adapter for (only RS today) |
-| 502 `receipt.sefaz.fetch.failed` | SVRS portal didn't respond / 5xx'd |
+| 502 `receipt.sefaz.fetch.failed` | SVRS portal didn't respond / 5xx'd — **only after the server already retried** (the SVRS portal is flaky; the backend retries transient failures up to 5 attempts: immediate, then 5s/5s/5s, before surfacing this). 4xx is not retried. The call can therefore take up to ~15s+ when the portal is down. |
 | 400 `receipt.parse.failed` | We fetched HTML but the parser couldn't extract items. **The receipt is still saved with `status=FAILED_PARSE` + `rawHtml`** so ops can patch the parser without you re-scanning. |
 | 409 `receipt.already.ingested` | This chave is already in **your household's** history. Other households can still import the same chave; this only blocks double-import within yours. Delete it via `DELETE /receipts/{id}` to free the slot. |
 
@@ -727,10 +727,12 @@ GET  /api/v1/categorizer/ml/predict?description=Milho&description=Lays
 GET  /api/v1/categorizer/benchmark     → categorization accuracy % over the golden set (records a snapshot)
 GET  /api/v1/categorizer/quality/history?limit=50 → quality trend over time (snapshots)
 GET  /api/v1/categorizer/status        → ML model state
-POST /api/v1/categorizer/retrain       → trigger retraining manually
-POST /api/v1/categorizer/auto-promote  → trigger learned-dictionary promotion (from ML)
-POST /api/v1/categorizer/promote-consensus → graduate user-correction consensus → learned dict
+POST /api/v1/categorizer/retrain       → trigger retraining manually          [ADMIN only]
+POST /api/v1/categorizer/auto-promote  → trigger learned-dictionary promotion  [ADMIN only]
+POST /api/v1/categorizer/promote-consensus → graduate user-correction consensus → learned dict [ADMIN only]
 ```
+
+> The three **model-training / catalog-mutating POSTs** (`retrain`, `auto-promote`, `promote-consensus`) require `Role.ADMIN` — a normal user gets `403`. The read/debug GETs (`classify`, `ml/predict`, `benchmark`, `quality/history`, `status`) remain open to any authenticated user.
 
 **`/promote-consensus`** — turns user category corrections into deterministic knowledge: products corrected by ≥N distinct households (consensus) get their global category set (source USER), and recurring agreed tokens enter the learned dictionary. Returns `{ productsGraduated, tokensLearned, learnedTotal }`. Runs daily automatically; this is the manual trigger.
 

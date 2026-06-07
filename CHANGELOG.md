@@ -16,6 +16,13 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-07 — SEFAZ fetch auto-retry + training endpoints locked to ADMIN
+
+- **NFC-e import now auto-retries** transient SEFAZ failures (the SVRS portal is flaky — 5xx/timeouts/empty body). Up to 5 attempts total: immediate retry, then 5s/5s/5s. 4xx (bad chave) is **not** retried. Net effect for the FE: fewer spurious `502 receipt.sefaz.fetch.failed` — the user no longer has to keep re-submitting. Trade-off: a submit can take up to ~15s+ when the portal is down, so keep your loading state patient before showing an error.
+- **Training/catalog-mutating categorizer endpoints are now ADMIN-only** (`POST /categorizer/retrain`, `/auto-promote`, `/promote-consensus`) — a normal user gets `403`. Read/debug GETs (`classify`, `ml/predict`, `benchmark`, `quality/history`, `status`) are unchanged.
+
+---
+
 ## 2026-06-07 — custom categories + product migration (new screen)
 
 Households can create their own categories (e.g. "Frutas") and migrate products into them — household-scoped, the global product/catalog is untouched.
