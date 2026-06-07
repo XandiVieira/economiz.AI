@@ -1,7 +1,6 @@
 package com.relyon.economizai.dto.response;
 
 import com.relyon.economizai.model.ReceiptItem;
-import com.relyon.economizai.model.enums.ProductCategory;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -34,24 +33,24 @@ public record PurchasedItemResponse(
         LocalDateTime purchasedAt
 ) {
     public static PurchasedItemResponse from(ReceiptItem item) {
-        return from(item, null);
+        return from(item, (String) null);
     }
 
     /**
-     * @param overrideCategory the household's corrected category, shown in place
-     *                         of the product's global category when present.
+     * @param overrideLabel the household's corrected category label (enum name or
+     *                      custom-category name), shown in place of the product's
+     *                      global category when present.
      */
-    public static PurchasedItemResponse from(ReceiptItem item, ProductCategory overrideCategory) {
+    public static PurchasedItemResponse from(ReceiptItem item, String overrideLabel) {
         var friendly = item.getFriendlyDescription();
         var display = friendly != null && !friendly.isBlank() ? friendly : item.getRawDescription();
         var product = item.getProduct();
         var receipt = item.getReceipt();
-        var globalCategory = product != null ? product.getCategory() : null;
-        var effective = overrideCategory != null ? overrideCategory : globalCategory;
+        var globalCategory = product != null && product.getCategory() != null ? product.getCategory().name() : null;
         return new PurchasedItemResponse(
                 item.getId(),
                 product != null ? product.getId() : null,
-                effective != null ? effective.name() : null,
+                overrideLabel != null ? overrideLabel : globalCategory,
                 display,
                 item.getRawDescription(),
                 friendly,

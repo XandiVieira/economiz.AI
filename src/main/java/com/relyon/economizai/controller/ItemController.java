@@ -3,6 +3,7 @@ package com.relyon.economizai.controller;
 import com.relyon.economizai.dto.response.PurchasedItemResponse;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.ProductCategory;
+import com.relyon.economizai.service.CustomCategoryService;
 import com.relyon.economizai.service.ItemQueryService;
 import com.relyon.economizai.service.ItemQueryService.ItemFilters;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -48,6 +49,7 @@ import java.util.UUID;
 public class ItemController {
 
     private final ItemQueryService itemQueryService;
+    private final CustomCategoryService customCategoryService;
 
     @GetMapping
     public ResponseEntity<Page<PurchasedItemResponse>> list(
@@ -61,9 +63,20 @@ public class ItemController {
             @RequestParam(required = false) List<String> ean,
             @RequestParam(required = false) BigDecimal minReceiptTotal,
             @RequestParam(required = false) BigDecimal maxReceiptTotal,
+            @RequestParam(required = false) UUID customCategoryId,
             @PageableDefault(size = 20) Pageable pageable) {
+        // Filtering by a custom category resolves to the household's products
+        // migrated into it; combine with any explicit productId filter.
+        var productIds = productId;
+        if (customCategoryId != null) {
+            var inCustom = customCategoryService.productIdsIn(user, customCategoryId);
+            if (inCustom.isEmpty()) {
+                return ResponseEntity.ok(Page.empty(pageable));
+            }
+            productIds = inCustom;
+        }
         var filters = ItemFilters.fromRequest(from, to, marketCnpj, marketCnpjRoot, category,
-                productId, ean, minReceiptTotal, maxReceiptTotal);
+                productIds, ean, minReceiptTotal, maxReceiptTotal);
         return ResponseEntity.ok(itemQueryService.query(user, filters, pageable));
     }
 }

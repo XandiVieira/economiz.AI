@@ -2,7 +2,6 @@ package com.relyon.economizai.dto.response;
 
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.ReceiptItem;
-import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
 
@@ -35,10 +34,11 @@ public record ReceiptResponse(
     }
 
     /**
-     * @param categoryOverrides productId → the household's corrected category,
-     *                          applied in place of the product's global category.
+     * @param categoryOverrides productId → the household's corrected category label
+     *                          (enum name or custom-category name), applied in
+     *                          place of the product's global category.
      */
-    public static ReceiptResponse from(Receipt receipt, Map<UUID, ProductCategory> categoryOverrides) {
+    public static ReceiptResponse from(Receipt receipt, Map<UUID, String> categoryOverrides) {
         var householdTotal = receipt.getItems().stream()
                 .filter(i -> !i.isExcluded())
                 .map(i -> i.getTotalPrice())
@@ -65,8 +65,7 @@ public record ReceiptResponse(
         );
     }
 
-    private static ProductCategory overrideFor(ReceiptItem item,
-                                               Map<UUID, ProductCategory> categoryOverrides) {
+    private static String overrideFor(ReceiptItem item, Map<UUID, String> categoryOverrides) {
         if (categoryOverrides.isEmpty() || item.getProduct() == null) return null;
         return categoryOverrides.get(item.getProduct().getId());
     }

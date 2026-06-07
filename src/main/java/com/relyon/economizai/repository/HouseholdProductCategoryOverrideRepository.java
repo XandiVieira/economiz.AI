@@ -13,4 +13,6 @@ public interface HouseholdProductCategoryOverrideRepository
     Optional<HouseholdProductCategoryOverride> findByHouseholdIdAndProductId(UUID householdId, UUID productId);
 
     List<HouseholdProductCategoryOverride> findByHouseholdIdAndProductIdIn(UUID householdId, List<UUID> productIds);
+
+    List<HouseholdProductCategoryOverride> findByHouseholdIdAndCustomCategoryId(UUID householdId, UUID customCategoryId);
 }

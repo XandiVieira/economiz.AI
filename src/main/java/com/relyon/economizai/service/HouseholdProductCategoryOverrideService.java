@@ -1,11 +1,11 @@
 package com.relyon.economizai.service;
 
+import com.relyon.economizai.model.HouseholdCustomCategory;
 import com.relyon.economizai.model.HouseholdProductCategoryOverride;
 import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.repository.HouseholdProductCategoryOverrideRepository;
-import com.relyon.economizai.service.privacy.LogMasker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -19,8 +19,8 @@ import java.util.stream.Collectors;
 /**
  * Household-scoped category corrections — "evidence, not truth". Storing a
  * correction does NOT mutate the global {@link Product}; it overrides only what
- * the correcting household sees, and the row stands as a vote for a later
- * cross-household consensus pass.
+ * the correcting household sees. The target is either a global enum category or
+ * a {@link HouseholdCustomCategory}.
  */
 @Slf4j
 @Service
@@ -29,26 +29,50 @@ public class HouseholdProductCategoryOverrideService {
 
     private final HouseholdProductCategoryOverrideRepository overrideRepository;
 
-    /** Upsert the household's category correction for a product. */
+    /** Upsert: point this household's view of the product at a global enum category. */
     @Transactional
     public void setOverride(User user, Product product, ProductCategory category) {
-        var householdId = user.getHousehold().getId();
-        var existing = overrideRepository.findByHouseholdIdAndProductId(householdId, product.getId());
-        var override = existing.orElseGet(() -> HouseholdProductCategoryOverride.builder()
-                .household(user.getHousehold())
-                .product(product)
-                .build());
+        var override = loadOrCreate(user, product);
         override.setCategory(category);
+        override.setCustomCategory(null);
         overrideRepository.save(override);
         log.info("category.override.set household={} product={} category={}",
-                householdId, product.getId(), category);
+                user.getHousehold().getId(), product.getId(), category);
     }
 
-    /** Map of productId → corrected category for a household, for the given products. */
+    /** Upsert: point this household's view of the product at a custom category. */
+    @Transactional
+    public void setCustomOverride(User user, Product product, HouseholdCustomCategory customCategory) {
+        var override = loadOrCreate(user, product);
+        override.setCategory(null);
+        override.setCustomCategory(customCategory);
+        overrideRepository.save(override);
+        log.info("category.override.set household={} product={} customCategory={}",
+                user.getHousehold().getId(), product.getId(), customCategory.getId());
+    }
+
+    private HouseholdProductCategoryOverride loadOrCreate(User user, Product product) {
+        return overrideRepository.findByHouseholdIdAndProductId(user.getHousehold().getId(), product.getId())
+                .orElseGet(() -> HouseholdProductCategoryOverride.builder()
+                        .household(user.getHousehold())
+                        .product(product)
+                        .build());
+    }
+
+    /** Product ids this household migrated into a custom category. */
     @Transactional(readOnly = true)
-    public Map<UUID, ProductCategory> overridesByProduct(UUID householdId, List<UUID> productIds) {
+    public List<UUID> productIdsInCustomCategory(UUID householdId, UUID customCategoryId) {
+        return overrideRepository.findByHouseholdIdAndCustomCategoryId(householdId, customCategoryId).stream()
+                .map(override -> override.getProduct().getId())
+                .toList();
+    }
+
+    /** Map of productId → effective category LABEL (custom name or enum name) for a household. */
+    @Transactional(readOnly = true)
+    public Map<UUID, String> overridesByProduct(UUID householdId, List<UUID> productIds) {
         if (productIds.isEmpty()) return Map.of();
         return overrideRepository.findByHouseholdIdAndProductIdIn(householdId, productIds).stream()
-                .collect(Collectors.toMap(o -> o.getProduct().getId(), HouseholdProductCategoryOverride::getCategory));
+                .filter(override -> override.effectiveLabel() != null)
+                .collect(Collectors.toMap(o -> o.getProduct().getId(), HouseholdProductCategoryOverride::effectiveLabel));
     }
 }

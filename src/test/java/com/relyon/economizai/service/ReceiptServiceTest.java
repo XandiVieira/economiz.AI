@@ -87,7 +87,7 @@ class ReceiptServiceTest {
         item.setProduct(product);
         when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
         when(categoryOverrideService.overridesByProduct(eq(user.getHousehold().getId()), any()))
-                .thenReturn(java.util.Map.of(product.getId(), ProductCategory.GROCERIES));
+                .thenReturn(java.util.Map.of(product.getId(), "GROCERIES"));
 
         var response = receiptService.updateItemCategory(user, receipt.getId(), item.getId(), ProductCategory.GROCERIES);
 

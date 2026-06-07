@@ -43,7 +43,20 @@ public class HouseholdProductCategoryOverride extends BaseEntity {
     @JoinColumn(name = "product_id", nullable = false)
     private Product product;
 
+    /** Target global category — null when the override targets a custom category. */
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 30)
+    @Column(length = 30)
     private ProductCategory category;
+
+    /** Target custom category — null when the override targets a global enum. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "custom_category_id")
+    private HouseholdCustomCategory customCategory;
+
+    /** The category label this household sees: custom name if set, else the enum name. */
+    public String effectiveLabel() {
+        if (customCategory != null) return customCategory.getName();
+        return category != null ? category.name() : null;
+    }
 }
+

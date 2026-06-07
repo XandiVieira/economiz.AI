@@ -82,7 +82,7 @@ class HouseholdProductCategoryOverrideServiceTest {
 
         var map = service.overridesByProduct(household, List.of(product.getId()));
 
-        assertEquals(ProductCategory.CLEANING, map.get(product.getId()));
+        assertEquals("CLEANING", map.get(product.getId()));
     }
 
     @Test

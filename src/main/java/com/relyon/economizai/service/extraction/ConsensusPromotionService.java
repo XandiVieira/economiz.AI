@@ -66,6 +66,9 @@ public class ConsensusPromotionService {
         // productId -> (category -> distinct households that corrected it to that category)
         var votesByProduct = new HashMap<UUID, Map<ProductCategory, Integer>>();
         for (var override : overrideRepository.findAll()) {
+            // Custom-category overrides are household-specific and never graduate
+            // to the global enum — only enum corrections count toward consensus.
+            if (override.getCategory() == null) continue;
             votesByProduct
                     .computeIfAbsent(override.getProduct().getId(), key -> new HashMap<>())
                     .merge(override.getCategory(), 1, Integer::sum);
