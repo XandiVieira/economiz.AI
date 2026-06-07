@@ -7,6 +7,7 @@ import com.relyon.economizai.dto.response.MlClassificationResponse;
 import com.relyon.economizai.model.enums.CategorizationQualityTrigger;
 import com.relyon.economizai.service.extraction.AutoPromotionService;
 import com.relyon.economizai.service.extraction.CategorizationBenchmarkService;
+import com.relyon.economizai.service.extraction.ConsensusPromotionService;
 import com.relyon.economizai.service.extraction.CategorizationDebugService;
 import com.relyon.economizai.service.extraction.CategorizationQualityService;
 import com.relyon.economizai.service.extraction.ml.MlClassifierService;
@@ -39,6 +40,18 @@ public class CategorizerController {
     private final CategorizationDebugService categorizationDebugService;
     private final CategorizationBenchmarkService categorizationBenchmarkService;
     private final CategorizationQualityService categorizationQualityService;
+    private final ConsensusPromotionService consensusPromotionService;
+
+    /**
+     * Promote user-correction consensus into deterministic knowledge: products
+     * corrected by enough households graduate to a global category (source USER),
+     * and recurring agreed tokens enter the learned dictionary. Source #2 of the
+     * cascade, fed by user feedback. Scheduled daily; this is the manual trigger.
+     */
+    @PostMapping("/promote-consensus")
+    public ResponseEntity<ConsensusPromotionService.ConsensusOutcome> promoteConsensus() {
+        return ResponseEntity.ok(consensusPromotionService.promote());
+    }
 
     /**
      * Categorization quality over the golden set. Returns the detailed report

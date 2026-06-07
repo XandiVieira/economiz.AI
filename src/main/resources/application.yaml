@@ -66,6 +66,15 @@ economizai:
     community-promo-threshold-pct: 15          # current price < (median - X%) → community promo
     community-promo-recent-window-days: 7      # last N days = "recent" sample; older rows are baseline
     lookback-days: 90                          # observations older than this are excluded from reference + promo calcs
+  categorizer:
+    consensus:
+      # User category corrections graduate to global truth (+ learned dictionary)
+      # once this many distinct households agree on the same product→category.
+      # A single household never changes anything globally.
+      min-households: ${CONSENSUS_MIN_HOUSEHOLDS:2}
+      # A token enters the learned dictionary only if it recurs across at least
+      # this many consensus products, with no category disagreement.
+      min-token-products: ${CONSENSUS_MIN_TOKEN_PRODUCTS:2}
   ml:
     # Cascade applies ML category/genericName only when true. Currently OFF —
     # the model is still trained + measured (shadow) via the benchmark, but its
