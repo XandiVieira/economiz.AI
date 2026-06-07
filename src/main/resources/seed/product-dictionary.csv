@@ -216,3 +216,135 @@ prato sob,Prato,OTHER
 brinde,Brinde,OTHER
 vitamina,Vitamina,OTHER
 gelol,Gelol,OTHER
+
+# === 2026-06 common-base expansion: Brazilian grocery staples ===
+# GROCERIES (mercearia / pantry)
+lentilha,Lentilha,GROCERIES
+grao de bico,Grão de Bico,GROCERIES
+ervilha,Ervilha,GROCERIES
+soja,Soja,GROCERIES
+espaguete,Espaguete,GROCERIES
+miojo,Macarrão Instantâneo,GROCERIES
+polvilho,Polvilho,GROCERIES
+tapioca,Tapioca,GROCERIES
+adocante,Adoçante,GROCERIES
+bicarbonato,Bicarbonato,GROCERIES
+leite em po,Leite em Pó,GROCERIES
+gelatina,Gelatina,GROCERIES
+pudim,Pudim,GROCERIES
+pasta de amendoim,Pasta de Amendoim,GROCERIES
+amendoim,Amendoim,GROCERIES
+azeitona,Azeitona,GROCERIES
+palmito,Palmito,GROCERIES
+shoyu,Molho Shoyu,GROCERIES
+oregano,Orégano,GROCERIES
+canela,Canela,GROCERIES
+pimenta,Pimenta,GROCERIES
+cominho,Cominho,GROCERIES
+colorau,Colorau,GROCERIES
+caldo,Caldo,GROCERIES
+tempero,Tempero,GROCERIES
+farofa,Farofa,GROCERIES
+cuscuz,Cuscuz,GROCERIES
+lasanha,Lasanha,GROCERIES
+doce de leite,Doce de Leite,GROCERIES
+pacoca,Paçoca,GROCERIES
+castanha,Castanha,GROCERIES
+nozes,Nozes,GROCERIES
+uva passa,Uva Passa,GROCERIES
+coco ralado,Coco Ralado,GROCERIES
+leite de coco,Leite de Coco,GROCERIES
+rapadura,Rapadura,GROCERIES
+mistura para bolo,Mistura para Bolo,GROCERIES
+sagu,Sagu,GROCERIES
+mostarda,Mostarda,GROCERIES
+# MEAT_DAIRY (açougue / frios / laticínios)
+mussarela,Mussarela,MEAT_DAIRY
+parmesao,Parmesão,MEAT_DAIRY
+provolone,Provolone,MEAT_DAIRY
+ricota,Ricota,MEAT_DAIRY
+cottage,Cottage,MEAT_DAIRY
+queijo prato,Queijo Prato,MEAT_DAIRY
+leite fermentado,Leite Fermentado,MEAT_DAIRY
+picanha,Picanha,MEAT_DAIRY
+maminha,Maminha,MEAT_DAIRY
+pernil,Pernil,MEAT_DAIRY
+lombo,Lombo,MEAT_DAIRY
+tilapia,Tilápia,MEAT_DAIRY
+coxao,Coxão,MEAT_DAIRY
+musculo,Músculo,MEAT_DAIRY
+sobrecoxa,Sobrecoxa,MEAT_DAIRY
+asa de frango,Asa de Frango,MEAT_DAIRY
+# PRODUCE (hortifruti)
+mamao,Mamão,PRODUCE
+melancia,Melancia,PRODUCE
+melao,Melão,PRODUCE
+uva,Uva,PRODUCE
+manga,Manga,PRODUCE
+pera,Pera,PRODUCE
+morango,Morango,PRODUCE
+repolho,Repolho,PRODUCE
+chuchu,Chuchu,PRODUCE
+gengibre,Gengibre,PRODUCE
+coentro,Coentro,PRODUCE
+manjericao,Manjericão,PRODUCE
+vagem,Vagem,PRODUCE
+quiabo,Quiabo,PRODUCE
+berinjela,Berinjela,PRODUCE
+agriao,Agrião,PRODUCE
+tangerina,Tangerina,PRODUCE
+figo,Figo,PRODUCE
+caju,Caju,PRODUCE
+kiwi,Kiwi,PRODUCE
+ameixa,Ameixa,PRODUCE
+pessego,Pêssego,PRODUCE
+caqui,Caqui,PRODUCE
+goiaba,Goiaba,PRODUCE
+acerola,Acerola,PRODUCE
+alho poro,Alho-poró,PRODUCE
+batata doce,Batata Doce,PRODUCE
+rabanete,Rabanete,PRODUCE
+# CLEANING (limpeza)
+lustra moveis,Lustra-móveis,CLEANING
+tira manchas,Tira-manchas,CLEANING
+cloro,Cloro,CLEANING
+removedor,Removedor,CLEANING
+desengordurante,Desengordurante,CLEANING
+limpa vidro,Limpa-vidros,CLEANING
+odorizador,Odorizador,CLEANING
+inseticida,Inseticida,CLEANING
+pano de chao,Pano de Chão,CLEANING
+esfregao,Esfregão,CLEANING
+# PERSONAL_CARE (higiene)
+enxaguante bucal,Enxaguante Bucal,PERSONAL_CARE
+barbeador,Barbeador,PERSONAL_CARE
+espuma de barbear,Espuma de Barbear,PERSONAL_CARE
+sabonete intimo,Sabonete Íntimo,PERSONAL_CARE
+talco,Talco,PERSONAL_CARE
+colonia,Colônia,PERSONAL_CARE
+perfume,Perfume,PERSONAL_CARE
+pomada assadura,Pomada para Assadura,PERSONAL_CARE
+mascara capilar,Máscara Capilar,PERSONAL_CARE
+hidratante labial,Hidratante Labial,PERSONAL_CARE
+# BEVERAGES (bebidas)
+agua de coco,Água de Coco,BEVERAGES
+agua tonica,Água Tônica,BEVERAGES
+vodka,Vodka,BEVERAGES
+whisky,Whisky,BEVERAGES
+cachaca,Cachaça,BEVERAGES
+gin,Gin,BEVERAGES
+rum,Rum,BEVERAGES
+licor,Licor,BEVERAGES
+refresco,Refresco em Pó,BEVERAGES
+suco em po,Suco em Pó,BEVERAGES
+mate,Chá Mate,BEVERAGES
+# BAKERY (padaria)
+pao de forma,Pão de Forma,BAKERY
+pao frances,Pão Francês,BAKERY
+pao de queijo,Pão de Queijo,BAKERY
+baguete,Baguete,BAKERY
+croissant,Croissant,BAKERY
+bisnaguinha,Bisnaguinha,BAKERY
+pao integral,Pão Integral,BAKERY
+broa,Broa,BAKERY
+rosca,Rosca,BAKERY
