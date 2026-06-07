@@ -41,4 +41,12 @@ class LegalControllerTest {
                 .andExpect(jsonPath("$.version").value(LegalDocuments.CURRENT_PRIVACY_VERSION))
                 .andExpect(jsonPath("$.content").exists());
     }
+
+    @Test
+    void privacy_shortPathAlias_isPubliclyAccessible_andReturnsCurrentVersion() throws Exception {
+        mockMvc.perform(get("/api/v1/legal/privacy"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.version").value(LegalDocuments.CURRENT_PRIVACY_VERSION))
+                .andExpect(jsonPath("$.content").exists());
+    }
 }

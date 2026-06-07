@@ -23,7 +23,7 @@ public class LegalController {
                 LegalDocuments.CURRENT_TERMS_VERSION, documents.getTermsContent()));
     }
 
-    @GetMapping("/privacy-policy")
+    @GetMapping({"/privacy-policy", "/privacy"})
     public ResponseEntity<LegalDocumentResponse> privacy() {
         return ResponseEntity.ok(new LegalDocumentResponse(
                 LegalDocuments.CURRENT_PRIVACY_VERSION, documents.getPrivacyContent()));
