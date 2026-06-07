@@ -145,6 +145,7 @@ public class CommunityPromoService {
                             marketCnpj,
                             PriceIndexService.cnpjRoot(marketCnpj),
                             firstRow.getMarketName(),
+                            firstRow.getMarketName(),
                             recentMedian,
                             baselineMedian,
                             dropPct,
@@ -169,6 +170,7 @@ public class CommunityPromoService {
             String marketCnpj,
             String marketCnpjRoot,
             String marketName,
+            String marketFriendlyName,
             BigDecimal currentMedianPrice,
             BigDecimal baselineMedianPrice,
             BigDecimal dropPct,
@@ -176,5 +178,12 @@ public class CommunityPromoService {
             long distinctHouseholds,
             Double distanceKm,
             boolean watching
-    ) {}
+    ) {
+        /** Copy with the household's custom display name applied; leaves the original {@code marketName} intact. */
+        public CommunityPromo withMarketFriendlyName(String marketFriendlyName) {
+            return new CommunityPromo(productId, productName, marketCnpj, marketCnpjRoot, marketName,
+                    marketFriendlyName, currentMedianPrice, baselineMedianPrice, dropPct,
+                    recentSampleCount, distinctHouseholds, distanceKm, watching);
+        }
+    }
 }

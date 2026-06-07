@@ -108,7 +108,7 @@ class AdminControllerTest {
     private ReceiptResponse sampleReceipt(ReceiptStatus status) {
         return new ReceiptResponse(
                 UUID.randomUUID(), CHAVE_RS, UnidadeFederativa.RS, "12345678000190",
-                "Mercado X", "Rua Y, 123", LocalDateTime.now(),
+                "Mercado X", "Mercado X", "Rua Y, 123", LocalDateTime.now(),
                 new BigDecimal("57.80"), new BigDecimal("57.80"), null, null, null,
                 status, null, LocalDateTime.now(),
                 List.of(new ReceiptItemResponse(
@@ -201,7 +201,7 @@ class AdminControllerTest {
 
     @Test
     void listReceipts_returnsPagedSummaries() throws Exception {
-        var summary = new ReceiptSummaryResponse(UUID.randomUUID(), "Mercado X", LocalDateTime.now(),
+        var summary = new ReceiptSummaryResponse(UUID.randomUUID(), "Mercado X", "Mercado X", LocalDateTime.now(),
                 new BigDecimal("57.80"), new BigDecimal("57.80"), null, 1, ReceiptStatus.CONFIRMED);
         Page<ReceiptSummaryResponse> page = new PageImpl<>(List.of(summary));
         when(adminReceiptService.list(any(), any(), any(), any(), any(), any(), any(Pageable.class)))

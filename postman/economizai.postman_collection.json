@@ -1336,6 +1336,67 @@
    "name": "Products",
    "item": [
     {
+     "name": "Household products (mine)",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Accept-Language",
+        "value": "pt"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/v1/products/mine",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "v1",
+        "products",
+        "mine"
+       ]
+      }
+     },
+     "response": []
+    },
+    {
+     "name": "Where is it cheapest (product markets)",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Accept-Language",
+        "value": "pt"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/v1/products/{{productId}}/markets?includeNearby=true&radiusKm=10",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "v1",
+        "products",
+        "{{productId}}",
+        "markets"
+       ],
+       "query": [
+        {
+         "key": "includeNearby",
+         "value": "true"
+        },
+        {
+         "key": "radiusKm",
+         "value": "10"
+        }
+       ]
+      }
+     },
+     "response": []
+    },
+    {
      "name": "Search products",
      "request": {
       "method": "GET",
@@ -2349,6 +2410,66 @@
         "markets",
         "watched",
         "93015006005182"
+       ]
+      }
+     },
+     "response": []
+    },
+    {
+     "name": "Set custom market name (household-only)",
+     "request": {
+      "method": "PUT",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Accept-Language",
+        "value": "pt"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/v1/markets/93015006005182/name",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "v1",
+        "markets",
+        "93015006005182",
+        "name"
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"name\": \"Zaffari de casa\"\n}"
+      }
+     },
+     "response": []
+    },
+    {
+     "name": "Clear custom market name",
+     "request": {
+      "method": "DELETE",
+      "header": [
+       {
+        "key": "Accept-Language",
+        "value": "pt"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/v1/markets/93015006005182/name",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "v1",
+        "markets",
+        "93015006005182",
+        "name"
        ]
       }
      },
@@ -5052,6 +5173,177 @@
      ]
     },
     {
+     "name": "33a. Household products (mine)",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Accept-Language",
+        "value": "pt"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/v1/products/mine",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "v1",
+        "products",
+        "mine"
+       ]
+      }
+     },
+     "response": [],
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+         "pm.test('Body is an array', function () { pm.expect(pm.response.json()).to.be.an('array'); });"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "33b. Set custom market name (household-only)",
+     "request": {
+      "method": "PUT",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Accept-Language",
+        "value": "pt"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/v1/markets/{{e2eMarketCnpj}}/name",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "v1",
+        "markets",
+        "{{e2eMarketCnpj}}",
+        "name"
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"name\": \"Mercado teste E2E\"\n}"
+      }
+     },
+     "response": [],
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "if (!pm.collectionVariables.get('e2eMarketCnpj')) { pm.test.skip('No market available — skipping'); return; }",
+         "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+         "pm.test('Echoes custom name', function () { pm.expect(pm.response.json().name).to.eql('Mercado teste E2E'); });"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "33c. Where is it cheapest (product markets)",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Accept-Language",
+        "value": "pt"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/v1/products/{{e2eProductId}}/markets?includeNearby=true&radiusKm=10",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "v1",
+        "products",
+        "{{e2eProductId}}",
+        "markets"
+       ],
+       "query": [
+        {
+         "key": "includeNearby",
+         "value": "true"
+        },
+        {
+         "key": "radiusKm",
+         "value": "10"
+        }
+       ]
+      }
+     },
+     "response": [],
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "if (!pm.collectionVariables.get('e2eProductId')) { pm.test.skip('No product id — skipping'); return; }",
+         "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+         "pm.test('Body is an array', function () { pm.expect(pm.response.json()).to.be.an('array'); });"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "33d. Clear custom market name",
+     "request": {
+      "method": "DELETE",
+      "header": [
+       {
+        "key": "Accept-Language",
+        "value": "pt"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/v1/markets/{{e2eMarketCnpj}}/name",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "v1",
+        "markets",
+        "{{e2eMarketCnpj}}",
+        "name"
+       ]
+      }
+     },
+     "response": [],
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "if (!pm.collectionVariables.get('e2eMarketCnpj')) { pm.test.skip('No market available — skipping'); return; }",
+         "pm.test('Returns 204', function () { pm.response.to.have.status(204); });"
+        ]
+       }
+      }
+     ]
+    },
+    {
      "name": "34. Consumption predictions",
      "request": {
       "method": "GET",
@@ -5648,6 +5940,7 @@
          "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
          "var page = pm.response.json();",
          "pm.test('Paginated item list', function () { pm.expect(page.content).to.be.an('array'); });",
+         "pm.collectionVariables.set('e2eProductHasItems', page.content.length > 0 ? 'yes' : 'no');",
          "pm.test('Every row is for the requested product', function () {",
          "    page.content.forEach(function (i) { pm.expect(i.productId).to.eql(pm.collectionVariables.get('e2eProductId')); });",
          "});"
@@ -5833,9 +6126,16 @@
         "exec": [
          "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
          "var page = pm.response.json();",
-         "pm.test('Migrated product shows under the custom category', function () {",
-         "    pm.expect(page.content.some(function(i){return i.productId===pm.collectionVariables.get('e2eProductId');})).to.eql(true);",
-         "});"
+         "pm.test('Paginated item list', function () { pm.expect(page.content).to.be.an('array'); });",
+         "// /items returns purchased line items only — the migrated product appears here",
+         "// only if it had confirmed purchases (captured in step 43).",
+         "if (pm.collectionVariables.get('e2eProductHasItems') === 'yes') {",
+         "    pm.test('Migrated product shows under the custom category', function () {",
+         "        pm.expect(page.content.some(function(i){return i.productId===pm.collectionVariables.get('e2eProductId');})).to.eql(true);",
+         "    });",
+         "} else {",
+         "    pm.test.skip('Migrated product has no confirmed purchases — nothing to list (expected)');",
+         "}"
         ]
        }
       }

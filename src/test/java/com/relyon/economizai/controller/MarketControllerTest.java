@@ -6,6 +6,7 @@ import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.LocalizedMessageService;
+import com.relyon.economizai.service.geo.MarketNameService;
 import com.relyon.economizai.service.geo.WatchedMarketService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +37,7 @@ class MarketControllerTest {
     @Autowired private MockMvc mockMvc;
 
     @MockitoBean private WatchedMarketService watchedMarketService;
+    @MockitoBean private MarketNameService marketNameService;
     @MockitoBean private JwtService jwtService;
     @MockitoBean private UserDetailsService userDetailsService;
     @MockitoBean private LocalizedMessageService localizedMessageService;
@@ -48,7 +50,7 @@ class MarketControllerTest {
     @Test
     void list_returnsCatalogue() throws Exception {
         when(watchedMarketService.listForPicker(any(), any())).thenReturn(List.of(
-                new MarketResponse("11111111000111", "11111111", "Mercado A", "Rua X",
+                new MarketResponse("11111111000111", "11111111", "Mercado A", "Mercado A", "Rua X",
                         null, null, null, true, false)
         ));
 
@@ -62,7 +64,7 @@ class MarketControllerTest {
     @Test
     void watched_returnsOnlyPinned() throws Exception {
         when(watchedMarketService.listWatched(any())).thenReturn(List.of(
-                new MarketResponse("22222222000111", "22222222", "Mercado B", null,
+                new MarketResponse("22222222000111", "22222222", "Mercado B", "Mercado B", null,
                         null, null, null, false, true)
         ));
 
@@ -76,7 +78,7 @@ class MarketControllerTest {
     @Test
     void pin_returnsRow() throws Exception {
         when(watchedMarketService.watch(any(), eq("33333333000111"))).thenReturn(
-                new MarketResponse("33333333000111", "33333333", "Mercado C", null,
+                new MarketResponse("33333333000111", "33333333", "Mercado C", "Mercado C", null,
                         null, null, null, false, true));
 
         mockMvc.perform(post("/api/v1/markets/watched/33333333000111")

@@ -16,6 +16,16 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-07 — household product list, "where is it cheapest", and custom market names (new endpoints)
+
+Three additions for the products/markets screens:
+
+- **`GET /api/v1/products/mine`** — the products **your household actually buys** (not the global catalog), newest purchase first, each with `timesBought`, `lastBoughtAt`, `lastUnitPrice`, and last market. Use this for the "my products" screen; keep `GET /products` for global autocomplete.
+- **`GET /api/v1/products/{id}/markets?includeNearby=&radiusKm=`** — "onde está mais barato": one row per market (your watched markets always; nearby only if `includeNearby=true`), cheapest first, with `price`, `distanceKm`, `watched`/`visited`. **Privacy:** `priceType` is `OWN_LAST` (your exact last paid price at a market you've shopped at) or `COMMUNITY_MEDIAN` (k-anon median, only when ≥3 households contributed — sub-K markets are omitted, never shown with a single price). Full rationale in API.md §5.
+- **`PUT/DELETE /api/v1/markets/{cnpj}/name`** — give a market a **household-only custom name**. The original `name`/`marketName` is **never overwritten**: every market-bearing response now also carries a **`friendlyName`** field that defaults to the original and is replaced by your rename when set. **Display `friendlyName`.** Applies for your household everywhere a market appears (markets list, product-markets, receipts, items, insights, price history, notifications); the global name and other households are untouched.
+
+---
+
 ## 2026-06-07 — profile pictures now persist across redeploys (bugfix)
 
 Uploaded profile pictures were disappearing after a while — the cause was that

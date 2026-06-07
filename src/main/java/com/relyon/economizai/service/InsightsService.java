@@ -8,6 +8,7 @@ import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.config.CachingConfig;
 import com.relyon.economizai.repository.InsightsRepository;
 import com.relyon.economizai.repository.ProductRepository;
+import com.relyon.economizai.service.geo.MarketNameService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
@@ -29,6 +30,7 @@ public class InsightsService {
 
     private final InsightsRepository insightsRepository;
     private final ProductRepository productRepository;
+    private final MarketNameService marketNameService;
 
     @Transactional(readOnly = true)
     @Cacheable(value = CachingConfig.INSIGHTS_SPEND_CACHE,
@@ -52,12 +54,22 @@ public class InsightsService {
                         toBigDecimal(row[2]),
                         ((Number) row[3]).longValue()))
                 .toList();
-        var byMarket = insightsRepository.spendByMarket(householdId, fromBound, toBound).stream()
+        var marketBuckets = insightsRepository.spendByMarket(householdId, fromBound, toBound).stream()
                 .map(row -> new SpendInsightsResponse.MarketBucket(
                         (String) row[0],
                         (String) row[1],
+                        (String) row[1],
                         toBigDecimal(row[2]),
                         ((Number) row[3]).longValue()))
+                .toList();
+        var marketOverrides = marketNameService.resolveNames(householdId, marketBuckets.stream()
+                .map(bucket -> bucket.cnpj())
+                .filter(cnpj -> cnpj != null)
+                .distinct()
+                .toList());
+        var byMarket = marketBuckets.stream()
+                .map(bucket -> bucket.withMarketFriendlyName(marketNameService.applyOverride(
+                        marketOverrides, bucket.cnpj(), bucket.marketName())))
                 .toList();
         var byCategory = insightsRepository.spendByCategory(householdId, fromBound, toBound).stream()
                 .map(row -> new SpendInsightsResponse.CategoryBucket(
@@ -84,14 +96,25 @@ public class InsightsService {
         var product = productRepository.findById(productId).orElseThrow(ProductNotFoundException::new);
         var fromBound = from != null ? from : EPOCH_FLOOR;
         var toBound = to != null ? to : EPOCH_CEIL;
-        var points = insightsRepository
-                .priceHistoryForProduct(user.getHousehold().getId(), productId, fromBound, toBound).stream()
+        var householdId = user.getHousehold().getId();
+        var rawPoints = insightsRepository
+                .priceHistoryForProduct(householdId, productId, fromBound, toBound).stream()
                 .map(row -> new PriceHistoryResponse.PricePoint(
                         (LocalDateTime) row[0],
                         (String) row[1],
                         (String) row[2],
+                        (String) row[2],
                         toBigDecimal(row[3]),
                         toBigDecimal(row[4])))
+                .toList();
+        var overrides = marketNameService.resolveNames(householdId, rawPoints.stream()
+                .map(point -> point.marketCnpj())
+                .filter(cnpj -> cnpj != null)
+                .distinct()
+                .toList());
+        var points = rawPoints.stream()
+                .map(point -> point.withMarketFriendlyName(marketNameService.applyOverride(
+                        overrides, point.marketCnpj(), point.marketName())))
                 .toList();
         return new PriceHistoryResponse(product.getId(), product.getNormalizedName(), points);
     }

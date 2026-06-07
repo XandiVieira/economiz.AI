@@ -1,9 +1,12 @@
 package com.relyon.economizai.controller;
 
+import com.relyon.economizai.dto.request.SetMarketNameRequest;
 import com.relyon.economizai.dto.response.MarketResponse;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.service.geo.MarketNameService;
 import com.relyon.economizai.service.geo.WatchedMarketService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -11,11 +14,14 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Markets the user has shopped at, plus user-curated "watchlist" of CNPJs
@@ -29,6 +35,7 @@ import java.util.List;
 public class MarketController {
 
     private final WatchedMarketService watchedMarketService;
+    private final MarketNameService marketNameService;
 
     /** Catalogue for the picker UI: visited + watched + (optionally) nearby. */
     @GetMapping
@@ -51,6 +58,21 @@ public class MarketController {
     @DeleteMapping("/watched/{cnpj}")
     public ResponseEntity<Void> unpin(@AuthenticationPrincipal User user, @PathVariable String cnpj) {
         watchedMarketService.unwatch(user, cnpj);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Set a household-only custom name for a market. */
+    @PutMapping("/{cnpj}/name")
+    public ResponseEntity<Map<String, String>> setName(@AuthenticationPrincipal User user,
+                                                       @PathVariable String cnpj,
+                                                       @Valid @RequestBody SetMarketNameRequest request) {
+        return ResponseEntity.ok(Map.of("name", marketNameService.setName(user, cnpj, request.name())));
+    }
+
+    /** Remove the household's custom name for a market (reverts to the global name). */
+    @DeleteMapping("/{cnpj}/name")
+    public ResponseEntity<Void> clearName(@AuthenticationPrincipal User user, @PathVariable String cnpj) {
+        marketNameService.clearName(user, cnpj);
         return ResponseEntity.noContent().build();
     }
 }

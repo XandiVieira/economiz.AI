@@ -18,10 +18,16 @@ public record ShoppingPlanResponse(
     public record MarketPlan(
             String marketCnpj,
             String marketName,
+            String marketFriendlyName,
             BigDecimal subtotal,
             int itemCount,
             List<PlanItem> items
-    ) {}
+    ) {
+        /** Copy with the household's custom display name applied; leaves the original {@code marketName} intact. */
+        public MarketPlan withMarketFriendlyName(String marketFriendlyName) {
+            return new MarketPlan(marketCnpj, marketName, marketFriendlyName, subtotal, itemCount, items);
+        }
+    }
 
     public record PlanItem(
             UUID productId,

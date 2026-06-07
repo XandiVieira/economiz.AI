@@ -3,9 +3,12 @@ package com.relyon.economizai.controller;
 import com.relyon.economizai.dto.request.CreateAliasRequest;
 import com.relyon.economizai.dto.request.CreateProductRequest;
 import com.relyon.economizai.dto.request.UpdateProductRequest;
+import com.relyon.economizai.dto.response.HouseholdProductResponse;
+import com.relyon.economizai.dto.response.ProductMarketPriceResponse;
 import com.relyon.economizai.dto.response.ProductResponse;
 import com.relyon.economizai.dto.response.UnmatchedItemResponse;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.service.HouseholdProductService;
 import com.relyon.economizai.service.ProductService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -35,11 +38,32 @@ import java.util.UUID;
 public class ProductController {
 
     private final ProductService productService;
+    private final HouseholdProductService householdProductService;
 
     @GetMapping
     public ResponseEntity<Page<ProductResponse>> search(@RequestParam(required = false) String query,
                                                         @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(productService.search(query, pageable));
+    }
+
+    /** Products this household has actually bought (not the global catalog), newest purchase first. */
+    @GetMapping("/mine")
+    public ResponseEntity<List<HouseholdProductResponse>> mine(@AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(householdProductService.listHouseholdProducts(user));
+    }
+
+    /**
+     * Where this product can be bought and at what price — watched markets always,
+     * nearby markets when {@code includeNearby=true}. Own visited markets show the
+     * exact last paid price; community markets show the k-anon-guarded median.
+     */
+    @GetMapping("/{id}/markets")
+    public ResponseEntity<List<ProductMarketPriceResponse>> markets(
+            @AuthenticationPrincipal User user,
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "false") boolean includeNearby,
+            @RequestParam(required = false) Double radiusKm) {
+        return ResponseEntity.ok(householdProductService.productMarkets(user, id, includeNearby, radiusKm));
     }
 
     @GetMapping("/unmatched")

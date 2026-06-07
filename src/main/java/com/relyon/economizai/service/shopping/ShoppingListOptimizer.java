@@ -13,6 +13,7 @@ import com.relyon.economizai.repository.PriceObservationAuditRepository;
 import com.relyon.economizai.repository.PriceObservationRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.repository.ReceiptItemRepository;
+import com.relyon.economizai.service.geo.MarketNameService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -58,6 +59,7 @@ public class ShoppingListOptimizer {
     private final PriceObservationAuditRepository auditRepository;
     private final ProductRepository productRepository;
     private final CollaborativeProperties properties;
+    private final MarketNameService marketNameService;
 
     @Transactional(readOnly = true)
     public ShoppingPlanResponse optimize(User user, OptimizeShoppingListRequest request) {
@@ -83,9 +85,18 @@ public class ShoppingListOptimizer {
             totalCost = totalCost.add(subtotal);
         }
 
-        var plans = perMarket.values().stream()
+        var builtPlans = perMarket.values().stream()
                 .map(MarketPlanBuilder::build)
                 .sorted(Comparator.comparing(MarketPlan::subtotal).reversed())
+                .toList();
+        var overrides = marketNameService.resolveNames(householdId, builtPlans.stream()
+                .map(MarketPlan::marketCnpj)
+                .filter(cnpj -> cnpj != null)
+                .distinct()
+                .toList());
+        var plans = builtPlans.stream()
+                .map(plan -> plan.withMarketFriendlyName(marketNameService.applyOverride(
+                        overrides, plan.marketCnpj(), plan.marketName())))
                 .toList();
         log.info("shopping_list.optimize household={} requested={} markets={} unpriced={} estimated_total={}",
                 householdId, request.items().size(), plans.size(), unpriced.size(), totalCost);
@@ -150,7 +161,7 @@ public class ShoppingListOptimizer {
         }
 
         MarketPlan build() {
-            return new MarketPlan(cnpj, name, subtotal, items.size(), items);
+            return new MarketPlan(cnpj, name, name, subtotal, items.size(), items);
         }
     }
 }

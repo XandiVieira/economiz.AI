@@ -10,6 +10,7 @@ import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.repository.ReceiptRepository;
 import com.relyon.economizai.service.InsightsService;
 import com.relyon.economizai.service.consumption.ConsumptionIntelligenceService;
+import com.relyon.economizai.service.geo.MarketNameService;
 import com.relyon.economizai.service.geo.WatchedMarketService;
 import com.relyon.economizai.service.priceindex.CommunityPromoService;
 import lombok.RequiredArgsConstructor;
@@ -52,6 +53,7 @@ public class DashboardCacheService {
     private final ConsumptionIntelligenceService consumptionService;
     private final CommunityPromoService communityPromoService;
     private final WatchedMarketService watchedMarketService;
+    private final MarketNameService marketNameService;
 
     @Transactional(readOnly = true)
     @Cacheable(value = CachingConfig.DASHBOARD_CACHE,
@@ -71,21 +73,41 @@ public class DashboardCacheService {
         var spendSnapshot = new SpendSnapshot(ym.getYear(), ym.getMonthValue(),
                 spendInsights.total(), receiptCount, avgTicket);
 
-        var recent = receiptRepository
+        var householdId = user.getHousehold().getId();
+        var recentReceipts = receiptRepository
                 .findAll(recentForHousehold(user), PageRequest.of(0, RECENT_RECEIPTS,
                         Sort.by(Sort.Direction.DESC, "issuedAt")))
-                .map(ReceiptSummaryResponse::from)
                 .getContent();
+        var recentCnpjs = recentReceipts.stream()
+                .map(Receipt::getCnpjEmitente)
+                .filter(cnpj -> cnpj != null)
+                .distinct()
+                .toList();
+        var recentOverrides = marketNameService.resolveNames(householdId, recentCnpjs);
+        var recent = recentReceipts.stream()
+                .map(receipt -> ReceiptSummaryResponse.from(receipt)
+                        .withMarketFriendlyName(marketNameService.applyOverride(
+                                recentOverrides, receipt.getCnpjEmitente(), receipt.getMarketName())))
+                .toList();
 
         var suggested = consumptionService.suggestedList(user, false, 0).items().stream()
                 .limit(SUGGESTED_TOP_N)
                 .toList();
 
-        var promos = communityPromoService.detectAll(
+        var detectedPromos = communityPromoService.detectAll(
                         user.getHomeLatitude(), user.getHomeLongitude(),
                         null,    // FE typically wants the broad view on the home screen
                         watchedMarketService.watchedCnpjs(user)).stream()
                 .limit(PROMOS_TOP_N)
+                .toList();
+        var promoOverrides = marketNameService.resolveNames(householdId, detectedPromos.stream()
+                .map(promo -> promo.marketCnpj())
+                .filter(cnpj -> cnpj != null)
+                .distinct()
+                .toList());
+        var promos = detectedPromos.stream()
+                .map(promo -> promo.withMarketFriendlyName(marketNameService.applyOverride(
+                        promoOverrides, promo.marketCnpj(), promo.marketName())))
                 .toList();
 
         log.debug("dashboard.core built household={} recent={} suggested={} promos={}",

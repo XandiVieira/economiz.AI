@@ -12,6 +12,8 @@ import com.relyon.economizai.repository.NotificationRuleRepository;
 import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.repository.UserWatchedMarketRepository;
 import com.relyon.economizai.service.geo.MarketLocationService;
+import com.relyon.economizai.service.geo.MarketNameService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -40,8 +42,15 @@ class NotificationRuleEngineTest {
     @Mock private ReceiptItemRepository receiptItemRepository;
     @Mock private UserWatchedMarketRepository watchedMarketRepository;
     @Mock private MarketLocationService marketLocationService;
+    @Mock private MarketNameService marketNameService;
     @Mock private NotificationService notificationService;
     @InjectMocks private NotificationRuleEngine engine;
+
+    @BeforeEach
+    void stubMarketNames() {
+        lenient().when(marketNameService.resolve(any(), any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(2));
+    }
 
     private static final UUID PRODUCT_ID = UUID.randomUUID();
     private static final UUID OWNER_HOUSEHOLD = UUID.randomUUID();

@@ -7,6 +7,8 @@ import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.repository.InsightsRepository;
 import com.relyon.economizai.repository.ProductRepository;
+import com.relyon.economizai.service.geo.MarketNameService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -17,12 +19,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
@@ -36,8 +40,16 @@ class InsightsServiceTest {
 
     @Mock private InsightsRepository insightsRepository;
     @Mock private ProductRepository productRepository;
+    @Mock private MarketNameService marketNameService;
 
     @InjectMocks private InsightsService insightsService;
+
+    @BeforeEach
+    void stubMarketNames() {
+        lenient().when(marketNameService.resolveNames(any(), any())).thenReturn(Map.of());
+        lenient().when(marketNameService.applyOverride(any(), any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(2));
+    }
 
     private User buildUser() {
         var household = Household.builder().id(UUID.randomUUID()).inviteCode("HH0001").build();

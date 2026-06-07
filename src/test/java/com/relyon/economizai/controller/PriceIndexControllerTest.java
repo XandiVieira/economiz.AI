@@ -101,7 +101,7 @@ class PriceIndexControllerTest {
         when(communityPromoService.detectAll(isNull(), isNull(), isNull(), any()))
                 .thenReturn(List.of(
                         new CommunityPromoService.CommunityPromo(UUID.randomUUID(), "Arroz",
-                                "93015006005182", "93015006", "Mercado X",
+                                "93015006005182", "93015006", "Mercado X", "Mercado X",
                                 new BigDecimal("22"), new BigDecimal("28"), new BigDecimal("21.43"),
                                 5, 3L, null, false)
                 ));

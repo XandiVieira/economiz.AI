@@ -17,7 +17,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -38,6 +40,7 @@ public class WatchedMarketService {
     private final UserWatchedMarketRepository watchedRepository;
     private final MarketLocationRepository marketRepository;
     private final ReceiptRepository receiptRepository;
+    private final MarketNameService marketNameService;
 
     /** CNPJs the user is watching. Cheap helper for query-layer joins. */
     @Transactional(readOnly = true)
@@ -62,11 +65,11 @@ public class WatchedMarketService {
                 .collect(Collectors.toMap(MarketLocation::getCnpj, m -> m));
         var visitedCnpjs = new HashSet<>(receiptRepository.findDistinctCnpjsByHousehold(user.getHousehold().getId()));
 
-        return pinned.stream()
+        var rows = pinned.stream()
                 .map(p -> {
                     var loc = locations.get(p.getMarketCnpj());
                     if (loc == null) {
-                        return new MarketResponse(p.getMarketCnpj(), null, null, null, null, null, null,
+                        return new MarketResponse(p.getMarketCnpj(), null, null, null, null, null, null, null,
                                 visitedCnpjs.contains(p.getMarketCnpj()), true);
                     }
                     return MarketResponse.from(loc, distanceFromHome(user, loc),
@@ -76,6 +79,7 @@ public class WatchedMarketService {
                         .comparing((MarketResponse r) -> r.distanceKm() == null ? Double.MAX_VALUE : r.distanceKm())
                         .thenComparing(r -> r.name() == null ? "" : r.name()))
                 .toList();
+        return applyFriendlyNames(user.getHousehold().getId(), rows);
     }
 
     /**
@@ -108,7 +112,7 @@ public class WatchedMarketService {
                         .toList()
                 : List.<MarketLocation>of();
 
-        return Stream.concat(visitedAndWatched.stream(), nearby.stream())
+        var rows = Stream.concat(visitedAndWatched.stream(), nearby.stream())
                 .map(m -> MarketResponse.from(
                         m,
                         distanceFromHome(user, m),
@@ -119,6 +123,7 @@ public class WatchedMarketService {
                         .thenComparing(MarketResponse::visited, Comparator.reverseOrder())
                         .thenComparing(r -> r.distanceKm() == null ? Double.MAX_VALUE : r.distanceKm()))
                 .toList();
+        return applyFriendlyNames(user.getHousehold().getId(), rows);
     }
 
     @Transactional
@@ -133,7 +138,22 @@ public class WatchedMarketService {
             log.info("watched_market.added user={} cnpj={}", LogMasker.email(user.getEmail()), cnpj);
         }
         var visited = receiptRepository.findDistinctCnpjsByHousehold(user.getHousehold().getId()).contains(cnpj);
-        return MarketResponse.from(location, distanceFromHome(user, location), visited, true);
+        var response = MarketResponse.from(location, distanceFromHome(user, location), visited, true);
+        return response.withFriendlyName(marketNameService.resolve(user.getHousehold().getId(), cnpj, response.name()));
+    }
+
+    /**
+     * Set each market's {@code friendlyName} to the household's custom rename when present
+     * (the original {@code name} is left intact). Batched to avoid N+1.
+     */
+    private List<MarketResponse> applyFriendlyNames(UUID householdId, List<MarketResponse> rows) {
+        if (rows.isEmpty()) return rows;
+        var overrides = marketNameService.resolveNames(householdId,
+                rows.stream().map(MarketResponse::cnpj).toList());
+        if (overrides.isEmpty()) return rows;
+        return rows.stream()
+                .map(row -> row.withFriendlyName(marketNameService.applyOverride(overrides, row.cnpj(), row.friendlyName())))
+                .toList();
     }
 
     @Transactional

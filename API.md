@@ -472,7 +472,9 @@ POST   /api/v1/categories/migrate        { "productIds":[...], "targetCategory":
 ## 5. Products
 
 ```
-GET   /api/v1/products?query=arroz&page=0&size=20    → search by name or exact EAN
+GET   /api/v1/products?query=arroz&page=0&size=20    → GLOBAL catalog search by name or exact EAN (autocomplete)
+GET   /api/v1/products/mine                          → products MY household has actually bought
+GET   /api/v1/products/{id}/markets[?includeNearby=&radiusKm=] → where this product is, and at what price
 GET   /api/v1/products/{id}                          → single product
 POST  /api/v1/products                               → create canonical product (rare; usually auto-created on confirm)
 PATCH /api/v1/products/{id}                          → set category/brand/etc
@@ -480,7 +482,13 @@ POST  /api/v1/products/{id}/aliases                  { "rawDescription": "<raw N
 GET   /api/v1/products/unmatched                     → review queue: receipt items the system couldn't match
 ```
 
-The "review queue" is the workflow for messy receipts: items that didn't auto-
+`GET /products` stays the **global** catalog (for autocomplete when creating alerts/rules etc.). For "the products I buy", use the two household-scoped endpoints:
+
+- **`GET /products/mine`** → `List<HouseholdProductResponse>` = products your household has bought (confirmed, non-excluded), newest purchase first. Each: `{ productId, name, brand, category, timesBought, lastBoughtAt, lastUnitPrice, lastMarketCnpj, lastMarketName, lastMarketFriendlyName }`. Display `lastMarketFriendlyName` (your custom market name when set, else the original `lastMarketName`).
+- **`GET /products/{id}/markets`** → `List<ProductMarketPriceResponse>` = where to buy this product, cheapest first. Scope: your **watched markets** always; nearby markets only when `includeNearby=true` (`radiusKm` from home). Each: `{ cnpj, cnpjRoot, marketName, friendlyName, price, priceType, communityMinPrice, sampleCount, distinctHouseholds, distanceKm, watched, visited, observedAt }`. Display `friendlyName` (custom-or-original).
+  - **`priceType`** drives the privacy model: `OWN_LAST` = your household's own exact last paid price at a market you shopped at (your data). `COMMUNITY_MEDIAN` = the **k-anonymity-guarded** median from the collaborative index — only present when **≥3 distinct households** contributed (`economizai.collaborative.min-households-for-public`); below that the market is omitted, never shown with a single-source price. **Why:** the price index is anonymized (no user/household FK); exposing a lone contributor's single price would re-identify them (a market with one contributor = that person's purchase). K=3 guarantees no individual purchase is exposed. The threshold is configurable, so the rule can be relaxed later if the privacy/legal stance changes — without code edits.
+
+The "review queue" (`/unmatched`) is the workflow for messy receipts: items that didn't auto-
 match show up here, the user picks the right product, and the alias is
 automatically backfilled to all matching items.
 
@@ -493,12 +501,16 @@ GET    /api/v1/markets[?radiusKm=10]                 → catalogue (visited + wa
 GET    /api/v1/markets/watched                       → "Meus mercados"
 POST   /api/v1/markets/watched/{cnpj}                → pin
 DELETE /api/v1/markets/watched/{cnpj}                → unpin
+PUT    /api/v1/markets/{cnpj}/name                   { "name": "Zaffari de casa" } → set a household-only custom name
+DELETE /api/v1/markets/{cnpj}/name                   → revert to the global name
 ```
 
 Each row carries `visited` (household has shopped here) and `watching` (user
 pinned it) flags. Watched markets bypass the home-radius filter in price
 intelligence — useful for "the market on my commute is far from home but I want
 its promos anyway".
+
+**Custom market name (household-only):** `PUT /markets/{cnpj}/name` saves a rename for your household. It does **not** overwrite the global name — instead every market-bearing response carries a separate **`friendlyName`** field (alongside the original `name`/`marketName`) that defaults to the original and is replaced by your rename when set. The FE should **display `friendlyName`**. It applies everywhere a market appears for your household (markets list, product-markets, receipts, items, insights, price history, notifications); the global name and other households are never affected. `DELETE` clears it (so `friendlyName` falls back to the original).
 
 ---
 

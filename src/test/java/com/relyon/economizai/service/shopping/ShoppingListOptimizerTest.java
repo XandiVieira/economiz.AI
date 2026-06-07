@@ -14,6 +14,7 @@ import com.relyon.economizai.repository.PriceObservationAuditRepository;
 import com.relyon.economizai.repository.PriceObservationRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.repository.ReceiptItemRepository;
+import com.relyon.economizai.service.geo.MarketNameService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,6 +24,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -43,6 +45,7 @@ class ShoppingListOptimizerTest {
     @Mock private PriceObservationRepository observationRepository;
     @Mock private PriceObservationAuditRepository auditRepository;
     @Mock private ProductRepository productRepository;
+    @Mock private MarketNameService marketNameService;
 
     private CollaborativeProperties properties;
     private ShoppingListOptimizer optimizer;
@@ -53,11 +56,14 @@ class ShoppingListOptimizerTest {
     void setUp() {
         properties = new CollaborativeProperties();
         optimizer = new ShoppingListOptimizer(receiptItemRepository, observationRepository,
-                auditRepository, productRepository, properties);
+                auditRepository, productRepository, properties, marketNameService);
         household = Household.builder().id(UUID.randomUUID()).inviteCode("ABC123").build();
         user = User.builder().id(UUID.randomUUID()).email("buyer@economizai").household(household).build();
         lenient().when(observationRepository.findRecentByProduct(any(), any())).thenReturn(List.of());
         lenient().when(receiptItemRepository.findHouseholdHistoryForProduct(any(), any())).thenReturn(List.of());
+        lenient().when(marketNameService.resolveNames(any(), any())).thenReturn(Map.of());
+        lenient().when(marketNameService.applyOverride(any(), any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(2));
     }
 
     @Test

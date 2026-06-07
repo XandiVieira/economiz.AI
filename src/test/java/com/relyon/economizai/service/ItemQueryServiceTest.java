@@ -7,6 +7,7 @@ import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.service.ItemQueryService.ItemFilters;
+import com.relyon.economizai.service.geo.MarketNameService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -44,6 +46,7 @@ import static org.mockito.Mockito.when;
 class ItemQueryServiceTest {
 
     @Mock private HouseholdProductCategoryOverrideService categoryOverrideService;
+    @Mock private MarketNameService marketNameService;
     @Mock private EntityManager entityManager;
     @Mock private TypedQuery<Long> countQuery;
     @Mock private TypedQuery<ReceiptItem> rowQuery;
@@ -54,8 +57,11 @@ class ItemQueryServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new ItemQueryService(categoryOverrideService);
+        service = new ItemQueryService(categoryOverrideService, marketNameService);
         ReflectionTestUtils.setField(service, "entityManager", entityManager);
+        lenient().when(marketNameService.resolveNames(any(), any())).thenReturn(Map.of());
+        lenient().when(marketNameService.applyOverride(any(), any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(2));
         householdId = UUID.randomUUID();
         var household = Household.builder().id(householdId).inviteCode("ABC123").build();
         user = User.builder().id(UUID.randomUUID()).email("u@e.test").household(household).build();

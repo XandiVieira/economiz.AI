@@ -29,6 +29,7 @@ public record PurchasedItemResponse(
         boolean nfcePromoFlag,
         UUID receiptId,
         String marketName,
+        String marketFriendlyName,
         String marketCnpj,
         LocalDateTime purchasedAt
 ) {
@@ -62,7 +63,15 @@ public record PurchasedItemResponse(
                 item.isNfcePromoFlag(),
                 receipt.getId(),
                 receipt.getMarketName(),
+                receipt.getMarketName(),
                 receipt.getCnpjEmitente(),
                 receipt.getIssuedAt());
+    }
+
+    /** Copy with the household's custom display name applied; leaves the original {@code marketName} intact. */
+    public PurchasedItemResponse withMarketFriendlyName(String marketFriendlyName) {
+        return new PurchasedItemResponse(itemId, productId, category, displayDescription, rawDescription,
+                friendlyDescription, ean, quantity, unit, unitPrice, totalPrice, nfcePromoFlag,
+                receiptId, marketName, marketFriendlyName, marketCnpj, purchasedAt);
     }
 }

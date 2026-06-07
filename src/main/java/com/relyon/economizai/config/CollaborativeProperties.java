@@ -19,6 +19,21 @@ public class CollaborativeProperties {
 
     public static class Collaborative {
         private boolean enabled = true;
+        /**
+         * k-anonymity threshold (K). The minimum number of DISTINCT households that
+         * must have contributed before a (product, market) price may be disclosed to
+         * anyone other than the contributor.
+         *
+         * <p><strong>Why this rule exists:</strong> {@code PriceObservation} is
+         * anonymized on purpose — it carries no user/household FK. But a per-market
+         * price disclosed from a market with only one contributor effectively reveals
+         * THAT contributor's purchase (what, where, roughly when) — re-identifying a
+         * person from "anonymous" data. Requiring K≥3 distinct households means no
+         * single household's purchase can be inferred from a disclosed price/median.
+         * A household always sees its OWN prices at full detail (own data, no K needed);
+         * K only gates other households' data. Configurable so the rule can be relaxed
+         * later if the privacy/legal stance changes, without touching code.
+         */
         private int minHouseholdsForPublic = 3;
         private int minObservationsPerProductMarket = 5;
         private int minObservationsForCommunityPromo = 10;

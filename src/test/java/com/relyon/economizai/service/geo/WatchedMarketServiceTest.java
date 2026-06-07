@@ -16,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -36,13 +37,19 @@ class WatchedMarketServiceTest {
     @Mock private UserWatchedMarketRepository watchedRepository;
     @Mock private MarketLocationRepository marketRepository;
     @Mock private ReceiptRepository receiptRepository;
+    @Mock private MarketNameService marketNameService;
 
     private WatchedMarketService service;
     private User user;
 
     @BeforeEach
     void setUp() {
-        service = new WatchedMarketService(watchedRepository, marketRepository, receiptRepository);
+        service = new WatchedMarketService(watchedRepository, marketRepository, receiptRepository, marketNameService);
+        lenient().when(marketNameService.resolveNames(any(), any())).thenReturn(Map.of());
+        lenient().when(marketNameService.resolve(any(), any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(2));
+        lenient().when(marketNameService.applyOverride(any(), any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(2));
         var household = Household.builder().id(UUID.randomUUID()).inviteCode("ABC123").build();
         user = User.builder().id(UUID.randomUUID()).email("u@e").household(household).build();
     }

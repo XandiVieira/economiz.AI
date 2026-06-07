@@ -57,7 +57,7 @@ class ItemControllerTest {
                 UUID.randomUUID(), UUID.randomUUID(), "MEAT_DAIRY",
                 "Leite Integral", "LEITE INT 1L", "Leite Integral", "7891234567890",
                 new BigDecimal("2.000"), "UN", new BigDecimal("4.50"), new BigDecimal("9.00"),
-                false, UUID.randomUUID(), "Mercado Bom Preco", "93015006005182", LocalDateTime.now());
+                false, UUID.randomUUID(), "Mercado Bom Preco", "Mercado Bom Preco", "93015006005182", LocalDateTime.now());
     }
 
     @Test

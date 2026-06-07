@@ -14,7 +14,13 @@ public record PriceHistoryResponse(
             LocalDateTime issuedAt,
             String marketCnpj,
             String marketName,
+            String marketFriendlyName,
             BigDecimal unitPrice,
             BigDecimal quantity
-    ) {}
+    ) {
+        /** Copy with the household's custom display name applied; leaves the original {@code marketName} intact. */
+        public PricePoint withMarketFriendlyName(String marketFriendlyName) {
+            return new PricePoint(issuedAt, marketCnpj, marketName, marketFriendlyName, unitPrice, quantity);
+        }
+    }
 }

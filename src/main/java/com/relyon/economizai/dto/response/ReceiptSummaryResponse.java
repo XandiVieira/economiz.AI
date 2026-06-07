@@ -29,6 +29,7 @@ import java.util.UUID;
 public record ReceiptSummaryResponse(
         UUID id,
         String marketName,
+        String marketFriendlyName,
         LocalDateTime issuedAt,
         BigDecimal totalAmount,
         BigDecimal householdTotalAmount,
@@ -44,6 +45,7 @@ public record ReceiptSummaryResponse(
         return new ReceiptSummaryResponse(
                 receipt.getId(),
                 receipt.getMarketName(),
+                receipt.getMarketName(),
                 receipt.getIssuedAt(),
                 receipt.getTotalAmount(),
                 householdTotal,
@@ -51,6 +53,12 @@ public record ReceiptSummaryResponse(
                 receipt.getItems().size(),
                 receipt.getStatus()
         );
+    }
+
+    /** Copy with the household's custom display name applied; leaves the original {@code marketName} intact. */
+    public ReceiptSummaryResponse withMarketFriendlyName(String marketFriendlyName) {
+        return new ReceiptSummaryResponse(id, marketName, marketFriendlyName, issuedAt,
+                totalAmount, householdTotalAmount, approxTaxTotal, itemCount, status);
     }
 
     private static BigDecimal approxTaxTotal(Receipt receipt) {

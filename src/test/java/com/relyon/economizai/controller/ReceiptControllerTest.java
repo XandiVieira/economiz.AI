@@ -91,6 +91,7 @@ class ReceiptControllerTest {
                 UnidadeFederativa.RS,
                 "12345678000190",
                 "Mercado X",
+                "Mercado X",
                 "Rua Y, 123",
                 LocalDateTime.now(),
                 new BigDecimal("57.80"),
@@ -170,7 +171,7 @@ class ReceiptControllerTest {
     @Test
     void list_returnsPagedSummaries() throws Exception {
         var user = buildUser();
-        var summary = new ReceiptSummaryResponse(UUID.randomUUID(), "Mercado X", LocalDateTime.now(),
+        var summary = new ReceiptSummaryResponse(UUID.randomUUID(), "Mercado X", "Mercado X", LocalDateTime.now(),
                 new BigDecimal("57.80"), new BigDecimal("57.80"), null, 1, ReceiptStatus.CONFIRMED);
         Page<ReceiptSummaryResponse> page = new PageImpl<>(List.of(summary));
         when(receiptService.list(any(User.class), isNull(), isNull(), isNull(), isNull(List.class), isNull(), any(Pageable.class)))

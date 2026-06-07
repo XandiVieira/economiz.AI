@@ -5,6 +5,7 @@ import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.model.enums.ReceiptStatus;
+import com.relyon.economizai.service.geo.MarketNameService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.Query;
@@ -47,6 +48,7 @@ public class ItemQueryService {
     private static final LocalDateTime EPOCH_CEIL = LocalDateTime.of(2999, 12, 31, 23, 59, 59);
 
     private final HouseholdProductCategoryOverrideService categoryOverrideService;
+    private final MarketNameService marketNameService;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -77,9 +79,17 @@ public class ItemQueryService {
                     .distinct()
                     .toList();
             var overrides = categoryOverrideService.overridesByProduct(filters.householdId(), productIds);
+            var marketCnpjs = items.stream()
+                    .map(item -> item.getReceipt().getCnpjEmitente())
+                    .filter(cnpj -> cnpj != null)
+                    .distinct()
+                    .toList();
+            var marketOverrides = marketNameService.resolveNames(filters.householdId(), marketCnpjs);
             rows = items.stream()
                     .map(item -> PurchasedItemResponse.from(item,
-                            item.getProduct() == null ? null : overrides.get(item.getProduct().getId())))
+                                    item.getProduct() == null ? null : overrides.get(item.getProduct().getId()))
+                            .withMarketFriendlyName(marketNameService.applyOverride(marketOverrides,
+                                    item.getReceipt().getCnpjEmitente(), item.getReceipt().getMarketName())))
                     .toList();
         }
         log.info("items.query household={} total={} returned={}", filters.householdId(), total, rows.size());

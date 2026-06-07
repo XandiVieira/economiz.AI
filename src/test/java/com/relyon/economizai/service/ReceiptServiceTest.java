@@ -20,11 +20,13 @@ import com.relyon.economizai.service.HouseholdProductAliasService;
 import com.relyon.economizai.service.cache.HouseholdCacheGen;
 import com.relyon.economizai.service.canonicalization.CanonicalizationService;
 import com.relyon.economizai.service.geo.MarketLocationService;
+import com.relyon.economizai.service.geo.MarketNameService;
 import com.relyon.economizai.service.priceindex.PriceIndexService;
 import com.relyon.economizai.service.priceindex.PromoDetector;
 import com.relyon.economizai.service.sefaz.ParsedReceipt;
 import com.relyon.economizai.service.sefaz.ParsedReceiptItem;
 import com.relyon.economizai.service.sefaz.SefazIngestionService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -44,6 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -63,8 +66,18 @@ class ReceiptServiceTest {
     @Mock private HouseholdProductAliasService householdProductAliasService;
     @Mock private HouseholdProductCategoryOverrideService categoryOverrideService;
     @Mock private HouseholdCacheGen householdCacheGen;
+    @Mock private MarketNameService marketNameService;
 
     @InjectMocks private ReceiptService receiptService;
+
+    @BeforeEach
+    void stubMarketNames() {
+        lenient().when(marketNameService.resolve(any(), any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(2));
+        lenient().when(marketNameService.resolveNames(any(), any())).thenReturn(Map.of());
+        lenient().when(marketNameService.applyOverride(any(), any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(2));
+    }
 
     @Test
     void updateItemCategory_unlinkedItem_throws() {

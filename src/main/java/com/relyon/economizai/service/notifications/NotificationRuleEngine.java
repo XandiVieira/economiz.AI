@@ -10,6 +10,7 @@ import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.repository.UserWatchedMarketRepository;
 import com.relyon.economizai.service.geo.DistanceCalculator;
 import com.relyon.economizai.service.geo.MarketLocationService;
+import com.relyon.economizai.service.geo.MarketNameService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -64,6 +65,7 @@ public class NotificationRuleEngine {
     private final ReceiptItemRepository receiptItemRepository;
     private final UserWatchedMarketRepository watchedMarketRepository;
     private final MarketLocationService marketLocationService;
+    private final MarketNameService marketNameService;
     private final NotificationService notificationService;
 
     @Transactional
@@ -129,7 +131,7 @@ public class NotificationRuleEngine {
 
     private void notifyPriceRule(NotificationRule rule, PriceObservation observation) {
         var productName = observation.getProduct().getNormalizedName();
-        var marketName = marketName(observation);
+        var marketName = friendlyMarketName(rule, observation);
         String title;
         String body;
         if (rule.getType() == NotificationType.PRICE_ABOVE) {
@@ -177,7 +179,7 @@ public class NotificationRuleEngine {
                     rule.getUser(), NotificationType.PROMO_COMMUNITY,
                     "Oferta na comunidade: " + productName,
                     String.format("%s está em promoção por R$ %s no %s.",
-                            productName, promo.getUnitPrice(), marketName(promo)),
+                            productName, promo.getUnitPrice(), friendlyMarketName(rule, promo)),
                     baseExtras(rule, promo)));
             rule.setLastFiredAt(now);
             fired.add(rule);
@@ -215,14 +217,15 @@ public class NotificationRuleEngine {
 
             var productName = hit.getProduct().getNormalizedName();
             var savingsPct = savingsPercent(lastPaid, hit.getUnitPrice());
+            var friendlyMarket = friendlyMarketName(rule, hit);
             var extras = baseExtras(rule, hit);
             extras.put("lastPaidPrice", lastPaid);
             extras.put("savingsPct", savingsPct);
             notificationService.notify(new NotificationPayload(
                     rule.getUser(), NotificationType.CHEAPER_MARKET,
-                    "Mais barato em " + marketName(hit) + ": " + productName,
+                    "Mais barato em " + friendlyMarket + ": " + productName,
                     String.format("%s saiu por R$ %s no %s — %s%% abaixo dos R$ %s que você pagou da última vez.",
-                            productName, hit.getUnitPrice(), marketName(hit), savingsPct,
+                            productName, hit.getUnitPrice(), friendlyMarket, savingsPct,
                             lastPaid.setScale(2, RoundingMode.HALF_UP)),
                     extras));
             rule.setLastFiredAt(now);
@@ -302,13 +305,22 @@ public class NotificationRuleEngine {
         return observation.getMarketName() != null ? observation.getMarketName() : "um mercado próximo";
     }
 
+    /** The rule owner's household custom name for the market, falling back to the observation's display name. */
+    private String friendlyMarketName(NotificationRule rule, PriceObservation observation) {
+        var householdId = rule.getUser().getHousehold() != null ? rule.getUser().getHousehold().getId() : null;
+        return marketNameService.resolve(householdId, observation.getMarketCnpj(), marketName(observation));
+    }
+
     private Map<String, Object> baseExtras(NotificationRule rule, PriceObservation observation) {
+        var householdId = rule.getUser().getHousehold() != null ? rule.getUser().getHousehold().getId() : null;
+        var friendly = marketNameService.resolve(householdId, observation.getMarketCnpj(), observation.getMarketName());
         var extras = new HashMap<String, Object>();
         extras.put("ruleId", rule.getId().toString());
         extras.put("productId", observation.getProduct().getId().toString());
         extras.put("observedPrice", observation.getUnitPrice());
         extras.put("marketCnpj", observation.getMarketCnpj());
         extras.put("marketName", observation.getMarketName() != null ? observation.getMarketName() : "");
+        extras.put("marketFriendlyName", friendly != null ? friendly : "");
         if (rule.getThresholdPrice() != null) extras.put("thresholdPrice", rule.getThresholdPrice());
         return extras;
     }

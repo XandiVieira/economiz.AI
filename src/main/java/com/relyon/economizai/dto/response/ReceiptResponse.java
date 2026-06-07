@@ -17,6 +17,7 @@ public record ReceiptResponse(
         UnidadeFederativa uf,
         String cnpjEmitente,
         String marketName,
+        String marketFriendlyName,
         String marketAddress,
         LocalDateTime issuedAt,
         BigDecimal totalAmount,
@@ -49,6 +50,7 @@ public record ReceiptResponse(
                 receipt.getUf(),
                 receipt.getCnpjEmitente(),
                 receipt.getMarketName(),
+                receipt.getMarketName(),
                 receipt.getMarketAddress(),
                 receipt.getIssuedAt(),
                 receipt.getTotalAmount(),
@@ -63,6 +65,14 @@ public record ReceiptResponse(
                         .map(item -> ReceiptItemResponse.from(item, overrideFor(item, categoryOverrides)))
                         .toList()
         );
+    }
+
+    /** Copy with the household's custom display name applied; leaves the original {@code marketName} intact. */
+    public ReceiptResponse withMarketFriendlyName(String marketFriendlyName) {
+        return new ReceiptResponse(
+                id, chaveAcesso, uf, cnpjEmitente, marketName, marketFriendlyName, marketAddress,
+                issuedAt, totalAmount, householdTotalAmount, approxTaxFederal, approxTaxEstadual,
+                approxTaxTotal, status, confirmedAt, createdAt, items);
     }
 
     private static String overrideFor(ReceiptItem item, Map<UUID, String> categoryOverrides) {

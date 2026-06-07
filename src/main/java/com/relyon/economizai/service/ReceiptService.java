@@ -24,6 +24,7 @@ import com.relyon.economizai.repository.ReceiptRepository;
 import com.relyon.economizai.service.cache.HouseholdCacheGen;
 import com.relyon.economizai.service.canonicalization.CanonicalizationService;
 import com.relyon.economizai.service.geo.MarketLocationService;
+import com.relyon.economizai.service.geo.MarketNameService;
 import com.relyon.economizai.service.notifications.NotificationPayload;
 import com.relyon.economizai.service.notifications.NotificationRuleService;
 import com.relyon.economizai.service.notifications.NotificationService;
@@ -69,6 +70,7 @@ public class ReceiptService {
     private final HouseholdProductAliasService householdProductAliasService;
     private final HouseholdProductCategoryOverrideService categoryOverrideService;
     private final HouseholdCacheGen householdCacheGen;
+    private final MarketNameService marketNameService;
 
     @Transactional
     public ReceiptResponse submit(User user, SubmitReceiptRequest request) {
@@ -113,7 +115,7 @@ public class ReceiptService {
         MDC.put(MdcContextFilter.RECEIPT_ID, abbrev(receipt.getId()));
         log.info("submit ok status=PENDING_CONFIRMATION items={} total={} market='{}'",
                 receipt.getItems().size(), receipt.getTotalAmount(), receipt.getMarketName());
-        return ReceiptResponse.from(receipt);
+        return withFriendlyName(user.getHousehold().getId(), receipt, ReceiptResponse.from(receipt));
     }
 
     @Transactional(readOnly = true)
@@ -132,7 +134,17 @@ public class ReceiptService {
                 : pageable;
         var spec = ReceiptSpecifications.forSearch(
                 user.getHousehold().getId(), from, to, cnpj, categories, trimmedSearch, true);
-        return receiptRepository.findAll(spec, sortedPageable).map(ReceiptSummaryResponse::from);
+        var page = receiptRepository.findAll(spec, sortedPageable);
+        var householdId = user.getHousehold().getId();
+        var cnpjs = page.getContent().stream()
+                .map(Receipt::getCnpjEmitente)
+                .filter(c -> c != null)
+                .distinct()
+                .toList();
+        var overrides = marketNameService.resolveNames(householdId, cnpjs);
+        return page.map(receipt -> ReceiptSummaryResponse.from(receipt)
+                .withMarketFriendlyName(marketNameService.applyOverride(
+                        overrides, receipt.getCnpjEmitente(), receipt.getMarketName())));
     }
 
     @Transactional(readOnly = true)
@@ -170,7 +182,7 @@ public class ReceiptService {
                 .distinct()
                 .toList();
         var overrides = categoryOverrideService.overridesByProduct(user.getHousehold().getId(), productIds);
-        return ReceiptResponse.from(receipt, overrides);
+        return withFriendlyName(user.getHousehold().getId(), receipt, ReceiptResponse.from(receipt, overrides));
     }
 
     @Transactional
@@ -206,7 +218,8 @@ public class ReceiptService {
         var saved = receiptRepository.save(receipt);
         householdCacheGen.bump(receipt.getHousehold().getId());
         log.info("confirm ok status=CONFIRMED personalPromos={}", personalPromos.size());
-        return new ConfirmReceiptResponse(ReceiptResponse.from(saved), personalPromos);
+        return new ConfirmReceiptResponse(
+                withFriendlyName(user.getHousehold().getId(), saved, ReceiptResponse.from(saved)), personalPromos);
     }
 
     private void notifyPersonalPromos(User user, Receipt receipt, List<PromoDetector.PersonalPromo> promos) {
@@ -305,7 +318,7 @@ public class ReceiptService {
         householdCacheGen.bump(receipt.getHousehold().getId());
         log.info("reparse ok items={} total={} market='{}'",
                 saved.getItems().size(), saved.getTotalAmount(), saved.getMarketName());
-        return ReceiptResponse.from(saved);
+        return withFriendlyName(saved.getHousehold().getId(), saved, ReceiptResponse.from(saved));
     }
 
     @Transactional
@@ -317,7 +330,7 @@ public class ReceiptService {
         var saved = receiptRepository.save(receipt);
         householdCacheGen.bump(receipt.getHousehold().getId());
         log.info("reject ok status=REJECTED");
-        return ReceiptResponse.from(saved);
+        return withFriendlyName(user.getHousehold().getId(), saved, ReceiptResponse.from(saved));
     }
 
     @Transactional
@@ -338,7 +351,7 @@ public class ReceiptService {
         householdCacheGen.bump(receipt.getHousehold().getId());
         log.info("item.updated description='{}' qty={} totalPrice={}",
                 item.getRawDescription(), item.getQuantity(), item.getTotalPrice());
-        return ReceiptResponse.from(receipt);
+        return withFriendlyName(user.getHousehold().getId(), receipt, ReceiptResponse.from(receipt));
     }
 
     /**
@@ -371,7 +384,13 @@ public class ReceiptService {
         householdCacheGen.bump(receipt.getHousehold().getId());
         log.info("item.added line={} description='{}' qty={} totalPrice={}",
                 nextLine, item.getRawDescription(), item.getQuantity(), item.getTotalPrice());
-        return ReceiptResponse.from(receipt);
+        return withFriendlyName(user.getHousehold().getId(), receipt, ReceiptResponse.from(receipt));
+    }
+
+    /** Apply the household's custom market display name to the response (sibling field; original untouched). */
+    private ReceiptResponse withFriendlyName(UUID householdId, Receipt receipt, ReceiptResponse response) {
+        var friendly = marketNameService.resolve(householdId, receipt.getCnpjEmitente(), receipt.getMarketName());
+        return response.withMarketFriendlyName(friendly);
     }
 
     private static String abbrev(UUID id) {
