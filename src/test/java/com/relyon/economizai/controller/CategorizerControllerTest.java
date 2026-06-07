@@ -3,6 +3,7 @@ package com.relyon.economizai.controller;
 import com.relyon.economizai.config.SecurityConfig;
 import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.Role;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.LocalizedMessageService;
 import com.relyon.economizai.service.extraction.AutoPromotionService;
@@ -51,6 +52,12 @@ class CategorizerControllerTest {
         return User.builder().id(UUID.randomUUID()).email("u@e").household(household).build();
     }
 
+    private User adminPrincipal() {
+        var admin = principal();
+        admin.setRole(Role.ADMIN);
+        return admin;
+    }
+
     @Test
     void status_returnsClassifierState() throws Exception {
         when(mlClassifier.isReady()).thenReturn(true);
@@ -70,10 +77,17 @@ class CategorizerControllerTest {
                 new MlClassifierService.RetrainOutcome(true, 100, 80, Duration.ofMillis(45)));
 
         mockMvc.perform(post("/api/v1/categorizer/retrain")
-                        .with(SecurityMockMvcRequestPostProcessors.user(principal())))
+                        .with(SecurityMockMvcRequestPostProcessors.user(adminPrincipal())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.trained").value(true))
                 .andExpect(jsonPath("$.categoryExamples").value(100));
+    }
+
+    @Test
+    void retrain_forbiddenForNonAdmin() throws Exception {
+        mockMvc.perform(post("/api/v1/categorizer/retrain")
+                        .with(SecurityMockMvcRequestPostProcessors.user(principal())))
+                .andExpect(status().isForbidden());
     }
 
     @Test
@@ -82,9 +96,16 @@ class CategorizerControllerTest {
                 new AutoPromotionService.PromotionOutcome(3, 1, 2, 18, 5));
 
         mockMvc.perform(post("/api/v1/categorizer/auto-promote")
-                        .with(SecurityMockMvcRequestPostProcessors.user(principal())))
+                        .with(SecurityMockMvcRequestPostProcessors.user(adminPrincipal())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.promoted").value(3))
                 .andExpect(jsonPath("$.learnedTotal").value(5));
+    }
+
+    @Test
+    void autoPromote_forbiddenForNonAdmin() throws Exception {
+        mockMvc.perform(post("/api/v1/categorizer/auto-promote")
+                        .with(SecurityMockMvcRequestPostProcessors.user(principal())))
+                .andExpect(status().isForbidden());
     }
 }
