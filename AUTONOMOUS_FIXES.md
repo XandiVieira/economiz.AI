@@ -11,6 +11,15 @@
 > for the self-hosted **dev** server only.
 >
 > **Safety rails that still apply:**
+> - **Reproduce-first gate:** the fixer must write a test that FAILS on the bug
+>   before fixing it. The watchdog independently verifies the named test exists
+>   and is in the diff; if it can't reproduce (`REPRO_FAIL`) or gives no
+>   verifiable test, **no code is changed** — it's logged `NEEDS-HUMAN` and the
+>   loop moves on. A bug is only auto-fixed once it's been proven real.
+> - Known-transient external errors (SEFAZ/geocoder/network/5xx) must **recur**
+>   3× within 10 min before any fix is attempted — a one-off blip is ignored.
+> - The fixer call has a 600s timeout and is fully sandboxed in error handling:
+>   a hang/crash logs `NEEDS-HUMAN` and the loop keeps running — it never freezes.
 > - A fix that fails `mvnw test` is **never pushed**.
 > - After deploy, if `/actuator/health` != `UP`, the commit is **auto-reverted**
 >   (restoring last-good) and the loop keeps running.

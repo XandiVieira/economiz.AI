@@ -164,14 +164,27 @@ Spring Boot project (Java 21). A live error was detected in the app logs:
 
 __ERRLINE__
 
-Your job: find the ROOT CAUSE in the codebase and apply a minimal, correct fix.
+Work in this EXACT order - REPRODUCE FIRST, then fix:
+
+STEP 1 - REPRODUCE: Write a unit test that FAILS because of this bug, exposing
+the exact faulty behavior from the log line above. Run ONLY that test and
+confirm it fails for the right reason. This proves the bug is real and that you
+understood it. Do NOT change any production code yet.
+  - If you cannot write a test that reproduces the bug (not enough info, not a
+    code bug, environmental/external), make NO changes and reply exactly:
+    REPRO_FAIL <one-line reason>
+
+STEP 2 - FIX: Only after the test fails as expected, apply a minimal, correct
+fix so that same test now PASSES and nothing else breaks.
+
 Rules:
-- Follow the conventions in CLAUDE.md.
-- Add or update a unit test that covers the bug (required).
+- Follow the conventions in CLAUDE.md (test location, style, fixtures).
 - Do NOT commit or push - just edit files. The watchdog handles git + build.
-- If you cannot confidently identify the root cause, make NO changes and reply
-  exactly: NO_FIX_FOUND <one-line reason>.
-- When done with a fix, reply with: FIXED <one-line summary of root cause + fix>.
+- Final reply MUST be one line, one of:
+    REPRO_FAIL <reason>                                  (could not reproduce)
+    FIXED <FullyQualifiedTestClass#testMethod> | <root cause + fix summary>
+  The test reference is REQUIRED on a FIXED reply - the watchdog re-runs that
+  exact test to independently verify your fix.
 '@
         $prompt = $prompt.Replace('__ERRLINE__', $line)
 
@@ -208,13 +221,38 @@ Rules:
         }
         Log ("claude.reply {0}" -f $claudeOut.Substring(0, [Math]::Min(160, $claudeOut.Length)))
 
-        if ($claudeOut -match 'NO_FIX_FOUND') {
+        if ($claudeOut -match 'REPRO_FAIL|NO_FIX_FOUND') {
             $failCount[$sig] = ([int]$failCount[$sig]) + 1
-            Ledger ("### [{0}] ⚠️ NEEDS-HUMAN · NO-FIX (attempt {1}x) - {2}`r`n- **Error:** ``{3}```r`n- **Outcome:** Claude could not confidently diagnose; no change made.`r`n- **Detail:** {4}`r`n- **Note for human:** this bug is still live and unfixed - needs eyes." -f (Stamp), $failCount[$sig], $shortSig, $line, $claudeOut)
+            & git checkout -- . 2>$null; & git clean -fd 2>$null   # drop any partial test
+            Ledger ("### [{0}] ⚠️ NEEDS-HUMAN · NO-REPRO (attempt {1}x) - {2}`r`n- **Error:** ``{3}```r`n- **Outcome:** could NOT reproduce the bug with a failing test; no code changed.`r`n- **Detail:** {4}`r`n- **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes." -f (Stamp), $failCount[$sig], $shortSig, $line, $claudeOut)
             continue
         }
 
-        # GATE 1: build + tests
+        # GATE 0: reproduction must be real. Claude claims FIXED <test#method>.
+        # We independently confirm the named test (a) actually exists in the tree
+        # and (b) is part of the diff - i.e. Claude really wrote a covering test,
+        # not just edited prod code and asserted "fixed".
+        $testRef = ""
+        if ($claudeOut -match 'FIXED\s+([\w.]+#[\w]+)') { $testRef = $Matches[1] }
+        if ([string]::IsNullOrWhiteSpace($testRef)) {
+            $failCount[$sig] = ([int]$failCount[$sig]) + 1
+            & git checkout -- . 2>$null; & git clean -fd 2>$null
+            Ledger ("### [{0}] ⚠️ NEEDS-HUMAN · NO-TESTREF (attempt {1}x) - {2}`r`n- **Error:** ``{3}```r`n- **Claude:** {4}`r`n- **Outcome:** reply lacked a verifiable test reference; changes discarded (reproduction unproven).`r`n- **Note for human:** bug still live - needs eyes." -f (Stamp), $failCount[$sig], $shortSig, $line, $claudeOut)
+            continue
+        }
+        $testClass = ($testRef -split '#')[0]
+        $testFileName = ($testClass -split '\.')[-1] + ".java"
+        $changedTests = (& git status --porcelain 2>$null) -match [regex]::Escape($testFileName)
+        if (-not $changedTests) {
+            $failCount[$sig] = ([int]$failCount[$sig]) + 1
+            & git checkout -- . 2>$null; & git clean -fd 2>$null
+            Ledger ("### [{0}] ⚠️ NEEDS-HUMAN · NO-TEST-DIFF (attempt {1}x) - {2}`r`n- **Error:** ``{3}```r`n- **Claude:** {4}`r`n- **Outcome:** claimed test ``{5}`` but no matching test file was added/changed; changes discarded.`r`n- **Note for human:** bug still live; reproduction not proven - needs eyes." -f (Stamp), $failCount[$sig], $shortSig, $line, $claudeOut, $testRef)
+            continue
+        }
+        Log ("repro.verified test={0}" -f $testRef)
+
+        # GATE 1: build + tests (full suite - the covering test must pass AND
+        # nothing else may break)
         Log "build.start mvnw test"
         $null = & cmd /c ('"{0}\mvnw.cmd" -q test 2>&1' -f $repo)
         $buildOk = ($LASTEXITCODE -eq 0)
@@ -235,7 +273,10 @@ Rules:
         }
 
         & git add -A
-        $msg = ("fix(auto): " + ($claudeOut -replace '^FIXED\s*','' -replace '[\r\n]+',' '))
+        # Build the commit subject from the part after the "|" (the human summary);
+        # the test ref is kept for the ledger, not the subject.
+        $summary = $claudeOut -replace '^FIXED\s+[\w.]+#[\w]+\s*\|?\s*','' -replace '^FIXED\s*','' -replace '[\r\n]+',' '
+        $msg = ("fix(auto): " + $summary.Trim())
         if ($msg.Length -gt 100) { $msg = $msg.Substring(0, 100) }
         & git commit -q -m $msg
         $sha = (& git rev-parse --short HEAD).Trim()
@@ -246,7 +287,7 @@ Rules:
 
         if (WaitForDeployAndHealth) {
             Log ("deploy.healthy sha={0}" -f $sha)
-            Ledger ("### [{0}] FIX {1} - {2}`r`n- **Error:** ``{3}```r`n- **Root cause + fix:** {4}`r`n- **Build:** PASS (mvnw test)`r`n- **Deploy:** pushed {1} -> auto-deploy, health **UP**`r`n- **Outcome:** RESOLVED" -f (Stamp), $sha, $shortSig, $line, $claudeOut)
+            Ledger ("### [{0}] FIX {1} - {2}`r`n- **Error:** ``{3}```r`n- **Reproduced by:** ``{4}`` (failed before fix, passes after)`r`n- **Root cause + fix:** {5}`r`n- **Build:** PASS (mvnw test, full suite)`r`n- **Deploy:** pushed {1} -> auto-deploy, health **UP**`r`n- **Outcome:** RESOLVED" -f (Stamp), $sha, $shortSig, $line, $testRef, $claudeOut)
         } else {
             Log ("deploy.unhealthy auto-reverting sha={0}" -f $sha)
             & git revert --no-edit $sha 2>&1 | Out-Null
