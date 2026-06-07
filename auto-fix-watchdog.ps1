@@ -201,7 +201,15 @@ while ($true) {
     # stacktrace snippet (status code + error message + our first frame).
     for ($li = 0; $li -lt $raw.Count; $li++) {
         $line = "$($raw[$li])"
-        if ($line -notmatch 'ERROR|Exception|Caused by|FAILED|OutOfMemory|Unexpected error') { continue }
+        # Only treat ERROR/FATAL-level lines (or raw stacktrace continuations) as
+        # bugs. Matching bare 'Exception' anywhere caught the logger CLASS NAME
+        # 'GlobalExceptionHandler' on EVERY line it logged - including expected
+        # WARN/400 validation messages. Gate on the log LEVEL token instead.
+        $isError = ($line -match '\b(ERROR|FATAL)\b') -or
+                   ($line -match '^\s*(at\s+\w|Caused by:|\.\.\.\s+\d+\s+more)') -or
+                   ($line -match 'Exception(:| in thread)') -or
+                   ($line -match 'OutOfMemory|Unexpected error')
+        if (-not $isError) { continue }
         if ($line -match 'PageImpl|PagedModel|SpringDataJackson|WarningLoggingModifier') { continue }
 
         $sig = Signature $line
