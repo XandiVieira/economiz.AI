@@ -48,16 +48,16 @@ public class NominatimGeocoder {
 
     public Optional<GeocodeResult> geocode(String address) {
         if (address == null || address.isBlank()) return Optional.empty();
-        var url = UriComponentsBuilder.fromUriString(NOMINATIM_URL)
+        var uri = UriComponentsBuilder.fromUriString(NOMINATIM_URL)
                 .queryParam("q", address.trim())
                 .queryParam("countrycodes", "br")
                 .queryParam("format", "json")
                 .queryParam("addressdetails", 1)
                 .queryParam("limit", 1)
-                .build(true).toUriString();
+                .build().toUri();
         log.info("geocode.request address='{}'", address);
         try {
-            var body = restClient.get().uri(url).retrieve().body(String.class);
+            var body = restClient.get().uri(uri).retrieve().body(String.class);
             if (body == null || body.isBlank() || body.equals("[]")) {
                 log.info("geocode.empty address='{}'", address);
                 return Optional.empty();
