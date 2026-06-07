@@ -5979,6 +5979,39 @@
      "response": []
     },
     {
+     "name": "Delete product (admin, prune test/junk rows)",
+     "request": {
+      "method": "DELETE",
+      "header": [
+       {
+        "key": "Accept-Language",
+        "value": "pt"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/v1/admin/products/{{productId}}?force=false",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "v1",
+        "admin",
+        "products",
+        "{{productId}}"
+       ],
+       "query": [
+        {
+         "key": "force",
+         "value": "false",
+         "description": "true to detach confirmed-purchase items and delete anyway"
+        }
+       ]
+      }
+     },
+     "response": []
+    },
+    {
      "name": "Recategorize catalog (admin, dry-run report)",
      "request": {
       "method": "GET",

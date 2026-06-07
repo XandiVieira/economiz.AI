@@ -675,7 +675,10 @@ POST   /api/v1/admin/products/{id}/merge       → 200 ProductMergeResultRespons
 GET    /api/v1/admin/products/recategorize        → RecategorizeReportResponse (dry-run, read-only)
 POST   /api/v1/admin/products/recategorize?includeMl=false → RecategorizeResultResponse (apply)
 POST   /api/v1/admin/products/refresh-brands       → BrandBackfillResponse (fill missing brands)
+DELETE /api/v1/admin/products/{id}?force=false     → 200 ProductDeletionResponse (prune test/junk catalog rows)
 ```
+
+- **Delete product** — removes a product and its CASCADE dependents (aliases, observations, category overrides, alerts, snoozes, shopping-list items). Receipt items that referenced it are detached (`product_id` → null), so confirmed purchase history survives as unmatched rows. Refuses with `409 product.deletion.referenced` when the product still backs confirmed purchases unless `force=true`. Returns `{ productId, receiptItemsDetached }`.
 
 - **Users list** — `q` does substring match on email + name (case-insensitive). Sorted by `createdAt` desc by default.
 - **User detail** — bundles `householdId`, `householdMemberCount`, `receipts` counts (PENDING_CONFIRMATION / CONFIRMED / REJECTED / FAILED_PARSE), and `spendLast30Days`. Useful for triaging "why is X seeing Y".
