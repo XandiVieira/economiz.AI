@@ -57,6 +57,12 @@ services:
       # add the FE dev machine + the server's own origin here (comma-separated)
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:8081}
       NOTIFICATIONS_EMAIL_ENABLED: ${NOTIFICATIONS_EMAIL_ENABLED:-false}
+      # profile pics live on a named volume (below) so they survive container
+      # rebuilds — /tmp is wiped on every --build redeploy, which silently
+      # orphaned the DB key and made avatars "disappear".
+      PROFILE_PICTURE_DIR: /data/profile-pics
+    volumes:
+      - economizai-profilepics:/data/profile-pics
     ports:
       - "8080:10000"                # host 8080 -> container 10000 (Dockerfile port)
     restart: unless-stopped
@@ -86,3 +92,4 @@ services:
 
 volumes:
   economizai-pgdata:
+  economizai-profilepics:

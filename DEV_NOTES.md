@@ -28,11 +28,11 @@ mirror entries here.
 
 ## Storage / infrastructure
 
-### Profile picture storage = local disk
-- **Now**: `LocalDiskProfilePictureStorage` writes to `/tmp/economizai/profile-pics/`. Bytes served via `GET /users/me/profile-picture`.
-- **Why OK for dev**: zero setup, no external account, works on Render free tier.
-- **Why NOT OK for prod**: Render free tier disk is **ephemeral** — wiped on every redeploy. Users would lose their pics on every push. Also can't scale to multiple instances.
-- **Fix before prod**: implement an `S3ProfilePictureStorage` (or Cloudinary, or Render's paid persistent disk), wire via the `ProfilePictureStorage` interface, switch via env var. ~2 hr.
+### Profile picture storage = local disk (now on a persistent volume)
+- **Now**: `LocalDiskProfilePictureStorage` writes to `PROFILE_PICTURE_DIR` (default `/tmp/economizai/profile-pics`). On the self-hosted server the app sets it to `/data/profile-pics`, backed by the named Docker volume `economizai-profilepics` (compose `app` service) — same durability as `economizai-pgdata`. Bytes served via `GET /users/me/profile-picture`.
+- **History**: the default `/tmp` is **inside the container** and wiped on every `--build` redeploy. Since every push auto-deploys (rebuild), uploaded pics vanished while the DB key dangled → `read()` fell back to the initials avatar = pics "disappearing". Fixed 2026-06-07 by mounting a volume + pointing the env var at it.
+- **Why still NOT prod-final**: local disk can't scale to multiple instances and isn't backed up off-box.
+- **Fix before prod**: implement an `S3ProfilePictureStorage` (or Cloudinary), wire via the `ProfilePictureStorage` interface, switch via env var. ~2 hr.
 
 ### Push notifications = Expo Push Service (works in dev with no setup)
 - **Now**: `PushDispatcher` calls the Expo Push HTTP API (`https://exp.host/--/api/v2/push/send`). The FE (React Native + Expo) registers an Expo Push Token via `PUT /api/v1/users/me/push-token`; the backend POSTs to Expo, which routes to FCM (Android) or APNs (iOS).

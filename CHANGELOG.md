@@ -16,6 +16,15 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-07 — profile pictures now persist across redeploys (bugfix)
+
+Uploaded profile pictures were disappearing after a while — the cause was that
+the server stored them in a container-local `/tmp` dir that gets wiped on every
+deploy, while the DB kept pointing at the now-missing file (so the API silently
+served the initials-avatar fallback). Pics are now kept on a persistent volume
+on the server, so an uploaded picture survives deploys. No API/payload changes —
+`PUT/GET/DELETE /users/me/profile-picture` are unchanged. **FE action:** none.
+
 ## 2026-06-07 — pharmacy detection now CNAE-verified (backend accuracy)
 
 The pharmacy-merchant signal behind `HEALTH` categorization is now **verified from the CNPJ's CNAE** (economic activity) via an external registry — `4771*` = pharmacy, `4711*/4712*` = supermarket — instead of only guessing from the merchant name. It runs async/best-effort (never blocks import; falls back to the name guess if the lookup fails), and when a merchant is confirmed a pharmacy, its previously-`OTHER` items are backfilled to `HEALTH`. No API contract change — purely better category accuracy on items the FE already reads.
