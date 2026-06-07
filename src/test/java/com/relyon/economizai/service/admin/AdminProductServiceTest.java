@@ -65,6 +65,18 @@ class AdminProductServiceTest {
     }
 
     @Test
+    void listAll_pagesThroughCatalog() {
+        var product = product("ARROZ", ProductCategory.GROCERIES, CategorizationSource.DICTIONARY);
+        when(productRepository.findAll(PageRequest.of(0, 50)))
+                .thenReturn(new PageImpl<>(List.of(product)));
+
+        var page = service.listAll(PageRequest.of(0, 50));
+
+        assertEquals(1, page.getTotalElements());
+        assertEquals(ProductCategory.GROCERIES, page.getContent().get(0).category());
+    }
+
+    @Test
     void recategorizeReport_splitsDictionaryVsMlAndFlagsUserOverrides() {
         var dictFix = product("LIMP VEJA", null, CategorizationSource.NONE);              // dict suggestion
         var mlOnly = product("PRATO", null, CategorizationSource.NONE);                    // ML suggestion

@@ -99,6 +99,12 @@ public class AdminController {
         return ResponseEntity.accepted().build();
     }
 
+    /** Full product catalog (paged) — dev tool for curating dictionary/brands. */
+    @GetMapping("/products")
+    public ResponseEntity<Page<ProductResponse>> listProducts(@PageableDefault(size = 50) Pageable pageable) {
+        return ResponseEntity.ok(adminProductService.listAll(pageable));
+    }
+
     @GetMapping("/products/missing-brand")
     public ResponseEntity<Page<MissingBrandProductResponse>> listMissingBrand(
             @PageableDefault(size = 20) Pageable pageable) {

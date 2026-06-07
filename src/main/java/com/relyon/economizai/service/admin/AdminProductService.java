@@ -59,6 +59,12 @@ public class AdminProductService {
     private final ConsumptionSnoozeRepository consumptionSnoozeRepository;
     private final ProductExtractor productExtractor;
 
+    /** Full catalog (paged) — for curating the dictionary/brands against real data. */
+    @Transactional(readOnly = true)
+    public Page<ProductResponse> listAll(Pageable pageable) {
+        return productRepository.findAll(pageable).map(ProductResponse::from);
+    }
+
     @Transactional(readOnly = true)
     public Page<MissingBrandProductResponse> listMissingBrand(Pageable pageable) {
         var page = productRepository.findMissingBrand(pageable);
