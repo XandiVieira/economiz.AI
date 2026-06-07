@@ -4,6 +4,7 @@ import com.relyon.economizai.exception.ProductNotFoundException;
 import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.CategoryView;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.repository.InsightsRepository;
 import com.relyon.economizai.repository.ProductRepository;
@@ -24,6 +25,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -41,6 +43,7 @@ class InsightsServiceTest {
     @Mock private InsightsRepository insightsRepository;
     @Mock private ProductRepository productRepository;
     @Mock private MarketNameService marketNameService;
+    @Mock private HouseholdProductCategoryOverrideService categoryOverrideService;
 
     @InjectMocks private InsightsService insightsService;
 
@@ -165,7 +168,7 @@ class InsightsServiceTest {
     }
 
     @Test
-    void topCategories_appliesLimit() {
+    void topCategories_globalLens_appliesLimitOverGlobalEnumGrouping() {
         var user = buildUser();
         var householdId = user.getHousehold().getId();
         stubEmptyAggregates(householdId, EPOCH_FLOOR, EPOCH_CEIL);
@@ -174,10 +177,59 @@ class InsightsServiceTest {
                         new Object[]{ProductCategory.GROCERIES, new BigDecimal("40.00"), 5L},
                         new Object[]{ProductCategory.BEVERAGES, new BigDecimal("15.00"), 2L}));
 
-        var top = insightsService.topCategories(user, null, null, 1);
+        var top = insightsService.topCategories(user, null, null, 1, CategoryView.GLOBAL);
 
         assertEquals(1, top.size());
         assertEquals(ProductCategory.GROCERIES, top.get(0).category());
+        assertEquals("GROCERIES", top.get(0).label());
+    }
+
+    @Test
+    void topCategories_householdLens_reaggregatesByEffectiveCategory_noDoubleCount() {
+        var user = buildUser();
+        var householdId = user.getHousehold().getId();
+        var leite = UUID.randomUUID();      // global MEAT_DAIRY, overridden to GROCERIES
+        var arroz = UUID.randomUUID();      // global GROCERIES, no override
+        var sabao = UUID.randomUUID();      // global CLEANING, moved to a custom category
+        when(insightsRepository.spendByProduct(householdId, EPOCH_FLOOR, EPOCH_CEIL))
+                .thenReturn(List.<Object[]>of(
+                        new Object[]{leite, ProductCategory.MEAT_DAIRY, new BigDecimal("10.00"), 2L},
+                        new Object[]{arroz, ProductCategory.GROCERIES, new BigDecimal("30.00"), 3L},
+                        new Object[]{sabao, ProductCategory.CLEANING, new BigDecimal("5.00"), 1L}));
+        when(categoryOverrideService.overridesByProduct(eq(householdId),
+                any())).thenReturn(Map.of(
+                        leite, "GROCERIES",
+                        sabao, "Produtos de Limpeza"));
+
+        var buckets = insightsService.topCategories(user, null, null, 10, CategoryView.HOUSEHOLD);
+
+        // GROCERIES bucket = arroz 30 + leite 10 (override) = 40, ranked first.
+        var groceries = buckets.stream().filter(b -> "GROCERIES".equals(b.label())).findFirst().orElseThrow();
+        assertEquals(0, new BigDecimal("40.00").compareTo(groceries.total()));
+        assertEquals(ProductCategory.GROCERIES, groceries.category());
+        // Custom bucket carries the custom name as label and a null enum category.
+        var custom = buckets.stream().filter(b -> "Produtos de Limpeza".equals(b.label())).findFirst().orElseThrow();
+        assertEquals(0, new BigDecimal("5.00").compareTo(custom.total()));
+        assertNull(custom.category());
+        // MEAT_DAIRY no longer appears — leite was moved out of it (no double count).
+        assertTrue(buckets.stream().noneMatch(b -> "MEAT_DAIRY".equals(b.label())));
+        // CLEANING no longer appears — sabao migrated to the custom category.
+        assertTrue(buckets.stream().noneMatch(b -> "CLEANING".equals(b.label())));
+    }
+
+    @Test
+    void topCategories_householdLens_isTheDefault() {
+        var user = buildUser();
+        var householdId = user.getHousehold().getId();
+        var arroz = UUID.randomUUID();
+        when(insightsRepository.spendByProduct(householdId, EPOCH_FLOOR, EPOCH_CEIL))
+                .thenReturn(List.<Object[]>of(new Object[]{arroz, ProductCategory.GROCERIES, new BigDecimal("30.00"), 3L}));
+        when(categoryOverrideService.overridesByProduct(eq(householdId), any())).thenReturn(Map.of());
+
+        var buckets = insightsService.topCategories(user, null, null, 10);
+
+        assertEquals(1, buckets.size());
+        assertEquals(ProductCategory.GROCERIES, buckets.get(0).category());
     }
 
     @Test

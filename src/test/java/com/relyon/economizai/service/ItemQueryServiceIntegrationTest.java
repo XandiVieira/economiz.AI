@@ -1,13 +1,16 @@
 package com.relyon.economizai.service;
 
 import com.relyon.economizai.model.Household;
+import com.relyon.economizai.model.HouseholdCustomCategory;
 import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.CategoryView;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
+import com.relyon.economizai.repository.HouseholdCustomCategoryRepository;
 import com.relyon.economizai.repository.HouseholdRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.repository.ReceiptRepository;
@@ -45,6 +48,8 @@ class ItemQueryServiceIntegrationTest {
     @Autowired private HouseholdRepository householdRepository;
     @Autowired private ReceiptRepository receiptRepository;
     @Autowired private ProductRepository productRepository;
+    @Autowired private HouseholdProductCategoryOverrideService categoryOverrideService;
+    @Autowired private HouseholdCustomCategoryRepository customCategoryRepository;
 
     private User user;
     private Product leite;
@@ -96,6 +101,60 @@ class ItemQueryServiceIntegrationTest {
         assertEquals(3, page.getTotalElements()); // leite bought 3 times
         assertTrue(page.getContent().stream()
                 .allMatch(i -> "MEAT_DAIRY".equals(i.category())));
+        // With no override, effective category and global category coincide.
+        assertTrue(page.getContent().stream()
+                .allMatch(i -> "MEAT_DAIRY".equals(i.globalCategory())));
+    }
+
+    @Test
+    void householdLens_excludesProductMovedToCustomCategory_fromItsOldEnumFilter() {
+        // Migrate "leite" (global MEAT_DAIRY) into a custom category.
+        var custom = customCategoryRepository.save(HouseholdCustomCategory.builder()
+                .household(user.getHousehold()).name("Laticinios").build());
+        categoryOverrideService.setCustomOverride(user, leite, custom);
+
+        var page = service.query(user,
+                ItemFilters.fromRequest(null, null, null, null,
+                        List.of(ProductCategory.MEAT_DAIRY), null, null, null, null),
+                PageRequest.of(0, 20));
+
+        // Household lens: leite no longer counts under MEAT_DAIRY (moved out).
+        assertEquals(0, page.getTotalElements());
+    }
+
+    @Test
+    void householdLens_includesProductOverriddenIntoTheFilteredEnum() {
+        // Move "leite" from MEAT_DAIRY to GROCERIES via an enum override.
+        categoryOverrideService.setOverride(user, leite, ProductCategory.GROCERIES);
+
+        var page = service.query(user,
+                ItemFilters.fromRequest(null, null, null, null,
+                        List.of(ProductCategory.GROCERIES), null, null, null, null),
+                PageRequest.of(0, 20));
+
+        // arroz (3, global GROCERIES) + leite (3, overridden into GROCERIES) = 6.
+        assertEquals(6, page.getTotalElements());
+        assertTrue(page.getContent().stream()
+                .allMatch(item -> "GROCERIES".equals(item.category())));
+    }
+
+    @Test
+    void globalLens_stillIncludesProductMovedToCustomCategory() {
+        var custom = customCategoryRepository.save(HouseholdCustomCategory.builder()
+                .household(user.getHousehold()).name("Laticinios").build());
+        categoryOverrideService.setCustomOverride(user, leite, custom);
+
+        var page = service.query(user,
+                ItemFilters.fromRequest(null, null, null, null,
+                        List.of(ProductCategory.MEAT_DAIRY), null, null, null, null, CategoryView.GLOBAL),
+                PageRequest.of(0, 20));
+
+        // GLOBAL lens ignores the override → leite still counts under MEAT_DAIRY.
+        assertEquals(3, page.getTotalElements());
+        // category reflects the override label, globalCategory reflects the enum.
+        var row = page.getContent().get(0);
+        assertEquals("Laticinios", row.category());
+        assertEquals("MEAT_DAIRY", row.globalCategory());
     }
 
     @Test

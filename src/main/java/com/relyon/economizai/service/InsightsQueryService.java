@@ -5,6 +5,7 @@ import com.relyon.economizai.dto.response.InsightsQueryResponse.Bucket;
 import com.relyon.economizai.dto.response.InsightsQueryResponse.Filters;
 import com.relyon.economizai.dto.response.InsightsQueryResponse.Summary;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.CategoryView;
 import com.relyon.economizai.model.enums.InsightsGroupBy;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.model.enums.ReceiptStatus;
@@ -20,10 +21,13 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -49,6 +53,8 @@ public class InsightsQueryService {
     private static final int DEFAULT_LIMIT = 100;
     private static final int MAX_LIMIT = 500;
 
+    private final HouseholdProductCategoryOverrideService categoryOverrideService;
+
     @PersistenceContext
     private EntityManager entityManager;
 
@@ -57,9 +63,14 @@ public class InsightsQueryService {
         var filters = QueryFilters.normalize(input, user.getHousehold().getId());
         var groupBy = filters.groupBy();
         var summary = computeSummary(filters);
-        var buckets = groupBy == InsightsGroupBy.NONE
-                ? List.<Bucket>of()
-                : computeBuckets(filters);
+        List<Bucket> buckets;
+        if (groupBy == InsightsGroupBy.NONE) {
+            buckets = List.of();
+        } else if (groupBy == InsightsGroupBy.CATEGORY && filters.categoryView() == CategoryView.HOUSEHOLD) {
+            buckets = computeHouseholdCategoryBuckets(filters);
+        } else {
+            buckets = computeBuckets(filters);
+        }
 
         log.info("insights.query household={} groupBy={} buckets={} total={} receipts={}",
                 filters.householdId(), groupBy, buckets.size(),
@@ -119,6 +130,83 @@ public class InsightsQueryService {
         return query.getResultList().stream()
                 .map(dimension::toBucket)
                 .toList();
+    }
+
+    /**
+     * HOUSEHOLD-lens CATEGORY buckets. SQL grouping by {@code p.category} would
+     * double-count products moved by an override, so instead we group at
+     * {@code (productId, category, receiptId)} granularity and re-aggregate in
+     * code by the household's EFFECTIVE category. Grouping by receipt id too lets
+     * us keep {@code receiptCount} as a correct DISTINCT count per effective
+     * category (a receipt touching two products in the same bucket counts once).
+     */
+    private List<Bucket> computeHouseholdCategoryBuckets(QueryFilters f) {
+        var clauses = buildClauses(f);
+        var jpql = """
+                SELECT p.id, p.category, r.id,
+                       COALESCE(SUM(ri.totalPrice), 0),
+                       COUNT(ri)
+                FROM ReceiptItem ri
+                JOIN ri.receipt r
+                LEFT JOIN ri.product p
+                WHERE %s
+                GROUP BY p.id, p.category, r.id
+                """.formatted(clauses.where());
+        var query = entityManager.createQuery(jpql, Object[].class);
+        clauses.bind(query);
+        var rows = query.getResultList();
+
+        var productIds = rows.stream()
+                .map(row -> (UUID) row[0])
+                .filter(id -> id != null)
+                .distinct()
+                .toList();
+        var overrides = categoryOverrideService.overridesByProduct(f.householdId(), productIds);
+
+        var accumulators = new LinkedHashMap<String, CategoryAccumulator>();
+        for (var row : rows) {
+            var productId = (UUID) row[0];
+            var globalCategory = (ProductCategory) row[1];
+            var receiptId = (UUID) row[2];
+            var total = (BigDecimal) row[3];
+            var itemCount = ((Number) row[4]).longValue();
+            var overrideLabel = productId != null ? overrides.get(productId) : null;
+            var label = overrideLabel != null ? overrideLabel
+                    : (globalCategory != null ? globalCategory.name() : ProductCategory.OTHER.name());
+            accumulators.computeIfAbsent(label, CategoryAccumulator::new)
+                    .add(total, itemCount, receiptId);
+        }
+        return accumulators.values().stream()
+                .sorted(Comparator.comparing(CategoryAccumulator::total).reversed())
+                .limit(f.limit())
+                .map(CategoryAccumulator::toBucket)
+                .toList();
+    }
+
+    private static final class CategoryAccumulator {
+        private final String label;
+        private BigDecimal total = BigDecimal.ZERO;
+        private long itemCount = 0;
+        private final Set<UUID> receiptIds = new HashSet<>();
+
+        CategoryAccumulator(String label) {
+            this.label = label;
+        }
+
+        void add(BigDecimal amount, long items, UUID receiptId) {
+            total = total.add(amount);
+            itemCount += items;
+            if (receiptId != null) receiptIds.add(receiptId);
+        }
+
+        BigDecimal total() {
+            return total;
+        }
+
+        Bucket toBucket() {
+            var receiptCount = receiptIds.size();
+            return new Bucket(label, label, total, receiptCount, itemCount, averageTicket(total, receiptCount));
+        }
     }
 
     /**
@@ -206,9 +294,10 @@ public class InsightsQueryService {
             BigDecimal minReceiptTotal,
             BigDecimal maxReceiptTotal,
             InsightsGroupBy groupBy,
-            int limit
+            int limit,
+            CategoryView categoryView
     ) {
-        /** Builder for the controller — householdId is filled in by the service. */
+        /** Backwards-compatible builder — defaults the lens to HOUSEHOLD. */
         public static QueryFilters fromRequest(LocalDateTime from, LocalDateTime to,
                                                List<String> marketCnpjs,
                                                List<String> marketCnpjRoots,
@@ -219,11 +308,28 @@ public class InsightsQueryService {
                                                BigDecimal maxReceiptTotal,
                                                InsightsGroupBy groupBy,
                                                Integer limit) {
+            return fromRequest(from, to, marketCnpjs, marketCnpjRoots, categories, productIds, eans,
+                    minReceiptTotal, maxReceiptTotal, groupBy, limit, CategoryView.HOUSEHOLD);
+        }
+
+        /** Builder for the controller — householdId is filled in by the service. */
+        public static QueryFilters fromRequest(LocalDateTime from, LocalDateTime to,
+                                               List<String> marketCnpjs,
+                                               List<String> marketCnpjRoots,
+                                               List<ProductCategory> categories,
+                                               List<UUID> productIds,
+                                               List<String> eans,
+                                               BigDecimal minReceiptTotal,
+                                               BigDecimal maxReceiptTotal,
+                                               InsightsGroupBy groupBy,
+                                               Integer limit,
+                                               CategoryView categoryView) {
             return new QueryFilters(null, from, to,
                     marketCnpjs, marketCnpjRoots, categories, productIds, eans,
                     minReceiptTotal, maxReceiptTotal,
                     groupBy != null ? groupBy : InsightsGroupBy.NONE,
-                    clampLimit(limit));
+                    clampLimit(limit),
+                    categoryView != null ? categoryView : CategoryView.HOUSEHOLD);
         }
 
         static QueryFilters normalize(QueryFilters f, UUID householdId) {
@@ -239,7 +345,8 @@ public class InsightsQueryService {
                     f.minReceiptTotal(),
                     f.maxReceiptTotal(),
                     f.groupBy(),
-                    f.limit()
+                    f.limit(),
+                    f.categoryView() != null ? f.categoryView() : CategoryView.HOUSEHOLD
             );
         }
 

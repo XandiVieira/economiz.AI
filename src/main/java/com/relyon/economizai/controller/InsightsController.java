@@ -4,6 +4,7 @@ import com.relyon.economizai.dto.response.InsightsQueryResponse;
 import com.relyon.economizai.dto.response.PriceHistoryResponse;
 import com.relyon.economizai.dto.response.SpendInsightsResponse;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.CategoryView;
 import com.relyon.economizai.model.enums.InsightsGroupBy;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.service.InsightsQueryService;
@@ -56,8 +57,9 @@ public class InsightsController {
             @AuthenticationPrincipal User user,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
-            @RequestParam(defaultValue = "5") int limit) {
-        return ResponseEntity.ok(insightsService.topCategories(user, from, to, limit));
+            @RequestParam(defaultValue = "5") int limit,
+            @RequestParam(defaultValue = "HOUSEHOLD") CategoryView categoryView) {
+        return ResponseEntity.ok(insightsService.topCategories(user, from, to, limit, categoryView));
     }
 
     @GetMapping("/products/{productId}/price-history")
@@ -103,9 +105,10 @@ public class InsightsController {
             @RequestParam(required = false) BigDecimal minReceiptTotal,
             @RequestParam(required = false) BigDecimal maxReceiptTotal,
             @RequestParam(required = false) InsightsGroupBy groupBy,
-            @RequestParam(required = false) Integer limit) {
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(defaultValue = "HOUSEHOLD") CategoryView categoryView) {
         var filters = QueryFilters.fromRequest(from, to, marketCnpj, marketCnpjRoot, category,
-                productId, ean, minReceiptTotal, maxReceiptTotal, groupBy, limit);
+                productId, ean, minReceiptTotal, maxReceiptTotal, groupBy, limit, categoryView);
         return ResponseEntity.ok(insightsQueryService.query(user, filters));
     }
 }

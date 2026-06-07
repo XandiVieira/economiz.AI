@@ -224,7 +224,7 @@ DELETE /api/v1/receipts/{id}                         → hard delete. Frees the 
 
 **Per-item display name (`friendlyDescription`)** — NFC-e descriptions are noisy ("ARROZ TIO J TP1 5KG"). The user can rename an item for display via `PATCH /receipts/{id}/items/{itemId}` with `{ "friendlyDescription": "Arroz Tio João 5kg" }`. The original `rawDescription` stays untouched (it's the legal audit text from SEFAZ — immutable).
 
-**Per-item category correction** — `PUT /receipts/{id}/items/{itemId}/category` with `{ "category": "MEAT_DAIRY" }`. This is **household-scoped "evidence, not truth"**: it changes the category *this household* sees for that product everywhere (`GET /receipts/{id}`, `GET /items`) but does **not** mutate the global product, so other households are unaffected. `400` if the item isn't linked to a canonical product yet. Returns the updated receipt with the override applied. (Aggregates/insights still use the global category.)
+**Per-item category correction** — `PUT /receipts/{id}/items/{itemId}/category` with `{ "category": "MEAT_DAIRY" }`. This is **household-scoped "evidence, not truth"**: it changes the category *this household* sees for that product everywhere (`GET /receipts/{id}`, `GET /items`) but does **not** mutate the global product, so other households are unaffected. `400` if the item isn't linked to a canonical product yet. Returns the updated receipt with the override applied. (Aggregates/insights honor this override in the **HOUSEHOLD** category lens, the default — pass `categoryView=GLOBAL` on `/items`, `/insights/query`, and `/insights/categories/top` to ignore overrides and use the global category.)
 
 The response always includes both:
 - `rawDescription` — original NFC-e text, never changes
@@ -316,9 +316,11 @@ Returns:
 
 ```
 GET /api/v1/insights/markets/top?limit=5
-GET /api/v1/insights/categories/top?limit=5
+GET /api/v1/insights/categories/top?limit=5&categoryView=HOUSEHOLD
 GET /api/v1/insights/products/{productId}/price-history?from=&to=
 ```
+
+`categories/top` takes the same **category lens** as `/items` via `categoryView` (default `HOUSEHOLD`). In the HOUSEHOLD lens each product is counted **once** under its effective category, so a product moved by an override is removed from its old enum bucket and added to the override target (custom name → its own bucket). Each `CategoryBucket` carries `category` (the global enum, **null** for custom-category buckets), `label` (always present — the display name), `total`, and `itemCount`. Pass `categoryView=GLOBAL` to group purely by `Product.category` (the pre-lens behavior).
 
 `price-history` returns chronological points, **each tagged with marketCnpj +
 marketName** so the FE can color the points to differentiate stores of the same
@@ -342,7 +344,10 @@ GET /api/v1/insights/query
     &maxReceiptTotal=500.00
     &groupBy=WEEK                     ← see list below
     &limit=100                        ← bucket cap (default 100, max 500)
+    &categoryView=HOUSEHOLD           ← category lens (default HOUSEHOLD; only affects groupBy=CATEGORY)
 ```
+
+**Category lens (`categoryView`)** — only affects `groupBy=CATEGORY`. In `HOUSEHOLD` (default), spend is re-bucketed by each household's **effective** category (override custom name / corrected enum / global enum), counting each product **once** — no double-counting. The bucket `key`/`label` is the effective category name; `receiptCount` is a correct distinct-receipt count per effective bucket. `GLOBAL` groups purely by `Product.category` (pre-lens behavior). Other `groupBy` dimensions ignore this param.
 
 **`groupBy`** is a single dimension (one at a time):
 - **Temporal:** `DAY`, `WEEK`, `MONTH`, `YEAR` — sorted ascending
@@ -413,8 +418,15 @@ GET /api/v1/items
     &ean=7891234567890                ← list-typed
     &minReceiptTotal=100.00           ← receipt-total range
     &maxReceiptTotal=500.00
+    &categoryView=HOUSEHOLD           ← category lens (default HOUSEHOLD; or GLOBAL)
     &page=0&size=20                   ← standard Spring pagination
 ```
+
+**Category lens (`categoryView`)** — each product belongs to **exactly one** category for the household (no double-counting). The lens controls how `&category=<ENUM>` filtering resolves:
+- `HOUSEHOLD` (**default**): filter by the **effective** category — the household's override (a corrected enum) when set, else the global `Product.category`. `?category=GROCERIES` returns products whose *effective* category is GROCERIES and **excludes** any product the household moved to a custom category or to a different enum.
+- `GLOBAL`: ignore overrides; filter purely by the global `Product.category` (the pre-lens behavior).
+
+Each row carries **both** categories: `category` is the effective label (override custom name / corrected enum / global enum), `globalCategory` is always the global enum (or null when the item has no canonical product).
 
 Returns a Spring `Page<PurchasedItemResponse>`:
 ```json
@@ -423,7 +435,8 @@ Returns a Spring `Page<PurchasedItemResponse>`:
     {
       "itemId": "uuid",
       "productId": "uuid|null",
-      "category": "MEAT_DAIRY|null",
+      "category": "MEAT_DAIRY|Laticínios|null",
+      "globalCategory": "MEAT_DAIRY|null",
       "displayDescription": "Leite Italac 1L",
       "rawDescription": "LEITE ITALAC 1L",
       "friendlyDescription": "Leite Italac 1L|null",
@@ -450,6 +463,7 @@ Returns a Spring `Page<PurchasedItemResponse>`:
 - The category enum values: `GROCERIES, BEVERAGES, PRODUCE, MEAT_DAIRY, BAKERY, CLEANING, PERSONAL_CARE, HEALTH, OTHER`. The FE maps these to PT labels (e.g. `MEAT_DAIRY` → "Carnes e Laticínios", `HEALTH` → "Saúde").
 - Natural drill-down target: take a bucket `key` from `/insights/query` (a productId, a category, a CNPJ) and pass it here to list the underlying items.
 - Extra filter `&customCategoryId=<uuid>` lists the items the household has migrated into one of its **custom categories** (see §4c). Combine with other filters as usual; unknown id → empty page.
+- `categoryView` (default `HOUSEHOLD`) decides whether `&category=<ENUM>` filters by the household's effective category or the global one — see the lens note above.
 
 ---
 
@@ -479,7 +493,7 @@ POST   /api/v1/categories/migrate        { "productIds":[...], "targetCategory":
 → 200 { "migrated": 2, "skipped": 0 }
 ```
 
-**Migration screen flow:** list a category's items with `GET /items?category=GROCERIES`, check the ones to move (with a select-all toggle), then `POST /categories/migrate` with those `productIds` and the target. View a custom category's contents with `GET /items?customCategoryId=<uuid>`. After migration each moved item's `category` reads back as the custom-category **name** (a display string, no longer always an enum). Aggregates/insights still use the global category.
+**Migration screen flow:** list a category's items with `GET /items?category=GROCERIES`, check the ones to move (with a select-all toggle), then `POST /categories/migrate` with those `productIds` and the target. View a custom category's contents with `GET /items?customCategoryId=<uuid>`. After migration each moved item's `category` reads back as the custom-category **name** (a display string, no longer always an enum); the item's `globalCategory` keeps the underlying enum. In the default **HOUSEHOLD** category lens, `/items?category=<enum>` and the `CATEGORY` insights paths count the moved product under its new (custom/corrected) category and drop it from the old enum — no double-counting. Pass `categoryView=GLOBAL` to fall back to the global category everywhere.
 
 ---
 

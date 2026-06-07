@@ -1,14 +1,17 @@
 package com.relyon.economizai.service;
 
 import com.relyon.economizai.model.Household;
+import com.relyon.economizai.model.HouseholdCustomCategory;
 import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.CategoryView;
 import com.relyon.economizai.model.enums.InsightsGroupBy;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
+import com.relyon.economizai.repository.HouseholdCustomCategoryRepository;
 import com.relyon.economizai.repository.HouseholdRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.repository.ReceiptRepository;
@@ -45,6 +48,8 @@ class InsightsQueryServiceIntegrationTest {
     @Autowired private HouseholdRepository householdRepository;
     @Autowired private ReceiptRepository receiptRepository;
     @Autowired private ProductRepository productRepository;
+    @Autowired private HouseholdProductCategoryOverrideService categoryOverrideService;
+    @Autowired private HouseholdCustomCategoryRepository customCategoryRepository;
 
     private User user;
     private Product leite;
@@ -159,11 +164,52 @@ class InsightsQueryServiceIntegrationTest {
     }
 
     @Test
-    void groupBy_category_rankedBySpend() {
+    void groupBy_category_globalLens_rankedBySpend() {
+        var result = service.query(user,
+                filters().groupBy(InsightsGroupBy.CATEGORY).categoryView(CategoryView.GLOBAL).build());
+        assertEquals(3, result.buckets().size());
+        assertEquals("GROCERIES", result.buckets().get(0).key());
+        assertEquals(0, new BigDecimal("120.00").compareTo(result.buckets().get(0).total()));
+    }
+
+    @Test
+    void groupBy_category_householdLens_isDefault_andMatchesGlobalWithoutOverrides() {
         var result = service.query(user, filters().groupBy(InsightsGroupBy.CATEGORY).build());
         assertEquals(3, result.buckets().size());
         assertEquals("GROCERIES", result.buckets().get(0).key());
         assertEquals(0, new BigDecimal("120.00").compareTo(result.buckets().get(0).total()));
+    }
+
+    @Test
+    void groupBy_category_householdLens_reaggregatesOverriddenEnum_noDoubleCount() {
+        // Move leite (MEAT_DAIRY, 30) into GROCERIES via an enum override.
+        categoryOverrideService.setOverride(user, leite, ProductCategory.GROCERIES);
+
+        var result = service.query(user, filters().groupBy(InsightsGroupBy.CATEGORY).build());
+
+        var groceries = result.buckets().stream()
+                .filter(bucket -> "GROCERIES".equals(bucket.key())).findFirst().orElseThrow();
+        // arroz 120 + leite 30 = 150; MEAT_DAIRY bucket disappears.
+        assertEquals(0, new BigDecimal("150.00").compareTo(groceries.total()));
+        assertTrue(result.buckets().stream().noneMatch(bucket -> "MEAT_DAIRY".equals(bucket.key())));
+        // GLOBAL lens still splits them.
+        var global = service.query(user,
+                filters().groupBy(InsightsGroupBy.CATEGORY).categoryView(CategoryView.GLOBAL).build());
+        assertTrue(global.buckets().stream().anyMatch(bucket -> "MEAT_DAIRY".equals(bucket.key())));
+    }
+
+    @Test
+    void groupBy_category_householdLens_customCategoryBecomesItsOwnBucket() {
+        var custom = customCategoryRepository.save(HouseholdCustomCategory.builder()
+                .household(user.getHousehold()).name("Laticinios").build());
+        categoryOverrideService.setCustomOverride(user, leite, custom);
+
+        var result = service.query(user, filters().groupBy(InsightsGroupBy.CATEGORY).build());
+
+        var laticinios = result.buckets().stream()
+                .filter(bucket -> "Laticinios".equals(bucket.key())).findFirst().orElseThrow();
+        assertEquals(0, new BigDecimal("30.00").compareTo(laticinios.total()));
+        assertTrue(result.buckets().stream().noneMatch(bucket -> "MEAT_DAIRY".equals(bucket.key())));
     }
 
     @Test
@@ -277,6 +323,7 @@ class InsightsQueryServiceIntegrationTest {
         private BigDecimal maxReceiptTotal;
         private InsightsGroupBy groupBy = InsightsGroupBy.NONE;
         private Integer limit;
+        private CategoryView categoryView = CategoryView.HOUSEHOLD;
 
         FilterBuilder from(LocalDateTime v) { this.from = v; return this; }
         FilterBuilder to(LocalDateTime v) { this.to = v; return this; }
@@ -286,10 +333,11 @@ class InsightsQueryServiceIntegrationTest {
         FilterBuilder maxReceiptTotal(BigDecimal v) { this.maxReceiptTotal = v; return this; }
         FilterBuilder groupBy(InsightsGroupBy v) { this.groupBy = v; return this; }
         FilterBuilder limit(Integer v) { this.limit = v; return this; }
+        FilterBuilder categoryView(CategoryView v) { this.categoryView = v; return this; }
 
         QueryFilters build() {
             return QueryFilters.fromRequest(from, to, marketCnpjs, marketCnpjRoots, categories,
-                    productIds, eans, minReceiptTotal, maxReceiptTotal, groupBy, limit);
+                    productIds, eans, minReceiptTotal, maxReceiptTotal, groupBy, limit, categoryView);
         }
     }
 }

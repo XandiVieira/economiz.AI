@@ -18,6 +18,7 @@ public record PurchasedItemResponse(
         UUID itemId,
         UUID productId,
         String category,
+        String globalCategory,
         String displayDescription,
         String rawDescription,
         String friendlyDescription,
@@ -52,6 +53,7 @@ public record PurchasedItemResponse(
                 item.getId(),
                 product != null ? product.getId() : null,
                 overrideLabel != null ? overrideLabel : globalCategory,
+                globalCategory,
                 display,
                 item.getRawDescription(),
                 friendly,
@@ -70,7 +72,7 @@ public record PurchasedItemResponse(
 
     /** Copy with the household's custom display name applied; leaves the original {@code marketName} intact. */
     public PurchasedItemResponse withMarketFriendlyName(String marketFriendlyName) {
-        return new PurchasedItemResponse(itemId, productId, category, displayDescription, rawDescription,
+        return new PurchasedItemResponse(itemId, productId, category, globalCategory, displayDescription, rawDescription,
                 friendlyDescription, ean, quantity, unit, unitPrice, totalPrice, nfcePromoFlag,
                 receiptId, marketName, marketFriendlyName, marketCnpj, purchasedAt);
     }

@@ -3,6 +3,7 @@ package com.relyon.economizai.service;
 import com.relyon.economizai.dto.response.PurchasedItemResponse;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.CategoryView;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.service.geo.MarketNameService;
@@ -59,16 +60,17 @@ public class ItemQueryService {
         var clauses = buildClauses(filters);
 
         var countQuery = entityManager.createQuery(
-                "SELECT COUNT(ri) FROM ReceiptItem ri JOIN ri.receipt r LEFT JOIN ri.product p WHERE "
-                        + clauses.where(), Long.class);
+                "SELECT COUNT(ri) FROM ReceiptItem ri JOIN ri.receipt r LEFT JOIN ri.product p"
+                        + clauses.join() + " WHERE " + clauses.where(), Long.class);
         clauses.bind(countQuery);
         var total = countQuery.getSingleResult();
 
         List<PurchasedItemResponse> rows = List.of();
         if (total > 0) {
             var rowQuery = entityManager.createQuery(
-                    "SELECT ri FROM ReceiptItem ri JOIN FETCH ri.receipt r LEFT JOIN FETCH ri.product p WHERE "
-                            + clauses.where() + " ORDER BY r.issuedAt DESC, ri.id ASC", ReceiptItem.class);
+                    "SELECT ri FROM ReceiptItem ri JOIN FETCH ri.receipt r LEFT JOIN FETCH ri.product p"
+                            + clauses.join() + " WHERE " + clauses.where()
+                            + " ORDER BY r.issuedAt DESC, ri.id ASC", ReceiptItem.class);
             clauses.bind(rowQuery);
             rowQuery.setFirstResult((int) pageable.getOffset());
             rowQuery.setMaxResults(pageable.getPageSize());
@@ -99,6 +101,7 @@ public class ItemQueryService {
     private static FilterClauses buildClauses(ItemFilters f) {
         var clauses = new ArrayList<String>();
         var bindings = new LinkedHashMap<String, Object>();
+        var join = "";
 
         clauses.add("r.household.id = :householdId");
         bindings.put("householdId", f.householdId());
@@ -122,7 +125,17 @@ public class ItemQueryService {
             bindings.put("marketCnpjRoots", f.marketCnpjRoots());
         }
         if (f.categories() != null) {
-            clauses.add("p.category IN (:categories)");
+            if (f.categoryView() == CategoryView.HOUSEHOLD) {
+                // Household lens: filter by EFFECTIVE category. A product matches when
+                // it has no override and its global category is in the list, OR its
+                // override targets an enum in the list. Products migrated to a custom
+                // category (override.category IS NULL) or to a different enum are excluded.
+                join = " LEFT JOIN HouseholdProductCategoryOverride o"
+                        + " ON o.product = p AND o.household.id = :householdId";
+                clauses.add("((o.id IS NULL AND p.category IN (:categories)) OR o.category IN (:categories))");
+            } else {
+                clauses.add("p.category IN (:categories)");
+            }
             bindings.put("categories", f.categories());
         }
         if (f.productIds() != null) {
@@ -141,10 +154,10 @@ public class ItemQueryService {
             clauses.add("r.totalAmount <= :maxReceiptTotal");
             bindings.put("maxReceiptTotal", f.maxReceiptTotal());
         }
-        return new FilterClauses(String.join(" AND ", clauses), bindings);
+        return new FilterClauses(join, String.join(" AND ", clauses), bindings);
     }
 
-    private record FilterClauses(String where, Map<String, Object> bindings) {
+    private record FilterClauses(String join, String where, Map<String, Object> bindings) {
         void bind(Query query) {
             bindings.forEach(query::setParameter);
         }
@@ -166,8 +179,10 @@ public class ItemQueryService {
             List<UUID> productIds,
             List<String> eans,
             BigDecimal minReceiptTotal,
-            BigDecimal maxReceiptTotal
+            BigDecimal maxReceiptTotal,
+            CategoryView categoryView
     ) {
+        /** Backwards-compatible builder — defaults the lens to HOUSEHOLD. */
         public static ItemFilters fromRequest(LocalDateTime from, LocalDateTime to,
                                               List<String> marketCnpjs,
                                               List<String> marketCnpjRoots,
@@ -176,8 +191,22 @@ public class ItemQueryService {
                                               List<String> eans,
                                               BigDecimal minReceiptTotal,
                                               BigDecimal maxReceiptTotal) {
+            return fromRequest(from, to, marketCnpjs, marketCnpjRoots, categories,
+                    productIds, eans, minReceiptTotal, maxReceiptTotal, CategoryView.HOUSEHOLD);
+        }
+
+        public static ItemFilters fromRequest(LocalDateTime from, LocalDateTime to,
+                                              List<String> marketCnpjs,
+                                              List<String> marketCnpjRoots,
+                                              List<ProductCategory> categories,
+                                              List<UUID> productIds,
+                                              List<String> eans,
+                                              BigDecimal minReceiptTotal,
+                                              BigDecimal maxReceiptTotal,
+                                              CategoryView categoryView) {
             return new ItemFilters(null, from, to, marketCnpjs, marketCnpjRoots, categories,
-                    productIds, eans, minReceiptTotal, maxReceiptTotal);
+                    productIds, eans, minReceiptTotal, maxReceiptTotal,
+                    categoryView != null ? categoryView : CategoryView.HOUSEHOLD);
         }
 
         static ItemFilters normalize(ItemFilters f, UUID householdId) {
@@ -191,7 +220,8 @@ public class ItemQueryService {
                     nullIfEmpty(f.productIds()),
                     nullIfEmpty(trimAll(f.eans())),
                     f.minReceiptTotal(),
-                    f.maxReceiptTotal());
+                    f.maxReceiptTotal(),
+                    f.categoryView() != null ? f.categoryView() : CategoryView.HOUSEHOLD);
         }
 
         private static <T> List<T> nullIfEmpty(List<T> list) {

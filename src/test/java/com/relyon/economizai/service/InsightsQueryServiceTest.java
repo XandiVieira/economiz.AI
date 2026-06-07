@@ -3,6 +3,7 @@ package com.relyon.economizai.service;
 import com.relyon.economizai.dto.response.InsightsQueryResponse;
 import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.CategoryView;
 import com.relyon.economizai.model.enums.InsightsGroupBy;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.service.InsightsQueryService.QueryFilters;
@@ -16,10 +17,12 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -39,6 +42,7 @@ class InsightsQueryServiceTest {
     @Mock private EntityManager entityManager;
     @Mock private TypedQuery<Object[]> summaryQuery;
     @Mock private TypedQuery<Object[]> bucketQuery;
+    @Mock private HouseholdProductCategoryOverrideService categoryOverrideService;
 
     @InjectMocks private InsightsQueryService insightsQueryService;
 
@@ -47,6 +51,10 @@ class InsightsQueryServiceTest {
 
     @BeforeEach
     void setUp() {
+        // The service now takes a constructor dependency, so @InjectMocks uses
+        // constructor injection and won't populate the @PersistenceContext field;
+        // wire the EntityManager mock in by reflection.
+        ReflectionTestUtils.setField(insightsQueryService, "entityManager", entityManager);
         householdId = UUID.randomUUID();
         var household = Household.builder().id(householdId).inviteCode("HH0001").build();
         user = User.builder().id(UUID.randomUUID()).email("maria@test.com").household(household).build();
@@ -54,6 +62,11 @@ class InsightsQueryServiceTest {
 
     private QueryFilters filtersWith(InsightsGroupBy groupBy) {
         return QueryFilters.fromRequest(null, null, null, null, null, null, null, null, null, groupBy, null);
+    }
+
+    private QueryFilters filtersWith(InsightsGroupBy groupBy, CategoryView categoryView) {
+        return QueryFilters.fromRequest(null, null, null, null, null, null, null, null, null,
+                groupBy, null, categoryView);
     }
 
     @Test
@@ -87,7 +100,7 @@ class InsightsQueryServiceTest {
     }
 
     @Test
-    void query_groupByCategory_buildsBucketsAndAppliesLimit() {
+    void query_groupByCategory_globalLens_buildsBucketsAndAppliesLimit() {
         when(entityManager.createQuery(anyString(), eq(Object[].class)))
                 .thenReturn(summaryQuery, bucketQuery);
         when(summaryQuery.getSingleResult())
@@ -96,7 +109,8 @@ class InsightsQueryServiceTest {
                 new Object[]{ProductCategory.GROCERIES, new BigDecimal("40.00"), 2L, 5L},
                 new Object[]{null, new BigDecimal("20.00"), 1L, 4L}));
 
-        var response = insightsQueryService.query(user, filtersWith(InsightsGroupBy.CATEGORY));
+        var response = insightsQueryService.query(user,
+                filtersWith(InsightsGroupBy.CATEGORY, CategoryView.GLOBAL));
 
         assertEquals(InsightsGroupBy.CATEGORY, response.groupBy());
         assertEquals(2, response.buckets().size());
@@ -110,6 +124,39 @@ class InsightsQueryServiceTest {
         // null category falls back to OTHER
         assertEquals(ProductCategory.OTHER.name(), response.buckets().get(1).key());
         verify(bucketQuery).setMaxResults(100);
+        // GLOBAL lens never consults the override service.
+        verify(categoryOverrideService, never()).overridesByProduct(any(), any());
+    }
+
+    @Test
+    void query_groupByCategory_householdLens_reaggregatesByEffectiveCategory() {
+        var leite = UUID.randomUUID();   // global MEAT_DAIRY, overridden to GROCERIES
+        var arroz = UUID.randomUUID();   // global GROCERIES, no override
+        var receiptOne = UUID.randomUUID();
+        var receiptTwo = UUID.randomUUID();
+        when(entityManager.createQuery(anyString(), eq(Object[].class)))
+                .thenReturn(summaryQuery, bucketQuery);
+        when(summaryQuery.getSingleResult())
+                .thenReturn(new Object[]{new BigDecimal("40.00"), 2L, 3L});
+        // (productId, category, receiptId, total, itemCount) — leite + arroz share receiptOne.
+        when(bucketQuery.getResultList()).thenReturn(List.<Object[]>of(
+                new Object[]{leite, ProductCategory.MEAT_DAIRY, receiptOne, new BigDecimal("10.00"), 1L},
+                new Object[]{arroz, ProductCategory.GROCERIES, receiptOne, new BigDecimal("20.00"), 1L},
+                new Object[]{arroz, ProductCategory.GROCERIES, receiptTwo, new BigDecimal("10.00"), 1L}));
+        when(categoryOverrideService.overridesByProduct(eq(householdId), any()))
+                .thenReturn(Map.of(leite, "GROCERIES"));
+
+        var response = insightsQueryService.query(user, filtersWith(InsightsGroupBy.CATEGORY));
+
+        // Single effective GROCERIES bucket: 10 (leite override) + 30 (arroz) = 40,
+        // distinct receipts = {receiptOne, receiptTwo} = 2 (no double count).
+        assertEquals(1, response.buckets().size());
+        var bucket = response.buckets().get(0);
+        assertEquals("GROCERIES", bucket.key());
+        assertEquals("GROCERIES", bucket.label());
+        assertEquals(0, new BigDecimal("40.00").compareTo(bucket.total()));
+        assertEquals(2L, bucket.receiptCount());
+        assertEquals(3L, bucket.itemCount());
     }
 
     @Test
@@ -242,7 +289,8 @@ class InsightsQueryServiceTest {
                 new BigDecimal("10.00"),
                 new BigDecimal("500.00"),
                 InsightsGroupBy.CATEGORY,
-                9999);
+                9999,
+                CategoryView.GLOBAL);
 
         var response = insightsQueryService.query(user, input);
 

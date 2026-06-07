@@ -5,6 +5,7 @@ import com.relyon.economizai.dto.response.PriceHistoryResponse;
 import com.relyon.economizai.dto.response.SpendInsightsResponse;
 import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.CategoryView;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.InsightsQueryService;
@@ -57,7 +58,7 @@ class InsightsControllerTest {
                 List.of(new SpendInsightsResponse.MonthBucket(2026, 4, new BigDecimal("250.50"), 3L)),
                 List.of(new SpendInsightsResponse.WeekBucket(2026, 17, new BigDecimal("250.50"), 3L)),
                 List.of(new SpendInsightsResponse.MarketBucket("12345678000190", "Mercado X", "Mercado X", new BigDecimal("250.50"), 3L)),
-                List.of(new SpendInsightsResponse.CategoryBucket(ProductCategory.GROCERIES, new BigDecimal("100.00"), 5L))
+                List.of(SpendInsightsResponse.CategoryBucket.ofEnum(ProductCategory.GROCERIES, new BigDecimal("100.00"), 5L))
         );
         when(insightsService.spend(any(User.class), any(), any())).thenReturn(response);
 
@@ -83,15 +84,30 @@ class InsightsControllerTest {
     }
 
     @Test
-    void topCategories_returnsList() throws Exception {
+    void topCategories_returnsList_defaultsToHouseholdLens() throws Exception {
         var user = buildUser();
-        var bucket = new SpendInsightsResponse.CategoryBucket(ProductCategory.PRODUCE, new BigDecimal("50"), 7L);
-        when(insightsService.topCategories(any(User.class), any(), any(), anyInt())).thenReturn(List.of(bucket));
+        var bucket = SpendInsightsResponse.CategoryBucket.ofEnum(ProductCategory.PRODUCE, new BigDecimal("50"), 7L);
+        when(insightsService.topCategories(any(User.class), any(), any(), anyInt(), eq(CategoryView.HOUSEHOLD)))
+                .thenReturn(List.of(bucket));
 
         mockMvc.perform(get("/api/v1/insights/categories/top")
                         .with(SecurityMockMvcRequestPostProcessors.user(user)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].category").value("PRODUCE"));
+                .andExpect(jsonPath("$[0].category").value("PRODUCE"))
+                .andExpect(jsonPath("$[0].label").value("PRODUCE"));
+    }
+
+    @Test
+    void topCategories_passesGlobalLensThrough() throws Exception {
+        var user = buildUser();
+        var bucket = SpendInsightsResponse.CategoryBucket.ofEnum(ProductCategory.BEVERAGES, new BigDecimal("12"), 3L);
+        when(insightsService.topCategories(any(User.class), any(), any(), anyInt(), eq(CategoryView.GLOBAL)))
+                .thenReturn(List.of(bucket));
+
+        mockMvc.perform(get("/api/v1/insights/categories/top?categoryView=GLOBAL")
+                        .with(SecurityMockMvcRequestPostProcessors.user(user)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].category").value("BEVERAGES"));
     }
 
     @Test

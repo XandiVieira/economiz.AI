@@ -90,6 +90,30 @@ public interface InsightsRepository extends JpaRepository<Receipt, UUID> {
                                    @Param("from") LocalDateTime from,
                                    @Param("to") LocalDateTime to);
 
+    // Product-granularity spend, used by the HOUSEHOLD category lens: the global
+    // p.category is returned per product so InsightsService can re-bucket by the
+    // household's EFFECTIVE category (override custom name / corrected enum / global
+    // enum) in code, without double-counting. Items with no linked product collapse
+    // under a null productId + null category (treated as OTHER downstream).
+    @Query("""
+        SELECT p.id AS productId,
+               p.category AS category,
+               COALESCE(SUM(ri.totalPrice), 0) AS total,
+               COUNT(ri) AS itemCount
+        FROM ReceiptItem ri
+        JOIN ri.receipt r
+        LEFT JOIN ri.product p
+        WHERE r.household.id = :householdId
+          AND r.status = 'CONFIRMED'
+          AND ri.excluded = false
+          AND r.issuedAt >= :from
+          AND r.issuedAt <= :to
+        GROUP BY p.id, p.category
+    """)
+    List<Object[]> spendByProduct(@Param("householdId") UUID householdId,
+                                  @Param("from") LocalDateTime from,
+                                  @Param("to") LocalDateTime to);
+
     @Query("""
         SELECT r.issuedAt AS issuedAt,
                r.cnpjEmitente AS cnpj,

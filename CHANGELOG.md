@@ -16,6 +16,21 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-07 — Category lens: one product = one category, household vs global view
+
+`GET /items`, `GET /insights/categories/top`, and `GET /insights/query` now take a **`categoryView`** param (`HOUSEHOLD` default, or `GLOBAL`). Each product belongs to **exactly one** category per household — **no double-counting**.
+
+- **HOUSEHOLD (new default):** the effective category is the household's override (custom name or corrected enum) when set, else the global `Product.category`. `?category=GROCERIES` now returns/buckets products whose *effective* category is GROCERIES and **excludes** any product moved to a custom category or a different enum. Category insight buckets are re-aggregated by effective category (custom-category spend becomes its own bucket).
+- **GLOBAL:** old behavior — filter/group purely by `Product.category`. Pass `categoryView=GLOBAL` to reproduce pre-lens numbers.
+
+**Response additions (additive, nullable):**
+- `PurchasedItemResponse` gains **`globalCategory`** (always the global enum, or null) alongside the existing effective `category`.
+- `CategoryBucket` gains **`label`** (always present, display-safe); `category` is now **null** for custom-category buckets in the household view.
+
+**Heads-up:** the default for these three endpoints changed from global to household. If a chart depended on the old global grouping/filtering, add `&categoryView=GLOBAL`.
+
+---
+
 ## 2026-06-07 — Sign in with Google & Apple (new endpoints)
 
 Social login is in. The app does the **native** Google/Apple sign-in, then posts the provider token:

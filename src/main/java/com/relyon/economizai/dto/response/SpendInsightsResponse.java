@@ -24,5 +24,20 @@ public record SpendInsightsResponse(
             return new MarketBucket(cnpj, marketName, marketFriendlyName, total, receiptCount);
         }
     }
-    public record CategoryBucket(ProductCategory category, BigDecimal total, long itemCount) {}
+    /**
+     * Spend grouped into one category bucket.
+     *
+     * <p>In the GLOBAL lens {@code category} is the global enum and {@code label}
+     * equals its name. In the HOUSEHOLD lens the bucket is the household's
+     * EFFECTIVE category: for a custom category {@code category} is null and
+     * {@code label} carries the custom name; for a (possibly corrected) enum
+     * {@code category} is that enum and {@code label} is its name. {@code label}
+     * is therefore the always-present, display-safe key.
+     */
+    public record CategoryBucket(ProductCategory category, String label, BigDecimal total, long itemCount) {
+        /** Convenience for the global lens, where the label is just the enum name. */
+        public static CategoryBucket ofEnum(ProductCategory category, BigDecimal total, long itemCount) {
+            return new CategoryBucket(category, category != null ? category.name() : null, total, itemCount);
+        }
+    }
 }
