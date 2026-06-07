@@ -17,6 +17,14 @@
 > - Circuit breaker: if the same error signature recurs after a fix, or more
 >   than N fixes happen in an hour, the loop **halts and waits for a human**.
 > - Every entry here is written by the loop itself, newest at the top.
+>
+> **Finding what needs your attention.** Every block that failed and still needs
+> a human is tagged `⚠️ NEEDS-HUMAN` — grep for it to list all open items:
+> `grep "NEEDS-HUMAN" AUTONOMOUS_FIXES.md`. Three failure kinds carry it:
+> `NO-FIX` (couldn't diagnose), `BUILD-FAIL` (fix didn't pass `mvnw test`),
+> `ROLLBACK` (fix deployed but health stayed DOWN, so it was reverted). Each
+> shows `(attempt Nx)` — how many times an autonomous fix for that same error
+> signature has failed — so a recurring problem is obvious at a glance.
 
 ---
 

@@ -98,6 +98,7 @@ function WaitForDeployAndHealth([int]$timeoutSec = 420) {
 Log ("watchdog.start dryRun={0} branch={1} maxFixesPerHour={2}" -f $DryRun, $Branch, $MaxFixesPerHour)
 
 $seen     = @{}
+$failCount = @{}   # signature -> how many times an autonomous fix has FAILED for it
 $fixTimes = New-Object System.Collections.ArrayList
 $lastLogTime = Get-Date
 
@@ -149,7 +150,8 @@ Rules:
         Log ("claude.reply {0}" -f $claudeOut.Substring(0, [Math]::Min(160, $claudeOut.Length)))
 
         if ($claudeOut -match 'NO_FIX_FOUND') {
-            Ledger ("### [{0}] NO-FIX - {1}`r`n- **Error:** ``{2}```r`n- **Outcome:** Claude could not confidently diagnose; no change made.`r`n- **Detail:** {3}" -f (Stamp), $shortSig, $line, $claudeOut)
+            $failCount[$sig] = ([int]$failCount[$sig]) + 1
+            Ledger ("### [{0}] ⚠️ NEEDS-HUMAN · NO-FIX (attempt {1}x) - {2}`r`n- **Error:** ``{3}```r`n- **Outcome:** Claude could not confidently diagnose; no change made.`r`n- **Detail:** {4}`r`n- **Note for human:** this bug is still live and unfixed - needs eyes." -f (Stamp), $failCount[$sig], $shortSig, $line, $claudeOut)
             continue
         }
 
@@ -160,7 +162,8 @@ Rules:
         if (-not $buildOk) {
             Log "build.fail discarding changes"
             & git checkout -- . 2>$null; & git clean -fd 2>$null
-            Ledger ("### [{0}] BUILD-FAIL - {1}`r`n- **Error:** ``{2}```r`n- **Claude:** {3}`r`n- **Outcome:** fix discarded - mvnw test failed, nothing pushed." -f (Stamp), $shortSig, $line, $claudeOut)
+            $failCount[$sig] = ([int]$failCount[$sig]) + 1
+            Ledger ("### [{0}] ⚠️ NEEDS-HUMAN · BUILD-FAIL (attempt {1}x) - {2}`r`n- **Error:** ``{3}```r`n- **Attempted fix:** {4}`r`n- **Outcome:** fix discarded - mvnw test failed, nothing pushed.`r`n- **Note for human:** bug still live; the autonomous fix did not compile/pass tests - needs eyes." -f (Stamp), $failCount[$sig], $shortSig, $line, $claudeOut)
             continue
         }
         Log "build.pass"
@@ -191,7 +194,8 @@ Rules:
             $rev = (& git rev-parse --short HEAD).Trim()
             & git push origin $Branch 2>&1 | Out-Null
             $recovered = WaitForDeployAndHealth
-            Ledger ("### [{0}] ROLLBACK {1} - reverted {2}`r`n- **Error being fixed:** ``{3}```r`n- **Attempted fix:** {4}`r`n- **Why reverted:** /actuator/health did NOT return UP after deploy.`r`n- **Revert commit:** {1}, health recovered: {5}`r`n- **Loop state:** kept running. Signature left for human review.`r`n- **Note for human:** the autonomous fix for this bug FAILED in production - needs eyes." -f (Stamp), $rev, $sha, $line, $claudeOut, $recovered)
+            $failCount[$sig] = ([int]$failCount[$sig]) + 1
+            Ledger ("### [{0}] ⚠️ NEEDS-HUMAN · ROLLBACK {1} (attempt {6}x) - reverted {2}`r`n- **Error being fixed:** ``{3}```r`n- **Attempted fix:** {4}`r`n- **Why reverted:** /actuator/health did NOT return UP after deploy.`r`n- **Revert commit:** {1}, health recovered: {5}`r`n- **Loop state:** kept running. Signature left for human review.`r`n- **Note for human:** the autonomous fix for this bug FAILED in production - needs eyes." -f (Stamp), $rev, $sha, $line, $claudeOut, $recovered, $failCount[$sig])
             $seen.Remove($sig)
         }
     }
