@@ -8,5 +8,6 @@ public enum ProductCategory {
     BAKERY,
     CLEANING,
     PERSONAL_CARE,
+    PHARMACY,
     OTHER
 }

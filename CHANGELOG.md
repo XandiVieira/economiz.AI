@@ -16,6 +16,12 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-07 — new `PHARMACY` category
+
+Added a 9th global category **`PHARMACY`** (PT label "Farmácia") for drugstore/pharmacy items — vitamins, meds, supplements, first-aid. The category enum is now: `GROCERIES, BEVERAGES, PRODUCE, MEAT_DAIRY, BAKERY, CLEANING, PERSONAL_CARE, PHARMACY, OTHER`. Add a `PHARMACY` chip/label to your category map. Items are classified into it by the product dictionary (drug/supplement terms) and, for items the dictionary can't place, by detecting pharmacy merchants (more below as it lands).
+
+---
+
 ## 2026-06-07 — `productId` on receipt items
 
 `ReceiptResponse.items[*]` now includes **`productId`** (`uuid`, or `null` for an unmatched item). This lets the **review screen drive category migration directly**: collect the `productId`s of the items the user checks and `POST /categories/migrate` — no need to cross-reference `/items` first. Additive field, nothing else changed.
@@ -33,7 +39,7 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 Households can create their own categories (e.g. "Frutas") and migrate products into them — household-scoped, the global product/catalog is untouched.
 
-- `GET /api/v1/categories` → all categories the household can use: the 8 global enums (`{id:null, name, custom:false}`) + the household's custom ones (`{id, name, custom:true}`).
+- `GET /api/v1/categories` → all categories the household can use: the 9 global enums (`{id:null, name, custom:false}`) + the household's custom ones (`{id, name, custom:true}`).
 - `POST /api/v1/categories` `{ "name": "Frutas" }` → 201 create (idempotent on name).
 - `DELETE /api/v1/categories/{id}` → remove a custom category (its product overrides revert).
 - `POST /api/v1/categories/migrate` `{ "productIds": [...], "targetCategory": "GROCERIES" | null, "targetCustomCategoryId": "<uuid>" | null }` → moves the selected products into the target (exactly one target). Household-scoped.

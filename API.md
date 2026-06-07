@@ -433,7 +433,7 @@ Returns a Spring `Page<PurchasedItemResponse>`:
 - All filters optional; multi-value filters OR within a dimension, AND across dimensions.
 - Scope is **CONFIRMED receipts, excluded items dropped** — i.e. real purchases (matches the analytics scope).
 - Default sort: `purchasedAt` desc (receipt issue date), then item id. Empty result is an empty page, not a 404.
-- The category enum values: `GROCERIES, BEVERAGES, PRODUCE, MEAT_DAIRY, BAKERY, CLEANING, PERSONAL_CARE, OTHER`. The FE maps these to PT labels (e.g. `MEAT_DAIRY` → "Carnes e Laticínios").
+- The category enum values: `GROCERIES, BEVERAGES, PRODUCE, MEAT_DAIRY, BAKERY, CLEANING, PERSONAL_CARE, PHARMACY, OTHER`. The FE maps these to PT labels (e.g. `MEAT_DAIRY` → "Carnes e Laticínios", `PHARMACY` → "Farmácia").
 - Natural drill-down target: take a bucket `key` from `/insights/query` (a productId, a category, a CNPJ) and pass it here to list the underlying items.
 - Extra filter `&customCategoryId=<uuid>` lists the items the household has migrated into one of its **custom categories** (see §4c). Combine with other filters as usual; unknown id → empty page.
 
@@ -450,7 +450,7 @@ DELETE /api/v1/categories/{id}           → 204, removes a custom category (its
 POST   /api/v1/categories/migrate        { "productIds":[...], "targetCategory":..., "targetCustomCategoryId":... }
 ```
 
-`GET /categories` returns the 8 global enums **and** the household's custom ones:
+`GET /categories` returns the 9 global enums **and** the household's custom ones:
 ```json
 [
   { "id": null, "name": "GROCERIES", "custom": false },

@@ -2545,7 +2545,7 @@
   },
   {
    "name": "Categories",
-   "description": "Household custom categories + product migration. All household-scoped: the global product/catalog is never mutated. GET lists the 8 global enums (id=null, custom=false) plus the household's custom ones. Migrate moves selected products into exactly one target (a global enum OR a custom category).",
+   "description": "Household custom categories + product migration. All household-scoped: the global product/catalog is never mutated. GET lists the 9 global enums (id=null, custom=false) plus the household's custom ones. Migrate moves selected products into exactly one target (a global enum OR a custom category).",
    "item": [
     {
      "name": "List categories (global enums + custom)",
@@ -5373,7 +5373,7 @@
         "exec": [
          "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
          "var list = pm.response.json();",
-         "pm.test('Has the 8 global enums', function () { pm.expect(list.filter(function(c){return !c.custom;}).length).to.eql(8); });",
+         "pm.test('Has the 9 global enums', function () { pm.expect(list.filter(function(c){return !c.custom;}).length).to.eql(9); });",
          "pm.test('Includes the new custom category', function () { pm.expect(list.some(function(c){return c.custom && c.name==='Frutas E2E';})).to.eql(true); });"
         ]
        }
