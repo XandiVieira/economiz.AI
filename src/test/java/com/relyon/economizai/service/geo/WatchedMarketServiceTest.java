@@ -5,9 +5,11 @@ import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.MarketLocation;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.UserWatchedMarket;
+import com.relyon.economizai.exception.PaywallException;
 import com.relyon.economizai.repository.MarketLocationRepository;
 import com.relyon.economizai.repository.ReceiptRepository;
 import com.relyon.economizai.repository.UserWatchedMarketRepository;
+import com.relyon.economizai.service.subscription.SubscriptionGateService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,13 +40,17 @@ class WatchedMarketServiceTest {
     @Mock private MarketLocationRepository marketRepository;
     @Mock private ReceiptRepository receiptRepository;
     @Mock private MarketNameService marketNameService;
+    @Mock private SubscriptionGateService subscriptionGate;
 
     private WatchedMarketService service;
     private User user;
 
     @BeforeEach
     void setUp() {
-        service = new WatchedMarketService(watchedRepository, marketRepository, receiptRepository, marketNameService);
+        service = new WatchedMarketService(watchedRepository, marketRepository, receiptRepository,
+                marketNameService, subscriptionGate);
+        // Default: PRO-equivalent unlimited cap so existing tests keep their intent.
+        lenient().when(subscriptionGate.watchedMarketLimit(any())).thenReturn(Integer.MAX_VALUE);
         lenient().when(marketNameService.resolveNames(any(), any())).thenReturn(Map.of());
         lenient().when(marketNameService.resolve(any(), any(), any()))
                 .thenAnswer(invocation -> invocation.getArgument(2));
@@ -233,6 +239,38 @@ class WatchedMarketServiceTest {
 
         assertTrue(rows.isEmpty());
         verify(marketRepository, never()).findAll();
+    }
+
+    @Test
+    void watch_throwsPaywallWhenFreeUserAtLimit() {
+        var location = market("11111111000111", "Mercado A");
+        when(marketRepository.findByCnpj(eq("11111111000111"))).thenReturn(Optional.of(location));
+        when(watchedRepository.findByUserIdAndMarketCnpj(eq(user.getId()), eq("11111111000111")))
+                .thenReturn(Optional.empty());
+        when(subscriptionGate.watchedMarketLimit(any())).thenReturn(3);
+        when(watchedRepository.findAllByUserId(eq(user.getId()))).thenReturn(List.of(
+                UserWatchedMarket.builder().marketCnpj("aaaaaaaa000111").build(),
+                UserWatchedMarket.builder().marketCnpj("bbbbbbbb000111").build(),
+                UserWatchedMarket.builder().marketCnpj("cccccccc000111").build()
+        ));
+
+        assertThrows(PaywallException.class, () -> service.watch(user, "11111111000111"));
+        verify(watchedRepository, never()).save(any());
+    }
+
+    @Test
+    void watch_allowsRepinOfExistingEvenAtLimit() {
+        var location = market("11111111000111", "Mercado A");
+        when(marketRepository.findByCnpj(eq("11111111000111"))).thenReturn(Optional.of(location));
+        when(watchedRepository.findByUserIdAndMarketCnpj(eq(user.getId()), eq("11111111000111")))
+                .thenReturn(Optional.of(UserWatchedMarket.builder().user(user).marketCnpj("11111111000111").build()));
+        when(receiptRepository.findDistinctCnpjsByHousehold(eq(user.getHousehold().getId())))
+                .thenReturn(List.of());
+
+        var response = service.watch(user, "11111111000111");
+
+        assertTrue(response.watching());
+        verify(watchedRepository, never()).save(any()); // existing pin → no cap check, no insert
     }
 
     private MarketLocation market(String cnpj, String name) {

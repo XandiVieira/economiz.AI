@@ -856,6 +856,47 @@ the register request.
 
 ---
 
+## 13. Subscription & limits (FREE vs PRO)
+
+Every user has a `subscriptionTier` (`FREE` default, or `PRO`), exposed on
+`UserResponse` and admin user views. All paywall decisions go through one
+gating service — gates below are **enforced**.
+
+**What's gated (FREE limit → PRO):**
+
+| Capability | FREE | PRO | Enforcement |
+| --- | --- | --- | --- |
+| Watched markets (`POST /markets/{cnpj}/watch`) | 3 pins | unlimited | New pin over the cap → **402**. Unpin / re-pin existing is always fine. |
+| Receipt uploads (`POST /receipts`) | 5 / calendar month | unlimited | Over the cap → **402**. Counts ALL statuses (reject/resubmit can't game it). |
+| History window (`/insights/*`, `/items`) | last 90 days | full range | `from` older than 90d (or omitted) is silently clamped. No error — just windowed. |
+| Notification delivery | in-app inbox only | inbox + push/email | FREE inbox row is always saved (`delivered=false`, `failureReason=free_tier_inbox_only`); push/email skipped. |
+| Basket optimization (`POST /shopping-list/optimize`) | — | ✅ | FREE → **402**. |
+
+**402 response** (Payment Required) — distinct from 403 (forbidden). Standard
+error shape; the message resolves `subscription.upgrade_required` with the
+gated feature name as an argument, e.g. *"This feature (BASKET_OPTIMIZATION)
+requires a PRO subscription."* Treat 402 as "show the upgrade prompt".
+
+**Admin set-tier (ops / promos / testing):**
+`PUT /api/v1/admin/users/{id}/subscription-tier` — body `{ "tier": "PRO" }`
+or `{ "tier": "FREE" }`. ADMIN-only. Returns the admin user detail. PRO
+activates a manual subscription; FREE cancels it.
+
+**Billing webhook (integration seam):**
+`POST /api/v1/webhooks/subscription` — public route, provider-agnostic. A real
+payment provider (Stripe / Mercado Pago) maps its webhook event onto:
+```json
+{ "userEmail": "u@x.com", "action": "ACTIVATE",
+  "provider": "stripe", "providerRef": "sub_123",
+  "currentPeriodEnd": "2026-12-31T00:00:00" }
+```
+`action` is `ACTIVATE` (grant PRO) or `CANCEL` (drop to FREE). Verified by the
+`X-Webhook-Secret` header against `economizai.billing.webhook-secret`
+(empty in dev → check skipped; set + wrong/missing → **401**). FE doesn't call
+this — it's server-to-server from the provider.
+
+---
+
 ## Common patterns + gotchas
 
 - **All money** is `BigDecimal` with 2 decimals (R$ centavos). Never parse as

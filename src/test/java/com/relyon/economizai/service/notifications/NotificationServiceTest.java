@@ -5,8 +5,11 @@ import com.relyon.economizai.model.NotificationPreference;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.NotificationChannel;
 import com.relyon.economizai.model.enums.NotificationType;
+import com.relyon.economizai.model.enums.SubscriptionTier;
 import com.relyon.economizai.repository.NotificationPreferenceRepository;
 import com.relyon.economizai.repository.NotificationRepository;
+import com.relyon.economizai.service.subscription.Feature;
+import com.relyon.economizai.service.subscription.SubscriptionGateService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -24,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -34,19 +38,33 @@ class NotificationServiceTest {
 
     @Mock private NotificationPreferenceRepository preferenceRepository;
     @Mock private NotificationRepository notificationRepository;
+    @Mock private SubscriptionGateService subscriptionGate;
     @Mock private NotificationDispatcher emailDispatcher;
     @Mock private NotificationDispatcher pushDispatcher;
 
+    /** PRO user — delivery (push/email) is allowed. */
     private User userWithPushToken() {
         return User.builder().id(UUID.randomUUID()).email("u@e")
+                .subscriptionTier(SubscriptionTier.PRO)
                 .pushDeviceToken("fcm-abc").build();
     }
 
+    /** PRO user without a push token — falls back to email. */
     private User userWithoutPushToken() {
-        return User.builder().id(UUID.randomUUID()).email("u@e").build();
+        return User.builder().id(UUID.randomUUID()).email("u@e")
+                .subscriptionTier(SubscriptionTier.PRO).build();
+    }
+
+    private User freeUserWithPushToken() {
+        return User.builder().id(UUID.randomUUID()).email("free@e")
+                .subscriptionTier(SubscriptionTier.FREE)
+                .pushDeviceToken("fcm-abc").build();
     }
 
     private NotificationService service(boolean withEmail, boolean withPush) {
+        // Default: delivery allowed (PRO). FREE-tier behavior is exercised by
+        // the inbox-only test, which stubs allows(...) false.
+        lenient().when(subscriptionGate.allows(any(), eq(Feature.PUSH_AND_EMAIL_DELIVERY))).thenReturn(true);
         var dispatchers = new ArrayList<NotificationDispatcher>();
         if (withEmail) {
             lenient().when(emailDispatcher.channel()).thenReturn(NotificationChannel.EMAIL);
@@ -56,7 +74,7 @@ class NotificationServiceTest {
             lenient().when(pushDispatcher.channel()).thenReturn(NotificationChannel.PUSH);
             dispatchers.add(pushDispatcher);
         }
-        return new NotificationService(preferenceRepository, notificationRepository, dispatchers);
+        return new NotificationService(preferenceRepository, notificationRepository, subscriptionGate, dispatchers);
     }
 
     private NotificationPayload payload(User user, NotificationType type) {
@@ -121,6 +139,27 @@ class NotificationServiceTest {
         verify(notificationRepository).save(captor.capture());
         assertEquals(false, captor.getValue().isDelivered());
         assertEquals("no token", captor.getValue().getFailureReason());
+    }
+
+    @Test
+    void freeTier_persistsInboxRowButSkipsDispatch() {
+        var user = freeUserWithPushToken();
+        when(emailDispatcher.channel()).thenReturn(NotificationChannel.EMAIL);
+        when(pushDispatcher.channel()).thenReturn(NotificationChannel.PUSH);
+        when(preferenceRepository.findByUserIdAndType(any(), any())).thenReturn(Optional.empty());
+        when(subscriptionGate.allows(any(), eq(Feature.PUSH_AND_EMAIL_DELIVERY))).thenReturn(false);
+        var svc = new NotificationService(preferenceRepository, notificationRepository, subscriptionGate,
+                List.of(emailDispatcher, pushDispatcher));
+
+        svc.notify(payload(user, NotificationType.PROMO_PERSONAL));
+
+        verify(emailDispatcher, never()).dispatch(any());
+        verify(pushDispatcher, never()).dispatch(any());
+        var captor = ArgumentCaptor.forClass(Notification.class);
+        verify(notificationRepository).save(captor.capture());
+        assertEquals(false, captor.getValue().isDelivered());
+        assertEquals("free_tier_inbox_only", captor.getValue().getFailureReason());
+        assertEquals(NotificationChannel.PUSH, captor.getValue().getChannel());
     }
 
     @Test

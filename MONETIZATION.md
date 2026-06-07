@@ -58,28 +58,40 @@ across markets, and basket-level inflation tracking."
   reopen the app — and it's also the most friction-y to wire (FCM, email, rules
   engine), so paywalling it has good unit economics.
 
-#### Implementation needed
-- `User.subscriptionTier` (FREE/PRO) — already on entity, *not enforced anywhere yet*.
-- Single `SubscriptionGateService` — never inline `if (user.tier != PRO)` in
-  controllers (per CLAUDE.md). Service gives back `Allowed | Blocked(reason, upgradeUrl)`.
-- Receipt upload counter — count by month per user.
-- Query-layer date-range cap — PRO bypasses, FREE truncates.
-- Watched-markets gate — `WatchedMarketService.watch` checks count.
-- Push-notification gate — `NotificationService` reads tier before dispatching
-  push for PROMO_PERSONAL / PROMO_COMMUNITY / RUNNING_LOW.
-- Stripe Brasil or Pagar.me + Pix integration.
-- Subscription-management page + PUT `/users/me/subscription`.
-- Feature-flag service so we can A/B individual gates.
+#### Implementation status
+- ✅ `User.subscriptionTier` (FREE/PRO) — on entity **and now enforced**.
+- ✅ Single `SubscriptionGateService` (`service/subscription`) — `allows`/`require`
+  + typed limit helpers (`watchedMarketLimit`, `monthlyReceiptLimit`,
+  `freeHistoryWindowDays`, `clampFrom`). No inline tier checks anywhere.
+  Limits tunable via `economizai.subscription.free.{watched-markets,history-days,monthly-receipts}`.
+- ✅ `PaywallException` → **HTTP 402** (`subscription.upgrade_required`).
+- ✅ Receipt upload counter — `ReceiptService.submit`, counts all statuses this calendar month.
+- ✅ Query-layer date-range cap — `clampFrom` applied in `ItemQueryService`,
+  `InsightsService`, `InsightsQueryService`. PRO bypasses.
+- ✅ Watched-markets gate — `WatchedMarketService.watch` checks count on NEW pins.
+- ✅ Delivery gate — `NotificationService.notify` persists the inbox row for all,
+  dispatches push/email only for PRO (`PUSH_AND_EMAIL_DELIVERY`).
+- ✅ Basket optimization gate — `ShoppingListOptimizer.optimize` requires PRO.
+- ✅ `Subscription` entity + `SubscriptionService.activatePro/cancel` (tier kept in sync).
+- ✅ Admin set-tier — `PUT /api/v1/admin/users/{id}/subscription-tier`.
+- ✅ Provider-agnostic webhook — `POST /api/v1/webhooks/subscription` (seam for a real provider).
+- ⬜ Payment provider (Stripe Brasil / Mercado Pago / Pagar.me + Pix) — **not chosen yet**.
+  Needs API keys + map the provider webhook onto `/api/v1/webhooks/subscription`
+  and set `economizai.billing.webhook-secret`. See DEV_NOTES.
+- ⬜ Self-serve subscription-management page + PUT `/users/me/subscription`.
+- ⬜ Feature-flag service so we can A/B individual gates.
+- ⬜ Top markets/categories `?limit` hard cap for FREE (history window is gated; the limit cap is not yet).
+- ⬜ Manual preference override (AVOID/MUST_HAVE) — depends on Phase 2.6.
+- ⬜ Household member-count gate (FREE ≤ 2).
 
 #### Gating sequence (which paywalls to ship first)
-1. **Watched markets cap** (3 free) — easiest gate, immediately visible, low risk.
-2. **History window** (90 days free) — wide impact, simple query change.
-3. **Push notifications** (PRO only) — high value, requires FCM live first.
-4. **Basket optimization** (PRO only) — hard to build, highest perceived value.
-5. **Manual preference override** (PRO only) — depends on Phase 2.6 completion.
+1. ✅ **Watched markets cap** (3 free) — shipped.
+2. ✅ **History window** (90 days free) — shipped.
+3. ✅ **Push notifications** (PRO only) — delivery gate shipped (inbox stays free).
+4. ✅ **Basket optimization** (PRO only) — shipped.
+5. ⬜ **Manual preference override** (PRO only) — depends on Phase 2.6 completion.
 
-Don't ship all five at once. Each gate is an A/B; measure conversion before
-adding the next.
+Each gate is an A/B; measure conversion before leaning harder on the next.
 
 ---
 

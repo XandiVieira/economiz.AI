@@ -70,6 +70,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -195,6 +196,44 @@ class AdminControllerTest {
         mockMvc.perform(get("/api/v1/admin/users/" + id)
                         .with(SecurityMockMvcRequestPostProcessors.user(adminUser())))
                 .andExpect(status().isNotFound());
+    }
+
+    // --- set subscription tier ---
+
+    @Test
+    void setSubscriptionTier_returnsUpdatedDetail() throws Exception {
+        var id = UUID.randomUUID();
+        var detail = new AdminUserDetailResponse(id, "John", "john@test.com",
+                Role.USER, SubscriptionTier.PRO, true, true, true, UUID.randomUUID(),
+                1L, new ReceiptCounts(0L, 0L, 0L, 0L), BigDecimal.ZERO, LocalDateTime.now());
+        when(adminUserService.setTier(eq(id), eq(SubscriptionTier.PRO))).thenReturn(detail);
+
+        mockMvc.perform(put("/api/v1/admin/users/" + id + "/subscription-tier")
+                        .with(SecurityMockMvcRequestPostProcessors.user(adminUser()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tier\":\"PRO\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subscriptionTier").value("PRO"));
+
+        verify(adminUserService).setTier(id, SubscriptionTier.PRO);
+    }
+
+    @Test
+    void setSubscriptionTier_returns400WhenTierMissing() throws Exception {
+        mockMvc.perform(put("/api/v1/admin/users/" + UUID.randomUUID() + "/subscription-tier")
+                        .with(SecurityMockMvcRequestPostProcessors.user(adminUser()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void setSubscriptionTier_forbiddenForNonAdmin() throws Exception {
+        mockMvc.perform(put("/api/v1/admin/users/" + UUID.randomUUID() + "/subscription-tier")
+                        .with(SecurityMockMvcRequestPostProcessors.user(regularUser()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tier\":\"PRO\"}"))
+                .andExpect(status().isForbidden());
     }
 
     // --- list / get receipts cross-household ---

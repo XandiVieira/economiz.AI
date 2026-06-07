@@ -3,6 +3,7 @@ package com.relyon.economizai.service.shopping;
 import com.relyon.economizai.config.CollaborativeProperties;
 import com.relyon.economizai.dto.request.OptimizeShoppingListRequest;
 import com.relyon.economizai.dto.response.ShoppingPlanResponse.PlanItem;
+import com.relyon.economizai.exception.PaywallException;
 import com.relyon.economizai.exception.ProductNotFoundException;
 import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.PriceObservation;
@@ -15,6 +16,8 @@ import com.relyon.economizai.repository.PriceObservationRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.service.geo.MarketNameService;
+import com.relyon.economizai.service.subscription.Feature;
+import com.relyon.economizai.service.subscription.SubscriptionGateService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,6 +49,7 @@ class ShoppingListOptimizerTest {
     @Mock private PriceObservationAuditRepository auditRepository;
     @Mock private ProductRepository productRepository;
     @Mock private MarketNameService marketNameService;
+    @Mock private SubscriptionGateService subscriptionGate;
 
     private CollaborativeProperties properties;
     private ShoppingListOptimizer optimizer;
@@ -56,7 +60,7 @@ class ShoppingListOptimizerTest {
     void setUp() {
         properties = new CollaborativeProperties();
         optimizer = new ShoppingListOptimizer(receiptItemRepository, observationRepository,
-                auditRepository, productRepository, properties, marketNameService);
+                auditRepository, productRepository, properties, marketNameService, subscriptionGate);
         household = Household.builder().id(UUID.randomUUID()).inviteCode("ABC123").build();
         user = User.builder().id(UUID.randomUUID()).email("buyer@economizai").household(household).build();
         lenient().when(observationRepository.findRecentByProduct(any(), any())).thenReturn(List.of());
@@ -91,6 +95,16 @@ class ShoppingListOptimizerTest {
         // community fallback never queried because local history covered the markets it found,
         // but it IS still queried since the loop runs regardless — verify it ran with no rows.
         verify(auditRepository, never()).countDistinctHouseholdsForProductMarket(any(), any(), any());
+    }
+
+    @Test
+    void optimize_throwsPaywallForFreeTier() {
+        org.mockito.Mockito.doThrow(new PaywallException(Feature.BASKET_OPTIMIZATION.name()))
+                .when(subscriptionGate).require(eq(user), eq(Feature.BASKET_OPTIMIZATION));
+
+        assertThrows(PaywallException.class,
+                () -> optimizer.optimize(user, request(UUID.randomUUID(), BigDecimal.ONE)));
+        verify(productRepository, never()).findById(any());
     }
 
     @Test

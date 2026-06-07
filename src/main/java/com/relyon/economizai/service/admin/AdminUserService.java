@@ -6,9 +6,11 @@ import com.relyon.economizai.dto.response.AdminUserSummaryResponse;
 import com.relyon.economizai.exception.UserNotFoundException;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.ReceiptStatus;
+import com.relyon.economizai.model.enums.SubscriptionTier;
 import com.relyon.economizai.repository.InsightsRepository;
 import com.relyon.economizai.repository.ReceiptRepository;
 import com.relyon.economizai.repository.UserRepository;
+import com.relyon.economizai.service.subscription.SubscriptionService;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,6 +46,7 @@ public class AdminUserService {
     private final UserRepository userRepository;
     private final ReceiptRepository receiptRepository;
     private final InsightsRepository insightsRepository;
+    private final SubscriptionService subscriptionService;
 
     @Transactional(readOnly = true)
     public Page<AdminUserSummaryResponse> list(String search, Pageable pageable) {
@@ -57,15 +60,33 @@ public class AdminUserService {
     @Transactional(readOnly = true)
     public AdminUserDetailResponse get(UUID userId) {
         var user = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException(userId.toString()));
-        var householdId = user.getHousehold().getId();
+        log.info("admin.user.get userId={}", userId);
+        return detail(user);
+    }
 
+    /**
+     * Set a user's subscription tier directly (testing / promos / ops). PRO
+     * activates a manual subscription; FREE cancels it. Both keep the
+     * subscription record and the user's tier in sync via SubscriptionService.
+     */
+    @Transactional
+    public AdminUserDetailResponse setTier(UUID userId, SubscriptionTier tier) {
+        var user = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException(userId.toString()));
+        if (tier == SubscriptionTier.PRO) {
+            subscriptionService.activatePro(user, "manual", null, null);
+        } else {
+            subscriptionService.cancel(user);
+        }
+        log.info("admin.user.set_tier userId={} tier={}", userId, tier);
+        return detail(user);
+    }
+
+    private AdminUserDetailResponse detail(User user) {
+        var householdId = user.getHousehold().getId();
         var receipts = countReceiptsByStatus(householdId);
         var spend = insightsRepository.totalSpend(
                 householdId, LocalDateTime.now().minusDays(SPEND_WINDOW_DAYS), LocalDateTime.now());
         var memberCount = userRepository.countByHouseholdId(householdId);
-
-        log.info("admin.user.get userId={} household={} memberCount={} confirmed={}",
-                userId, householdId, memberCount, receipts.confirmed());
         return AdminUserDetailResponse.from(user, memberCount, receipts, spend);
     }
 

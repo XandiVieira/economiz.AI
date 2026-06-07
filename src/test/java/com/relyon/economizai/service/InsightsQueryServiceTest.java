@@ -7,6 +7,7 @@ import com.relyon.economizai.model.enums.CategoryView;
 import com.relyon.economizai.model.enums.InsightsGroupBy;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.service.InsightsQueryService.QueryFilters;
+import com.relyon.economizai.service.subscription.SubscriptionGateService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import jakarta.persistence.TypedQuery;
@@ -31,6 +32,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -43,6 +45,7 @@ class InsightsQueryServiceTest {
     @Mock private TypedQuery<Object[]> summaryQuery;
     @Mock private TypedQuery<Object[]> bucketQuery;
     @Mock private HouseholdProductCategoryOverrideService categoryOverrideService;
+    @Mock private SubscriptionGateService subscriptionGate;
 
     @InjectMocks private InsightsQueryService insightsQueryService;
 
@@ -55,6 +58,9 @@ class InsightsQueryServiceTest {
         // constructor injection and won't populate the @PersistenceContext field;
         // wire the EntityManager mock in by reflection.
         ReflectionTestUtils.setField(insightsQueryService, "entityManager", entityManager);
+        // Default: PRO passthrough (no history clamping).
+        lenient().when(subscriptionGate.clampFrom(any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(1));
         householdId = UUID.randomUUID();
         var household = Household.builder().id(householdId).inviteCode("HH0001").build();
         user = User.builder().id(UUID.randomUUID()).email("maria@test.com").household(household).build();

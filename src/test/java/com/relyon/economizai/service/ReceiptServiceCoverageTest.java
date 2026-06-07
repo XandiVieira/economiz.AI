@@ -32,6 +32,7 @@ import com.relyon.economizai.service.sefaz.FailedParseRecorder;
 import com.relyon.economizai.service.sefaz.ParsedReceipt;
 import com.relyon.economizai.service.sefaz.ParsedReceiptItem;
 import com.relyon.economizai.service.sefaz.SefazIngestionService;
+import com.relyon.economizai.service.subscription.SubscriptionGateService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -94,6 +95,7 @@ class ReceiptServiceCoverageTest {
     @Mock private HouseholdProductCategoryOverrideService categoryOverrideService;
     @Mock private HouseholdCacheGen householdCacheGen;
     @Mock private MarketNameService marketNameService;
+    @Mock private SubscriptionGateService subscriptionGate;
 
     @InjectMocks private ReceiptService receiptService;
 
@@ -104,6 +106,8 @@ class ReceiptServiceCoverageTest {
         lenient().when(marketNameService.resolveNames(any(), any())).thenReturn(Map.of());
         lenient().when(marketNameService.applyOverride(any(), any(), any()))
                 .thenAnswer(invocation -> invocation.getArgument(2));
+        // Default: PRO (unlimited) so the monthly cap is bypassed in existing tests.
+        lenient().when(subscriptionGate.monthlyReceiptLimit(any())).thenReturn(Integer.MAX_VALUE);
     }
 
     // ---------------------------------------------------------------- submit

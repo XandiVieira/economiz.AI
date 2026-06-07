@@ -4,9 +4,11 @@ import com.relyon.economizai.exception.UserNotFoundException;
 import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.ReceiptStatus;
+import com.relyon.economizai.model.enums.SubscriptionTier;
 import com.relyon.economizai.repository.InsightsRepository;
 import com.relyon.economizai.repository.ReceiptRepository;
 import com.relyon.economizai.repository.UserRepository;
+import com.relyon.economizai.service.subscription.SubscriptionService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -39,8 +41,51 @@ class AdminUserServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private ReceiptRepository receiptRepository;
     @Mock private InsightsRepository insightsRepository;
+    @Mock private SubscriptionService subscriptionService;
 
     @InjectMocks private AdminUserService service;
+
+    @Test
+    void setTierToPro_activatesAndReturnsDetail() {
+        var householdId = UUID.randomUUID();
+        var household = Household.builder().id(householdId).inviteCode("ABC123").build();
+        var user = User.builder().id(UUID.randomUUID()).name("Maria").email("maria@test.com")
+                .household(household).build();
+        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+        when(receiptRepository.countByHouseholdIdAndStatus(eq(householdId), any(ReceiptStatus.class))).thenReturn(0L);
+        when(insightsRepository.totalSpend(eq(householdId), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(BigDecimal.ZERO);
+        when(userRepository.countByHouseholdId(householdId)).thenReturn(1L);
+
+        var detail = service.setTier(user.getId(), SubscriptionTier.PRO);
+
+        verify(subscriptionService).activatePro(eq(user), eq("manual"), eq(null), eq(null));
+        assertEquals("maria@test.com", detail.email());
+    }
+
+    @Test
+    void setTierToFree_cancels() {
+        var householdId = UUID.randomUUID();
+        var household = Household.builder().id(householdId).inviteCode("ABC123").build();
+        var user = User.builder().id(UUID.randomUUID()).name("Joao").email("joao@test.com")
+                .household(household).build();
+        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+        when(receiptRepository.countByHouseholdIdAndStatus(eq(householdId), any(ReceiptStatus.class))).thenReturn(0L);
+        when(insightsRepository.totalSpend(eq(householdId), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(BigDecimal.ZERO);
+        when(userRepository.countByHouseholdId(householdId)).thenReturn(1L);
+
+        service.setTier(user.getId(), SubscriptionTier.FREE);
+
+        verify(subscriptionService).cancel(user);
+    }
+
+    @Test
+    void setTierThrowsWhenUserMissing() {
+        var id = UUID.randomUUID();
+        when(userRepository.findById(id)).thenReturn(Optional.empty());
+        assertThrows(UserNotFoundException.class, () -> service.setTier(id, SubscriptionTier.PRO));
+    }
 
     @Test
     void getBundlesUserWithHouseholdAndSpendStats() {

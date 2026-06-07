@@ -7,6 +7,7 @@ import com.relyon.economizai.model.enums.CategoryView;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.service.geo.MarketNameService;
+import com.relyon.economizai.service.subscription.SubscriptionGateService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.Query;
@@ -50,13 +51,20 @@ public class ItemQueryService {
 
     private final HouseholdProductCategoryOverrideService categoryOverrideService;
     private final MarketNameService marketNameService;
+    private final SubscriptionGateService subscriptionGate;
 
     @PersistenceContext
     private EntityManager entityManager;
 
     @Transactional(readOnly = true)
     public Page<PurchasedItemResponse> query(User user, ItemFilters input, Pageable pageable) {
-        var filters = ItemFilters.normalize(input, user.getHousehold().getId());
+        // FREE tier: clamp the requested lower bound to the allowed history window.
+        var clampedFrom = subscriptionGate.clampFrom(user, input.from());
+        var clamped = new ItemFilters(input.householdId(), clampedFrom, input.to(),
+                input.marketCnpjs(), input.marketCnpjRoots(), input.categories(),
+                input.productIds(), input.eans(), input.minReceiptTotal(),
+                input.maxReceiptTotal(), input.categoryView());
+        var filters = ItemFilters.normalize(clamped, user.getHousehold().getId());
         var clauses = buildClauses(filters);
 
         var countQuery = entityManager.createQuery(

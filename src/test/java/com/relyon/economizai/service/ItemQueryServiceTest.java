@@ -8,6 +8,7 @@ import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.service.ItemQueryService.ItemFilters;
 import com.relyon.economizai.service.geo.MarketNameService;
+import com.relyon.economizai.service.subscription.SubscriptionGateService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import org.junit.jupiter.api.BeforeEach;
@@ -47,6 +48,7 @@ class ItemQueryServiceTest {
 
     @Mock private HouseholdProductCategoryOverrideService categoryOverrideService;
     @Mock private MarketNameService marketNameService;
+    @Mock private SubscriptionGateService subscriptionGate;
     @Mock private EntityManager entityManager;
     @Mock private TypedQuery<Long> countQuery;
     @Mock private TypedQuery<ReceiptItem> rowQuery;
@@ -57,7 +59,10 @@ class ItemQueryServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new ItemQueryService(categoryOverrideService, marketNameService);
+        service = new ItemQueryService(categoryOverrideService, marketNameService, subscriptionGate);
+        // Default: PRO passthrough (no clamping) so existing clause assertions hold.
+        lenient().when(subscriptionGate.clampFrom(any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(1));
         ReflectionTestUtils.setField(service, "entityManager", entityManager);
         lenient().when(marketNameService.resolveNames(any(), any())).thenReturn(Map.of());
         lenient().when(marketNameService.applyOverride(any(), any(), any()))

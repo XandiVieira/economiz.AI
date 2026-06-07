@@ -7,6 +7,7 @@ import com.relyon.economizai.dto.request.UpdateReceiptItemRequest;
 import com.relyon.economizai.dto.response.ConfirmReceiptResponse;
 import com.relyon.economizai.dto.response.ReceiptResponse;
 import com.relyon.economizai.dto.response.ReceiptSummaryResponse;
+import com.relyon.economizai.exception.PaywallException;
 import com.relyon.economizai.exception.ReceiptAlreadyIngestedException;
 import com.relyon.economizai.exception.ReceiptItemNotFoundException;
 import com.relyon.economizai.exception.ReceiptNotEditableException;
@@ -35,6 +36,8 @@ import com.relyon.economizai.service.sefaz.ChaveAcessoParser;
 import com.relyon.economizai.service.sefaz.FailedParseRecorder;
 import com.relyon.economizai.service.sefaz.ParsedReceipt;
 import com.relyon.economizai.service.sefaz.SefazIngestionService;
+import com.relyon.economizai.service.subscription.Feature;
+import com.relyon.economizai.service.subscription.SubscriptionGateService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -46,6 +49,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -71,12 +75,26 @@ public class ReceiptService {
     private final HouseholdProductCategoryOverrideService categoryOverrideService;
     private final HouseholdCacheGen householdCacheGen;
     private final MarketNameService marketNameService;
+    private final SubscriptionGateService subscriptionGate;
 
     @Transactional
     public ReceiptResponse submit(User user, SubmitReceiptRequest request) {
         var qrPayload = request.qrPayload();
         var chave = ChaveAcessoParser.extractChave(qrPayload);
         log.info("submit chave={}", LogMasker.chave(chave));
+
+        // Monthly receipt cap (FREE). Counts ALL statuses this calendar month so
+        // reject/delete-and-resubmit can't game the limit. PRO bypasses.
+        var monthlyLimit = subscriptionGate.monthlyReceiptLimit(user);
+        if (monthlyLimit != Integer.MAX_VALUE) {
+            var startOfMonth = YearMonth.now().atDay(1).atStartOfDay();
+            var thisMonth = receiptRepository.countByUserIdAndCreatedAtGreaterThanEqual(user.getId(), startOfMonth);
+            if (thisMonth >= monthlyLimit) {
+                log.info("paywall.blocked user={} feature={} thisMonth={} limit={}",
+                        LogMasker.email(user.getEmail()), Feature.RECEIPT_UPLOAD_UNLIMITED, thisMonth, monthlyLimit);
+                throw new PaywallException(Feature.RECEIPT_UPLOAD_UNLIMITED.name());
+            }
+        }
 
         // Per-household uniqueness: a household can't double-import its own
         // CONFIRMED receipts (data has been committed downstream — price

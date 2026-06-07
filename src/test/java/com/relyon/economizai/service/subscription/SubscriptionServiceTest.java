@@ -1,0 +1,99 @@
+package com.relyon.economizai.service.subscription;
+
+import com.relyon.economizai.model.Subscription;
+import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.SubscriptionStatus;
+import com.relyon.economizai.model.enums.SubscriptionTier;
+import com.relyon.economizai.repository.SubscriptionRepository;
+import com.relyon.economizai.repository.UserRepository;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.time.LocalDateTime;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class SubscriptionServiceTest {
+
+    @Mock private SubscriptionRepository subscriptionRepository;
+    @Mock private UserRepository userRepository;
+
+    @InjectMocks private SubscriptionService service;
+
+    private User freeUser() {
+        return User.builder().id(UUID.randomUUID()).email("u@e")
+                .subscriptionTier(SubscriptionTier.FREE).build();
+    }
+
+    @Test
+    void activatePro_insertsSubscriptionAndSetsTierWhenNoneExists() {
+        var user = freeUser();
+        when(subscriptionRepository.findByUserId(user.getId())).thenReturn(Optional.empty());
+        when(subscriptionRepository.save(any(Subscription.class))).thenAnswer(inv -> inv.getArgument(0));
+        var periodEnd = LocalDateTime.now().plusDays(30);
+
+        service.activatePro(user, "stripe", "sub_123", periodEnd);
+
+        var captor = ArgumentCaptor.forClass(Subscription.class);
+        verify(subscriptionRepository).save(captor.capture());
+        var saved = captor.getValue();
+        assertEquals(SubscriptionStatus.ACTIVE, saved.getStatus());
+        assertEquals("stripe", saved.getProvider());
+        assertEquals("sub_123", saved.getProviderRef());
+        assertEquals(periodEnd, saved.getCurrentPeriodEnd());
+        assertEquals(SubscriptionTier.PRO, user.getSubscriptionTier());
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void activatePro_upsertsExistingSubscription() {
+        var user = freeUser();
+        var existing = Subscription.builder().user(user)
+                .status(SubscriptionStatus.CANCELED).provider("old").build();
+        when(subscriptionRepository.findByUserId(user.getId())).thenReturn(Optional.of(existing));
+        when(subscriptionRepository.save(any(Subscription.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.activatePro(user, "mercadopago", "mp_9", null);
+
+        assertEquals(SubscriptionStatus.ACTIVE, existing.getStatus());
+        assertEquals("mercadopago", existing.getProvider());
+        assertEquals(SubscriptionTier.PRO, user.getSubscriptionTier());
+    }
+
+    @Test
+    void cancel_marksSubscriptionCanceledAndDropsTier() {
+        var user = User.builder().id(UUID.randomUUID()).email("u@e")
+                .subscriptionTier(SubscriptionTier.PRO).build();
+        var existing = Subscription.builder().user(user).status(SubscriptionStatus.ACTIVE).build();
+        when(subscriptionRepository.findByUserId(user.getId())).thenReturn(Optional.of(existing));
+
+        service.cancel(user);
+
+        assertEquals(SubscriptionStatus.CANCELED, existing.getStatus());
+        assertEquals(SubscriptionTier.FREE, user.getSubscriptionTier());
+        verify(subscriptionRepository).save(existing);
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void cancel_dropsTierEvenWhenNoSubscriptionRow() {
+        var user = User.builder().id(UUID.randomUUID()).email("u@e")
+                .subscriptionTier(SubscriptionTier.PRO).build();
+        when(subscriptionRepository.findByUserId(user.getId())).thenReturn(Optional.empty());
+
+        service.cancel(user);
+
+        assertEquals(SubscriptionTier.FREE, user.getSubscriptionTier());
+        verify(userRepository).save(user);
+    }
+}

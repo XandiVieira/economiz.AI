@@ -37,6 +37,11 @@ public class GlobalExceptionHandler {
         return respond(ex, HttpStatus.UNAUTHORIZED, "Invalid social-login token");
     }
 
+    @ExceptionHandler(InvalidWebhookSecretException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidWebhookSecret(InvalidWebhookSecretException ex) {
+        return respond(ex, HttpStatus.UNAUTHORIZED, "Invalid webhook secret");
+    }
+
     @ExceptionHandler(InvalidCurrentPasswordException.class)
     public ResponseEntity<ErrorResponse> handleInvalidCurrentPassword(InvalidCurrentPasswordException ex) {
         return respond(ex, HttpStatus.BAD_REQUEST, "Invalid current password");
@@ -65,6 +70,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(SefazFetchException.class)
     public ResponseEntity<ErrorResponse> handleSefazFetch(SefazFetchException ex) {
         return respond(ex, HttpStatus.BAD_GATEWAY, "SEFAZ fetch failed");
+    }
+
+    @ExceptionHandler(PaywallException.class)
+    public ResponseEntity<ErrorResponse> handlePaywall(PaywallException ex) {
+        return respond(ex, HttpStatus.PAYMENT_REQUIRED, "Paywall: PRO feature blocked for FREE tier");
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

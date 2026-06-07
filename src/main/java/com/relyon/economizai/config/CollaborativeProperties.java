@@ -11,11 +11,39 @@ public class CollaborativeProperties {
     private final PersonalPromo personalPromo = new PersonalPromo();
     private final Consumption consumption = new Consumption();
     private final Preferences preferences = new Preferences();
+    private final Subscription subscription = new Subscription();
 
     public Collaborative getCollaborative() { return collaborative; }
     public PersonalPromo getPersonalPromo() { return personalPromo; }
     public Consumption getConsumption() { return consumption; }
     public Preferences getPreferences() { return preferences; }
+    public Subscription getSubscription() { return subscription; }
+
+    /**
+     * FREE-tier limits, tunable so paywall thresholds can move without code
+     * changes. PRO bypasses all of these (treated as unlimited).
+     */
+    public static class Subscription {
+        private final Free free = new Free();
+
+        public Free getFree() { return free; }
+
+        public static class Free {
+            /** Max pinned watched markets for FREE users. */
+            private int watchedMarkets = 3;
+            /** Rolling history/analytics window (days) for FREE users. */
+            private int historyDays = 90;
+            /** Max receipts a FREE user may submit per calendar month. */
+            private int monthlyReceipts = 5;
+
+            public int getWatchedMarkets() { return watchedMarkets; }
+            public void setWatchedMarkets(int v) { this.watchedMarkets = v; }
+            public int getHistoryDays() { return historyDays; }
+            public void setHistoryDays(int v) { this.historyDays = v; }
+            public int getMonthlyReceipts() { return monthlyReceipts; }
+            public void setMonthlyReceipts(int v) { this.monthlyReceipts = v; }
+        }
+    }
 
     public static class Collaborative {
         private boolean enabled = true;

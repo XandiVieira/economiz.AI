@@ -5,10 +5,13 @@ import com.relyon.economizai.exception.MarketNotFoundException;
 import com.relyon.economizai.model.MarketLocation;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.UserWatchedMarket;
+import com.relyon.economizai.exception.PaywallException;
 import com.relyon.economizai.repository.MarketLocationRepository;
 import com.relyon.economizai.repository.ReceiptRepository;
 import com.relyon.economizai.repository.UserWatchedMarketRepository;
 import com.relyon.economizai.service.privacy.LogMasker;
+import com.relyon.economizai.service.subscription.Feature;
+import com.relyon.economizai.service.subscription.SubscriptionGateService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -41,6 +44,7 @@ public class WatchedMarketService {
     private final MarketLocationRepository marketRepository;
     private final ReceiptRepository receiptRepository;
     private final MarketNameService marketNameService;
+    private final SubscriptionGateService subscriptionGate;
 
     /** CNPJs the user is watching. Cheap helper for query-layer joins. */
     @Transactional(readOnly = true)
@@ -131,6 +135,11 @@ public class WatchedMarketService {
         var location = marketRepository.findByCnpj(cnpj).orElseThrow(() -> new MarketNotFoundException(cnpj));
         var existing = watchedRepository.findByUserIdAndMarketCnpj(user.getId(), cnpj);
         if (existing.isEmpty()) {
+            // Cap only NEW pins — re-pinning an existing one is always allowed.
+            var current = watchedRepository.findAllByUserId(user.getId()).size();
+            if (current >= subscriptionGate.watchedMarketLimit(user)) {
+                throw new PaywallException(Feature.WATCHED_MARKETS_UNLIMITED.name());
+            }
             watchedRepository.save(UserWatchedMarket.builder()
                     .user(user)
                     .marketCnpj(cnpj)

@@ -65,6 +65,16 @@ economizai:
         # States with their own portal (SP, MG, BA, PE, PR, GO, MT, MS, DF)
         # need a dedicated adapter — the SVRS URL won't serve their cupons.
         states: ${SEFAZ_SVRS_STATES:RS}
+  subscription:
+    free:
+      watched-markets: 3                       # FREE: max pinned markets (PRO unlimited)
+      history-days: 90                         # FREE: rolling analytics/history window (PRO unlimited)
+      monthly-receipts: 5                      # FREE: max receipt submissions per calendar month (PRO unlimited)
+  billing:
+    # Shared secret the provider-agnostic webhook (/api/v1/webhooks/subscription)
+    # verifies via the X-Webhook-Secret header. EMPTY in dev = check skipped.
+    # In prod set this AND configure the provider (Stripe/Mercado Pago) to send it.
+    webhook-secret: ${BILLING_WEBHOOK_SECRET:}
   collaborative:
     enabled: true                              # master switch — disables all observation writes/reads
     min-households-for-public: 3               # k-anon: aggregate queries return empty until this many distinct households contributed

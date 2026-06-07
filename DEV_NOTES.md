@@ -228,6 +228,22 @@ Helper scripts at repo root (run each in an **Administrator** PowerShell once):
 
 ---
 
+## Billing / subscriptions
+
+### No payment provider wired — PRO is granted manually / via webhook only
+- **Now**: the PRO tier is fully **enforced** (gates in `SubscriptionGateService`, 402 on block), and a user can be made PRO two ways: (a) admin `PUT /api/v1/admin/users/{id}/subscription-tier {"tier":"PRO"}`, or (b) the provider-agnostic webhook `POST /api/v1/webhooks/subscription`. There is **no actual payment collection** — no Stripe/Mercado Pago/Pix integration, no checkout, no self-serve upgrade page.
+- **Webhook secret is empty in dev**: `economizai.billing.webhook-secret` defaults to empty → the `X-Webhook-Secret` check is **skipped**, so anyone who can reach the route can grant/revoke PRO. Fine locally; **a hole in prod if left empty**.
+- **Why OK for dev**: lets us test the entire gated experience (and demo PRO) without a payment processor or merchant account.
+- **Before prod — to enable paid subscriptions**:
+  1. **Pick a provider** (Stripe Brasil, Mercado Pago, or Pagar.me + Pix).
+  2. **Get API keys** (publishable + secret) and create the product/price (R$9.90/mo per MONETIZATION §1).
+  3. **Set `BILLING_WEBHOOK_SECRET`** (env → `economizai.billing.webhook-secret`) to a strong random value so the webhook rejects unsigned calls (401).
+  4. **Point the provider's webhook** at `POST /api/v1/webhooks/subscription` and map its event payload onto our `{ userEmail, action: ACTIVATE|CANCEL, provider, providerRef, currentPeriodEnd }` shape, sending the shared secret in `X-Webhook-Secret`. (If the provider signs with HMAC instead of a static header, add a small verify step in `SubscriptionWebhookController` for that scheme.)
+  5. **Build the checkout / self-serve upgrade flow** in the app + a `PUT /users/me/subscription` (or hosted-checkout redirect). Currently only admins can flip the tier from inside the app.
+  6. Decide period-end handling: a scheduled job should expire `current_period_end` PRO subs back to FREE if the provider stops sending renewals (not built).
+
+---
+
 ## Monitoring / ops
 
 ### `/actuator/prometheus` is public (no auth)

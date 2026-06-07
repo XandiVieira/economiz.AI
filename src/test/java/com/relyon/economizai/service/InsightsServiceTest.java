@@ -9,6 +9,7 @@ import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.repository.InsightsRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.service.geo.MarketNameService;
+import com.relyon.economizai.service.subscription.SubscriptionGateService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -44,6 +45,7 @@ class InsightsServiceTest {
     @Mock private ProductRepository productRepository;
     @Mock private MarketNameService marketNameService;
     @Mock private HouseholdProductCategoryOverrideService categoryOverrideService;
+    @Mock private SubscriptionGateService subscriptionGate;
 
     @InjectMocks private InsightsService insightsService;
 
@@ -52,6 +54,9 @@ class InsightsServiceTest {
         lenient().when(marketNameService.resolveNames(any(), any())).thenReturn(Map.of());
         lenient().when(marketNameService.applyOverride(any(), any(), any()))
                 .thenAnswer(invocation -> invocation.getArgument(2));
+        // Default: PRO passthrough (no history clamping).
+        lenient().when(subscriptionGate.clampFrom(any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(1));
     }
 
     private User buildUser() {

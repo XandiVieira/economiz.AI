@@ -2,6 +2,7 @@ package com.relyon.economizai.service;
 
 import com.relyon.economizai.dto.request.SubmitReceiptRequest;
 import com.relyon.economizai.dto.request.UpdateReceiptItemRequest;
+import com.relyon.economizai.exception.PaywallException;
 import com.relyon.economizai.exception.ReceiptAlreadyIngestedException;
 import com.relyon.economizai.exception.ReceiptItemNotFoundException;
 import com.relyon.economizai.exception.ReceiptNotEditableException;
@@ -26,6 +27,7 @@ import com.relyon.economizai.service.priceindex.PromoDetector;
 import com.relyon.economizai.service.sefaz.ParsedReceipt;
 import com.relyon.economizai.service.sefaz.ParsedReceiptItem;
 import com.relyon.economizai.service.sefaz.SefazIngestionService;
+import com.relyon.economizai.service.subscription.SubscriptionGateService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -67,6 +69,7 @@ class ReceiptServiceTest {
     @Mock private HouseholdProductCategoryOverrideService categoryOverrideService;
     @Mock private HouseholdCacheGen householdCacheGen;
     @Mock private MarketNameService marketNameService;
+    @Mock private SubscriptionGateService subscriptionGate;
 
     @InjectMocks private ReceiptService receiptService;
 
@@ -77,6 +80,8 @@ class ReceiptServiceTest {
         lenient().when(marketNameService.resolveNames(any(), any())).thenReturn(Map.of());
         lenient().when(marketNameService.applyOverride(any(), any(), any()))
                 .thenAnswer(invocation -> invocation.getArgument(2));
+        // Default: PRO (unlimited) so the monthly cap is bypassed in existing tests.
+        lenient().when(subscriptionGate.monthlyReceiptLimit(any())).thenReturn(Integer.MAX_VALUE);
     }
 
     @Test
@@ -188,6 +193,42 @@ class ReceiptServiceTest {
         assertEquals(ReceiptStatus.PENDING_CONFIRMATION, response.status());
         assertEquals(1, response.items().size());
         assertEquals("ARROZ TIO J 5KG", response.items().get(0).rawDescription());
+    }
+
+    @Test
+    void submit_throwsPaywallWhenFreeUserAtMonthlyCap() {
+        var user = buildUser();
+        when(subscriptionGate.monthlyReceiptLimit(any())).thenReturn(5);
+        when(receiptRepository.countByUserIdAndCreatedAtGreaterThanEqual(eq(user.getId()), any()))
+                .thenReturn(5L);
+
+        assertThrows(PaywallException.class,
+                () -> receiptService.submit(user, new SubmitReceiptRequest(CHAVE_RS)));
+
+        verify(sefazIngestionService, never()).fetch(any());
+        verify(receiptRepository, never()).save(any());
+    }
+
+    @Test
+    void submit_allowsWhenFreeUserUnderMonthlyCap() {
+        var user = buildUser();
+        when(subscriptionGate.monthlyReceiptLimit(any())).thenReturn(5);
+        when(receiptRepository.countByUserIdAndCreatedAtGreaterThanEqual(eq(user.getId()), any()))
+                .thenReturn(2L);
+        when(receiptRepository.findByHouseholdIdAndChaveAcesso(any(), eq(CHAVE_RS))).thenReturn(Optional.empty());
+        var fetched = new SefazIngestionService.FetchedDocument(null, "<html/>", CHAVE_RS,
+                UnidadeFederativa.RS, null);
+        when(sefazIngestionService.fetch(CHAVE_RS)).thenReturn(fetched);
+        when(sefazIngestionService.parse(fetched)).thenReturn(sampleParsed());
+        when(receiptRepository.save(any(Receipt.class))).thenAnswer(inv -> {
+            var r = inv.<Receipt>getArgument(0);
+            r.setId(UUID.randomUUID());
+            return r;
+        });
+
+        var response = receiptService.submit(user, new SubmitReceiptRequest(CHAVE_RS));
+
+        assertEquals(ReceiptStatus.PENDING_CONFIRMATION, response.status());
     }
 
     @Test

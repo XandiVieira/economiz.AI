@@ -11,6 +11,7 @@ import com.relyon.economizai.config.CachingConfig;
 import com.relyon.economizai.repository.InsightsRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.service.geo.MarketNameService;
+import com.relyon.economizai.service.subscription.SubscriptionGateService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
@@ -36,12 +37,16 @@ public class InsightsService {
     private final ProductRepository productRepository;
     private final MarketNameService marketNameService;
     private final HouseholdProductCategoryOverrideService categoryOverrideService;
+    private final SubscriptionGateService subscriptionGate;
 
     @Transactional(readOnly = true)
     @Cacheable(value = CachingConfig.INSIGHTS_SPEND_CACHE,
-            key = "#user.household.id + ':' + @householdCacheGen.get(#user.household.id) + ':' + #from + ':' + #to")
+            key = "#user.household.id + ':' + @householdCacheGen.get(#user.household.id) + ':' + #user.subscriptionTier + ':' + #from + ':' + #to")
     public SpendInsightsResponse spend(User user, LocalDateTime from, LocalDateTime to) {
         var householdId = user.getHousehold().getId();
+        // FREE tier: clamp the lower bound to the allowed history window. Tier is
+        // part of the cache key so FREE/PRO results don't collide.
+        from = subscriptionGate.clampFrom(user, from);
         var fromBound = from != null ? from : EPOCH_FLOOR;
         var toBound = to != null ? to : EPOCH_CEIL;
         var total = insightsRepository.totalSpend(householdId, fromBound, toBound);
@@ -115,6 +120,7 @@ public class InsightsService {
      */
     private List<CategoryBucket> householdCategoryBuckets(User user, LocalDateTime from, LocalDateTime to) {
         var householdId = user.getHousehold().getId();
+        from = subscriptionGate.clampFrom(user, from);
         var fromBound = from != null ? from : EPOCH_FLOOR;
         var toBound = to != null ? to : EPOCH_CEIL;
         var rows = insightsRepository.spendByProduct(householdId, fromBound, toBound);
@@ -178,6 +184,7 @@ public class InsightsService {
     @Transactional(readOnly = true)
     public PriceHistoryResponse priceHistory(User user, UUID productId, LocalDateTime from, LocalDateTime to) {
         var product = productRepository.findById(productId).orElseThrow(ProductNotFoundException::new);
+        from = subscriptionGate.clampFrom(user, from);
         var fromBound = from != null ? from : EPOCH_FLOOR;
         var toBound = to != null ? to : EPOCH_CEIL;
         var householdId = user.getHousehold().getId();

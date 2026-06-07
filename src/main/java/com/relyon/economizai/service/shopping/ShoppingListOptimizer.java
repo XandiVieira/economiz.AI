@@ -14,6 +14,8 @@ import com.relyon.economizai.repository.PriceObservationRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.service.geo.MarketNameService;
+import com.relyon.economizai.service.subscription.Feature;
+import com.relyon.economizai.service.subscription.SubscriptionGateService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -60,9 +62,11 @@ public class ShoppingListOptimizer {
     private final ProductRepository productRepository;
     private final CollaborativeProperties properties;
     private final MarketNameService marketNameService;
+    private final SubscriptionGateService subscriptionGate;
 
     @Transactional(readOnly = true)
     public ShoppingPlanResponse optimize(User user, OptimizeShoppingListRequest request) {
+        subscriptionGate.require(user, Feature.BASKET_OPTIMIZATION);
         var householdId = user.getHousehold().getId();
         var perMarket = new HashMap<String, MarketPlanBuilder>();
         var unpriced = new ArrayList<UnpricedItem>();

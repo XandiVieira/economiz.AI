@@ -16,6 +16,23 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-07 — PRO tier enforced: paywall gates, 402, admin set-tier, billing webhook
+
+The FREE/PRO subscription tier (`User.subscriptionTier`) is now **enforced** end-to-end through a single `SubscriptionGateService`. New **HTTP 402 `subscription.upgrade_required`** error when a FREE user hits a PRO gate (body: standard error shape; message arg = the gated feature name).
+
+**Gates now active (FREE limits; PRO = unlimited):**
+- **Watched markets** — FREE pins up to **3** markets. Pinning a 4th → 402. Unpin / re-pin of an existing one is always allowed.
+- **Receipt uploads** — FREE may submit **5 receipts per calendar month** (counts ALL statuses to prevent reject/resubmit gaming). The 6th `POST /receipts` → 402.
+- **History window** — FREE analytics/history is clamped to the last **90 days**. Affects `GET /insights/spend`, `/insights/query`, `/insights/categories|markets/top`, `/insights/products/{id}/price-history`, and `GET /items`: a `from` older than 90d (or omitted) is silently floored. PRO unaffected. (No error — results are just windowed.)
+- **Notification delivery** — FREE always gets the in-app inbox row, but push/email **dispatch is skipped** (audit row `delivered=false`, `failureReason=free_tier_inbox_only`). PRO gets push/email.
+- **Basket optimization** — `POST /shopping-list/optimize` is PRO-only → 402 for FREE.
+
+**New endpoints:**
+- `PUT /api/v1/admin/users/{id}/subscription-tier` (ADMIN) — body `{ "tier": "PRO" | "FREE" }`; returns the admin user detail. PRO activates a manual subscription, FREE cancels it.
+- `POST /api/v1/webhooks/subscription` (public; provider-agnostic) — body `{ "userEmail", "action": "ACTIVATE"|"CANCEL", "provider", "providerRef", "currentPeriodEnd" }`. Verified by the `X-Webhook-Secret` header against `economizai.billing.webhook-secret` (empty in dev = check skipped; wrong/missing when set → 401). This is the seam a real payment provider (Stripe / Mercado Pago) maps its webhook onto.
+
+**Heads-up for FE:** handle **402** as "show upgrade prompt" (distinct from 403 forbidden). FREE dashboards will show at most 90 days even if a wider range is requested.
+
 ## 2026-06-07 — Category lens: one product = one category, household vs global view
 
 `GET /items`, `GET /insights/categories/top`, and `GET /insights/query` now take a **`categoryView`** param (`HOUSEHOLD` default, or `GLOBAL`). Each product belongs to **exactly one** category per household — **no double-counting**.

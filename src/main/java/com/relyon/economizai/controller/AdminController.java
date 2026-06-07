@@ -3,6 +3,7 @@ package com.relyon.economizai.controller;
 import com.relyon.economizai.dto.request.MergeProductRequest;
 import com.relyon.economizai.dto.request.SendTestNotificationRequest;
 import com.relyon.economizai.dto.request.SetProductBrandRequest;
+import com.relyon.economizai.dto.request.UpdateSubscriptionTierRequest;
 import com.relyon.economizai.dto.response.AdminUserDetailResponse;
 import com.relyon.economizai.dto.response.BrandBackfillResponse;
 import com.relyon.economizai.dto.response.AdminUserSummaryResponse;
@@ -37,6 +38,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -79,6 +81,13 @@ public class AdminController {
     @GetMapping("/users/{id}")
     public ResponseEntity<AdminUserDetailResponse> getUser(@PathVariable UUID id) {
         return ResponseEntity.ok(adminUserService.get(id));
+    }
+
+    /** Set a user's subscription tier (testing / promos / ops). PRO activates, FREE cancels. */
+    @PutMapping("/users/{id}/subscription-tier")
+    public ResponseEntity<AdminUserDetailResponse> setSubscriptionTier(
+            @PathVariable UUID id, @Valid @RequestBody UpdateSubscriptionTierRequest request) {
+        return ResponseEntity.ok(adminUserService.setTier(id, request.tier()));
     }
 
     @GetMapping("/receipts")

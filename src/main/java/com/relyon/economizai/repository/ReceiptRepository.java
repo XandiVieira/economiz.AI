@@ -25,6 +25,13 @@ public interface ReceiptRepository extends JpaRepository<Receipt, UUID>, JpaSpec
 
     long countByHouseholdIdAndStatus(UUID householdId, ReceiptStatus status);
 
+    /**
+     * How many receipts the user submitted at/after the given instant, ANY
+     * status. Counting all statuses (not just CONFIRMED) closes the gaming
+     * loop where a FREE user rejects/deletes-and-resubmits to dodge the cap.
+     */
+    long countByUserIdAndCreatedAtGreaterThanEqual(UUID userId, LocalDateTime since);
+
     long countByHouseholdIdAndStatusAndConfirmedAtAfter(UUID householdId, ReceiptStatus status, LocalDateTime since);
 
     /** Total R$ of the household's confirmed receipts confirmed at/after the given instant. */
