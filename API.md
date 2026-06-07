@@ -194,6 +194,7 @@ They can:
 ```
 GET    /api/v1/receipts/{id}                         → full receipt with items
 PATCH  /api/v1/receipts/{id}/items/{itemId}          → fix typos / qty / toggle excluded / set friendlyDescription
+PUT    /api/v1/receipts/{id}/items/{itemId}/category  → correct the category { "category": "MEAT_DAIRY" }
 POST   /api/v1/receipts/{id}/items                   → add a missing item (PENDING_CONFIRMATION only)
 POST   /api/v1/receipts/{id}/confirm                 → commit. Optional body { excludedItemIds: [uuid, ...] }
                                                         Returns { receipt, personalPromos: [...] }
@@ -208,6 +209,8 @@ DELETE /api/v1/receipts/{id}                         → hard delete. Frees the 
 ```
 
 **Per-item display name (`friendlyDescription`)** — NFC-e descriptions are noisy ("ARROZ TIO J TP1 5KG"). The user can rename an item for display via `PATCH /receipts/{id}/items/{itemId}` with `{ "friendlyDescription": "Arroz Tio João 5kg" }`. The original `rawDescription` stays untouched (it's the legal audit text from SEFAZ — immutable).
+
+**Per-item category correction** — `PUT /receipts/{id}/items/{itemId}/category` with `{ "category": "MEAT_DAIRY" }`. This is **household-scoped "evidence, not truth"**: it changes the category *this household* sees for that product everywhere (`GET /receipts/{id}`, `GET /items`) but does **not** mutate the global product, so other households are unaffected. `400` if the item isn't linked to a canonical product yet. Returns the updated receipt with the override applied. (Aggregates/insights still use the global category.)
 
 The response always includes both:
 - `rawDescription` — original NFC-e text, never changes

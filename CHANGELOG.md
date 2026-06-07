@@ -16,6 +16,16 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-07 — user category correction (household-scoped "evidence, not truth")
+
+Users can fix a wrong category on a receipt item. The fix is **per-household**: it changes what *your* household sees, and **never** mutates the global product (other households are unaffected). Each correction is also recorded as evidence/vote for a future cross-household consensus pass.
+
+- **`PUT /api/v1/receipts/{id}/items/{itemId}/category`** body `{ "category": "MEAT_DAIRY" }` → 200, returns the updated `ReceiptResponse` with the corrected category applied. `400` if the item isn't linked to a product yet.
+- The override is then applied wherever that household views the product's category: **`GET /receipts/{id}`** and **`GET /items`**. (Aggregates/insights still use the global category for now.)
+- Categories are the fixed enum (`GROCERIES, BEVERAGES, PRODUCE, MEAT_DAIRY, BAKERY, CLEANING, PERSONAL_CARE, OTHER`). Custom user categories are not supported yet.
+
+---
+
 ## 2026-06-06 — dev tooling: full-chain trace + ML-only inspector
 
 Developer endpoints for improving the algorithm (not FE-facing):

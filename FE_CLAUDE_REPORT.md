@@ -22,6 +22,22 @@ contract see [API.md](./API.md); for the running diary see [CHANGELOG.md](./CHAN
 
 ---
 
+## 2026-06-07 — User category correction (new, on the review screen)
+
+Let the user fix a wrong category on a receipt item. It's **household-scoped** — changes only what this household sees; the global product is untouched.
+
+```
+PUT /api/v1/receipts/{id}/items/{itemId}/category   body: { "category": "MEAT_DAIRY" }
+→ 200 ReceiptResponse (with the corrected category applied)
+→ 400 if the item has no linked product yet (rare; only fully-unmatched items)
+```
+
+- Category values: `GROCERIES, BEVERAGES, PRODUCE, MEAT_DAIRY, BAKERY, CLEANING, PERSONAL_CARE, OTHER` (reuse your existing category labels). No custom categories yet.
+- After the call, the corrected category shows everywhere this household reads the product: `GET /receipts/{id}` and `GET /items`. (Insights/dashboard aggregates still use the global category for now.)
+- UX: on the review screen, tapping an item's category opens a picker → `PUT` the chosen enum. Treat the returned receipt as the source of truth for the new category.
+
+---
+
 ## 2026-06-06 — Categorization debug endpoint (for reporting bad categories)
 
 If you spot a wrong category (e.g. "Milho" showing as Higiene), check it directly:

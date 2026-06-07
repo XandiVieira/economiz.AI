@@ -1132,6 +1132,43 @@
           "response": []
         },
         {
+          "name": "Correct item category (household-scoped)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/receipts/{{e2eReceiptId}}/items/{{e2eReceiptItemId}}/category",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "receipts",
+                "{{e2eReceiptId}}",
+                "items",
+                "{{e2eReceiptItemId}}",
+                "category"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"category\": \"MEAT_DAIRY\"\n}"
+            },
+            "description": "Evidence-not-truth: overrides the category THIS household sees for the item's product; the global product is untouched. 400 if the item isn't linked to a product."
+          },
+          "response": []
+        },
+        {
           "name": "Confirm receipt (all items)",
           "request": {
             "method": "POST",
