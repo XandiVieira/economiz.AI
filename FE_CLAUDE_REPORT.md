@@ -22,6 +22,33 @@ contract see [API.md](./API.md); for the running diary see [CHANGELOG.md](./CHAN
 
 ---
 
+## 2026-06-07 — Custom categories + migration (new screen)
+
+Users can create their own categories and move products into them. Household-scoped (only that household sees it). Exactly the flow you described:
+
+```
+GET    /api/v1/categories            → [{id:null,name:"GROCERIES",custom:false}, ..., {id,name:"Frutas",custom:true}]
+POST   /api/v1/categories            { "name":"Frutas" }            → 201 {id,name,custom:true}
+DELETE /api/v1/categories/{id}                                       → 204 (its overrides revert)
+POST   /api/v1/categories/migrate    { "productIds":[...],
+                                        "targetCategory":"GROCERIES" | null,
+                                        "targetCustomCategoryId":"<uuid>" | null }  → {migrated, skipped}
+```
+
+**Migration screen flow:**
+1. User picks a source category (e.g. GROCERIES) → list its items with `GET /items?category=GROCERIES`.
+2. Render each item with a **checkbox** + a **select-all/none** toggle.
+3. User creates/picks a target category (`POST /categories` or chooses an existing custom one).
+4. On "Migrate": `POST /categories/migrate` with the checked `productIds` + the target (one of `targetCategory` enum OR `targetCustomCategoryId`).
+5. View the custom category's items afterwards with `GET /items?customCategoryId=<uuid>`.
+
+Notes:
+- `migrate` needs **exactly one** of `targetCategory` / `targetCustomCategoryId` (else `400`).
+- After migration the item's `category` field reads back as the **custom category name** (it's a display string now, not always an enum).
+- Category chips: globals use the enum→PT label map; custom categories use their `name` as-is.
+
+---
+
 ## 2026-06-07 — User category correction (new, on the review screen)
 
 Let the user fix a wrong category on a receipt item. It's **household-scoped** — changes only what this household sees; the global product is untouched.

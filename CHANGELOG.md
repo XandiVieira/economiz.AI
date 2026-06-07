@@ -16,6 +16,19 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-07 — custom categories + product migration (new screen)
+
+Households can create their own categories (e.g. "Frutas") and migrate products into them — household-scoped, the global product/catalog is untouched.
+
+- `GET /api/v1/categories` → all categories the household can use: the 8 global enums (`{id:null, name, custom:false}`) + the household's custom ones (`{id, name, custom:true}`).
+- `POST /api/v1/categories` `{ "name": "Frutas" }` → 201 create (idempotent on name).
+- `DELETE /api/v1/categories/{id}` → remove a custom category (its product overrides revert).
+- `POST /api/v1/categories/migrate` `{ "productIds": [...], "targetCategory": "GROCERIES" | null, "targetCustomCategoryId": "<uuid>" | null }` → moves the selected products into the target (exactly one target). Household-scoped.
+- The migration UI flow: list a category's items with `GET /items?category=GROCERIES` (existing), let the user check items, then `POST /categories/migrate`. View a custom category's items with `GET /items?customCategoryId=<uuid>`.
+- **Heads-up:** an item's `category` field can now be a **custom-category name** (not just an enum) when the household has migrated it. Treat it as a display string.
+
+---
+
 ## 2026-06-07 — brand registry expansion + brand backfill
 
 Filled in lots of brands. Expanded the brand registry with ~45 brands found across the real catalog (Spaten, Andorinha/D'Aguirre, Coqueiro, McCain, Piracanjuba abbrev, Q-Boa, Limpol, Três Corações, …). New admin op `POST /api/v1/admin/products/refresh-brands` re-runs brand extraction over the catalog and **fills products missing a brand** (never overwrites an existing one) — needed because brand, like category, is set only at product creation. No FE change (the FE just sees more products with `brand` populated).

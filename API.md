@@ -434,6 +434,37 @@ Returns a Spring `Page<PurchasedItemResponse>`:
 - Default sort: `purchasedAt` desc (receipt issue date), then item id. Empty result is an empty page, not a 404.
 - The category enum values: `GROCERIES, BEVERAGES, PRODUCE, MEAT_DAIRY, BAKERY, CLEANING, PERSONAL_CARE, OTHER`. The FE maps these to PT labels (e.g. `MEAT_DAIRY` → "Carnes e Laticínios").
 - Natural drill-down target: take a bucket `key` from `/insights/query` (a productId, a category, a CNPJ) and pass it here to list the underlying items.
+- Extra filter `&customCategoryId=<uuid>` lists the items the household has migrated into one of its **custom categories** (see §4c). Combine with other filters as usual; unknown id → empty page.
+
+---
+
+## 4c. Categories + product migration
+
+Households can define their own categories ("Frutas", "Bebê", …) and move products into them. Everything here is **household-scoped** — the global product/catalog is never mutated, mirroring the per-item category correction (§3).
+
+```
+GET    /api/v1/categories                → categories this household can use
+POST   /api/v1/categories                { "name": "Frutas" }   → 201, idempotent on name
+DELETE /api/v1/categories/{id}           → 204, removes a custom category (its overrides revert)
+POST   /api/v1/categories/migrate        { "productIds":[...], "targetCategory":..., "targetCustomCategoryId":... }
+```
+
+`GET /categories` returns the 8 global enums **and** the household's custom ones:
+```json
+[
+  { "id": null, "name": "GROCERIES", "custom": false },
+  { "id": null, "name": "BEVERAGES", "custom": false },
+  { "id": "uuid", "name": "Frutas", "custom": true }
+]
+```
+
+`POST /categories/migrate` moves the selected products into the target. Provide **exactly one** of `targetCategory` (a global enum) or `targetCustomCategoryId` (a custom-category uuid) — `400 customcategory.migration.invalid` otherwise.
+```json
+{ "productIds": ["uuid","uuid"], "targetCategory": null, "targetCustomCategoryId": "uuid" }
+→ 200 { "migrated": 2, "skipped": 0 }
+```
+
+**Migration screen flow:** list a category's items with `GET /items?category=GROCERIES`, check the ones to move (with a select-all toggle), then `POST /categories/migrate` with those `productIds` and the target. View a custom category's contents with `GET /items?customCategoryId=<uuid>`. After migration each moved item's `category` reads back as the custom-category **name** (a display string, no longer always an enum). Aggregates/insights still use the global category.
 
 ---
 
