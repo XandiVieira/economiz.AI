@@ -3,6 +3,7 @@ package com.relyon.economizai.controller;
 import com.relyon.economizai.dto.response.CategorizationBenchmarkResponse;
 import com.relyon.economizai.dto.response.CategorizationExplanation;
 import com.relyon.economizai.dto.response.CategorizationQualitySnapshotResponse;
+import com.relyon.economizai.dto.response.MlClassificationResponse;
 import com.relyon.economizai.model.enums.CategorizationQualityTrigger;
 import com.relyon.economizai.service.extraction.AutoPromotionService;
 import com.relyon.economizai.service.extraction.CategorizationBenchmarkService;
@@ -65,6 +66,16 @@ public class CategorizerController {
     @GetMapping("/classify")
     public ResponseEntity<List<CategorizationExplanation>> classify(@RequestParam List<String> description) {
         return ResponseEntity.ok(categorizationDebugService.explainAll(description));
+    }
+
+    /**
+     * ML-ONLY view (dev): the model's raw prediction for each term, ignoring the
+     * dictionary and the apply gate. Use to inspect/improve the model in isolation.
+     * The full chain (dictionary + ML + final decision) is {@code /classify}.
+     */
+    @GetMapping("/ml/predict")
+    public ResponseEntity<List<MlClassificationResponse>> mlPredict(@RequestParam List<String> description) {
+        return ResponseEntity.ok(categorizationDebugService.mlPredictAll(description));
     }
 
     @GetMapping("/status")

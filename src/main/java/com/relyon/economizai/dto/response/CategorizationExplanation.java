@@ -28,6 +28,7 @@ public record CategorizationExplanation(
         MlGuess mlCategory,
         MlGuess mlGenericName,
         boolean mlReady,
+        boolean mlApplied,
         double mlConfidenceThreshold
 ) {
     /** What the dictionary (curated CSV + auto-promoted learned entries) matched, if anything. */

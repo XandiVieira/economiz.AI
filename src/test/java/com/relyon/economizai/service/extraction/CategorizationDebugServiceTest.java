@@ -34,6 +34,7 @@ class CategorizationDebugServiceTest {
                 new DictEntry("Batata", ProductCategory.PRODUCE, CategorizationSource.DICTIONARY));
         when(mlClassifier.getConfidenceThreshold()).thenReturn(0.75);
         when(mlClassifier.isReady()).thenReturn(true);
+        when(mlClassifier.isCategoryApplyEnabled()).thenReturn(false);
         when(mlClassifier.predictCategory("Batata Frita")).thenReturn(new MlPrediction<>(ProductCategory.GROCERIES, 0.40));
         when(mlClassifier.predictGenericName("Batata Frita")).thenReturn(new MlPrediction<>("Salgadinho", 0.40));
 
@@ -48,6 +49,23 @@ class CategorizationDebugServiceTest {
         assertEquals(0.40, r.mlCategory().confidence());
         assertFalse(r.mlCategory().meetsThreshold());
         assertTrue(r.mlReady());
+        assertFalse(r.mlApplied(), "ML is gated off → not applied to the live result");
+    }
+
+    @Test
+    void mlPredict_returnsModelOnlyView() {
+        when(mlClassifier.getConfidenceThreshold()).thenReturn(0.75);
+        when(mlClassifier.isReady()).thenReturn(true);
+        when(mlClassifier.predictCategory("Leite")).thenReturn(new MlPrediction<>(ProductCategory.MEAT_DAIRY, 0.91));
+        when(mlClassifier.predictGenericName("Leite")).thenReturn(new MlPrediction<>("Leite", 0.88));
+
+        var r = service.mlPredict("Leite");
+
+        assertEquals("Leite", r.input());
+        assertEquals("MEAT_DAIRY", r.category().label());
+        assertEquals(0.91, r.category().confidence());
+        assertTrue(r.category().meetsThreshold());
+        assertTrue(r.ready());
     }
 
     @Test

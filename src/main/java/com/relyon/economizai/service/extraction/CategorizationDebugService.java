@@ -3,6 +3,7 @@ package com.relyon.economizai.service.extraction;
 import com.relyon.economizai.dto.response.CategorizationExplanation;
 import com.relyon.economizai.dto.response.CategorizationExplanation.DictionaryHit;
 import com.relyon.economizai.dto.response.CategorizationExplanation.MlGuess;
+import com.relyon.economizai.dto.response.MlClassificationResponse;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.service.extraction.ml.MlClassifierService;
 import com.relyon.economizai.service.extraction.ml.MlPrediction;
@@ -53,12 +54,34 @@ public class CategorizationDebugService {
                 categoryGuess(mlCat, threshold),
                 genericNameGuess(mlGen, threshold),
                 mlClassifier.isReady(),
+                mlClassifier.isReady() && mlClassifier.isCategoryApplyEnabled(),
                 threshold);
     }
 
     public List<CategorizationExplanation> explainAll(List<String> descriptions) {
         if (descriptions == null) return List.of();
         return descriptions.stream().filter(Objects::nonNull).map(this::explain).toList();
+    }
+
+    /** ML-only view: the model's raw prediction, ignoring dictionary + the apply gate. */
+    public MlClassificationResponse mlPredict(String description) {
+        var threshold = mlClassifier.getConfidenceThreshold();
+        var category = mlClassifier.predictCategory(description);
+        var genericName = mlClassifier.predictGenericName(description);
+        var categoryLabel = category.label() == null ? null : category.label().name();
+        return new MlClassificationResponse(
+                description,
+                new MlClassificationResponse.Guess(categoryLabel,
+                        categoryLabel == null ? null : category.confidence(), category.isConfident(threshold)),
+                new MlClassificationResponse.Guess(genericName.label(),
+                        genericName.label() == null ? null : genericName.confidence(), genericName.isConfident(threshold)),
+                mlClassifier.isReady(),
+                threshold);
+    }
+
+    public List<MlClassificationResponse> mlPredictAll(List<String> descriptions) {
+        if (descriptions == null) return List.of();
+        return descriptions.stream().filter(Objects::nonNull).map(this::mlPredict).toList();
     }
 
     private static MlGuess categoryGuess(MlPrediction<ProductCategory> prediction, double threshold) {
