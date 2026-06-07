@@ -19,6 +19,23 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
     /** Products that have any category assigned — for catalog coverage metrics. */
     long countByCategoryNotNull();
 
+    /**
+     * Distinct OTHER-category products that have at least one confirmed,
+     * non-excluded purchase at the given merchant CNPJ. Used to backfill
+     * PHARMACY onto products that were canonicalized before their merchant was
+     * verified as a pharmacy. USER/MERCHANT-locked products are excluded.
+     */
+    @Query("""
+        SELECT DISTINCT ri.product FROM ReceiptItem ri
+        JOIN ri.receipt r
+        WHERE r.cnpjEmitente = :cnpj
+          AND ri.excluded = false
+          AND ri.product.category = 'OTHER'
+          AND ri.product.categorizationSource <> 'USER'
+          AND ri.product.categorizationSource <> 'MERCHANT'
+    """)
+    List<Product> findOtherCategoryProductsByMerchant(@Param("cnpj") String cnpj);
+
     @Query("""
         SELECT p FROM Product p
         WHERE (:query IS NULL OR LOWER(p.normalizedName) LIKE LOWER(CONCAT('%', :query, '%')) OR p.ean = :query)

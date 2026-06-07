@@ -10,10 +10,10 @@ mirror entries here.
 
 ---
 
-## Pharmacy-merchant detection is name-pattern only (no CNAE lookup)
-- **Now**: `MerchantClassifier.isPharmacy(marketName)` flags a merchant as a pharmacy by matching its NFC-e name against a curated marker list (Drogaria, Farmácia, Panvel, Droga Raia, Dimed, …). Drives the `PHARMACY` fallback for unknown items at drugstores.
-- **Why OK for dev**: synchronous, zero external dependency, high precision, and it covers the big BR chains + the "distribuidora de medicamentos" pattern. Handles real receipts today.
-- **Change before prod**: add the authoritative signal — look up the CNPJ's **CNAE** via BrasilAPI (`/api/cnpj/v1/{cnpj}`, free, no auth); CNAE `4771*` = pharmacy. Store the result as a `segment` on `MarketLocation` (classified once per CNPJ, async-batched exactly like geocoding, name-pattern as fallback when the API is down). Catches oddly-named drugstores the patterns miss. Also consider a one-off backfill to re-categorize historical `OTHER` products bought at now-known pharmacies. **Rough effort**: ~half a day (mirror the geocode enrichment pattern).
+## Merchant segment classification depends on BrasilAPI (best-effort)
+- **Now (built)**: `MarketLocation.segment` (UNKNOWN/SUPERMARKET/PHARMACY/OTHER) is verified from the CNPJ's **CNAE** via BrasilAPI (`/api/cnpj/v1/{cnpj}`, free, no auth) — `CnpjActivityClient` + `MarketLocationService.classifyPendingSegments()` (scheduled batch, decoupled from confirm, attempt-capped, name-pattern fallback in `MerchantClassifier`). When a market resolves to PHARMACY, OTHER products bought there are backfilled to PHARMACY. **Best-effort by design**: a lookup failure leaves the segment UNKNOWN and categorization proceeds normally on the name guess (or just the dictionary) — never blocks ingestion.
+- **Why OK for dev**: external dependency is fully optional (toggle `MERCHANT_CLASSIFY_ENABLED=false`), retried, and degrades gracefully. The name fallback covers the big chains immediately, so the CNAE layer is pure accuracy upside.
+- **Watch before prod**: BrasilAPI has no SLA / rate limits we control — if it gets flaky at volume, consider (a) a paid CNPJ provider or (b) caching/import a CNAE dataset. Also the first receipt from a brand-new oddly-named pharmacy categorizes on the name guess until the async batch resolves the segment (then the backfill corrects it). Headless/cron envs without outbound internet will just leave segments UNKNOWN.
 - `MERCHANT`-sourced categories are excluded from ML training (`TRUSTED_SOURCES`) and locked against admin recategorization downgrades — intentional, keep it that way.
 
 ---

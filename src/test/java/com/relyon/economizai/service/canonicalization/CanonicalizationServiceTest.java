@@ -29,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -109,7 +110,7 @@ class CanonicalizationServiceTest {
     void pharmacyMerchant_defaultsUnknownItemToPharmacy() {
         var receipt = buildReceipt(item("PRODUTO DESCONHECIDO XYZ", "999"));
         receipt.setMarketName("DROGARIA SAO JOAO");
-        when(merchantClassifier.isPharmacy("DROGARIA SAO JOAO")).thenReturn(true);
+        when(merchantClassifier.isPharmacy(any(), eq("DROGARIA SAO JOAO"))).thenReturn(true);
         when(productExtractor.extract(any())).thenReturn(
                 new ProductExtraction(null, null, null, null, ProductCategory.OTHER, CategorizationSource.NONE));
         when(productRepository.findByEan("999")).thenReturn(Optional.empty());
@@ -132,7 +133,7 @@ class CanonicalizationServiceTest {
     void pharmacyMerchant_doesNotOverrideKnownCategory() {
         var receipt = buildReceipt(item("COCA COLA 2L", "888"));
         receipt.setMarketName("DROGARIA SAO JOAO");
-        when(merchantClassifier.isPharmacy("DROGARIA SAO JOAO")).thenReturn(true);
+        when(merchantClassifier.isPharmacy(any(), eq("DROGARIA SAO JOAO"))).thenReturn(true);
         when(productExtractor.extract(any())).thenReturn(
                 new ProductExtraction("Refrigerante", null, new BigDecimal("2"), "L",
                         ProductCategory.BEVERAGES, CategorizationSource.DICTIONARY));

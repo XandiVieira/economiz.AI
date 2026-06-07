@@ -1,7 +1,10 @@
 package com.relyon.economizai.model;
 
+import com.relyon.economizai.model.enums.MerchantSegment;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -61,6 +64,18 @@ public class MarketLocation extends BaseEntity {
 
     @Column(length = 2)
     private String state;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20, nullable = false)
+    @lombok.Builder.Default
+    private MerchantSegment segment = MerchantSegment.UNKNOWN;
+
+    @Column(name = "segment_classified_at")
+    private LocalDateTime segmentClassifiedAt;
+
+    @Column(name = "segment_attempts", nullable = false)
+    @lombok.Builder.Default
+    private int segmentAttempts = 0;
 
     public boolean hasCoordinates() {
         return latitude != null && longitude != null;

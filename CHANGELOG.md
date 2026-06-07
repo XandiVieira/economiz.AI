@@ -16,6 +16,12 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-07 — pharmacy detection now CNAE-verified (backend accuracy)
+
+The pharmacy-merchant signal behind `PHARMACY` categorization is now **verified from the CNPJ's CNAE** (economic activity) via an external registry — `4771*` = pharmacy, `4711*/4712*` = supermarket — instead of only guessing from the merchant name. It runs async/best-effort (never blocks import; falls back to the name guess if the lookup fails), and when a merchant is confirmed a pharmacy, its previously-`OTHER` items are backfilled to `PHARMACY`. No API contract change — purely better category accuracy on items the FE already reads.
+
+---
+
 ## 2026-06-07 — new `PHARMACY` category
 
 Added a 9th global category **`PHARMACY`** (PT label "Farmácia") for drugstore/pharmacy items — vitamins, meds, supplements, first-aid. The category enum is now: `GROCERIES, BEVERAGES, PRODUCE, MEAT_DAIRY, BAKERY, CLEANING, PERSONAL_CARE, PHARMACY, OTHER`. Add a `PHARMACY` chip/label to your category map.

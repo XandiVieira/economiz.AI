@@ -1,15 +1,33 @@
 package com.relyon.economizai.service.canonicalization;
 
+import com.relyon.economizai.model.MarketLocation;
+import com.relyon.economizai.model.enums.MerchantSegment;
+import com.relyon.economizai.repository.MarketLocationRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.when;
 
+@ExtendWith(MockitoExtension.class)
 class MerchantClassifierTest {
 
-    private final MerchantClassifier classifier = new MerchantClassifier();
+    @Mock private MarketLocationRepository marketLocationRepository;
+    @InjectMocks private MerchantClassifier classifier;
+
+    private void noStoredSegment() {
+        lenient().when(marketLocationRepository.findByCnpj(any())).thenReturn(Optional.empty());
+    }
 
     @ParameterizedTest
     @ValueSource(strings = {
@@ -20,8 +38,9 @@ class MerchantClassifierTest {
             "RAIA DROGASIL S.A.",
             "DROGÃO SUPER"
     })
-    void recognizesPharmacies(String name) {
-        assertTrue(classifier.isPharmacy(name), name);
+    void recognizesPharmaciesByName(String name) {
+        noStoredSegment();
+        assertTrue(classifier.isPharmacy(null, name), name);
     }
 
     @ParameterizedTest
@@ -31,13 +50,38 @@ class MerchantClassifierTest {
             "SUPERMERCADO SAO JOAO LTDA",
             "ATACADAO S.A."
     })
-    void doesNotFlagSupermarkets(String name) {
-        assertFalse(classifier.isPharmacy(name), name);
+    void doesNotFlagSupermarketsByName(String name) {
+        noStoredSegment();
+        assertFalse(classifier.isPharmacy(null, name), name);
     }
 
     @Test
-    void nullOrBlankIsNotPharmacy() {
-        assertFalse(classifier.isPharmacy(null));
-        assertFalse(classifier.isPharmacy("  "));
+    void verifiedPharmacySegmentWins() {
+        var market = MarketLocation.builder().cnpj("123").segment(MerchantSegment.PHARMACY).build();
+        when(marketLocationRepository.findByCnpj("123")).thenReturn(Optional.of(market));
+        // name looks like a supermarket, but CNAE says pharmacy → pharmacy
+        assertTrue(classifier.isPharmacy("123", "MERCADO CENTRAL"));
+    }
+
+    @Test
+    void verifiedSupermarketSegmentOverridesNameGuess() {
+        var market = MarketLocation.builder().cnpj("123").segment(MerchantSegment.SUPERMARKET).build();
+        when(marketLocationRepository.findByCnpj("123")).thenReturn(Optional.of(market));
+        // name contains "FARMACIA" but CNAE verified it as a supermarket → not pharmacy
+        assertFalse(classifier.isPharmacy("123", "SUPER FARMACIA E MERCADO"));
+    }
+
+    @Test
+    void unknownSegmentFallsBackToName() {
+        var market = MarketLocation.builder().cnpj("123").segment(MerchantSegment.UNKNOWN).build();
+        when(marketLocationRepository.findByCnpj("123")).thenReturn(Optional.of(market));
+        assertTrue(classifier.isPharmacy("123", "DROGARIA SAO JOAO"));
+    }
+
+    @Test
+    void nullOrBlankNameWithNoSegmentIsNotPharmacy() {
+        noStoredSegment();
+        assertFalse(classifier.isPharmacy(null, null));
+        assertFalse(classifier.isPharmacy(null, "  "));
     }
 }

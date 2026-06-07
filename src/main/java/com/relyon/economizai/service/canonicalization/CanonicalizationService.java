@@ -47,7 +47,7 @@ public class CanonicalizationService {
         var matched = 0;
         var created = 0;
         var unmatched = 0;
-        var pharmacyMerchant = merchantClassifier.isPharmacy(receipt.getMarketName());
+        var pharmacyMerchant = merchantClassifier.isPharmacy(receipt.getCnpjEmitente(), receipt.getMarketName());
         for (var item : receipt.getItems()) {
             if (item.isExcluded()) continue;
             MDC.put(MdcContextFilter.ITEM_ID, abbrev(item.getId()));

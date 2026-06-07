@@ -1,6 +1,7 @@
 package com.relyon.economizai.repository;
 
 import com.relyon.economizai.model.MarketLocation;
+import com.relyon.economizai.model.enums.MerchantSegment;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -16,4 +17,8 @@ public interface MarketLocationRepository extends JpaRepository<MarketLocation, 
     /** Markets we know about but haven't successfully geocoded yet (for the
      *  scheduled geocoding job). */
     List<MarketLocation> findAllByLatitudeIsNullAndGeocodeAttemptsLessThan(int maxAttempts);
+
+    /** Markets whose business segment isn't resolved yet (for the scheduled
+     *  CNAE classification job). */
+    List<MarketLocation> findAllBySegmentAndSegmentAttemptsLessThan(MerchantSegment segment, int maxAttempts);
 }

@@ -2,7 +2,11 @@ package com.relyon.economizai.service.geo;
 
 import com.relyon.economizai.model.MarketLocation;
 import com.relyon.economizai.model.Receipt;
+import com.relyon.economizai.model.enums.CategorizationSource;
+import com.relyon.economizai.model.enums.MerchantSegment;
+import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.repository.MarketLocationRepository;
+import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.service.priceindex.PriceIndexService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,9 +34,12 @@ import java.util.stream.Collectors;
 public class MarketLocationService {
 
     private static final int MAX_GEOCODE_ATTEMPTS = 3;
+    private static final int MAX_SEGMENT_ATTEMPTS = 3;
 
     private final MarketLocationRepository repository;
     private final NominatimGeocoder geocoder;
+    private final CnpjActivityClient cnpjActivityClient;
+    private final ProductRepository productRepository;
 
     @Value("${economizai.geo.geocode-delay-ms:1100}")
     private long geocodeDelayMs;
@@ -90,6 +97,56 @@ public class MarketLocationService {
             market.setGeocodeFailedAt(LocalDateTime.now());
         }
         repository.save(market);
+    }
+
+    /**
+     * Verifies each unclassified market's business segment from its CNPJ's CNAE.
+     * Decoupled from the confirm flow (like geocoding) and best-effort: a lookup
+     * failure just leaves the segment UNKNOWN (attempts capped), and ingestion /
+     * categorization carry on normally without business-type context. When a
+     * market resolves to PHARMACY, OTHER products bought there are backfilled.
+     */
+    @Scheduled(fixedDelayString = "${economizai.merchant.classify.interval-ms:600000}",
+               initialDelayString = "${economizai.merchant.classify.initial-delay-ms:45000}")
+    public void classifyPendingSegments() {
+        if (!cnpjActivityClient.isEnabled()) return;
+        var pending = repository.findAllBySegmentAndSegmentAttemptsLessThan(
+                MerchantSegment.UNKNOWN, MAX_SEGMENT_ATTEMPTS);
+        if (pending.isEmpty()) return;
+        log.info("merchant.classify.batch.start pending={}", pending.size());
+        for (var market : pending) {
+            classifySegmentOne(market);
+        }
+        log.info("merchant.classify.batch.done attempted={}", pending.size());
+    }
+
+    @Transactional
+    public void classifySegmentOne(MarketLocation market) {
+        market.setSegmentAttempts(market.getSegmentAttempts() + 1);
+        var segment = cnpjActivityClient.classify(market.getCnpj());
+        if (segment != MerchantSegment.UNKNOWN) {
+            market.setSegment(segment);
+            market.setSegmentClassifiedAt(LocalDateTime.now());
+            log.info("merchant.classify.ok cnpj={} segment={} name='{}'",
+                    market.getCnpj(), segment, market.getName());
+        }
+        repository.save(market);
+        if (segment == MerchantSegment.PHARMACY) {
+            backfillPharmacyProducts(market.getCnpj());
+        }
+    }
+
+    /** Re-tag OTHER products bought at a now-verified pharmacy as PHARMACY. */
+    private void backfillPharmacyProducts(String cnpj) {
+        var products = productRepository.findOtherCategoryProductsByMerchant(cnpj);
+        for (var product : products) {
+            product.setCategory(ProductCategory.PHARMACY);
+            product.setCategorizationSource(CategorizationSource.MERCHANT);
+        }
+        if (!products.isEmpty()) {
+            productRepository.saveAll(products);
+            log.info("merchant.classify.backfill cnpj={} products={}", cnpj, products.size());
+        }
     }
 
     /** Bulk lookup helper for queries that need lat/lng for many CNPJs. */
