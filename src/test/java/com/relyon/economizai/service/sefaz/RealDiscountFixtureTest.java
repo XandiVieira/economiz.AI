@@ -30,7 +30,7 @@ class RealDiscountFixtureTest {
     private static final String CHAVE = "43260593015006000709651090005672911845634822";
 
     private final SvrsSharedPortalAdapter adapter = new SvrsSharedPortalAdapter(
-            RestClient.builder(), 5000, "test-agent", "RS");
+            RestClient.builder(), 5000, "test-agent", "RS", 5, 0L);
 
     @Test
     void parseDiscountReceipt_distributesAndExtractsTax() throws Exception {

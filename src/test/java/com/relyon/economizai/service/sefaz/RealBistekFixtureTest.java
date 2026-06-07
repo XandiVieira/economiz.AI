@@ -20,7 +20,7 @@ class RealBistekFixtureTest {
     private static final String CHAVE = "43260583261420003255656140000288561445164522";
 
     private final SvrsSharedPortalAdapter adapter = new SvrsSharedPortalAdapter(
-            RestClient.builder(), 5000, "test-agent", "RS");
+            RestClient.builder(), 5000, "test-agent", "RS", 5, 0L);
 
     @Test
     void parseRealBistekReceipt() throws Exception {

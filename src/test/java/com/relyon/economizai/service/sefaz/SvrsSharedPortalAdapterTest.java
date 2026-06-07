@@ -1,13 +1,21 @@
 package com.relyon.economizai.service.sefaz;
 
 import com.relyon.economizai.exception.ReceiptParseException;
+import com.relyon.economizai.exception.SefazFetchException;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
 import org.junit.jupiter.api.Test;
-import org.springframework.web.client.RestClient;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.ResourceAccessException;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.IntFunction;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -19,7 +27,7 @@ class SvrsSharedPortalAdapterTest {
     private static final String CHAVE_RS = "43260412345678000190650010000123451123456780";
 
     private final SvrsSharedPortalAdapter adapter = new SvrsSharedPortalAdapter(
-            RestClient.builder(), 5000, "test-agent", "RS");
+            RestClient.builder(), 5000, "test-agent", "RS", 5, 0L);
 
     private String loadFixture() throws Exception {
         return loadFixture("nfce-sample.html");
@@ -39,7 +47,7 @@ class SvrsSharedPortalAdapterTest {
 
     @Test
     void supportedStates_acceptsCsvOfMultipleUfs() {
-        var multi = new SvrsSharedPortalAdapter(RestClient.builder(), 5000, "test", "RS, SC, RJ");
+        var multi = new SvrsSharedPortalAdapter(RestClient.builder(), 5000, "test", "RS, SC, RJ", 5, 0L);
         assertEquals(3, multi.supportedStates().size());
         assertTrue(multi.supportedStates().contains(UnidadeFederativa.SC));
         assertTrue(multi.supportedStates().contains(UnidadeFederativa.RJ));
@@ -47,7 +55,7 @@ class SvrsSharedPortalAdapterTest {
 
     @Test
     void supportedStates_ignoresUnknownUfTokens() {
-        var partial = new SvrsSharedPortalAdapter(RestClient.builder(), 5000, "test", "RS,XX,SC");
+        var partial = new SvrsSharedPortalAdapter(RestClient.builder(), 5000, "test", "RS,XX,SC", 5, 0L);
         assertEquals(2, partial.supportedStates().size());
         assertTrue(partial.supportedStates().contains(UnidadeFederativa.RS));
         assertTrue(partial.supportedStates().contains(UnidadeFederativa.SC));
@@ -55,7 +63,7 @@ class SvrsSharedPortalAdapterTest {
 
     @Test
     void supportedStates_blankConfigFallsBackToRs() {
-        var fallback = new SvrsSharedPortalAdapter(RestClient.builder(), 5000, "test", "");
+        var fallback = new SvrsSharedPortalAdapter(RestClient.builder(), 5000, "test", "", 5, 0L);
         assertEquals(1, fallback.supportedStates().size());
         assertTrue(fallback.supportedStates().contains(UnidadeFederativa.RS));
     }
@@ -156,5 +164,66 @@ class SvrsSharedPortalAdapterTest {
         var parsed = adapter.parseHtml(html, CHAVE_RS, null);
         assertTrue(parsed.rawHtml().contains("***.***.***-**"));
         assertTrue(!parsed.rawHtml().contains("123.456.789-00"));
+    }
+
+    /** Builds an adapter whose HTTP layer is driven by {@code behavior(callNumber)}. */
+    private SvrsSharedPortalAdapter adapterWithHttp(int maxAttempts, AtomicInteger calls,
+                                                    IntFunction<String> behavior) {
+        return new SvrsSharedPortalAdapter(RestClient.builder(), 5000, "test", "RS", maxAttempts, 0L) {
+            @Override
+            protected String httpGet(String url) {
+                return behavior.apply(calls.incrementAndGet());
+            }
+        };
+    }
+
+    @Test
+    void fetchHtml_retriesTransientServerErrorsThenSucceeds() {
+        var calls = new AtomicInteger();
+        var stub = adapterWithHttp(5, calls, call -> {
+            if (call < 3) throw new HttpServerErrorException(HttpStatus.INTERNAL_SERVER_ERROR);
+            return "<html>ok</html>";
+        });
+        assertEquals("<html>ok</html>", stub.fetchHtml(CHAVE_RS));
+        assertEquals(3, calls.get());
+    }
+
+    @Test
+    void fetchHtml_retriesNetworkErrorsThenSucceeds() {
+        var calls = new AtomicInteger();
+        var stub = adapterWithHttp(5, calls, call -> {
+            if (call == 1) throw new ResourceAccessException("read timed out", new IOException("timeout"));
+            return "<html>ok</html>";
+        });
+        assertEquals("<html>ok</html>", stub.fetchHtml(CHAVE_RS));
+        assertEquals(2, calls.get());
+    }
+
+    @Test
+    void fetchHtml_retriesEmptyBodyThenSucceeds() {
+        var calls = new AtomicInteger();
+        var stub = adapterWithHttp(5, calls, call -> call == 1 ? "" : "<html>ok</html>");
+        assertEquals("<html>ok</html>", stub.fetchHtml(CHAVE_RS));
+        assertEquals(2, calls.get());
+    }
+
+    @Test
+    void fetchHtml_exhaustsAllAttemptsThenThrows() {
+        var calls = new AtomicInteger();
+        var stub = adapterWithHttp(5, calls, call -> {
+            throw new HttpServerErrorException(HttpStatus.SERVICE_UNAVAILABLE);
+        });
+        assertThrows(SefazFetchException.class, () -> stub.fetchHtml(CHAVE_RS));
+        assertEquals(5, calls.get());
+    }
+
+    @Test
+    void fetchHtml_doesNotRetryClientErrors() {
+        var calls = new AtomicInteger();
+        var stub = adapterWithHttp(5, calls, call -> {
+            throw new HttpClientErrorException(HttpStatus.NOT_FOUND);
+        });
+        assertThrows(SefazFetchException.class, () -> stub.fetchHtml(CHAVE_RS));
+        assertEquals(1, calls.get());
     }
 }

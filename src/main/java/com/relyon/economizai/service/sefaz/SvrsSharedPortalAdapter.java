@@ -10,7 +10,9 @@ import org.jsoup.nodes.Element;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -52,11 +54,15 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
 
     private final RestClient restClient;
     private final Set<UnidadeFederativa> supportedStates;
+    private final int maxAttempts;
+    private final long retryDelayMs;
 
     public SvrsSharedPortalAdapter(RestClient.Builder builder,
                                    @Value("${economizai.ingestion.sefaz.timeout-ms:30000}") int timeoutMs,
                                    @Value("${economizai.ingestion.sefaz.user-agent:economizai}") String userAgent,
-                                   @Value("${economizai.ingestion.sefaz.svrs.states:RS}") String svrsStates) {
+                                   @Value("${economizai.ingestion.sefaz.svrs.states:RS}") String svrsStates,
+                                   @Value("${economizai.ingestion.sefaz.retry.max-attempts:5}") int maxAttempts,
+                                   @Value("${economizai.ingestion.sefaz.retry.delay-ms:5000}") long retryDelayMs) {
         var requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Math.min(timeoutMs, 10000));
         requestFactory.setReadTimeout(timeoutMs);
@@ -66,7 +72,10 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
                 .requestFactory(requestFactory)
                 .build();
         this.supportedStates = parseStates(svrsStates);
-        log.info("SvrsSharedPortalAdapter active for UFs: {}", this.supportedStates);
+        this.maxAttempts = Math.max(1, maxAttempts);
+        this.retryDelayMs = Math.max(0, retryDelayMs);
+        log.info("SvrsSharedPortalAdapter active for UFs: {} (retry maxAttempts={} delayMs={})",
+                this.supportedStates, this.maxAttempts, this.retryDelayMs);
     }
 
     private Set<UnidadeFederativa> parseStates(String csv) {
@@ -89,23 +98,71 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
         return supportedStates;
     }
 
+    /**
+     * Fetches the NFC-e HTML, retrying transient SEFAZ-side failures (5xx,
+     * timeouts, connection errors, empty body) so a flaky portal doesn't
+     * force the user to keep re-submitting. The first retry is immediate;
+     * subsequent retries wait {@code retryDelayMs} between attempts, up to
+     * {@code maxAttempts} total (default: 5 — one user-triggered + 4 retries
+     * at 0s, 5s, 5s, 5s). Client errors (4xx) are permanent and never
+     * retried. After exhaustion a {@link SefazFetchException} surfaces.
+     */
     @Override
     public String fetchHtml(String qrPayload) {
         var url = resolveUrl(qrPayload);
-        log.info("Fetching SEFAZ NFC-e at {}", url);
-        try {
-            var html = restClient.get().uri(url).retrieve().body(String.class);
-            if (html == null || html.isBlank()) {
-                log.warn("SEFAZ returned empty body for {}", url);
-                throw new SefazFetchException(supportedStates.iterator().next().name());
+        for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                return fetchOnce(url, attempt);
+            } catch (TransientSefazFetchException ex) {
+                if (attempt >= maxAttempts) break;
+                var delay = attempt == 1 ? 0 : retryDelayMs;
+                log.warn("sefaz.fetch.retry attempt={}/{} reason={} nextDelayMs={}",
+                        attempt, maxAttempts, ex.getMessage(), delay);
+                sleep(delay);
             }
-            log.info("Fetched SEFAZ HTML ({} bytes)", html.length());
+        }
+        log.warn("sefaz.fetch.exhausted attempts={} url={}", maxAttempts, url);
+        throw new SefazFetchException(supportedStates.iterator().next().name());
+    }
+
+    private String fetchOnce(String url, int attempt) {
+        log.info("sefaz.fetch attempt={}/{} url={}", attempt, maxAttempts, url);
+        try {
+            var html = httpGet(url);
+            if (html == null || html.isBlank()) {
+                throw new TransientSefazFetchException("empty-body");
+            }
+            log.info("sefaz.fetch.ok bytes={} attempt={}", html.length(), attempt);
             return html;
-        } catch (SefazFetchException ex) {
-            throw ex;
-        } catch (Exception ex) {
-            log.warn("SEFAZ fetch failed: {}: {}", ex.getClass().getSimpleName(), ex.getMessage());
+        } catch (HttpClientErrorException ex) {
+            // 4xx — deterministic (bad/unknown chave): retrying won't help.
+            log.warn("sefaz.fetch.client_error status={} url={}", ex.getStatusCode(), url);
             throw new SefazFetchException(supportedStates.iterator().next().name());
+        } catch (RestClientException ex) {
+            // 5xx, read/connect timeouts, IO errors — transient, worth retrying.
+            throw new TransientSefazFetchException(ex.getClass().getSimpleName());
+        }
+    }
+
+    /** Raw HTTP GET — isolated as a seam so the retry loop is unit-testable. */
+    protected String httpGet(String url) {
+        return restClient.get().uri(url).retrieve().body(String.class);
+    }
+
+    private void sleep(long ms) {
+        if (ms <= 0) return;
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new SefazFetchException(supportedStates.iterator().next().name());
+        }
+    }
+
+    /** Marker for a retryable SEFAZ failure (kept internal to the adapter). */
+    private static class TransientSefazFetchException extends RuntimeException {
+        TransientSefazFetchException(String reason) {
+            super(reason);
         }
     }
 

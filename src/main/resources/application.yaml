@@ -49,6 +49,13 @@ economizai:
     sefaz:
       timeout-ms: 30000
       user-agent: "economizai/0.1 (+https://github.com/XandiVieira/economiz.AI)"
+      retry:
+        # SVRS portal is intermittently flaky (5xx/timeouts). Retry transient
+        # failures so the user doesn't have to re-submit. Total attempts =
+        # 1 user-triggered + retries; first retry is immediate, the rest wait
+        # delay-ms apart (default schedule: 0s, 5s, 5s, 5s). 4xx never retries.
+        max-attempts: ${SEFAZ_RETRY_MAX_ATTEMPTS:5}
+        delay-ms: ${SEFAZ_RETRY_DELAY_MS:5000}
       svrs:
         # UFs that delegate NFC-e consultation to the SVRS shared portal.
         # Start with RS (proven to work). Other states known to delegate to
