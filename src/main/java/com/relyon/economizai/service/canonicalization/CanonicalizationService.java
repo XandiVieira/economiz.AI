@@ -5,6 +5,8 @@ import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.ProductAlias;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.ReceiptItem;
+import com.relyon.economizai.model.enums.CategorizationSource;
+import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.repository.ProductAliasRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.service.HouseholdProductAliasService;
@@ -38,17 +40,19 @@ public class CanonicalizationService {
     private final ProductAliasRepository aliasRepository;
     private final ProductExtractor productExtractor;
     private final HouseholdProductAliasService householdProductAliasService;
+    private final MerchantClassifier merchantClassifier;
 
     @Transactional
     public CanonicalizationOutcome canonicalize(Receipt receipt) {
         var matched = 0;
         var created = 0;
         var unmatched = 0;
+        var pharmacyMerchant = merchantClassifier.isPharmacy(receipt.getMarketName());
         for (var item : receipt.getItems()) {
             if (item.isExcluded()) continue;
             MDC.put(MdcContextFilter.ITEM_ID, abbrev(item.getId()));
             try {
-                var result = canonicalizeItem(item);
+                var result = canonicalizeItem(item, pharmacyMerchant);
                 switch (result) {
                     case MATCHED -> matched++;
                     case CREATED -> created++;
@@ -76,7 +80,7 @@ public class CanonicalizationService {
         }
     }
 
-    private ItemResult canonicalizeItem(ReceiptItem item) {
+    private ItemResult canonicalizeItem(ReceiptItem item, boolean pharmacyMerchant) {
         if (item.getProduct() != null) {
             log.info("item.skip already linked product={}", abbrev(item.getProduct().getId()));
             return ItemResult.MATCHED;
@@ -102,7 +106,9 @@ public class CanonicalizationService {
                         extraction.packSize(), extraction.packUnit());
                 return ItemResult.MATCHED;
             }
-            var created = productRepository.save(buildEnrichedProduct(item, extraction));
+            var newProduct = buildEnrichedProduct(item, extraction);
+            applyPharmacyMerchantFallback(newProduct, pharmacyMerchant);
+            var created = productRepository.save(newProduct);
             item.setProduct(created);
             ensureAlias(created, item.getRawDescription(), normalized);
             log.info("item.created_from_ean ean={} product={} description='{}' extracted={}",
@@ -197,6 +203,20 @@ public class CanonicalizationService {
 
     private boolean hasEan(ReceiptItem item) {
         return item.getEan() != null && !item.getEan().isBlank();
+    }
+
+    /**
+     * Fallback for items the dictionary couldn't place that were bought at a
+     * pharmacy: default them to PHARMACY instead of OTHER. Only fills a blank
+     * or OTHER category — items the cascade already classified (e.g. candy or
+     * cleaning bought at a drugstore) keep their category.
+     */
+    private void applyPharmacyMerchantFallback(Product product, boolean pharmacyMerchant) {
+        if (!pharmacyMerchant) return;
+        if (product.getCategory() != null && product.getCategory() != ProductCategory.OTHER) return;
+        product.setCategory(ProductCategory.PHARMACY);
+        product.setCategorizationSource(CategorizationSource.MERCHANT);
+        log.info("item.category_from_pharmacy_merchant description='{}'", product.getNormalizedName());
     }
 
     private Product buildEnrichedProduct(ReceiptItem item, ProductExtraction extraction) {

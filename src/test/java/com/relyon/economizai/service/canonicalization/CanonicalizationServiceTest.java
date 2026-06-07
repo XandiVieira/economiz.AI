@@ -40,6 +40,7 @@ class CanonicalizationServiceTest {
     @Mock private ProductAliasRepository aliasRepository;
     @Mock private ProductExtractor productExtractor;
     @Mock private HouseholdProductAliasService householdProductAliasService;
+    @Mock private MerchantClassifier merchantClassifier;
 
     @InjectMocks private CanonicalizationService service;
 
@@ -102,6 +103,52 @@ class CanonicalizationServiceTest {
         assertEquals("Leite", product.getGenericName());
         assertEquals("L", product.getPackUnit());
         assertEquals(ProductCategory.MEAT_DAIRY, product.getCategory());
+    }
+
+    @Test
+    void pharmacyMerchant_defaultsUnknownItemToPharmacy() {
+        var receipt = buildReceipt(item("PRODUTO DESCONHECIDO XYZ", "999"));
+        receipt.setMarketName("DROGARIA SAO JOAO");
+        when(merchantClassifier.isPharmacy("DROGARIA SAO JOAO")).thenReturn(true);
+        when(productExtractor.extract(any())).thenReturn(
+                new ProductExtraction(null, null, null, null, ProductCategory.OTHER, CategorizationSource.NONE));
+        when(productRepository.findByEan("999")).thenReturn(Optional.empty());
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> {
+            var p = inv.<Product>getArgument(0);
+            p.setId(UUID.randomUUID());
+            return p;
+        });
+        when(aliasRepository.existsByNormalizedDescription(anyString())).thenReturn(false);
+
+        var outcome = service.canonicalize(receipt);
+
+        assertEquals(1, outcome.created());
+        var product = receipt.getItems().get(0).getProduct();
+        assertEquals(ProductCategory.PHARMACY, product.getCategory());
+        assertEquals(CategorizationSource.MERCHANT, product.getCategorizationSource());
+    }
+
+    @Test
+    void pharmacyMerchant_doesNotOverrideKnownCategory() {
+        var receipt = buildReceipt(item("COCA COLA 2L", "888"));
+        receipt.setMarketName("DROGARIA SAO JOAO");
+        when(merchantClassifier.isPharmacy("DROGARIA SAO JOAO")).thenReturn(true);
+        when(productExtractor.extract(any())).thenReturn(
+                new ProductExtraction("Refrigerante", null, new BigDecimal("2"), "L",
+                        ProductCategory.BEVERAGES, CategorizationSource.DICTIONARY));
+        when(productRepository.findByEan("888")).thenReturn(Optional.empty());
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> {
+            var p = inv.<Product>getArgument(0);
+            p.setId(UUID.randomUUID());
+            return p;
+        });
+        when(aliasRepository.existsByNormalizedDescription(anyString())).thenReturn(false);
+
+        service.canonicalize(receipt);
+
+        var product = receipt.getItems().get(0).getProduct();
+        assertEquals(ProductCategory.BEVERAGES, product.getCategory(), "candy/drinks at a pharmacy keep their category");
+        assertEquals(CategorizationSource.DICTIONARY, product.getCategorizationSource());
     }
 
     @Test

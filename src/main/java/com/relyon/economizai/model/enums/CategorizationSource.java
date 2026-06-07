@@ -13,5 +13,6 @@ public enum CategorizationSource {
     DICTIONARY,          // curated CSV in src/main/resources/seed/product-dictionary.csv
     LEARNED_DICTIONARY,  // auto-promoted from stable ML predictions
     ML,                  // multinomial NB inference (Phase 2.5b)
+    MERCHANT,            // inferred from the merchant type (e.g. pharmacy) when otherwise OTHER
     USER                 // explicit PATCH from a user
 }

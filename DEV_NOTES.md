@@ -10,6 +10,14 @@ mirror entries here.
 
 ---
 
+## Pharmacy-merchant detection is name-pattern only (no CNAE lookup)
+- **Now**: `MerchantClassifier.isPharmacy(marketName)` flags a merchant as a pharmacy by matching its NFC-e name against a curated marker list (Drogaria, Farmácia, Panvel, Droga Raia, Dimed, …). Drives the `PHARMACY` fallback for unknown items at drugstores.
+- **Why OK for dev**: synchronous, zero external dependency, high precision, and it covers the big BR chains + the "distribuidora de medicamentos" pattern. Handles real receipts today.
+- **Change before prod**: add the authoritative signal — look up the CNPJ's **CNAE** via BrasilAPI (`/api/cnpj/v1/{cnpj}`, free, no auth); CNAE `4771*` = pharmacy. Store the result as a `segment` on `MarketLocation` (classified once per CNPJ, async-batched exactly like geocoding, name-pattern as fallback when the API is down). Catches oddly-named drugstores the patterns miss. Also consider a one-off backfill to re-categorize historical `OTHER` products bought at now-known pharmacies. **Rough effort**: ~half a day (mirror the geocode enrichment pattern).
+- `MERCHANT`-sourced categories are excluded from ML training (`TRUSTED_SOURCES`) and locked against admin recategorization downgrades — intentional, keep it that way.
+
+---
+
 ## Multi-state SEFAZ coverage = 1 / 27 verified
 - **Now**: only RS has a working end-to-end ingestion path (`SvrsSharedPortalAdapter` against `dfe-portal.svrs.rs.gov.br`, with real Zaffari/Bistek HTML fixtures). Submitting chaves from any other UF returns `UnsupportedStateException`.
 - **What we know**: empirical probe of all 27 portals on 2026-05-06 documented in `docs/MULTI_STATE_RECON.md`. ~10 UFs are server-rendered + simple GET (Tier 1 — quick to add once we have real chaves). 3 UFs use JSF/ASP.NET ViewState (Tier 2, more code). 5 UFs gate behind captcha (Tier 4, needs 2Captcha or similar). 1-2 are SPAs requiring a headless browser.

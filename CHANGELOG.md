@@ -18,7 +18,9 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ## 2026-06-07 — new `PHARMACY` category
 
-Added a 9th global category **`PHARMACY`** (PT label "Farmácia") for drugstore/pharmacy items — vitamins, meds, supplements, first-aid. The category enum is now: `GROCERIES, BEVERAGES, PRODUCE, MEAT_DAIRY, BAKERY, CLEANING, PERSONAL_CARE, PHARMACY, OTHER`. Add a `PHARMACY` chip/label to your category map. Items are classified into it by the product dictionary (drug/supplement terms) and, for items the dictionary can't place, by detecting pharmacy merchants (more below as it lands).
+Added a 9th global category **`PHARMACY`** (PT label "Farmácia") for drugstore/pharmacy items — vitamins, meds, supplements, first-aid. The category enum is now: `GROCERIES, BEVERAGES, PRODUCE, MEAT_DAIRY, BAKERY, CLEANING, PERSONAL_CARE, PHARMACY, OTHER`. Add a `PHARMACY` chip/label to your category map.
+
+Two-layer classification, item-first: (1) the **product dictionary** tags meds/supplements/dosage-forms as `PHARMACY` wherever bought (so a vitamin at a supermarket is caught too); (2) for items the dictionary can't place, a **pharmacy-merchant fallback** — if the receipt's merchant is a drugstore (detected from its name: Drogaria, Farmácia, Panvel, Droga Raia, Dimed, …), the unknown item defaults to `PHARMACY` instead of `OTHER`. Items the dictionary already knows keep their category (candy/cleaning bought at a drugstore stay correct). No contract change beyond the new enum value.
 
 ---
 

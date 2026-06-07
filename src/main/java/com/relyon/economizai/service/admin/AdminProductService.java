@@ -131,7 +131,9 @@ public class AdminProductService {
             var suggested = productExtractor.extract(product.getNormalizedName());
             var suggestedCategory = suggested.category();
             if (suggestedCategory == null || suggestedCategory == product.getCategory()) continue;
-            var userOverride = product.getCategorizationSource() == CategorizationSource.USER;
+            // USER + MERCHANT are locked against dictionary recategorization (see apply()).
+            var userOverride = product.getCategorizationSource() == CategorizationSource.USER
+                    || product.getCategorizationSource() == CategorizationSource.MERCHANT;
             if (userOverride) {
                 skippedUser++;
             } else if (isTrusted(suggested.categorizationSource())) {
@@ -172,7 +174,11 @@ public class AdminProductService {
                 unchanged++;
                 continue;
             }
-            if (product.getCategorizationSource() == CategorizationSource.USER) {
+            // USER (manual) and MERCHANT (pharmacy-merchant inference) are locked:
+            // the dictionary cascade here has no merchant context and would wrongly
+            // downgrade a pharmacy-derived category back to OTHER.
+            if (product.getCategorizationSource() == CategorizationSource.USER
+                    || product.getCategorizationSource() == CategorizationSource.MERCHANT) {
                 skippedUser++;
                 continue;
             }
