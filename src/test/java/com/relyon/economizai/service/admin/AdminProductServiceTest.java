@@ -2,6 +2,7 @@ package com.relyon.economizai.service.admin;
 
 import com.relyon.economizai.dto.request.MergeProductRequest;
 import com.relyon.economizai.dto.request.SetProductBrandRequest;
+import com.relyon.economizai.exception.InvalidProductDeletionException;
 import com.relyon.economizai.exception.InvalidProductMergeException;
 import com.relyon.economizai.exception.ProductNotFoundException;
 import com.relyon.economizai.model.Product;
@@ -290,5 +291,47 @@ class AdminProductServiceTest {
         assertEquals(7L, result.priceObservationsMigrated());
         assertEquals(1L, result.householdAliasesDroppedAsConflict());
         verify(productRepository).delete(absorbed);
+    }
+
+    @Test
+    void delete_unreferenced_deletesAndReportsZeroDetached() {
+        var target = product("E2E Canonical Product", ProductCategory.GROCERIES, CategorizationSource.DICTIONARY);
+        when(productRepository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(receiptItemRepository.countByProduct(target)).thenReturn(0L);
+
+        var result = service.delete(target.getId(), false);
+
+        assertEquals(target.getId(), result.productId());
+        assertEquals(0L, result.receiptItemsDetached());
+        verify(productRepository).delete(target);
+    }
+
+    @Test
+    void delete_referenced_withoutForce_throwsAndKeepsProduct() {
+        var target = product("Real Product", ProductCategory.GROCERIES, CategorizationSource.DICTIONARY);
+        when(productRepository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(receiptItemRepository.countByProduct(target)).thenReturn(4L);
+
+        assertThrows(InvalidProductDeletionException.class, () -> service.delete(target.getId(), false));
+        verify(productRepository, never()).delete(any());
+    }
+
+    @Test
+    void delete_referenced_withForce_detachesAndDeletes() {
+        var target = product("Real Product", ProductCategory.GROCERIES, CategorizationSource.DICTIONARY);
+        when(productRepository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(receiptItemRepository.countByProduct(target)).thenReturn(4L);
+
+        var result = service.delete(target.getId(), true);
+
+        assertEquals(4L, result.receiptItemsDetached());
+        verify(productRepository).delete(target);
+    }
+
+    @Test
+    void delete_unknown_throws() {
+        var id = UUID.randomUUID();
+        when(productRepository.findById(id)).thenReturn(Optional.empty());
+        assertThrows(ProductNotFoundException.class, () -> service.delete(id, false));
     }
 }

@@ -8,6 +8,7 @@ import com.relyon.economizai.dto.response.BrandBackfillResponse;
 import com.relyon.economizai.dto.response.AdminUserSummaryResponse;
 import com.relyon.economizai.dto.response.DuplicateProductGroupResponse;
 import com.relyon.economizai.dto.response.MissingBrandProductResponse;
+import com.relyon.economizai.dto.response.ProductDeletionResponse;
 import com.relyon.economizai.dto.response.ProductMergeResultResponse;
 import com.relyon.economizai.dto.response.RecategorizeReportResponse;
 import com.relyon.economizai.dto.response.RecategorizeResultResponse;
@@ -30,6 +31,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -122,6 +124,17 @@ public class AdminController {
     public ResponseEntity<ProductResponse> setProductBrand(
             @PathVariable UUID id, @Valid @RequestBody SetProductBrandRequest request) {
         return ResponseEntity.ok(adminProductService.setBrand(id, request));
+    }
+
+    /**
+     * Delete a product and its dependents (catalog pruning of test/junk
+     * rows). Refuses if the product still backs confirmed purchases unless
+     * {@code force=true}; with force, those receipt items are detached.
+     */
+    @DeleteMapping("/products/{id}")
+    public ResponseEntity<ProductDeletionResponse> deleteProduct(
+            @PathVariable UUID id, @RequestParam(defaultValue = "false") boolean force) {
+        return ResponseEntity.ok(adminProductService.delete(id, force));
     }
 
     @GetMapping("/products/duplicates")

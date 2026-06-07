@@ -51,7 +51,7 @@ public class GlobalExceptionHandler {
         return respond(ex, HttpStatus.BAD_REQUEST, "Bad request");
     }
 
-    @ExceptionHandler({ReceiptAlreadyIngestedException.class, ProductAliasConflictException.class, EanConflictException.class})
+    @ExceptionHandler({ReceiptAlreadyIngestedException.class, ProductAliasConflictException.class, EanConflictException.class, InvalidProductDeletionException.class})
     public ResponseEntity<ErrorResponse> handleConflict(DomainException ex) {
         return respond(ex, HttpStatus.CONFLICT, "Conflict");
     }

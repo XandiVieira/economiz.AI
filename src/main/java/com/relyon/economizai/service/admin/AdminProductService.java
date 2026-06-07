@@ -5,10 +5,12 @@ import com.relyon.economizai.dto.request.SetProductBrandRequest;
 import com.relyon.economizai.dto.response.DuplicateProductGroupResponse;
 import com.relyon.economizai.dto.response.MissingBrandProductResponse;
 import com.relyon.economizai.dto.response.BrandBackfillResponse;
+import com.relyon.economizai.dto.response.ProductDeletionResponse;
 import com.relyon.economizai.dto.response.ProductMergeResultResponse;
 import com.relyon.economizai.dto.response.ProductResponse;
 import com.relyon.economizai.dto.response.RecategorizeReportResponse;
 import com.relyon.economizai.dto.response.RecategorizeResultResponse;
+import com.relyon.economizai.exception.InvalidProductDeletionException;
 import com.relyon.economizai.exception.InvalidProductMergeException;
 import com.relyon.economizai.exception.ProductNotFoundException;
 import com.relyon.economizai.model.Product;
@@ -185,6 +187,31 @@ public class AdminProductService {
         log.info("admin.product.recategorize.applied total={} updated={} skippedUser={} skippedMl={} unchanged={} includeMl={}",
                 products.size(), updated, skippedUser, skippedMl, unchanged, includeMl);
         return new RecategorizeResultResponse(products.size(), updated, skippedUser, skippedMl, unchanged);
+    }
+
+    /**
+     * Deletes a product and all its household-scoped / collaborative
+     * dependents (aliases, price observations, category overrides, price
+     * alerts, snoozes, shopping-list items — all {@code ON DELETE CASCADE}).
+     * Receipt items that referenced it are detached ({@code product_id} set
+     * to null) so confirmed purchase history is preserved as unmatched rows.
+     *
+     * <p>Guarded: refuses when the product still backs confirmed purchases
+     * unless {@code force=true}, so we don't silently strip a real product
+     * off historical receipts. Intended for pruning test/junk catalog rows.
+     */
+    @Transactional
+    public ProductDeletionResponse delete(UUID productId, boolean force) {
+        var product = productRepository.findById(productId)
+                .orElseThrow(ProductNotFoundException::new);
+        var receiptItemCount = receiptItemRepository.countByProduct(product);
+        if (receiptItemCount > 0 && !force) {
+            throw new InvalidProductDeletionException(receiptItemCount);
+        }
+        productRepository.delete(product);
+        log.info("admin.product.deleted product={} receiptItemsDetached={} forced={}",
+                productId, receiptItemCount, force);
+        return new ProductDeletionResponse(productId, receiptItemCount);
     }
 
     @Transactional
