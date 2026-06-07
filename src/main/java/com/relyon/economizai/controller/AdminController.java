@@ -23,6 +23,7 @@ import com.relyon.economizai.service.admin.AdminProductService;
 import com.relyon.economizai.service.admin.AdminReceiptService;
 import com.relyon.economizai.service.admin.AdminUserService;
 import com.relyon.economizai.service.extraction.CategorizationQualityService;
+import com.relyon.economizai.service.geo.MarketLocationService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -61,6 +62,7 @@ public class AdminController {
     private final AdminNotificationService adminNotificationService;
     private final AdminProductService adminProductService;
     private final CategorizationQualityService categorizationQualityService;
+    private final MarketLocationService marketLocationService;
 
     @PostMapping("/receipts/{id}/reparse")
     public ResponseEntity<ReceiptResponse> reparseReceipt(@PathVariable UUID id) {
@@ -106,6 +108,15 @@ public class AdminController {
     @GetMapping("/products")
     public ResponseEntity<Page<ProductResponse>> listProducts(@PageableDefault(size = 50) Pageable pageable) {
         return ResponseEntity.ok(adminProductService.listAll(pageable));
+    }
+
+    /**
+     * Classify (or backfill) every still-UNKNOWN market's business segment from
+     * its CNPJ's CNAE. Normally runs on a schedule; this triggers it on demand.
+     */
+    @PostMapping("/markets/classify-segments")
+    public ResponseEntity<MarketLocationService.SegmentClassificationSummary> classifyMarketSegments() {
+        return ResponseEntity.ok(marketLocationService.classifyPendingSegments());
     }
 
     /** Re-run brand extraction to fill products missing a brand (after registry edits). */

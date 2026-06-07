@@ -145,7 +145,7 @@ Other filters you can pass (same query for many screens — don't make new calls
 | `BAKERY` | Padaria |
 | `CLEANING` | Limpeza |
 | `PERSONAL_CARE` | Higiene e Cuidado Pessoal |
-| `PHARMACY` | Farmácia |
+| `HEALTH` | Saúde |
 | `OTHER` | Outros |
 
 **UX / behavior notes:**

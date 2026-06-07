@@ -433,7 +433,7 @@ Returns a Spring `Page<PurchasedItemResponse>`:
 - All filters optional; multi-value filters OR within a dimension, AND across dimensions.
 - Scope is **CONFIRMED receipts, excluded items dropped** — i.e. real purchases (matches the analytics scope).
 - Default sort: `purchasedAt` desc (receipt issue date), then item id. Empty result is an empty page, not a 404.
-- The category enum values: `GROCERIES, BEVERAGES, PRODUCE, MEAT_DAIRY, BAKERY, CLEANING, PERSONAL_CARE, PHARMACY, OTHER`. The FE maps these to PT labels (e.g. `MEAT_DAIRY` → "Carnes e Laticínios", `PHARMACY` → "Farmácia").
+- The category enum values: `GROCERIES, BEVERAGES, PRODUCE, MEAT_DAIRY, BAKERY, CLEANING, PERSONAL_CARE, HEALTH, OTHER`. The FE maps these to PT labels (e.g. `MEAT_DAIRY` → "Carnes e Laticínios", `HEALTH` → "Saúde").
 - Natural drill-down target: take a bucket `key` from `/insights/query` (a productId, a category, a CNPJ) and pass it here to list the underlying items.
 - Extra filter `&customCategoryId=<uuid>` lists the items the household has migrated into one of its **custom categories** (see §4c). Combine with other filters as usual; unknown id → empty page.
 
@@ -676,6 +676,7 @@ POST   /api/v1/admin/products/{id}/merge       → 200 ProductMergeResultRespons
 GET    /api/v1/admin/products/recategorize        → RecategorizeReportResponse (dry-run, read-only)
 POST   /api/v1/admin/products/recategorize?includeMl=false → RecategorizeResultResponse (apply)
 POST   /api/v1/admin/products/refresh-brands       → BrandBackfillResponse (fill missing brands)
+POST   /api/v1/admin/markets/classify-segments     → SegmentClassificationSummary (CNAE-classify pending markets)
 DELETE /api/v1/admin/products/{id}?force=false     → 200 ProductDeletionResponse (prune test/junk catalog rows)
 ```
 

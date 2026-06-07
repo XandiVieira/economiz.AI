@@ -5972,6 +5972,32 @@
      "response": []
     },
     {
+     "name": "Classify market segments (admin, CNAE backfill)",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Accept-Language",
+        "value": "pt"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/v1/admin/markets/classify-segments",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "v1",
+        "admin",
+        "markets",
+        "classify-segments"
+       ]
+      }
+     },
+     "response": []
+    },
+    {
      "name": "Delete product (admin, prune test/junk rows)",
      "request": {
       "method": "DELETE",

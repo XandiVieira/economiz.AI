@@ -359,47 +359,47 @@ perf r,Perfumador de Roupas,CLEANING
 orquidea,Aromatizante,CLEANING
 # --- PHARMACY / DRUGSTORE (high-precision; merchant fallback catches the rest) ---
 # Common OTC meds + brands (normalized: no accents, lowercase)
-dipirona,Dipirona,PHARMACY
-paracetamol,Paracetamol,PHARMACY
-ibuprofeno,Ibuprofeno,PHARMACY
-nimesulida,Nimesulida,PHARMACY
-diclofenaco,Diclofenaco,PHARMACY
-omeprazol,Omeprazol,PHARMACY
-amoxicilina,Amoxicilina,PHARMACY
-azitromicina,Azitromicina,PHARMACY
-loratadina,Loratadina,PHARMACY
-cetoprofeno,Cetoprofeno,PHARMACY
-dorflex,Dorflex,PHARMACY
-novalgina,Novalgina,PHARMACY
-buscopan,Buscopan,PHARMACY
-neosaldina,Neosaldina,PHARMACY
-tylenol,Tylenol,PHARMACY
-advil,Advil,PHARMACY
-aspirina,Aspirina,PHARMACY
-engov,Engov,PHARMACY
-dramin,Dramin,PHARMACY
-luftal,Luftal,PHARMACY
-gelol,Gelol,PHARMACY
+dipirona,Dipirona,HEALTH
+paracetamol,Paracetamol,HEALTH
+ibuprofeno,Ibuprofeno,HEALTH
+nimesulida,Nimesulida,HEALTH
+diclofenaco,Diclofenaco,HEALTH
+omeprazol,Omeprazol,HEALTH
+amoxicilina,Amoxicilina,HEALTH
+azitromicina,Azitromicina,HEALTH
+loratadina,Loratadina,HEALTH
+cetoprofeno,Cetoprofeno,HEALTH
+dorflex,Dorflex,HEALTH
+novalgina,Novalgina,HEALTH
+buscopan,Buscopan,HEALTH
+neosaldina,Neosaldina,HEALTH
+tylenol,Tylenol,HEALTH
+advil,Advil,HEALTH
+aspirina,Aspirina,HEALTH
+engov,Engov,HEALTH
+dramin,Dramin,HEALTH
+luftal,Luftal,HEALTH
+gelol,Gelol,HEALTH
 # Dosage forms (strong pharmacy signals)
-comprimido,Medicamento,PHARMACY
-capsula,Medicamento,PHARMACY
-capsulas,Medicamento,PHARMACY
-drageas,Medicamento,PHARMACY
-xarope,Xarope,PHARMACY
-pomada,Pomada,PHARMACY
+comprimido,Medicamento,HEALTH
+capsula,Medicamento,HEALTH
+capsulas,Medicamento,HEALTH
+drageas,Medicamento,HEALTH
+xarope,Xarope,HEALTH
+pomada,Pomada,HEALTH
 # Supplements / vitamins
-vitamina,Vitamina,PHARMACY
-polivitaminico,Polivitamínico,PHARMACY
-suplemento,Suplemento,PHARMACY
-whey,Whey Protein,PHARMACY
-creatina,Creatina,PHARMACY
-colageno,Colágeno,PHARMACY
-melatonina,Melatonina,PHARMACY
+vitamina,Vitamina,HEALTH
+polivitaminico,Polivitamínico,HEALTH
+suplemento,Suplemento,HEALTH
+whey,Whey Protein,HEALTH
+creatina,Creatina,HEALTH
+colageno,Colágeno,HEALTH
+melatonina,Melatonina,HEALTH
 # Health / first-aid items
-soro fisiologico,Soro Fisiológico,PHARMACY
-preservativo,Preservativo,PHARMACY
-curativo,Curativo,PHARMACY
-gaze,Gaze,PHARMACY
-seringa,Seringa,PHARMACY
-termometro,Termômetro,PHARMACY
-algodao,Algodão,PHARMACY
+soro fisiologico,Soro Fisiológico,HEALTH
+preservativo,Preservativo,HEALTH
+curativo,Curativo,HEALTH
+gaze,Gaze,HEALTH
+seringa,Seringa,HEALTH
+termometro,Termômetro,HEALTH
+algodao,Algodão,HEALTH

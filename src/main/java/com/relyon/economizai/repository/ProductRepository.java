@@ -21,9 +21,9 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
 
     /**
      * Distinct OTHER-category products that have at least one confirmed,
-     * non-excluded purchase at the given merchant CNPJ. Used to backfill
-     * PHARMACY onto products that were canonicalized before their merchant was
-     * verified as a pharmacy. USER/MERCHANT-locked products are excluded.
+     * non-excluded purchase at the given merchant CNPJ. Used to backfill the
+     * HEALTH category onto products that were canonicalized before their
+     * merchant was verified as a pharmacy. USER/MERCHANT-locked products are excluded.
      */
     @Query("""
         SELECT DISTINCT ri.product FROM ReceiptItem ri

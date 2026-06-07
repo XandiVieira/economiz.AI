@@ -63,11 +63,15 @@ public class ExpoPushClient {
         payload.put("body", body);
         if (data != null && !data.isEmpty()) payload.put("data", data);
         try {
-            var response = restClient.post().uri(EXPO_PUSH_URL).body(payload).retrieve().body(String.class);
-            return parseTicket(response);
+            return parseTicket(postToExpo(payload));
         } catch (Exception ex) {
             return Result.error(ex.getClass().getSimpleName(), ex.getMessage());
         }
+    }
+
+    /** Raw POST — isolated as a seam so response parsing is unit-testable without HTTP. */
+    protected String postToExpo(Map<String, Object> payload) {
+        return restClient.post().uri(EXPO_PUSH_URL).body(payload).retrieve().body(String.class);
     }
 
     private Result parseTicket(String response) throws Exception {

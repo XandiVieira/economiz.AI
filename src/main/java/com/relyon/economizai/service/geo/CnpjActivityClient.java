@@ -72,7 +72,8 @@ public class CnpjActivityClient {
         }
     }
 
-    private String fetchWithRetry(String cnpj) {
+    /** Raw fetch with retry — isolated as a seam so classify()'s parse path is unit-testable. */
+    protected String fetchWithRetry(String cnpj) {
         var url = baseUrl + "/" + cnpj;
         for (var attempt = 1; attempt <= maxAttempts; attempt++) {
             try {

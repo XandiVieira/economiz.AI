@@ -214,7 +214,7 @@ public class CanonicalizationService {
     private void applyPharmacyMerchantFallback(Product product, boolean pharmacyMerchant) {
         if (!pharmacyMerchant) return;
         if (product.getCategory() != null && product.getCategory() != ProductCategory.OTHER) return;
-        product.setCategory(ProductCategory.PHARMACY);
+        product.setCategory(ProductCategory.HEALTH);
         product.setCategorizationSource(CategorizationSource.MERCHANT);
         log.info("item.category_from_pharmacy_merchant description='{}'", product.getNormalizedName());
     }

@@ -3,7 +3,7 @@ package com.relyon.economizai.model.enums;
 /**
  * Business segment of a merchant, verified from its CNPJ's CNAE (economic
  * activity) via an external registry. Drives category fallbacks — e.g. an
- * unrecognized item at a PHARMACY defaults to ProductCategory.PHARMACY.
+ * unrecognized item at a PHARMACY merchant defaults to ProductCategory.HEALTH.
  */
 public enum MerchantSegment {
     UNKNOWN,      // not classified yet (or lookup failed)

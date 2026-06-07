@@ -108,17 +108,40 @@ public class MarketLocationService {
      */
     @Scheduled(fixedDelayString = "${economizai.merchant.classify.interval-ms:600000}",
                initialDelayString = "${economizai.merchant.classify.initial-delay-ms:45000}")
-    public void classifyPendingSegments() {
-        if (!cnpjActivityClient.isEnabled()) return;
+    public void scheduledSegmentClassification() {
+        classifyPendingSegments();
+    }
+
+    /**
+     * Classifies every still-UNKNOWN market (attempts capped). Also the
+     * admin-triggered backfill entry point. Returns a per-segment summary.
+     */
+    public SegmentClassificationSummary classifyPendingSegments() {
+        if (!cnpjActivityClient.isEnabled()) return new SegmentClassificationSummary(0, 0, 0, 0, 0);
         var pending = repository.findAllBySegmentAndSegmentAttemptsLessThan(
                 MerchantSegment.UNKNOWN, MAX_SEGMENT_ATTEMPTS);
-        if (pending.isEmpty()) return;
+        if (pending.isEmpty()) return new SegmentClassificationSummary(0, 0, 0, 0, 0);
         log.info("merchant.classify.batch.start pending={}", pending.size());
+        var pharmacy = 0;
+        var supermarket = 0;
+        var other = 0;
+        var unknown = 0;
         for (var market : pending) {
             classifySegmentOne(market);
+            switch (market.getSegment()) {
+                case PHARMACY -> pharmacy++;
+                case SUPERMARKET -> supermarket++;
+                case OTHER -> other++;
+                case UNKNOWN -> unknown++;
+            }
         }
-        log.info("merchant.classify.batch.done attempted={}", pending.size());
+        log.info("merchant.classify.batch.done attempted={} pharmacy={} supermarket={} other={} stillUnknown={}",
+                pending.size(), pharmacy, supermarket, other, unknown);
+        return new SegmentClassificationSummary(pending.size(), pharmacy, supermarket, other, unknown);
     }
+
+    public record SegmentClassificationSummary(int attempted, int pharmacy, int supermarket,
+                                               int other, int stillUnknown) {}
 
     @Transactional
     public void classifySegmentOne(MarketLocation market) {
@@ -140,7 +163,7 @@ public class MarketLocationService {
     private void backfillPharmacyProducts(String cnpj) {
         var products = productRepository.findOtherCategoryProductsByMerchant(cnpj);
         for (var product : products) {
-            product.setCategory(ProductCategory.PHARMACY);
+            product.setCategory(ProductCategory.HEALTH);
             product.setCategorizationSource(CategorizationSource.MERCHANT);
         }
         if (!products.isEmpty()) {
