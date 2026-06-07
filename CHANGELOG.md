@@ -16,6 +16,14 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-06 — dev tooling: full-chain trace + ML-only inspector
+
+Developer endpoints for improving the algorithm (not FE-facing):
+- `GET /categorizer/classify` (full chain) now also returns `mlApplied` — whether the ML guess is actually used live (currently false).
+- `GET /categorizer/ml/predict?description=...` — the **ML model alone** (category + genericName + confidence), ignoring dictionary + the apply gate. For inspecting/teaching the model in isolation.
+
+---
+
 ## 2026-06-06 — ML benched + brand/quantity quality tracking
 
 - **AI categorization is gated OFF** in the live cascade (it was confidently wrong at current data volume). New items are categorized by the **dictionary only** (deterministic) or left uncategorized — no more confidently-wrong AI labels. The model is still trained and measured so we can switch it back on when it's good enough (env `ML_CATEGORY_APPLY_ENABLED`).

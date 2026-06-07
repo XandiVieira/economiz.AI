@@ -683,7 +683,9 @@ DELETE /api/v1/alerts/{id}     → 204 (404 if not the caller's)
 
 ```
 GET  /api/v1/categorizer/classify?description=Milho&description=Lays
-                                       → dry-run: how each term would be categorized (no persist)
+                                       → full chain: dictionary + ML + final decision (dev)
+GET  /api/v1/categorizer/ml/predict?description=Milho&description=Lays
+                                       → ML model ALONE (dev — inspect/improve the model)
 GET  /api/v1/categorizer/benchmark     → categorization accuracy % over the golden set (records a snapshot)
 GET  /api/v1/categorizer/quality/history?limit=50 → quality trend over time (snapshots)
 GET  /api/v1/categorizer/status        → ML model state
@@ -710,7 +712,9 @@ Mostly for ops. Categorization runs automatically on receipt confirm.
   "mlReady": true, "mlConfidenceThreshold": 0.75
 }
 ```
-`source` says which layer won (`DICTIONARY`/`LEARNED_DICTIONARY`/`ML`/`NONE`) — the fast way to tell a bad dictionary entry from an over-confident ML guess.
+`source` says which layer won (`DICTIONARY`/`LEARNED_DICTIONARY`/`ML`/`NONE`) — the fast way to tell a bad dictionary entry from an over-confident ML guess. `mlApplied` tells you whether the ML guess is actually used in the live cascade (currently `false` — ML is benched).
+
+**`/ml/predict` (dev, ML-only)** — the model's raw guess per term, ignoring the dictionary and the apply gate: `[{ input, category:{label,confidence,meetsThreshold}, genericName:{...}, ready, confidenceThreshold }]`. Use it to inspect/improve the model in isolation; `/classify` is the whole chain.
 
 ---
 

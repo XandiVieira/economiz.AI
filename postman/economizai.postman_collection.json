@@ -1886,7 +1886,44 @@
                 }
               ]
             },
-            "description": "Dry-run: how each term would be categorized, with per-layer breakdown (dictionary vs ML) and the deciding source. Nothing is persisted."
+            "description": "Dry-run / full chain: how each term would be categorized, with per-layer breakdown (dictionary vs ML), the deciding source, and mlApplied. Nothing is persisted."
+          },
+          "response": []
+        },
+        {
+          "name": "ML-only predict (dev, model alone)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categorizer/ml/predict?description=Milho&description=Lays",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "categorizer",
+                "ml",
+                "predict"
+              ],
+              "query": [
+                {
+                  "key": "description",
+                  "value": "Milho"
+                },
+                {
+                  "key": "description",
+                  "value": "Lays"
+                }
+              ]
+            },
+            "description": "The ML model's raw prediction per term (category + genericName + confidence), ignoring the dictionary and the apply gate. Dev tool to inspect/improve the model in isolation."
           },
           "response": []
         },
