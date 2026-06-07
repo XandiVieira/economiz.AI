@@ -7,6 +7,7 @@ import java.util.UUID;
 
 public record ReceiptItemResponse(
         UUID id,
+        UUID productId,
         Integer lineNumber,
         String rawDescription,
         String friendlyDescription,
@@ -37,6 +38,7 @@ public record ReceiptItemResponse(
         var category = overrideLabel != null ? overrideLabel : globalCategory;
         return new ReceiptItemResponse(
                 item.getId(),
+                product != null ? product.getId() : null,
                 item.getLineNumber(),
                 item.getRawDescription(),
                 friendly,

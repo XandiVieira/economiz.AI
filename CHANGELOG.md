@@ -16,6 +16,12 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-07 — `productId` on receipt items
+
+`ReceiptResponse.items[*]` now includes **`productId`** (`uuid`, or `null` for an unmatched item). This lets the **review screen drive category migration directly**: collect the `productId`s of the items the user checks and `POST /categories/migrate` — no need to cross-reference `/items` first. Additive field, nothing else changed.
+
+---
+
 ## 2026-06-07 — SEFAZ fetch auto-retry + training endpoints locked to ADMIN
 
 - **NFC-e import now auto-retries** transient SEFAZ failures (the SVRS portal is flaky — 5xx/timeouts/empty body). Up to 5 attempts total: immediate retry, then 5s/5s/5s. 4xx (bad chave) is **not** retried. Net effect for the FE: fewer spurious `502 receipt.sefaz.fetch.failed` — the user no longer has to keep re-submitting. Trade-off: a submit can take up to ~15s+ when the portal is down, so keep your loading state patient before showing an error.

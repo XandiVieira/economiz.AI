@@ -216,6 +216,7 @@ The response always includes both:
 - `rawDescription` — original NFC-e text, never changes
 - `friendlyDescription` — user override, null when not set
 - `displayDescription` — derived: `friendlyDescription` if set, else `rawDescription`. Use this for rendering.
+- `productId` — the linked canonical product (`uuid`, or `null` when the item isn't matched yet). Use it to drive category migration straight from the review screen (`POST /categories/migrate` with the checked items' `productId`s — see §4c).
 
 **Household memory** — when the user names an item that's linked to a Product, the name is remembered household-wide. Future receipts that contain the same Product (matched by EAN or alias) will inherit `friendlyDescription` automatically — the user only types it once. Different households can have different names for the same product.
 

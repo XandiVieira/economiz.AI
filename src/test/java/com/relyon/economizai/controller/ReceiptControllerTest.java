@@ -103,6 +103,7 @@ class ReceiptControllerTest {
                 LocalDateTime.now(),
                 List.of(new ReceiptItemResponse(
                         UUID.randomUUID(),
+                        UUID.randomUUID(),
                         1,
                         "ARROZ TIO J 5KG",
                         null,

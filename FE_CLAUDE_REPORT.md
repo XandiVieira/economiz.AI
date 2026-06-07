@@ -43,6 +43,7 @@ POST   /api/v1/categories/migrate    { "productIds":[...],
 5. View the custom category's items afterwards with `GET /items?customCategoryId=<uuid>`.
 
 Notes:
+- **`ReceiptResponse.items[*].productId` is now populated** (`uuid` | `null`) — so you can also run migration straight from the receipt review screen using each item's `productId`, not just from `/items`.
 - `migrate` needs **exactly one** of `targetCategory` / `targetCustomCategoryId` (else `400`).
 - After migration the item's `category` field reads back as the **custom category name** (it's a display string now, not always an enum).
 - Category chips: globals use the enum→PT label map; custom categories use their `name` as-is.
