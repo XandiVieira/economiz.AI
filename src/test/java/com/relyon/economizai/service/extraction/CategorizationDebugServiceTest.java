@@ -12,6 +12,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -92,7 +93,7 @@ class CategorizationDebugServiceTest {
         when(mlClassifier.predictCategory("A")).thenReturn(MlPrediction.empty());
         when(mlClassifier.predictGenericName("A")).thenReturn(MlPrediction.empty());
 
-        var results = service.explainAll(java.util.Arrays.asList("A", null));
+        var results = service.explainAll(Arrays.asList("A", null));
 
         assertEquals(1, results.size());
     }

@@ -20,6 +20,8 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 
@@ -70,22 +72,22 @@ public class User extends BaseEntity implements UserDetails {
     private String acceptedPrivacyVersion;
 
     @Column(name = "accepted_legal_at", nullable = false)
-    private java.time.LocalDateTime acceptedLegalAt;
+    private LocalDateTime acceptedLegalAt;
 
     @Column(name = "home_latitude", precision = 10, scale = 7)
-    private java.math.BigDecimal homeLatitude;
+    private BigDecimal homeLatitude;
 
     @Column(name = "home_longitude", precision = 10, scale = 7)
-    private java.math.BigDecimal homeLongitude;
+    private BigDecimal homeLongitude;
 
     @Column(name = "home_set_at")
-    private java.time.LocalDateTime homeSetAt;
+    private LocalDateTime homeSetAt;
 
     @Column(name = "push_device_token", length = 500)
     private String pushDeviceToken;
 
     @Column(name = "push_token_updated_at")
-    private java.time.LocalDateTime pushTokenUpdatedAt;
+    private LocalDateTime pushTokenUpdatedAt;
 
     @Column(name = "profile_picture_key", length = 255)
     private String profilePictureKey;
@@ -94,14 +96,14 @@ public class User extends BaseEntity implements UserDetails {
     private String profilePictureContentType;
 
     @Column(name = "profile_picture_uploaded_at")
-    private java.time.LocalDateTime profilePictureUploadedAt;
+    private LocalDateTime profilePictureUploadedAt;
 
     @Column(name = "email_verified", nullable = false)
     @Builder.Default
     private boolean emailVerified = false;
 
     @Column(name = "email_verified_at")
-    private java.time.LocalDateTime emailVerifiedAt;
+    private LocalDateTime emailVerifiedAt;
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {

@@ -14,10 +14,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -81,7 +83,7 @@ class AutoPromotionServiceTest {
         // 50 ML products say "RACAO" → OTHER. One user disagrees: "RACAO" → GROCERIES.
         // The user override should block promotion of token "racao" specifically;
         // tokens that don't appear in the user product (none here) would still be eligible.
-        var products = new java.util.ArrayList<Product>(IntStream.range(0, 50)
+        var products = new ArrayList<Product>(IntStream.range(0, 50)
                 .mapToObj(i -> mlProduct("RACAO " + i, ProductCategory.OTHER, "Ração"))
                 .toList());
         products.add(userProduct("RACAO", ProductCategory.GROCERIES));
@@ -102,7 +104,7 @@ class AutoPromotionServiceTest {
                 .mapToObj(i -> mlProduct("FOO " + i, ProductCategory.GROCERIES, "X"));
         var cleaning = IntStream.range(0, 15)
                 .mapToObj(i -> mlProduct("FOO " + i, ProductCategory.CLEANING, "X"));
-        var products = java.util.stream.Stream.concat(groceries, cleaning).toList();
+        var products = Stream.concat(groceries, cleaning).toList();
         when(productRepository.findAll()).thenReturn(products);
         when(learnedRepository.findAll()).thenReturn(List.of());
 

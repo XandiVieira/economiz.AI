@@ -10,6 +10,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.math.BigDecimal;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -100,21 +101,21 @@ public class NominatimGeocoder {
         return null;
     }
 
-    private static final java.util.Map<String, String> BRAZIL_STATE_BY_NAME = java.util.Map.ofEntries(
-            java.util.Map.entry("Acre", "AC"), java.util.Map.entry("Alagoas", "AL"),
-            java.util.Map.entry("Amapá", "AP"), java.util.Map.entry("Amazonas", "AM"),
-            java.util.Map.entry("Bahia", "BA"), java.util.Map.entry("Ceará", "CE"),
-            java.util.Map.entry("Distrito Federal", "DF"), java.util.Map.entry("Espírito Santo", "ES"),
-            java.util.Map.entry("Goiás", "GO"), java.util.Map.entry("Maranhão", "MA"),
-            java.util.Map.entry("Mato Grosso", "MT"), java.util.Map.entry("Mato Grosso do Sul", "MS"),
-            java.util.Map.entry("Minas Gerais", "MG"), java.util.Map.entry("Pará", "PA"),
-            java.util.Map.entry("Paraíba", "PB"), java.util.Map.entry("Paraná", "PR"),
-            java.util.Map.entry("Pernambuco", "PE"), java.util.Map.entry("Piauí", "PI"),
-            java.util.Map.entry("Rio de Janeiro", "RJ"), java.util.Map.entry("Rio Grande do Norte", "RN"),
-            java.util.Map.entry("Rio Grande do Sul", "RS"), java.util.Map.entry("Rondônia", "RO"),
-            java.util.Map.entry("Roraima", "RR"), java.util.Map.entry("Santa Catarina", "SC"),
-            java.util.Map.entry("São Paulo", "SP"), java.util.Map.entry("Sergipe", "SE"),
-            java.util.Map.entry("Tocantins", "TO")
+    private static final Map<String, String> BRAZIL_STATE_BY_NAME = Map.ofEntries(
+            Map.entry("Acre", "AC"), Map.entry("Alagoas", "AL"),
+            Map.entry("Amapá", "AP"), Map.entry("Amazonas", "AM"),
+            Map.entry("Bahia", "BA"), Map.entry("Ceará", "CE"),
+            Map.entry("Distrito Federal", "DF"), Map.entry("Espírito Santo", "ES"),
+            Map.entry("Goiás", "GO"), Map.entry("Maranhão", "MA"),
+            Map.entry("Mato Grosso", "MT"), Map.entry("Mato Grosso do Sul", "MS"),
+            Map.entry("Minas Gerais", "MG"), Map.entry("Pará", "PA"),
+            Map.entry("Paraíba", "PB"), Map.entry("Paraná", "PR"),
+            Map.entry("Pernambuco", "PE"), Map.entry("Piauí", "PI"),
+            Map.entry("Rio de Janeiro", "RJ"), Map.entry("Rio Grande do Norte", "RN"),
+            Map.entry("Rio Grande do Sul", "RS"), Map.entry("Rondônia", "RO"),
+            Map.entry("Roraima", "RR"), Map.entry("Santa Catarina", "SC"),
+            Map.entry("São Paulo", "SP"), Map.entry("Sergipe", "SE"),
+            Map.entry("Tocantins", "TO")
     );
 
     public record GeocodeResult(BigDecimal latitude, BigDecimal longitude, String city, String state) {}

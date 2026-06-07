@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -110,8 +111,8 @@ public class CommunityPromoService {
                 // to raw unit price.
                 var allNormalized = rows.stream().allMatch(po -> po.getNormalizedUnitPrice() != null);
                 var priceFn = allNormalized
-                        ? (java.util.function.Function<PriceObservation, BigDecimal>) PriceObservation::getNormalizedUnitPrice
-                        : (java.util.function.Function<PriceObservation, BigDecimal>) PriceObservation::getUnitPrice;
+                        ? (Function<PriceObservation, BigDecimal>) PriceObservation::getNormalizedUnitPrice
+                        : (Function<PriceObservation, BigDecimal>) PriceObservation::getUnitPrice;
 
                 var recentPrices = rows.stream()
                         .filter(po -> po.getObservedAt().isAfter(recentCutoff))

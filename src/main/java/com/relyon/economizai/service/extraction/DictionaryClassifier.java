@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -65,7 +66,7 @@ public class DictionaryClassifier {
         var tokens = normalized.split("\\s+");
         for (var size = MAX_PHRASE_TOKENS; size >= 1; size--) {
             for (var i = 0; i + size <= tokens.length; i++) {
-                var phrase = String.join(" ", java.util.Arrays.copyOfRange(tokens, i, i + size));
+                var phrase = String.join(" ", Arrays.copyOfRange(tokens, i, i + size));
                 var curated = curatedEntries.get(phrase);
                 if (curated != null) return curated;
                 var learned = learnedEntries.get(phrase);

@@ -16,6 +16,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -160,10 +162,10 @@ public class AutoPromotionService {
         var normalized = DescriptionNormalizer.normalize(text);
         if (normalized.isBlank()) return List.of();
         var tokens = normalized.split("\\s+");
-        var phrases = new java.util.ArrayList<String>();
+        var phrases = new ArrayList<String>();
         for (var size = MAX_PHRASE_TOKENS; size >= 1; size--) {
             for (var i = 0; i + size <= tokens.length; i++) {
-                phrases.add(String.join(" ", java.util.Arrays.copyOfRange(tokens, i, i + size)));
+                phrases.add(String.join(" ", Arrays.copyOfRange(tokens, i, i + size)));
             }
         }
         return phrases;

@@ -19,7 +19,7 @@ public interface InsightsRepository extends JpaRepository<Receipt, UUID> {
         FROM ReceiptItem ri
         JOIN ri.receipt r
         WHERE r.household.id = :householdId
-          AND r.status = com.relyon.economizai.model.enums.ReceiptStatus.CONFIRMED
+          AND r.status = 'CONFIRMED'
           AND ri.excluded = false
           AND r.issuedAt >= :from
           AND r.issuedAt <= :to
@@ -36,7 +36,7 @@ public interface InsightsRepository extends JpaRepository<Receipt, UUID> {
         FROM ReceiptItem ri
         JOIN ri.receipt r
         WHERE r.household.id = :householdId
-          AND r.status = com.relyon.economizai.model.enums.ReceiptStatus.CONFIRMED
+          AND r.status = 'CONFIRMED'
           AND ri.excluded = false
           AND r.issuedAt >= :from
           AND r.issuedAt <= :to
@@ -55,7 +55,7 @@ public interface InsightsRepository extends JpaRepository<Receipt, UUID> {
         FROM ReceiptItem ri
         JOIN ri.receipt r
         WHERE r.household.id = :householdId
-          AND r.status = com.relyon.economizai.model.enums.ReceiptStatus.CONFIRMED
+          AND r.status = 'CONFIRMED'
           AND ri.excluded = false
           AND r.issuedAt >= :from
           AND r.issuedAt <= :to
@@ -67,18 +67,18 @@ public interface InsightsRepository extends JpaRepository<Receipt, UUID> {
                                  @Param("to") LocalDateTime to);
 
     @Query("""
-        SELECT COALESCE(p.category, com.relyon.economizai.model.enums.ProductCategory.OTHER) AS category,
+        SELECT COALESCE(p.category, 'OTHER') AS category,
                COALESCE(SUM(ri.totalPrice), 0) AS total,
                COUNT(ri) AS itemCount
         FROM ReceiptItem ri
         JOIN ri.receipt r
         LEFT JOIN ri.product p
         WHERE r.household.id = :householdId
-          AND r.status = com.relyon.economizai.model.enums.ReceiptStatus.CONFIRMED
+          AND r.status = 'CONFIRMED'
           AND ri.excluded = false
           AND r.issuedAt >= :from
           AND r.issuedAt <= :to
-        GROUP BY COALESCE(p.category, com.relyon.economizai.model.enums.ProductCategory.OTHER)
+        GROUP BY COALESCE(p.category, 'OTHER')
         ORDER BY total DESC
     """)
     List<Object[]> spendByCategory(@Param("householdId") UUID householdId,
@@ -94,7 +94,7 @@ public interface InsightsRepository extends JpaRepository<Receipt, UUID> {
         FROM ReceiptItem ri
         JOIN ri.receipt r
         WHERE r.household.id = :householdId
-          AND r.status = com.relyon.economizai.model.enums.ReceiptStatus.CONFIRMED
+          AND r.status = 'CONFIRMED'
           AND ri.excluded = false
           AND ri.product.id = :productId
           AND r.issuedAt >= :from
@@ -114,7 +114,7 @@ public interface InsightsRepository extends JpaRepository<Receipt, UUID> {
         FROM ReceiptItem ri
         JOIN ri.receipt r
         WHERE r.household.id = :householdId
-          AND r.status = com.relyon.economizai.model.enums.ReceiptStatus.CONFIRMED
+          AND r.status = 'CONFIRMED'
           AND ri.excluded = false
           AND r.issuedAt >= :from
           AND r.issuedAt <= :to

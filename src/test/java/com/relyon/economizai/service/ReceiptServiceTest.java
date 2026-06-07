@@ -35,6 +35,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -87,7 +88,7 @@ class ReceiptServiceTest {
         item.setProduct(product);
         when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
         when(categoryOverrideService.overridesByProduct(eq(user.getHousehold().getId()), any()))
-                .thenReturn(java.util.Map.of(product.getId(), "GROCERIES"));
+                .thenReturn(Map.of(product.getId(), "GROCERIES"));
 
         var response = receiptService.updateItemCategory(user, receipt.getId(), item.getId(), ProductCategory.GROCERIES);
 
@@ -258,7 +259,7 @@ class ReceiptServiceTest {
         var receipt = persistedReceipt(user, ReceiptStatus.PENDING_CONFIRMATION);
         when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
         when(receiptRepository.save(receipt)).thenReturn(receipt);
-        when(promoDetector.detectPersonalPromos(receipt)).thenReturn(java.util.List.of());
+        when(promoDetector.detectPersonalPromos(receipt)).thenReturn(List.of());
 
         var response = receiptService.confirm(user, receipt.getId(), null);
 

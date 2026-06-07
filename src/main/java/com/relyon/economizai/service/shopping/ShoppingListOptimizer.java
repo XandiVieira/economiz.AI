@@ -26,6 +26,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * PRO-52 — given a shopping list, return per-market grouping that minimizes
@@ -96,7 +97,7 @@ public class ShoppingListOptimizer {
         var localCandidates = receiptItemRepository
                 .findHouseholdHistoryForProduct(product.getId(), householdId).stream()
                 .filter(item -> item.getReceipt().getCnpjEmitente() != null && item.getUnitPrice() != null)
-                .collect(java.util.stream.Collectors.toMap(
+                .collect(Collectors.toMap(
                         item -> item.getReceipt().getCnpjEmitente(),
                         item -> new MarketCandidate(item.getReceipt().getCnpjEmitente(),
                                 item.getReceipt().getMarketName(), item.getUnitPrice(),
@@ -108,7 +109,7 @@ public class ShoppingListOptimizer {
             var since = LocalDateTime.now().minusDays(properties.getCollaborative().getLookbackDays());
             var observations = observationRepository.findRecentByProduct(product.getId(), since);
             var byMarket = observations.stream()
-                    .collect(java.util.stream.Collectors.groupingBy(o -> o.getMarketCnpj()));
+                    .collect(Collectors.groupingBy(o -> o.getMarketCnpj()));
             for (var entry : byMarket.entrySet()) {
                 if (localCandidates.containsKey(entry.getKey())) continue;
                 var rows = entry.getValue();

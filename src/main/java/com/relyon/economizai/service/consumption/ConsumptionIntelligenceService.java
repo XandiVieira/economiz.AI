@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Phase 3 — Consumption Intelligence.
@@ -165,7 +166,7 @@ public class ConsumptionIntelligenceService {
     private Set<UUID> activeSnoozes(UUID householdId) {
         return snoozeRepository.findAllByHouseholdIdAndSnoozedUntilAfter(householdId, LocalDateTime.now()).stream()
                 .map(s -> s.getProduct().getId())
-                .collect(java.util.stream.Collectors.toSet());
+                .collect(Collectors.toSet());
     }
 
     private ConsumptionPredictionResponse predictForProduct(List<PurchaseEvent> events,
