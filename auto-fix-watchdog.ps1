@@ -99,6 +99,43 @@ function ErrorSnippet($allLines, [int]$startIdx) {
     return ($out -join "`n")
 }
 
+# Bring the local branch up to date with origin BEFORE diagnosing/fixing, so the
+# Claude fix and the build run against the latest code. Returns $true if the tree
+# is clean and current; $false if a rebase conflict (or other error) left it
+# dirty - in which case the caller must abort this cycle, not fix on a bad base.
+function SyncBranch {
+    & git fetch origin $Branch 2>$null
+    & git rebase "origin/$Branch" 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        # Conflict or other rebase failure - abort cleanly, leave a pristine tree.
+        & git rebase --abort 2>$null | Out-Null
+        & git reset --hard "origin/$Branch" 2>$null | Out-Null
+        return $false
+    }
+    return $true
+}
+
+# Push the just-made commit, surviving the common race where another machine (or
+# the app's own CI) pushed between our commit and our push. Re-syncs and retries
+# up to $maxTries with a short backoff. Returns $true on success; on exhaustion
+# returns $false WITHOUT touching the tree (caller decides how to clean up).
+function PushWithRetry([int]$maxTries = 3) {
+    for ($t = 1; $t -le $maxTries; $t++) {
+        & git pull --rebase origin $Branch 2>$null | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            & git rebase --abort 2>$null | Out-Null
+            Log ("push.retry rebase-conflict try=$t/$maxTries")
+            Start-Sleep -Seconds ($t * 3)
+            continue
+        }
+        & git push origin $Branch 2>$null | Out-Null
+        if ($LASTEXITCODE -eq 0) { return $true }
+        Log ("push.retry push-rejected try=$t/$maxTries")
+        Start-Sleep -Seconds ($t * 3)
+    }
+    return $false
+}
+
 # Reduce a log line to a stable signature so we don't fix the same bug twice.
 function Signature([string]$line) {
     $s = $line -replace '\d{4}-\d{2}-\d{2} [\d:.]+', '' `
@@ -194,6 +231,16 @@ while ($true) {
                 continue
             }
             Log ("transient.recurring {0} hits={1} >= {2}; treating as real bug" -f $shortSig, $hits, $TransientThreshold)
+        }
+
+        # Update to latest origin BEFORE diagnosing, so the fix + build run on
+        # current code (another machine may have pushed while we polled). If the
+        # branch can't be cleanly synced, skip this cycle rather than fix on a
+        # stale/dirty base - the error will resurface and we'll retry next round.
+        if (-not (SyncBranch)) {
+            Log ("sync.skip {0} could not fast-forward to origin/$Branch; deferring" -f $shortSig)
+            $seen.Remove($sig)
+            continue
         }
 
         $prompt = @'
@@ -319,8 +366,18 @@ Rules:
         if ($msg.Length -gt 100) { $msg = $msg.Substring(0, 100) }
         & git commit -q -m $msg
         $sha = (& git rev-parse --short HEAD).Trim()
-        & git pull --rebase origin $Branch 2>$null
-        & git push origin $Branch 2>&1 | Out-Null
+
+        # Resilient push: re-sync + retry through races. If it still can't land,
+        # discard the local commit (reset to origin) so nothing stays stuck and
+        # the next cycle starts clean - then flag for a human and move on.
+        if (-not (PushWithRetry)) {
+            Log ("push.failed sha={0} discarding local commit after retries" -f $sha)
+            & git reset --hard "origin/$Branch" 2>$null | Out-Null
+            $failCount[$sig] = ([int]$failCount[$sig]) + 1
+            Ledger ("### [$(Stamp)] ⚠️ NEEDS-HUMAN · PUSH-FAILED (attempt $($failCount[$sig])x) - $shortSig`r`n$diag`r`n- **Attempted fix:** $claudeOut`r`n- **Outcome:** fix built + committed locally but could NOT be pushed after retries; local commit discarded to keep the tree clean.`r`n- **Note for human:** bug still live; the fix is reproducible - re-run or apply manually - needs eyes.")
+            $seen.Remove($sig)
+            continue
+        }
         [void]$fixTimes.Add((Get-Date))
         Log ("push.done sha={0}" -f $sha)
 
@@ -331,7 +388,8 @@ Rules:
             Log ("deploy.unhealthy auto-reverting sha={0}" -f $sha)
             & git revert --no-edit $sha 2>&1 | Out-Null
             $rev = (& git rev-parse --short HEAD).Trim()
-            & git push origin $Branch 2>&1 | Out-Null
+            # The revert MUST land to restore last-good - retry it too.
+            if (-not (PushWithRetry)) { Log ("revert.push_failed rev={0} - manual restore may be needed" -f $rev) }
             $recovered = WaitForDeployAndHealth
             $failCount[$sig] = ([int]$failCount[$sig]) + 1
             Ledger ("### [$(Stamp)] ⚠️ NEEDS-HUMAN · ROLLBACK $rev (attempt $($failCount[$sig])x) - reverted $sha`r`n$diag`r`n- **Attempted fix:** $claudeOut`r`n- **Why reverted:** /actuator/health did NOT return UP after deploy.`r`n- **Revert commit:** $rev, health recovered: $recovered`r`n- **Loop state:** kept running. Signature left for human review.`r`n- **Note for human:** the autonomous fix for this bug FAILED in production - needs eyes.")
