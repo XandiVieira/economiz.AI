@@ -693,8 +693,11 @@ GET  /api/v1/categorizer/benchmark     → categorization accuracy % over the go
 GET  /api/v1/categorizer/quality/history?limit=50 → quality trend over time (snapshots)
 GET  /api/v1/categorizer/status        → ML model state
 POST /api/v1/categorizer/retrain       → trigger retraining manually
-POST /api/v1/categorizer/auto-promote  → trigger learned-dictionary promotion
+POST /api/v1/categorizer/auto-promote  → trigger learned-dictionary promotion (from ML)
+POST /api/v1/categorizer/promote-consensus → graduate user-correction consensus → learned dict
 ```
+
+**`/promote-consensus`** — turns user category corrections into deterministic knowledge: products corrected by ≥N distinct households (consensus) get their global category set (source USER), and recurring agreed tokens enter the learned dictionary. Returns `{ productsGraduated, tokensLearned, learnedTotal }`. Runs daily automatically; this is the manual trigger.
 
 **`/benchmark` (quality metric)** — runs the cascade over `seed/categorization-benchmark.csv` (curated description → true category/brand/quantity) and returns per-field accuracy: `{ total, correct, accuracyPct (category), wrong, uncategorized, brandChecked, brandCorrect, brandAccuracyPct, quantityChecked, quantityCorrect, quantityAccuracyPct, mlCategoryChecked, mlCategoryCorrect, mlCategoryAccuracyPct, failures:[{description, field, expected, got, source}] }`. Brand/quantity are scored only on golden rows that declare them. `mlCategory*` is the ML model measured **alone** (shadow) — it's currently gated OUT of the live cascade (`category-apply-enabled=false`); watch `mlCategoryAccuracyPct` to decide when to re-enable. Each call records a snapshot.
 

@@ -2097,6 +2097,32 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Promote consensus (user corrections -> learned dict)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categorizer/promote-consensus",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "categorizer",
+                "promote-consensus"
+              ]
+            },
+            "description": "Graduates products corrected by ≥N households to a global category (source USER) and learns recurring agreed tokens into the learned dictionary. Returns { productsGraduated, tokensLearned, learnedTotal }."
+          },
+          "response": []
         }
       ]
     },

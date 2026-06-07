@@ -16,6 +16,16 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-07 — user corrections graduate to the learned dictionary (consensus)
+
+The "evidence → truth" step. A single household's correction stays personal (as before), but when **enough distinct households correct the same product to the same category** (default ≥2), it graduates:
+- the **global product** gets that category (so everyone sees it), and
+- tokens that recur across consensus products (≥2, no disagreement) enter the **learned dictionary** — so similar future products inherit the category automatically.
+
+This makes user feedback actually *teach* the deterministic system (cascade source #2), with no reliance on ML. Runs daily; manual trigger `POST /api/v1/categorizer/promote-consensus` (ops). No FE change.
+
+---
+
 ## 2026-06-07 — user category correction (household-scoped "evidence, not truth")
 
 Users can fix a wrong category on a receipt item. The fix is **per-household**: it changes what *your* household sees, and **never** mutates the global product (other households are unaffected). Each correction is also recorded as evidence/vote for a future cross-household consensus pass.
