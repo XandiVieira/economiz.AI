@@ -95,6 +95,15 @@ class InsightsControllerTest {
     }
 
     @Test
+    void unknownInsightsPath_returns404NotInternalError() throws Exception {
+        var user = buildUser();
+
+        mockMvc.perform(get("/api/v1/insights/categories")
+                        .with(SecurityMockMvcRequestPostProcessors.user(user)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void priceHistory_returnsPoints() throws Exception {
         var user = buildUser();
         var productId = UUID.randomUUID();

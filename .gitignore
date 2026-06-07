@@ -42,3 +42,4 @@ tunnel-proxy-worker/.wrangler/
 postman/live.postman_environment.json
 logs/
 # auto-fix-watchdog.log moved to %LOCALAPPDATA%\economizai\ (off OneDrive)
+.claude/scheduled_tasks.lock
