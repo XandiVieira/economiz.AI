@@ -16,6 +16,12 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-07 — brand registry expansion + brand backfill
+
+Filled in lots of brands. Expanded the brand registry with ~45 brands found across the real catalog (Spaten, Andorinha/D'Aguirre, Coqueiro, McCain, Piracanjuba abbrev, Q-Boa, Limpol, Três Corações, …). New admin op `POST /api/v1/admin/products/refresh-brands` re-runs brand extraction over the catalog and **fills products missing a brand** (never overwrites an existing one) — needed because brand, like category, is set only at product creation. No FE change (the FE just sees more products with `brand` populated).
+
+---
+
 ## 2026-06-07 — user corrections graduate to the learned dictionary (consensus)
 
 The "evidence → truth" step. A single household's correction stays personal (as before), but when **enough distinct households correct the same product to the same category** (default ≥2), it graduates:

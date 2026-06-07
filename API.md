@@ -643,6 +643,7 @@ GET    /api/v1/admin/products/duplicates       → List<DuplicateProductGroupRes
 POST   /api/v1/admin/products/{id}/merge       → 200 ProductMergeResultResponse
 GET    /api/v1/admin/products/recategorize        → RecategorizeReportResponse (dry-run, read-only)
 POST   /api/v1/admin/products/recategorize?includeMl=false → RecategorizeResultResponse (apply)
+POST   /api/v1/admin/products/refresh-brands       → BrandBackfillResponse (fill missing brands)
 ```
 
 - **Users list** — `q` does substring match on email + name (case-insensitive). Sorted by `createdAt` desc by default.

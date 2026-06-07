@@ -5503,6 +5503,23 @@
           "response": []
         },
         {
+          "name": "Refresh brands (admin, fill missing)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"},
+              {"key": "Accept-Language", "value": "pt"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/products/refresh-brands",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "products", "refresh-brands"]
+            },
+            "description": "Re-runs brand extraction over the catalog and fills products missing a brand (never overwrites). Run after adding entries to brand-registry.csv."
+          },
+          "response": []
+        },
+        {
           "name": "Recategorize catalog (admin, dry-run report)",
           "request": {
             "method": "GET",
