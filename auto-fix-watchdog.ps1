@@ -19,7 +19,12 @@ param(
     [string]$Branch       = "development"
 )
 
-$ErrorActionPreference = "Stop"
+# NOT "Stop": native CLIs (docker, git) writing to stderr become terminating
+# NativeCommandErrors under "Stop" and can kill the loop in the hidden Scheduled
+# Task context (where docker emits stderr warnings the interactive session does
+# not). Real failures are guarded with explicit try/catch and $LASTEXITCODE
+# checks, so a noisy-but-successful native command must NOT abort the process.
+$ErrorActionPreference = "Continue"
 $repo     = "C:\Users\Xandi\OneDrive\Documents\projects\economiz.AI"
 $ledger   = Join-Path $repo "AUTONOMOUS_FIXES.md"
 # Log lives OUTSIDE OneDrive: sync transiently locks files it watches, and a

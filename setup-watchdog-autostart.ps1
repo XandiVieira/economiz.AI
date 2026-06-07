@@ -14,8 +14,16 @@ $script   = "C:\Users\Xandi\OneDrive\Documents\projects\economiz.AI\auto-fix-wat
 
 if (-not (Test-Path $script)) { Write-Host "watchdog script not found at $script" -ForegroundColor Red; exit 1 }
 
-$action  = New-ScheduledTaskAction -Execute "powershell.exe" `
-    -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$script`""
+# Launch via a detached wrapper: `cmd /c start "" /b powershell ...` spawns the
+# watchdog as an INDEPENDENT process and lets the task's own action exit at once.
+# Running powershell.exe -WindowStyle Hidden directly as the action made the Task
+# Scheduler kill the loop within ~5s (it treated the hidden process as the action
+# and terminated it), which RestartCount then re-triggered — the phantom "restart
+# loop". Detaching fixes that: the scheduler sees the cmd action complete cleanly
+# while the real loop keeps running on its own.
+$inner   = "powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"`"$script`"`""
+$action  = New-ScheduledTaskAction -Execute "cmd.exe" `
+    -Argument "/c start `"economizai-watchdog`" /b $inner"
 $trigger = New-ScheduledTaskTrigger -AtLogOn
 $trigger.Delay = "PT3M"
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Highest
