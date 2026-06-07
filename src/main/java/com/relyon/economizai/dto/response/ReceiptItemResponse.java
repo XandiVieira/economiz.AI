@@ -1,6 +1,7 @@
 package com.relyon.economizai.dto.response;
 
 import com.relyon.economizai.model.ReceiptItem;
+import com.relyon.economizai.model.enums.ProductCategory;
 
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -21,10 +22,20 @@ public record ReceiptItemResponse(
         String category
 ) {
     public static ReceiptItemResponse from(ReceiptItem item) {
+        return from(item, null);
+    }
+
+    /**
+     * @param overrideCategory the household's corrected category, shown in place
+     *                         of the product's global category when present.
+     */
+    public static ReceiptItemResponse from(ReceiptItem item, ProductCategory overrideCategory) {
         var friendly = item.getFriendlyDescription();
         var display = friendly != null && !friendly.isBlank() ? friendly : item.getRawDescription();
         var product = item.getProduct();
-        var category = product != null && product.getCategory() != null ? product.getCategory().name() : null;
+        var globalCategory = product != null ? product.getCategory() : null;
+        var effective = overrideCategory != null ? overrideCategory : globalCategory;
+        var category = effective != null ? effective.name() : null;
         return new ReceiptItemResponse(
                 item.getId(),
                 item.getLineNumber(),

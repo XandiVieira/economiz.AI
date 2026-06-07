@@ -65,6 +65,7 @@ public class ReceiptService {
     private final MarketLocationService marketLocationService;
     private final NotificationService notificationService;
     private final HouseholdProductAliasService householdProductAliasService;
+    private final HouseholdProductCategoryOverrideService categoryOverrideService;
     private final HouseholdCacheGen householdCacheGen;
 
     @Transactional
@@ -134,7 +135,40 @@ public class ReceiptService {
 
     @Transactional(readOnly = true)
     public ReceiptResponse get(User user, UUID receiptId) {
-        return ReceiptResponse.from(loadOwned(user, receiptId));
+        return toResponse(user, loadOwned(user, receiptId));
+    }
+
+    /**
+     * The household's manual category correction for a receipt item's product —
+     * "evidence, not truth": it overrides only this household's view (the global
+     * product is untouched). Item must be linked to a product.
+     */
+    @Transactional
+    public ReceiptResponse updateItemCategory(User user, UUID receiptId, UUID itemId, ProductCategory category) {
+        MDC.put(MdcContextFilter.RECEIPT_ID, abbrev(receiptId));
+        MDC.put(MdcContextFilter.ITEM_ID, abbrev(itemId));
+        var receipt = loadOwned(user, receiptId);
+        var item = receipt.getItems().stream()
+                .filter(i -> i.getId().equals(itemId))
+                .findFirst()
+                .orElseThrow(ReceiptItemNotFoundException::new);
+        if (item.getProduct() == null) {
+            throw new ReceiptNotEditableException("ITEM_NOT_LINKED_TO_PRODUCT");
+        }
+        categoryOverrideService.setOverride(user, item.getProduct(), category);
+        log.info("item.category.override product={} category={}", item.getProduct().getId(), category);
+        return toResponse(user, receipt);
+    }
+
+    /** Build a ReceiptResponse with the household's category overrides applied. */
+    private ReceiptResponse toResponse(User user, Receipt receipt) {
+        var productIds = receipt.getItems().stream()
+                .filter(i -> i.getProduct() != null)
+                .map(i -> i.getProduct().getId())
+                .distinct()
+                .toList();
+        var overrides = categoryOverrideService.overridesByProduct(user.getHousehold().getId(), productIds);
+        return ReceiptResponse.from(receipt, overrides);
     }
 
     @Transactional

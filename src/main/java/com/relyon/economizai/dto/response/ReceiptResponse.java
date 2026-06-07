@@ -1,12 +1,15 @@
 package com.relyon.economizai.dto.response;
 
 import com.relyon.economizai.model.Receipt;
+import com.relyon.economizai.model.ReceiptItem;
+import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public record ReceiptResponse(
@@ -28,6 +31,14 @@ public record ReceiptResponse(
         List<ReceiptItemResponse> items
 ) {
     public static ReceiptResponse from(Receipt receipt) {
+        return from(receipt, Map.of());
+    }
+
+    /**
+     * @param categoryOverrides productId → the household's corrected category,
+     *                          applied in place of the product's global category.
+     */
+    public static ReceiptResponse from(Receipt receipt, Map<UUID, ProductCategory> categoryOverrides) {
         var householdTotal = receipt.getItems().stream()
                 .filter(i -> !i.isExcluded())
                 .map(i -> i.getTotalPrice())
@@ -48,8 +59,16 @@ public record ReceiptResponse(
                 receipt.getStatus(),
                 receipt.getConfirmedAt(),
                 receipt.getCreatedAt(),
-                receipt.getItems().stream().map(ReceiptItemResponse::from).toList()
+                receipt.getItems().stream()
+                        .map(item -> ReceiptItemResponse.from(item, overrideFor(item, categoryOverrides)))
+                        .toList()
         );
+    }
+
+    private static ProductCategory overrideFor(ReceiptItem item,
+                                               Map<UUID, ProductCategory> categoryOverrides) {
+        if (categoryOverrides.isEmpty() || item.getProduct() == null) return null;
+        return categoryOverrides.get(item.getProduct().getId());
     }
 
     private static BigDecimal approxTaxTotal(Receipt receipt) {

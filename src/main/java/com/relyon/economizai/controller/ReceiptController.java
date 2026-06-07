@@ -3,6 +3,7 @@ package com.relyon.economizai.controller;
 import com.relyon.economizai.dto.request.AddReceiptItemRequest;
 import com.relyon.economizai.dto.request.ConfirmReceiptRequest;
 import com.relyon.economizai.dto.request.SubmitReceiptRequest;
+import com.relyon.economizai.dto.request.UpdateItemCategoryRequest;
 import com.relyon.economizai.dto.request.UpdateReceiptItemRequest;
 import com.relyon.economizai.dto.response.ConfirmReceiptResponse;
 import com.relyon.economizai.dto.response.ReceiptResponse;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -79,6 +81,18 @@ public class ReceiptController {
                                                    @PathVariable UUID id,
                                                    @Valid @RequestBody AddReceiptItemRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(receiptService.addItem(user, id, request));
+    }
+
+    /**
+     * User category correction — household-scoped "evidence, not truth": shows
+     * for this household only; the global product is untouched.
+     */
+    @PutMapping("/{id}/items/{itemId}/category")
+    public ResponseEntity<ReceiptResponse> updateItemCategory(@AuthenticationPrincipal User user,
+                                                              @PathVariable UUID id,
+                                                              @PathVariable UUID itemId,
+                                                              @Valid @RequestBody UpdateItemCategoryRequest request) {
+        return ResponseEntity.ok(receiptService.updateItemCategory(user, id, itemId, request.category()));
     }
 
     @PostMapping("/{id}/confirm")

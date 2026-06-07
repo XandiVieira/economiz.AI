@@ -46,6 +46,8 @@ public class ItemQueryService {
     private static final LocalDateTime EPOCH_FLOOR = LocalDateTime.of(1900, 1, 1, 0, 0);
     private static final LocalDateTime EPOCH_CEIL = LocalDateTime.of(2999, 12, 31, 23, 59, 59);
 
+    private final HouseholdProductCategoryOverrideService categoryOverrideService;
+
     @PersistenceContext
     private EntityManager entityManager;
 
@@ -68,7 +70,17 @@ public class ItemQueryService {
             clauses.bind(rowQuery);
             rowQuery.setFirstResult((int) pageable.getOffset());
             rowQuery.setMaxResults(pageable.getPageSize());
-            rows = rowQuery.getResultList().stream().map(PurchasedItemResponse::from).toList();
+            var items = rowQuery.getResultList();
+            var productIds = items.stream()
+                    .filter(item -> item.getProduct() != null)
+                    .map(item -> item.getProduct().getId())
+                    .distinct()
+                    .toList();
+            var overrides = categoryOverrideService.overridesByProduct(filters.householdId(), productIds);
+            rows = items.stream()
+                    .map(item -> PurchasedItemResponse.from(item,
+                            item.getProduct() == null ? null : overrides.get(item.getProduct().getId())))
+                    .toList();
         }
         log.info("items.query household={} total={} returned={}", filters.householdId(), total, rows.size());
         return new PageImpl<>(rows, pageable, total);
