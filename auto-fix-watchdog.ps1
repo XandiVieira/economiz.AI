@@ -22,7 +22,12 @@ param(
 $ErrorActionPreference = "Stop"
 $repo     = "C:\Users\Xandi\OneDrive\Documents\projects\economiz.AI"
 $ledger   = Join-Path $repo "AUTONOMOUS_FIXES.md"
-$logFile  = Join-Path $repo "auto-fix-watchdog.log"
+# Log lives OUTSIDE OneDrive: sync transiently locks files it watches, and a
+# locked log would otherwise kill the loop on its first write. The ledger must
+# stay in-repo (it's committed) and is guarded by Write-FileWithRetry instead.
+$logDir   = Join-Path $env:LOCALAPPDATA "economizai"
+if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
+$logFile  = Join-Path $logDir "auto-fix-watchdog.log"
 $health   = "http://localhost:8080/actuator/health"
 $javaHome = "C:\Users\Xandi\.jdks\openjdk-21"
 $container = "economizai-app"
@@ -31,24 +36,37 @@ $MARKER   = "AUTONOMOUS ENTRIES BELOW"
 Set-Location $repo
 $env:JAVA_HOME = $javaHome
 
+# Write to a file, retrying through transient locks (e.g. OneDrive/AV holding
+# the handle). A failed write must NEVER kill the watchdog loop.
+function Write-FileWithRetry([scriptblock]$write) {
+    for ($i = 0; $i -lt 6; $i++) {
+        try { & $write; return $true }
+        catch [System.IO.IOException] { Start-Sleep -Milliseconds 250 }
+        catch { Start-Sleep -Milliseconds 250 }
+    }
+    return $false
+}
+
 function Log([string]$msg) {
     $line = ("{0}  {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $msg)
-    Add-Content -Path $logFile -Value $line
     Write-Host $line
+    [void](Write-FileWithRetry { Add-Content -Path $logFile -Value $line -ErrorAction Stop })
 }
 
 # Insert a finished markdown block into the ledger, right after the marker line.
 function Ledger([string]$block) {
-    $content = Get-Content $ledger -Raw
-    $content = $content -replace "(?s)_No autonomous fixes yet.*?detected bug\._", ""
-    if ($content.IndexOf($MARKER) -ge 0) {
-        $insertAt = $content.IndexOf("`n", $content.IndexOf($MARKER))
-        $head = $content.Substring(0, $insertAt + 1)
-        $tail = $content.Substring($insertAt + 1)
-        Set-Content -Path $ledger -Value ($head + "`r`n" + $block.TrimEnd() + "`r`n" + $tail) -Encoding UTF8
-    } else {
-        Add-Content -Path $ledger -Value ("`r`n`r`n" + $block)
-    }
+    [void](Write-FileWithRetry {
+        $content = Get-Content $ledger -Raw -ErrorAction Stop
+        $content = $content -replace "(?s)_No autonomous fixes yet.*?detected bug\._", ""
+        if ($content.IndexOf($MARKER) -ge 0) {
+            $insertAt = $content.IndexOf("`n", $content.IndexOf($MARKER))
+            $head = $content.Substring(0, $insertAt + 1)
+            $tail = $content.Substring($insertAt + 1)
+            Set-Content -Path $ledger -Value ($head + "`r`n" + $block.TrimEnd() + "`r`n" + $tail) -Encoding UTF8 -ErrorAction Stop
+        } else {
+            Add-Content -Path $ledger -Value ("`r`n`r`n" + $block) -ErrorAction Stop
+        }
+    })
 }
 
 function Stamp { return (Get-Date -Format "yyyy-MM-dd HH:mm:ss") }

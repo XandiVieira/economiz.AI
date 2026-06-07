@@ -41,4 +41,4 @@ db-backup.log
 tunnel-proxy-worker/.wrangler/
 postman/live.postman_environment.json
 logs/
-auto-fix-watchdog.log
+# auto-fix-watchdog.log moved to %LOCALAPPDATA%\economizai\ (off OneDrive)
