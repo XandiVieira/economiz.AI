@@ -2,12 +2,57 @@ package com.relyon.economizai.service.geo;
 
 import com.relyon.economizai.model.enums.MerchantSegment;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.client.RestClient;
 
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CnpjActivityClientTest {
+
+    private CnpjActivityClient client(boolean enabled) {
+        // 1ms timeout: any reachable code path here never depends on the network.
+        return new CnpjActivityClient(RestClient.builder(),
+                "https://example.test/api/cnpj/v1", 1, 3, "test-agent", enabled);
+    }
+
+    @Test
+    void isEnabled_reflectsConstructorFlag() {
+        assertTrue(client(true).isEnabled());
+        assertFalse(client(false).isEnabled());
+    }
+
+    @Test
+    void classify_returnsUnknownWhenDisabled() {
+        assertEquals(MerchantSegment.UNKNOWN, client(false).classify("11111111000111"));
+    }
+
+    @Test
+    void classify_returnsUnknownWhenCnpjNull() {
+        assertEquals(MerchantSegment.UNKNOWN, client(true).classify(null));
+    }
+
+    @Test
+    void classify_returnsUnknownWhenCnpjBlank() {
+        assertEquals(MerchantSegment.UNKNOWN, client(true).classify("   "));
+    }
+
+    @Test
+    void classify_returnsUnknownWhenFetchFails() {
+        // base-url points nowhere reachable + 1ms timeout → every attempt fails,
+        // fetchWithRetry returns null, classify yields UNKNOWN (never throws).
+        assertEquals(MerchantSegment.UNKNOWN, client(true).classify("11111111000111"));
+    }
+
+    @Test
+    void constructor_clampsMaxAttemptsToAtLeastOne() {
+        var clamped = new CnpjActivityClient(RestClient.builder(),
+                "https://example.test/api/cnpj/v1/", 1, 0, "test-agent", true);
+        // Trailing slash trimmed and maxAttempts >= 1: still reaches UNKNOWN safely.
+        assertEquals(MerchantSegment.UNKNOWN, clamped.classify("11111111000111"));
+    }
 
     @Test
     void primaryPharmacyCnaeWins() {

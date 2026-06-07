@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -131,6 +132,100 @@ class WatchedMarketServiceTest {
         assertEquals(2, rows.size());
         assertEquals("11111111000111", rows.get(0).cnpj()); // watched first
         assertEquals("33333333000111", rows.get(1).cnpj()); // then visited
+    }
+
+    @Test
+    void watch_savesWhenNotYetPinned() {
+        var location = market("11111111000111", "Mercado A");
+        when(marketRepository.findByCnpj(eq("11111111000111"))).thenReturn(Optional.of(location));
+        when(watchedRepository.findByUserIdAndMarketCnpj(eq(user.getId()), eq("11111111000111")))
+                .thenReturn(Optional.empty());
+        when(receiptRepository.findDistinctCnpjsByHousehold(eq(user.getHousehold().getId())))
+                .thenReturn(List.of("11111111000111"));
+
+        var response = service.watch(user, "11111111000111");
+
+        assertTrue(response.watching());
+        assertTrue(response.visited());
+        verify(watchedRepository).save(any());
+    }
+
+    @Test
+    void listWatched_emptyWatchlistReturnsEmptyList() {
+        when(watchedRepository.findAllByUserId(eq(user.getId()))).thenReturn(List.of());
+
+        assertTrue(service.listWatched(user).isEmpty());
+    }
+
+    @Test
+    void listWatched_unhydratedEntryWhenLocationMissing() {
+        when(watchedRepository.findAllByUserId(eq(user.getId()))).thenReturn(List.of(
+                UserWatchedMarket.builder().marketCnpj("99999999000111").build()
+        ));
+        when(marketRepository.findAllByCnpjIn(any())).thenReturn(List.of());
+        when(receiptRepository.findDistinctCnpjsByHousehold(eq(user.getHousehold().getId())))
+                .thenReturn(List.of());
+
+        var rows = service.listWatched(user);
+
+        assertEquals(1, rows.size());
+        var only = rows.get(0);
+        assertEquals("99999999000111", only.cnpj());
+        assertEquals(null, only.name());
+        assertEquals(null, only.distanceKm());
+        assertFalse(only.visited());
+        assertTrue(only.watching());
+    }
+
+    @Test
+    void listWatched_computesDistanceWhenHomeSet() {
+        user.setHomeLatitude(new BigDecimal("-30.0300000"));
+        user.setHomeLongitude(new BigDecimal("-51.2300000"));
+        when(watchedRepository.findAllByUserId(eq(user.getId()))).thenReturn(List.of(
+                UserWatchedMarket.builder().marketCnpj("11111111000111").build()
+        ));
+        when(marketRepository.findAllByCnpjIn(any()))
+                .thenReturn(List.of(market("11111111000111", "Mercado A")));
+        when(receiptRepository.findDistinctCnpjsByHousehold(eq(user.getHousehold().getId())))
+                .thenReturn(List.of());
+
+        var rows = service.listWatched(user);
+
+        assertEquals(1, rows.size());
+        assertTrue(rows.get(0).distanceKm() != null && rows.get(0).distanceKm() > 0);
+    }
+
+    @Test
+    void listForPicker_includesNearbyGeocodedMarketsWithinRadius() {
+        user.setHomeLatitude(new BigDecimal("-30.0500000"));
+        user.setHomeLongitude(new BigDecimal("-51.2200000"));
+        when(receiptRepository.findDistinctCnpjsByHousehold(eq(user.getHousehold().getId())))
+                .thenReturn(List.of());
+        when(watchedRepository.findAllByUserId(eq(user.getId()))).thenReturn(List.of());
+        lenient().when(marketRepository.findAllByCnpjIn(any())).thenReturn(List.of());
+        var nearMarket = market("44444444000111", "Near");
+        var farMarket = MarketLocation.builder()
+                .cnpj("55555555000111").cnpjRoot("55555555").name("Far")
+                .latitude(new BigDecimal("-10.0000000")).longitude(new BigDecimal("-40.0000000"))
+                .build();
+        when(marketRepository.findAll()).thenReturn(List.of(nearMarket, farMarket));
+
+        var rows = service.listForPicker(user, 5.0);
+
+        assertEquals(1, rows.size());
+        assertEquals("44444444000111", rows.get(0).cnpj());
+    }
+
+    @Test
+    void listForPicker_noRadiusSkipsNearbyLookup() {
+        when(receiptRepository.findDistinctCnpjsByHousehold(eq(user.getHousehold().getId())))
+                .thenReturn(List.of());
+        when(watchedRepository.findAllByUserId(eq(user.getId()))).thenReturn(List.of());
+
+        var rows = service.listForPicker(user, null);
+
+        assertTrue(rows.isEmpty());
+        verify(marketRepository, never()).findAll();
     }
 
     private MarketLocation market(String cnpj, String name) {

@@ -1,0 +1,320 @@
+package com.relyon.economizai.service;
+
+import com.relyon.economizai.dto.response.InsightsQueryResponse;
+import com.relyon.economizai.model.Household;
+import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.InsightsGroupBy;
+import com.relyon.economizai.model.enums.ProductCategory;
+import com.relyon.economizai.service.InsightsQueryService.QueryFilters;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
+import jakarta.persistence.TypedQuery;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class InsightsQueryServiceTest {
+
+    @Mock private EntityManager entityManager;
+    @Mock private TypedQuery<Object[]> summaryQuery;
+    @Mock private TypedQuery<Object[]> bucketQuery;
+
+    @InjectMocks private InsightsQueryService insightsQueryService;
+
+    private User user;
+    private UUID householdId;
+
+    @BeforeEach
+    void setUp() {
+        householdId = UUID.randomUUID();
+        var household = Household.builder().id(householdId).inviteCode("HH0001").build();
+        user = User.builder().id(UUID.randomUUID()).email("maria@test.com").household(household).build();
+    }
+
+    private QueryFilters filtersWith(InsightsGroupBy groupBy) {
+        return QueryFilters.fromRequest(null, null, null, null, null, null, null, null, null, groupBy, null);
+    }
+
+    @Test
+    void query_groupByNone_returnsSummaryOnlyNoBuckets() {
+        // Only the summary query is created when groupBy is NONE.
+        when(entityManager.createQuery(anyString(), eq(Object[].class))).thenReturn(summaryQuery);
+        when(summaryQuery.getSingleResult())
+                .thenReturn(new Object[]{new BigDecimal("100.00"), 4L, 12L});
+
+        var response = insightsQueryService.query(user, filtersWith(InsightsGroupBy.NONE));
+
+        assertEquals(InsightsGroupBy.NONE, response.groupBy());
+        assertTrue(response.buckets().isEmpty());
+        var summary = response.summary();
+        assertEquals(new BigDecimal("100.00"), summary.total());
+        assertEquals(4L, summary.receiptCount());
+        assertEquals(12L, summary.itemCount());
+        assertEquals(new BigDecimal("25.00"), summary.averageTicket());
+        verify(entityManager, times(1)).createQuery(anyString(), eq(Object[].class));
+    }
+
+    @Test
+    void query_averageTicketIsZeroWhenNoReceipts() {
+        when(entityManager.createQuery(anyString(), eq(Object[].class))).thenReturn(summaryQuery);
+        when(summaryQuery.getSingleResult())
+                .thenReturn(new Object[]{BigDecimal.ZERO, 0L, 0L});
+
+        var response = insightsQueryService.query(user, filtersWith(InsightsGroupBy.NONE));
+
+        assertEquals(BigDecimal.ZERO, response.summary().averageTicket());
+    }
+
+    @Test
+    void query_groupByCategory_buildsBucketsAndAppliesLimit() {
+        when(entityManager.createQuery(anyString(), eq(Object[].class)))
+                .thenReturn(summaryQuery, bucketQuery);
+        when(summaryQuery.getSingleResult())
+                .thenReturn(new Object[]{new BigDecimal("60.00"), 3L, 9L});
+        when(bucketQuery.getResultList()).thenReturn(List.<Object[]>of(
+                new Object[]{ProductCategory.GROCERIES, new BigDecimal("40.00"), 2L, 5L},
+                new Object[]{null, new BigDecimal("20.00"), 1L, 4L}));
+
+        var response = insightsQueryService.query(user, filtersWith(InsightsGroupBy.CATEGORY));
+
+        assertEquals(InsightsGroupBy.CATEGORY, response.groupBy());
+        assertEquals(2, response.buckets().size());
+        var first = response.buckets().get(0);
+        assertEquals("GROCERIES", first.key());
+        assertEquals("GROCERIES", first.label());
+        assertEquals(new BigDecimal("40.00"), first.total());
+        assertEquals(2L, first.receiptCount());
+        assertEquals(5L, first.itemCount());
+        assertEquals(new BigDecimal("20.00"), first.averageTicket());
+        // null category falls back to OTHER
+        assertEquals(ProductCategory.OTHER.name(), response.buckets().get(1).key());
+        verify(bucketQuery).setMaxResults(100);
+    }
+
+    @Test
+    void query_groupByMonth_formatsTemporalKey() {
+        when(entityManager.createQuery(anyString(), eq(Object[].class)))
+                .thenReturn(summaryQuery, bucketQuery);
+        when(summaryQuery.getSingleResult())
+                .thenReturn(new Object[]{new BigDecimal("10.00"), 1L, 1L});
+        when(bucketQuery.getResultList()).thenReturn(List.<Object[]>of(
+                new Object[]{2026, 4, new BigDecimal("10.00"), 1L, 1L}));
+
+        var response = insightsQueryService.query(user, filtersWith(InsightsGroupBy.MONTH));
+
+        var bucket = response.buckets().get(0);
+        assertEquals("2026-04", bucket.key());
+        assertEquals("2026-04", bucket.label());
+    }
+
+    @Test
+    void query_groupByDay_formatsTemporalKey() {
+        when(entityManager.createQuery(anyString(), eq(Object[].class)))
+                .thenReturn(summaryQuery, bucketQuery);
+        when(summaryQuery.getSingleResult())
+                .thenReturn(new Object[]{new BigDecimal("10.00"), 1L, 1L});
+        when(bucketQuery.getResultList()).thenReturn(List.<Object[]>of(
+                new Object[]{2026, 4, 7, new BigDecimal("10.00"), 1L, 1L}));
+
+        var response = insightsQueryService.query(user, filtersWith(InsightsGroupBy.DAY));
+
+        assertEquals("2026-04-07", response.buckets().get(0).key());
+    }
+
+    @Test
+    void query_groupByWeek_formatsTemporalKey() {
+        when(entityManager.createQuery(anyString(), eq(Object[].class)))
+                .thenReturn(summaryQuery, bucketQuery);
+        when(summaryQuery.getSingleResult())
+                .thenReturn(new Object[]{new BigDecimal("10.00"), 1L, 1L});
+        when(bucketQuery.getResultList()).thenReturn(List.<Object[]>of(
+                new Object[]{2026, 17, new BigDecimal("10.00"), 1L, 1L}));
+
+        var response = insightsQueryService.query(user, filtersWith(InsightsGroupBy.WEEK));
+
+        assertEquals("2026-W17", response.buckets().get(0).key());
+    }
+
+    @Test
+    void query_groupByYear_formatsTemporalKey() {
+        when(entityManager.createQuery(anyString(), eq(Object[].class)))
+                .thenReturn(summaryQuery, bucketQuery);
+        when(summaryQuery.getSingleResult())
+                .thenReturn(new Object[]{new BigDecimal("10.00"), 1L, 1L});
+        when(bucketQuery.getResultList()).thenReturn(List.<Object[]>of(
+                new Object[]{2026, new BigDecimal("10.00"), 1L, 1L}));
+
+        var response = insightsQueryService.query(user, filtersWith(InsightsGroupBy.YEAR));
+
+        assertEquals("2026", response.buckets().get(0).key());
+    }
+
+    @Test
+    void query_groupByMarket_usesMarketNameAsLabelAndCnpjFallback() {
+        when(entityManager.createQuery(anyString(), eq(Object[].class)))
+                .thenReturn(summaryQuery, bucketQuery);
+        when(summaryQuery.getSingleResult())
+                .thenReturn(new Object[]{new BigDecimal("30.00"), 2L, 4L});
+        when(bucketQuery.getResultList()).thenReturn(List.<Object[]>of(
+                new Object[]{"12345678000190", "Zaffari", new BigDecimal("20.00"), 1L, 2L},
+                new Object[]{"99999999000100", null, new BigDecimal("10.00"), 1L, 2L}));
+
+        var response = insightsQueryService.query(user, filtersWith(InsightsGroupBy.MARKET));
+
+        assertEquals("Zaffari", response.buckets().get(0).label());
+        // null market name falls back to the CNPJ key
+        assertEquals("99999999000100", response.buckets().get(1).label());
+    }
+
+    @Test
+    void query_groupByChain_fallsBackToCnpjRoot() {
+        when(entityManager.createQuery(anyString(), eq(Object[].class)))
+                .thenReturn(summaryQuery, bucketQuery);
+        when(summaryQuery.getSingleResult())
+                .thenReturn(new Object[]{new BigDecimal("10.00"), 1L, 2L});
+        when(bucketQuery.getResultList()).thenReturn(List.<Object[]>of(
+                new Object[]{"12345678", null, new BigDecimal("10.00"), 1L, 2L}));
+
+        var response = insightsQueryService.query(user, filtersWith(InsightsGroupBy.CHAIN));
+
+        assertEquals("12345678", response.buckets().get(0).key());
+        assertEquals("12345678", response.buckets().get(0).label());
+    }
+
+    @Test
+    void query_groupByProduct_usesNameLabelAndUnknownFallback() {
+        when(entityManager.createQuery(anyString(), eq(Object[].class)))
+                .thenReturn(summaryQuery, bucketQuery);
+        when(summaryQuery.getSingleResult())
+                .thenReturn(new Object[]{new BigDecimal("30.00"), 2L, 4L});
+        var productId = UUID.randomUUID();
+        when(bucketQuery.getResultList()).thenReturn(List.<Object[]>of(
+                new Object[]{productId, "Leite Italac 1L", new BigDecimal("20.00"), 1L, 2L},
+                new Object[]{null, null, new BigDecimal("10.00"), 1L, 2L}));
+
+        var response = insightsQueryService.query(user, filtersWith(InsightsGroupBy.PRODUCT));
+
+        assertEquals(productId.toString(), response.buckets().get(0).key());
+        assertEquals("Leite Italac 1L", response.buckets().get(0).label());
+        // null product id falls back to "unknown"
+        assertEquals("unknown", response.buckets().get(1).key());
+    }
+
+    @Test
+    void query_echoesFiltersAndClampsLimit() {
+        when(entityManager.createQuery(anyString(), eq(Object[].class)))
+                .thenReturn(summaryQuery, bucketQuery);
+        when(summaryQuery.getSingleResult())
+                .thenReturn(new Object[]{new BigDecimal("5.00"), 1L, 1L});
+        when(bucketQuery.getResultList()).thenReturn(List.<Object[]>of(
+                new Object[]{ProductCategory.GROCERIES, new BigDecimal("5.00"), 1L, 1L}));
+
+        var from = LocalDateTime.of(2026, 1, 1, 0, 0);
+        var to = LocalDateTime.of(2026, 6, 30, 23, 59);
+        var input = QueryFilters.fromRequest(
+                from, to,
+                List.of(" 12345678000190 ", "  "),
+                List.of("12345678"),
+                List.of(ProductCategory.GROCERIES),
+                List.of(),
+                List.of("7891234567890"),
+                new BigDecimal("10.00"),
+                new BigDecimal("500.00"),
+                InsightsGroupBy.CATEGORY,
+                9999);
+
+        var response = insightsQueryService.query(user, input);
+
+        var echoed = response.filters();
+        assertEquals(from, echoed.from());
+        assertEquals(to, echoed.to());
+        // trimAll trims and drops the blank entry
+        assertEquals(List.of("12345678000190"), echoed.marketCnpjs());
+        assertEquals(List.of("12345678"), echoed.marketCnpjRoots());
+        assertEquals(List.of(ProductCategory.GROCERIES), echoed.categories());
+        // empty productIds list normalizes to null
+        assertEquals(null, echoed.productIds());
+        assertEquals(List.of("7891234567890"), echoed.eans());
+        assertEquals(new BigDecimal("10.00"), echoed.minReceiptTotal());
+        assertEquals(new BigDecimal("500.00"), echoed.maxReceiptTotal());
+        // limit clamped to MAX_LIMIT = 500
+        verify(bucketQuery).setMaxResults(500);
+    }
+
+    @Test
+    void fromRequest_defaultsNullGroupByToNoneAndNullLimitToDefault() {
+        var input = QueryFilters.fromRequest(null, null, null, null, null, null, null, null, null, null, null);
+        assertEquals(InsightsGroupBy.NONE, input.groupBy());
+        assertEquals(100, input.limit());
+    }
+
+    @Test
+    void fromRequest_clampsNonPositiveLimitToDefault() {
+        var input = QueryFilters.fromRequest(null, null, null, null, null, null, null, null, null, InsightsGroupBy.MONTH, 0);
+        assertEquals(100, input.limit());
+    }
+
+    @Test
+    void query_bindsAllOptionalFilterParameters() {
+        when(entityManager.createQuery(anyString(), eq(Object[].class))).thenReturn(summaryQuery);
+        when(summaryQuery.getSingleResult())
+                .thenReturn(new Object[]{new BigDecimal("5.00"), 1L, 1L});
+
+        var input = QueryFilters.fromRequest(
+                LocalDateTime.of(2026, 1, 1, 0, 0),
+                LocalDateTime.of(2026, 6, 1, 0, 0),
+                List.of("12345678000190"),
+                List.of("12345678"),
+                List.of(ProductCategory.BEVERAGES),
+                List.of(UUID.randomUUID()),
+                List.of("7891234567890"),
+                new BigDecimal("1.00"),
+                new BigDecimal("2.00"),
+                InsightsGroupBy.NONE,
+                50);
+
+        insightsQueryService.query(user, input);
+
+        var nameCaptor = ArgumentCaptor.forClass(String.class);
+        verify(summaryQuery, times(11)).setParameter(nameCaptor.capture(), any());
+        var boundNames = nameCaptor.getAllValues();
+        assertTrue(boundNames.containsAll(List.of(
+                "householdId", "status", "from", "to",
+                "marketCnpjs", "marketCnpjRoots", "categories",
+                "productIds", "eans", "minReceiptTotal", "maxReceiptTotal")));
+    }
+
+    @Test
+    void query_bindsOnlyMandatoryParametersWhenNoFilters() {
+        when(entityManager.createQuery(anyString(), eq(Object[].class))).thenReturn(summaryQuery);
+        when(summaryQuery.getSingleResult())
+                .thenReturn(new Object[]{new BigDecimal("5.00"), 1L, 1L});
+
+        insightsQueryService.query(user, filtersWith(InsightsGroupBy.NONE));
+
+        // householdId, status, from, to only — no optional filters bound
+        verify(summaryQuery, times(4)).setParameter(anyString(), any());
+        verify(summaryQuery, never()).setMaxResults(anyInt());
+    }
+}

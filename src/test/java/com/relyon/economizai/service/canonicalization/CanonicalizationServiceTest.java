@@ -125,7 +125,7 @@ class CanonicalizationServiceTest {
 
         assertEquals(1, outcome.created());
         var product = receipt.getItems().get(0).getProduct();
-        assertEquals(ProductCategory.PHARMACY, product.getCategory());
+        assertEquals(ProductCategory.HEALTH, product.getCategory());
         assertEquals(CategorizationSource.MERCHANT, product.getCategorizationSource());
     }
 
