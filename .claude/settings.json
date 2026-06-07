@@ -1,0 +1,49 @@
+{
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Read",
+      "Edit",
+      "Write",
+      "Glob",
+      "Grep",
+      "Bash(git *)",
+      "Bash(./mvnw *)",
+      "Bash(mvnw *)",
+      "Bash(docker *)",
+      "Bash(docker compose *)",
+      "Bash(gh *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(cd *)",
+      "Bash(echo *)",
+      "Bash(grep *)",
+      "Bash(find *)",
+      "Bash(curl *)",
+      "Bash(npx --yes newman *)",
+      "PowerShell(git *)",
+      "PowerShell(docker *)",
+      "PowerShell(Get-*)",
+      "PowerShell(Set-Location *)",
+      "PowerShell(Test-Path *)",
+      "PowerShell(Select-*)"
+    ],
+    "deny": [
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(git reset --hard *)",
+      "Bash(rm -rf *)",
+      "Bash(rm -fr *)",
+      "Bash(sudo *)",
+      "Bash(docker system prune *)",
+      "Bash(docker volume rm *)",
+      "Bash(docker volume prune *)",
+      "Bash(:(){ *)",
+      "PowerShell(Remove-Item -Recurse -Force *)",
+      "PowerShell(Format-Volume *)",
+      "Read(.env)",
+      "Read(./.env)",
+      "Read(**/.env)"
+    ]
+  }
+}
