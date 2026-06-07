@@ -16,6 +16,19 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-07 — Sign in with Google & Apple (new endpoints)
+
+Social login is in. The app does the **native** Google/Apple sign-in, then posts the provider token:
+
+```
+POST /api/v1/auth/google  { "idToken": "..." }
+POST /api/v1/auth/apple   { "identityToken": "...", "name": "Maria Silva" }
+```
+
+Both return the **same** `{ token, refreshToken, user }` as password login, so the FE flow after sign-in is identical. The backend verifies the token against the provider's keys; first-time users get a solo household + `emailVerified=true` (no verification email), and an existing local account with the same email is linked. `name` is only needed on the first Apple sign-in. Bad token → `401 auth.oauth.invalid`. Requires the backend to be configured with the app's Google/Apple client IDs (see infra) — without them the audience check is skipped (dev only).
+
+---
+
 ## 2026-06-07 — household product list, "where is it cheapest", and custom market names (new endpoints)
 
 Three additions for the products/markets screens:

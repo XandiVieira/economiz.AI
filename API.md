@@ -75,6 +75,20 @@ POST /api/v1/auth/login
 → 200 { "token": "...", "refreshToken": "...", "user": { ... } }
 ```
 
+### Social login (Google / Apple)
+
+The mobile app runs the **native** Google / Apple sign-in SDK, gets the provider token, and sends it here. The backend verifies the token (RS256 against the provider's JWKS; issuer/expiry checks, and audience when client IDs are configured), then **finds-or-creates** the user and returns the **same `AuthResponse`** as password login.
+
+```
+POST /api/v1/auth/google   { "idToken": "<google id_token>" }                 → 200 { token, refreshToken, user }
+POST /api/v1/auth/apple    { "identityToken": "<apple identity_token>", "name": "Maria Silva" } → 200 { token, refreshToken, user }
+```
+
+- First-time social users get a **solo household**, `emailVerified=true` (the provider already verified it — no verification email is sent), and the current legal versions are accepted on their behalf (show terms in the app before the social button).
+- If an existing **local** account has the same email, the provider is **linked** to it.
+- `name` on `/apple` is only needed on the **first** Apple sign-in (Apple omits it afterward); forward whatever the Apple SDK gives you.
+- Invalid/expired/forged tokens → `401 auth.oauth.invalid`.
+
 ### Refresh + logout
 
 ```

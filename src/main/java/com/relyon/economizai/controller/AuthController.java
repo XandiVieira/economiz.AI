@@ -1,6 +1,8 @@
 package com.relyon.economizai.controller;
 
+import com.relyon.economizai.dto.request.AppleLoginRequest;
 import com.relyon.economizai.dto.request.ForgotPasswordRequest;
+import com.relyon.economizai.dto.request.GoogleLoginRequest;
 import com.relyon.economizai.dto.request.LoginRequest;
 import com.relyon.economizai.dto.request.RefreshTokenRequest;
 import com.relyon.economizai.dto.request.RegisterRequest;
@@ -13,6 +15,7 @@ import com.relyon.economizai.service.UserService;
 import com.relyon.economizai.service.auth.EmailVerificationService;
 import com.relyon.economizai.service.auth.PasswordResetService;
 import com.relyon.economizai.service.auth.RefreshTokenService;
+import com.relyon.economizai.service.auth.oauth.SocialLoginService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +37,7 @@ public class AuthController {
     private final EmailVerificationService emailVerificationService;
     private final RefreshTokenService refreshTokenService;
     private final JwtService jwtService;
+    private final SocialLoginService socialLoginService;
 
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
@@ -43,6 +47,16 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(userService.login(request));
+    }
+
+    @PostMapping("/google")
+    public ResponseEntity<AuthResponse> google(@Valid @RequestBody GoogleLoginRequest request) {
+        return ResponseEntity.ok(socialLoginService.loginWithGoogle(request));
+    }
+
+    @PostMapping("/apple")
+    public ResponseEntity<AuthResponse> apple(@Valid @RequestBody AppleLoginRequest request) {
+        return ResponseEntity.ok(socialLoginService.loginWithApple(request));
     }
 
     @PostMapping("/forgot-password")

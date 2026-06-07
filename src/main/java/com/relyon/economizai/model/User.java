@@ -1,5 +1,6 @@
 package com.relyon.economizai.model;
 
+import com.relyon.economizai.model.enums.AuthProvider;
 import com.relyon.economizai.model.enums.Role;
 import com.relyon.economizai.model.enums.SubscriptionTier;
 import jakarta.persistence.Column;
@@ -40,8 +41,18 @@ public class User extends BaseEntity implements UserDetails {
     @Column(nullable = false, unique = true)
     private String email;
 
-    @Column(nullable = false)
+    // Nullable: social-login (Google/Apple) users have no local password.
+    @Column(nullable = true)
     private String password;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "auth_provider", nullable = false, length = 20)
+    @Builder.Default
+    private AuthProvider authProvider = AuthProvider.LOCAL;
+
+    // Stable provider-issued subject id (Google/Apple "sub"). Null for LOCAL.
+    @Column(name = "provider_subject", length = 255)
+    private String providerSubject;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

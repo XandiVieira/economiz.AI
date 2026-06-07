@@ -32,6 +32,11 @@ public class GlobalExceptionHandler {
         return respond(ex, HttpStatus.UNAUTHORIZED, "Failed login attempt");
     }
 
+    @ExceptionHandler(InvalidOAuthTokenException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidOAuthToken(InvalidOAuthTokenException ex) {
+        return respond(ex, HttpStatus.UNAUTHORIZED, "Invalid social-login token");
+    }
+
     @ExceptionHandler(InvalidCurrentPasswordException.class)
     public ResponseEntity<ErrorResponse> handleInvalidCurrentPassword(InvalidCurrentPasswordException ex) {
         return respond(ex, HttpStatus.BAD_REQUEST, "Invalid current password");

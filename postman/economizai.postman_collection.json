@@ -232,6 +232,78 @@
      ]
     },
     {
+     "name": "Login with Google (native id_token)",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Accept-Language",
+        "value": "pt"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/v1/auth/google",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "v1",
+        "auth",
+        "google"
+       ]
+      },
+      "auth": {
+       "type": "noauth"
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"idToken\": \"<google id_token from the native Google Sign-In SDK>\"\n}"
+      }
+     },
+     "response": []
+    },
+    {
+     "name": "Login with Apple (native identity_token)",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Accept-Language",
+        "value": "pt"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/v1/auth/apple",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "v1",
+        "auth",
+        "apple"
+       ]
+      },
+      "auth": {
+       "type": "noauth"
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"identityToken\": \"<apple identity_token>\",\n  \"name\": \"Maria Silva\"\n}"
+      }
+     },
+     "response": []
+    },
+    {
      "name": "Forgot password (always 204, no enumeration)",
      "request": {
       "method": "POST",

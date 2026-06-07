@@ -10,6 +10,11 @@ mirror entries here.
 
 ---
 
+## Social login (Google/Apple): audience check skipped until client IDs are set
+- **Now**: `POST /api/v1/auth/google` and `/auth/apple` verify the provider token's signature (RS256 via the provider JWKS), issuer, and expiry. The **audience (`aud`) check only runs when `GOOGLE_OAUTH_CLIENT_IDS` / `APPLE_OAUTH_CLIENT_IDS` are configured**; when empty (dev default) it's skipped with a WARN.
+- **Why OK for dev**: signature+issuer+expiry still prove the token is a genuine, current Google/Apple token. Fine for local testing.
+- **Before prod**: set both env vars (comma-separated client IDs the mobile app may present as `aud`) so a token minted for a *different* app can't be replayed against us. Google: the OAuth client IDs per platform (Web/iOS/Android) from Google Cloud Console. Apple: the app bundle ID (native) and/or Service ID (web). Team ID + Sign-in-with-Apple key are NOT needed for this identity-token flow (only for the auth-code/refresh flow). JWKS are fetched + cached 1h in-memory (`CachingJwksKeySource`).
+
 ## Notification channels: Alexa / SMS / WhatsApp are stubs; email off by default
 - **Now**: the channel framework supports `PUSH` (Expo → FCM/APNs, working), `EMAIL` (SMTP via `EmailDispatcher`, gated by `NOTIFICATIONS_EMAIL_ENABLED`, off by default until SMTP creds are set), and `ALEXA`/`SMS`/`WHATSAPP` which are **structure-only** (`AlexaDispatcher`/`SmsDispatcher`/`WhatsAppDispatcher` extend `StubChannelDispatcher` — they log and record a "not implemented" failure on the notification audit row). They're registered so users can select them, but nothing is delivered.
 - **Why OK for dev**: graceful degradation — an unselected/stubbed channel just produces a failed audit row, never an exception. Push is the primary channel and works end-to-end.

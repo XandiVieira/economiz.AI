@@ -1,6 +1,7 @@
 package com.relyon.economizai.repository;
 
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.AuthProvider;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
@@ -11,6 +12,8 @@ import java.util.UUID;
 public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificationExecutor<User> {
 
     Optional<User> findByEmail(String email);
+
+    Optional<User> findByAuthProviderAndProviderSubject(AuthProvider authProvider, String providerSubject);
 
     boolean existsByEmail(String email);
 

@@ -2,6 +2,7 @@ package com.relyon.economizai.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.relyon.economizai.config.SecurityConfig;
+import com.relyon.economizai.dto.request.GoogleLoginRequest;
 import com.relyon.economizai.dto.request.LoginRequest;
 import com.relyon.economizai.dto.request.RegisterRequest;
 import com.relyon.economizai.dto.response.AuthResponse;
@@ -16,6 +17,7 @@ import com.relyon.economizai.service.UserService;
 import com.relyon.economizai.service.auth.EmailVerificationService;
 import com.relyon.economizai.service.auth.PasswordResetService;
 import com.relyon.economizai.service.auth.RefreshTokenService;
+import com.relyon.economizai.service.auth.oauth.SocialLoginService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -63,6 +65,9 @@ class AuthControllerTest {
 
     @MockitoBean
     private RefreshTokenService refreshTokenService;
+
+    @MockitoBean
+    private SocialLoginService socialLoginService;
 
     private UserResponse sampleUserResponse() {
         return new UserResponse(
@@ -126,6 +131,30 @@ class AuthControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").value("jwt-token"));
+    }
+
+    @Test
+    void google_shouldReturn200WithToken() throws Exception {
+        var request = new GoogleLoginRequest("google-id-token");
+        var response = new AuthResponse("jwt-token", "refresh-token", sampleUserResponse());
+        when(socialLoginService.loginWithGoogle(any(GoogleLoginRequest.class))).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/auth/google")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").value("jwt-token"))
+                .andExpect(jsonPath("$.refreshToken").value("refresh-token"));
+    }
+
+    @Test
+    void google_shouldReturn400WhenTokenBlank() throws Exception {
+        var request = new GoogleLoginRequest("");
+
+        mockMvc.perform(post("/api/v1/auth/google")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

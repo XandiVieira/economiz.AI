@@ -150,6 +150,14 @@ economizai:
     max-size-mb: 5
   auth:
     frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:3000}    # used in password-reset + email-verification links
+  oauth:
+    # Expected audiences (aud claim) for social-login ID tokens. Comma-separated;
+    # may be empty in dev (then the aud check is skipped with a WARN log). In prod
+    # set these so a token minted for another app can't be replayed against us.
+    google:
+      client-ids: ${GOOGLE_OAUTH_CLIENT_IDS:}    # Google OAuth client IDs (web/iOS/Android), e.g. xxxx.apps.googleusercontent.com
+    apple:
+      client-ids: ${APPLE_OAUTH_CLIENT_IDS:}     # Apple app bundle id and/or Service ID (Sign in with Apple)
 
 springdoc:
   swagger-ui:

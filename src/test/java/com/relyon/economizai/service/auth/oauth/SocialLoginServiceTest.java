@@ -1,0 +1,208 @@
+package com.relyon.economizai.service.auth.oauth;
+
+import com.relyon.economizai.dto.request.AppleLoginRequest;
+import com.relyon.economizai.dto.request.GoogleLoginRequest;
+import com.relyon.economizai.exception.InvalidOAuthTokenException;
+import com.relyon.economizai.legal.LegalDocuments;
+import com.relyon.economizai.model.Household;
+import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.AuthProvider;
+import com.relyon.economizai.repository.UserRepository;
+import com.relyon.economizai.security.JwtService;
+import com.relyon.economizai.service.HouseholdService;
+import com.relyon.economizai.service.auth.RefreshTokenService;
+import com.relyon.economizai.service.notifications.NotificationRuleService;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class SocialLoginServiceTest {
+
+    @Mock
+    private GoogleTokenVerifier googleTokenVerifier;
+
+    @Mock
+    private AppleTokenVerifier appleTokenVerifier;
+
+    @Mock
+    private UserRepository userRepository;
+
+    @Mock
+    private JwtService jwtService;
+
+    @Mock
+    private RefreshTokenService refreshTokenService;
+
+    @Mock
+    private HouseholdService householdService;
+
+    @Mock
+    private NotificationRuleService notificationRuleService;
+
+    @InjectMocks
+    private SocialLoginService socialLoginService;
+
+    private void stubTokenIssue() {
+        when(jwtService.generateToken(any(User.class))).thenReturn("jwt-token");
+        when(refreshTokenService.issue(any(User.class))).thenReturn("refresh-token");
+    }
+
+    @Test
+    void loginWithGoogle_newUser_createsHouseholdAndDefaultsEmailVerifiedNoPassword() {
+        when(googleTokenVerifier.verify("id-token"))
+                .thenReturn(new GoogleTokenVerifier.GoogleClaims("sub-1", "maria@example.com", true, "Maria"));
+        when(userRepository.findByAuthProviderAndProviderSubject(AuthProvider.GOOGLE, "sub-1"))
+                .thenReturn(Optional.empty());
+        when(userRepository.findByEmail("maria@example.com")).thenReturn(Optional.empty());
+        when(householdService.createSoloHousehold())
+                .thenReturn(Household.builder().id(UUID.randomUUID()).inviteCode("ABC123").build());
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> {
+            var user = inv.<User>getArgument(0);
+            user.setId(UUID.randomUUID());
+            return user;
+        });
+        stubTokenIssue();
+
+        var response = socialLoginService.loginWithGoogle(new GoogleLoginRequest("id-token"));
+
+        assertEquals("jwt-token", response.token());
+        assertEquals("refresh-token", response.refreshToken());
+
+        var captor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(captor.capture());
+        var saved = captor.getValue();
+        assertEquals(AuthProvider.GOOGLE, saved.getAuthProvider());
+        assertEquals("sub-1", saved.getProviderSubject());
+        assertEquals("Maria", saved.getName());
+        assertEquals("maria@example.com", saved.getEmail());
+        assertTrue(saved.isEmailVerified());
+        assertNull(saved.getPassword());
+        assertEquals(LegalDocuments.CURRENT_TERMS_VERSION, saved.getAcceptedTermsVersion());
+        assertEquals(LegalDocuments.CURRENT_PRIVACY_VERSION, saved.getAcceptedPrivacyVersion());
+        verify(householdService).createSoloHousehold();
+        verify(notificationRuleService).ensureDefaults(saved);
+    }
+
+    @Test
+    void loginWithGoogle_existingUserBySubject_logsInWithoutCreating() {
+        var existing = User.builder()
+                .id(UUID.randomUUID())
+                .name("Maria")
+                .email("maria@example.com")
+                .authProvider(AuthProvider.GOOGLE)
+                .providerSubject("sub-1")
+                .build();
+        when(googleTokenVerifier.verify("id-token"))
+                .thenReturn(new GoogleTokenVerifier.GoogleClaims("sub-1", "maria@example.com", true, "Maria"));
+        when(userRepository.findByAuthProviderAndProviderSubject(AuthProvider.GOOGLE, "sub-1"))
+                .thenReturn(Optional.of(existing));
+        stubTokenIssue();
+
+        var response = socialLoginService.loginWithGoogle(new GoogleLoginRequest("id-token"));
+
+        assertEquals("jwt-token", response.token());
+        verify(userRepository, never()).save(any(User.class));
+        verify(householdService, never()).createSoloHousehold();
+        verify(notificationRuleService, never()).ensureDefaults(any(User.class));
+    }
+
+    @Test
+    void loginWithGoogle_existingLocalUserByEmail_linksProvider() {
+        var local = User.builder()
+                .id(UUID.randomUUID())
+                .name("Maria")
+                .email("maria@example.com")
+                .password("encoded")
+                .authProvider(AuthProvider.LOCAL)
+                .build();
+        when(googleTokenVerifier.verify("id-token"))
+                .thenReturn(new GoogleTokenVerifier.GoogleClaims("sub-1", "maria@example.com", true, "Maria"));
+        when(userRepository.findByAuthProviderAndProviderSubject(AuthProvider.GOOGLE, "sub-1"))
+                .thenReturn(Optional.empty());
+        when(userRepository.findByEmail("maria@example.com")).thenReturn(Optional.of(local));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        stubTokenIssue();
+
+        var response = socialLoginService.loginWithGoogle(new GoogleLoginRequest("id-token"));
+
+        assertEquals("jwt-token", response.token());
+        assertEquals(AuthProvider.GOOGLE, local.getAuthProvider());
+        assertEquals("sub-1", local.getProviderSubject());
+        verify(userRepository).save(local);
+        verify(householdService, never()).createSoloHousehold();
+    }
+
+    @Test
+    void loginWithGoogle_blankSubject_rejected() {
+        when(googleTokenVerifier.verify("id-token"))
+                .thenReturn(new GoogleTokenVerifier.GoogleClaims("", "maria@example.com", true, "Maria"));
+
+        assertThrows(InvalidOAuthTokenException.class,
+                () -> socialLoginService.loginWithGoogle(new GoogleLoginRequest("id-token")));
+    }
+
+    @Test
+    void loginWithApple_newUser_usesForwardedNameAndCreatesUser() {
+        when(appleTokenVerifier.verify("identity-token", "Joao"))
+                .thenReturn(new AppleTokenVerifier.AppleClaims("apple-sub-1", "joao@example.com", "Joao"));
+        when(userRepository.findByAuthProviderAndProviderSubject(AuthProvider.APPLE, "apple-sub-1"))
+                .thenReturn(Optional.empty());
+        when(userRepository.findByEmail("joao@example.com")).thenReturn(Optional.empty());
+        when(householdService.createSoloHousehold())
+                .thenReturn(Household.builder().id(UUID.randomUUID()).inviteCode("XYZ789").build());
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> {
+            var user = inv.<User>getArgument(0);
+            user.setId(UUID.randomUUID());
+            return user;
+        });
+        stubTokenIssue();
+
+        var response = socialLoginService.loginWithApple(new AppleLoginRequest("identity-token", "Joao"));
+
+        assertEquals("jwt-token", response.token());
+        var captor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(captor.capture());
+        var saved = captor.getValue();
+        assertEquals(AuthProvider.APPLE, saved.getAuthProvider());
+        assertEquals("apple-sub-1", saved.getProviderSubject());
+        assertEquals("Joao", saved.getName());
+        assertTrue(saved.isEmailVerified());
+        assertNull(saved.getPassword());
+        verify(notificationRuleService).ensureDefaults(saved);
+    }
+
+    @Test
+    void loginWithApple_newUserWithoutName_fallsBackToDefault() {
+        when(appleTokenVerifier.verify("identity-token", null))
+                .thenReturn(new AppleTokenVerifier.AppleClaims("apple-sub-2", "joao2@example.com", null));
+        when(userRepository.findByAuthProviderAndProviderSubject(AuthProvider.APPLE, "apple-sub-2"))
+                .thenReturn(Optional.empty());
+        when(userRepository.findByEmail("joao2@example.com")).thenReturn(Optional.empty());
+        when(householdService.createSoloHousehold())
+                .thenReturn(Household.builder().id(UUID.randomUUID()).inviteCode("XYZ000").build());
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        stubTokenIssue();
+
+        socialLoginService.loginWithApple(new AppleLoginRequest("identity-token", null));
+
+        var captor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(captor.capture());
+        assertEquals("Usuario", captor.getValue().getName());
+    }
+}
