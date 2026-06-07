@@ -23,6 +23,7 @@ import com.relyon.economizai.service.cache.HouseholdCacheGen;
 import com.relyon.economizai.service.canonicalization.CanonicalizationService;
 import com.relyon.economizai.service.geo.MarketLocationService;
 import com.relyon.economizai.service.notifications.NotificationPayload;
+import com.relyon.economizai.service.notifications.NotificationRuleService;
 import com.relyon.economizai.service.notifications.NotificationService;
 import com.relyon.economizai.service.priceindex.PriceIndexService;
 import com.relyon.economizai.service.priceindex.PromoDetector;
@@ -59,6 +60,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -85,6 +87,7 @@ class ReceiptServiceCoverageTest {
     @Mock private PromoDetector promoDetector;
     @Mock private MarketLocationService marketLocationService;
     @Mock private NotificationService notificationService;
+    @Mock private NotificationRuleService notificationRuleService;
     @Mock private HouseholdProductAliasService householdProductAliasService;
     @Mock private HouseholdProductCategoryOverrideService categoryOverrideService;
     @Mock private HouseholdCacheGen householdCacheGen;
@@ -308,6 +311,7 @@ class ReceiptServiceCoverageTest {
                 new BigDecimal("19.90"), new BigDecimal("28.90"),
                 new BigDecimal("31.14"), 4);
         when(promoDetector.detectPersonalPromos(receipt)).thenReturn(List.of(promo));
+        lenient().when(notificationRuleService.isEnabled(any(), eq(NotificationType.PROMO_PERSONAL))).thenReturn(true);
 
         var response = receiptService.confirm(user, receipt.getId(), new ConfirmReceiptRequest(null));
 

@@ -25,6 +25,22 @@ served the initials-avatar fallback). Pics are now kept on a persistent volume
 on the server, so an uploaded picture survives deploys. No API/payload changes —
 `PUT/GET/DELETE /users/me/profile-picture` are unchanged. **FE action:** none.
 
+---
+
+## 2026-06-07 — notifications: user-created rules + toggleable defaults (new endpoints)
+
+Big notification upgrade. There's now **one place to create and toggle every notification**: `GET/POST/PATCH/DELETE /api/v1/notification-rules` (full contract in [API.md §10f](./API.md)). `GET` returns the user's rules **and** the system defaults as toggleable entries (`isDefault: true`, `active`), so a single settings screen can drive everything.
+
+New **user-creatable** rule types: `PRICE_ABOVE` (product over a ceiling), `STOCKOUT` (replenishment — we predict a regularly-bought product is about to run out from your buying cadence and warn you N days ahead), `BUDGET` (monthly household spend cap). `PRICE_DROP` ("avise-me quando") is unchanged. New **defaults** you can turn on/off: `CHEAPER_MARKET`, `PROMO_COMMUNITY`, `DIGEST` (weekly summary), plus the existing `PROMO_PERSONAL`.
+
+`CHEAPER_MARKET` = "someone bought a product I buy, at one of **my watched markets**, cheaper than I last paid." By default it only watches your favourite markets; set `radiusKm` on the rule to also include markets near home. The required drop scales with price (≈20% on a ~R$1 item → ≈5% on a ~R$200 item).
+
+**Channels:** push (live) and email (live once SMTP creds are set) work; `ALEXA`, `SMS`, `WHATSAPP` are scaffolded (selectable, but dispatch is a no-op stub for now). A per-rule `channel` overrides your per-type preference.
+
+**Migration note:** `/api/v1/alerts` still works exactly as before — it's now a thin alias over `PRICE_DROP` rules. The `NotificationResponse.type` set grew (see §10b); `PRICE_DROP` payload key renamed `alertId` → `ruleId`.
+
+---
+
 ## 2026-06-07 — pharmacy detection now CNAE-verified (backend accuracy)
 
 The pharmacy-merchant signal behind `HEALTH` categorization is now **verified from the CNPJ's CNAE** (economic activity) via an external registry — `4771*` = pharmacy, `4711*/4712*` = supermarket — instead of only guessing from the merchant name. It runs async/best-effort (never blocks import; falls back to the name guess if the lookup fails), and when a merchant is confirmed a pharmacy, its previously-`OTHER` items are backfilled to `HEALTH`. No API contract change — purely better category accuracy on items the FE already reads.

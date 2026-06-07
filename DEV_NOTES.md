@@ -10,6 +10,18 @@ mirror entries here.
 
 ---
 
+## Notification channels: Alexa / SMS / WhatsApp are stubs; email off by default
+- **Now**: the channel framework supports `PUSH` (Expo → FCM/APNs, working), `EMAIL` (SMTP via `EmailDispatcher`, gated by `NOTIFICATIONS_EMAIL_ENABLED`, off by default until SMTP creds are set), and `ALEXA`/`SMS`/`WHATSAPP` which are **structure-only** (`AlexaDispatcher`/`SmsDispatcher`/`WhatsAppDispatcher` extend `StubChannelDispatcher` — they log and record a "not implemented" failure on the notification audit row). They're registered so users can select them, but nothing is delivered.
+- **Why OK for dev**: graceful degradation — an unselected/stubbed channel just produces a failed audit row, never an exception. Push is the primary channel and works end-to-end.
+- **Before prod**: implement `deliver()` in each stub — Alexa Proactive Events (skill grant per user), SMS (Twilio/Zenvia + phone verification), WhatsApp Cloud API (Meta template messages + phone verification). Add the per-user contact fields (phone) + verification flow. Flip `EMAIL` on once Render has SMTP env vars. Config placeholders already in `application.yaml` under `economizai.notifications.{alexa,sms,whatsapp}`.
+
+## Community-default notifications need seeded rule rows; write-path eval is unbounded
+- **Now**: `CHEAPER_MARKET` / `PROMO_COMMUNITY` defaults fire only when the user has an active default rule row. New users get them seeded at registration (`NotificationRuleService.ensureDefaults`); pre-existing users get seeded lazily on first `GET /api/v1/notification-rules`. So those community notifications won't fire for an old user until they open notification settings once. `PERSONAL_PROMO` is unaffected (its trigger treats "no row" as enabled).
+- **Why OK for dev**: low user count; everyone opens settings early. No backfill needed.
+- **Before prod**: either run a one-off backfill that seeds defaults for all existing users, or move the seeding into a migration. Also `NotificationRuleEngine.evaluate` runs on the receipt-confirm write path and, for community defaults, issues a per-candidate `findHouseholdHistoryForProduct` query to compute last-paid — fine at current volume but should be batched/cached (or moved to an async queue) before high write throughput. The 24h cooldown is per default-rule (coarse, one community ping/type/day/user) — revisit if users want per-product granularity.
+
+---
+
 ## Merchant segment classification depends on BrasilAPI (best-effort)
 - **Now (built)**: `MarketLocation.segment` (UNKNOWN/SUPERMARKET/PHARMACY/OTHER) is verified from the CNPJ's **CNAE** via BrasilAPI (`/api/cnpj/v1/{cnpj}`, free, no auth) — `CnpjActivityClient` + `MarketLocationService.classifyPendingSegments()` (scheduled batch, decoupled from confirm, attempt-capped, name-pattern fallback in `MerchantClassifier`). When a market resolves to PHARMACY, OTHER products bought there are backfilled to the HEALTH category. **Best-effort by design**: a lookup failure leaves the segment UNKNOWN and categorization proceeds normally on the name guess (or just the dictionary) — never blocks ingestion.
 - **Why OK for dev**: external dependency is fully optional (toggle `MERCHANT_CLASSIFY_ENABLED=false`), retried, and degrades gracefully. The name fallback covers the big chains immediately, so the CNAE layer is pure accuracy upside.

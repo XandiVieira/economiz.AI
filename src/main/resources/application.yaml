@@ -127,6 +127,24 @@ economizai:
         # work for moderate volume; setting this raises rate limits and powers Expo's
         # analytics dashboard. Generate at https://expo.dev → Account → Access Tokens.
         access-token: ${EXPO_ACCESS_TOKEN:}
+    # Stub channels — structure only, dispatch records a "not implemented" failure.
+    # Wire credentials + the provider call in each *Dispatcher before flipping these on.
+    alexa:
+      enabled: ${NOTIFICATIONS_ALEXA_ENABLED:false}     # Alexa Skill Messaging / Proactive Events
+    sms:
+      enabled: ${NOTIFICATIONS_SMS_ENABLED:false}       # Twilio / Zenvia
+    whatsapp:
+      enabled: ${NOTIFICATIONS_WHATSAPP_ENABLED:false}  # WhatsApp Cloud API (Meta)
+    # Background jobs that drive scheduled notification types.
+    replenishment:
+      interval-ms: ${NOTIFICATIONS_REPLENISHMENT_INTERVAL_MS:21600000}   # every 6h: predict product runout
+      initial-delay-ms: 60000
+    budget:
+      interval-ms: ${NOTIFICATIONS_BUDGET_INTERVAL_MS:21600000}          # every 6h: monthly spend cap check
+      initial-delay-ms: 90000
+    digest:
+      cron: ${NOTIFICATIONS_DIGEST_CRON:0 0 8 * * MON}                   # weekly Monday 08:00
+      zone: ${NOTIFICATIONS_DIGEST_ZONE:America/Sao_Paulo}
   profile-picture:
     local-dir: ${PROFILE_PICTURE_DIR:/tmp/economizai/profile-pics}   # dev: local disk. prod: see DEV_NOTES.md
     max-size-mb: 5

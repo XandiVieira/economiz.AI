@@ -6,9 +6,9 @@ import com.relyon.economizai.model.PriceObservationAudit;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.repository.PriceObservationAuditRepository;
 import com.relyon.economizai.repository.PriceObservationRepository;
-import com.relyon.economizai.service.alerts.PriceAlertService;
 import com.relyon.economizai.service.geo.DistanceCalculator;
 import com.relyon.economizai.service.geo.MarketLocationService;
+import com.relyon.economizai.service.notifications.NotificationRuleEngine;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -55,7 +55,7 @@ public class PriceIndexService {
     private final PriceObservationAuditRepository auditRepository;
     private final CollaborativeProperties properties;
     private final MarketLocationService marketLocationService;
-    private final PriceAlertService priceAlertService;
+    private final NotificationRuleEngine notificationRuleEngine;
 
     @Transactional
     public int recordContributions(Receipt receipt) {
@@ -126,7 +126,7 @@ public class PriceIndexService {
 
         // Community retention loop: this household's prices may satisfy other
         // households' "avise-me quando" rules. Skips the contributor's own.
-        priceAlertService.evaluate(contributed, receipt.getHousehold().getId());
+        notificationRuleEngine.evaluate(contributed, receipt.getHousehold().getId());
         return contributed.size();
     }
 

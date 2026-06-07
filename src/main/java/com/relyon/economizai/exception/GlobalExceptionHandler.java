@@ -42,12 +42,12 @@ public class GlobalExceptionHandler {
         return respond(ex, HttpStatus.NOT_FOUND, "User not found");
     }
 
-    @ExceptionHandler({HouseholdNotFoundException.class, ReceiptNotFoundException.class, ReceiptItemNotFoundException.class, ProductNotFoundException.class, MarketNotFoundException.class, NotInHouseholdException.class, NotificationNotFoundException.class, ShoppingListNotFoundException.class, PriceAlertNotFoundException.class, CustomCategoryNotFoundException.class})
+    @ExceptionHandler({HouseholdNotFoundException.class, ReceiptNotFoundException.class, ReceiptItemNotFoundException.class, ProductNotFoundException.class, MarketNotFoundException.class, NotInHouseholdException.class, NotificationNotFoundException.class, ShoppingListNotFoundException.class, PriceAlertNotFoundException.class, NotificationRuleNotFoundException.class, CustomCategoryNotFoundException.class})
     public ResponseEntity<ErrorResponse> handleNotFound(DomainException ex) {
         return respond(ex, HttpStatus.NOT_FOUND, "Entity not found");
     }
 
-    @ExceptionHandler({InvalidInviteCodeException.class, InvalidQrPayloadException.class, UnsupportedStateException.class, ReceiptParseException.class, ReceiptNotEditableException.class, AlreadyInHouseholdException.class, InvalidLegalVersionException.class, InvalidProfilePictureException.class, InvalidAuthTokenException.class, InvalidShoppingListItemException.class, InvalidProductMergeException.class, InvalidCategoryMigrationException.class})
+    @ExceptionHandler({InvalidInviteCodeException.class, InvalidQrPayloadException.class, UnsupportedStateException.class, ReceiptParseException.class, ReceiptNotEditableException.class, AlreadyInHouseholdException.class, InvalidLegalVersionException.class, InvalidProfilePictureException.class, InvalidAuthTokenException.class, InvalidShoppingListItemException.class, InvalidProductMergeException.class, InvalidCategoryMigrationException.class, InvalidNotificationRuleException.class})
     public ResponseEntity<ErrorResponse> handleBadRequest(DomainException ex) {
         return respond(ex, HttpStatus.BAD_REQUEST, "Bad request");
     }

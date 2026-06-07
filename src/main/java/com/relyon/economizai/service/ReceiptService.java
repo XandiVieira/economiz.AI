@@ -25,6 +25,7 @@ import com.relyon.economizai.service.cache.HouseholdCacheGen;
 import com.relyon.economizai.service.canonicalization.CanonicalizationService;
 import com.relyon.economizai.service.geo.MarketLocationService;
 import com.relyon.economizai.service.notifications.NotificationPayload;
+import com.relyon.economizai.service.notifications.NotificationRuleService;
 import com.relyon.economizai.service.notifications.NotificationService;
 import com.relyon.economizai.service.priceindex.PriceIndexService;
 import com.relyon.economizai.service.privacy.LogMasker;
@@ -64,6 +65,7 @@ public class ReceiptService {
     private final PromoDetector promoDetector;
     private final MarketLocationService marketLocationService;
     private final NotificationService notificationService;
+    private final NotificationRuleService notificationRuleService;
     private final HouseholdProductAliasService householdProductAliasService;
     private final HouseholdProductCategoryOverrideService categoryOverrideService;
     private final HouseholdCacheGen householdCacheGen;
@@ -208,6 +210,10 @@ public class ReceiptService {
     }
 
     private void notifyPersonalPromos(User user, Receipt receipt, List<PromoDetector.PersonalPromo> promos) {
+        if (!promos.isEmpty() && !notificationRuleService.isEnabled(user, NotificationType.PROMO_PERSONAL)) {
+            log.debug("personal_promo.skipped user_disabled count={}", promos.size());
+            return;
+        }
         for (var promo : promos) {
             var title = "Você economizou em " + promo.productName();
             var body = String.format("No %s você pagou R$ %s no %s — %s%% abaixo do que normalmente paga.",

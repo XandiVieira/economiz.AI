@@ -20,6 +20,7 @@ import com.relyon.economizai.repository.UserRepository;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.auth.EmailVerificationService;
 import com.relyon.economizai.service.auth.RefreshTokenService;
+import com.relyon.economizai.service.notifications.NotificationRuleService;
 import org.mockito.ArgumentMatchers;
 import org.springframework.data.jpa.domain.Specification;
 import org.junit.jupiter.api.Test;
@@ -68,6 +69,9 @@ class UserServiceTest {
 
     @Mock
     private RefreshTokenService refreshTokenService;
+
+    @Mock
+    private NotificationRuleService notificationRuleService;
 
     @InjectMocks
     private UserService userService;

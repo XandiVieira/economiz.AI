@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -22,6 +24,17 @@ public interface ReceiptRepository extends JpaRepository<Receipt, UUID>, JpaSpec
     Optional<Receipt> findByHouseholdIdAndChaveAcesso(UUID householdId, String chaveAcesso);
 
     long countByHouseholdIdAndStatus(UUID householdId, ReceiptStatus status);
+
+    long countByHouseholdIdAndStatusAndConfirmedAtAfter(UUID householdId, ReceiptStatus status, LocalDateTime since);
+
+    /** Total R$ of the household's confirmed receipts confirmed at/after the given instant. */
+    @Query("""
+        SELECT COALESCE(SUM(r.totalAmount), 0) FROM Receipt r
+        WHERE r.household.id = :householdId
+          AND r.status = 'CONFIRMED'
+          AND r.confirmedAt >= :since
+    """)
+    BigDecimal sumConfirmedTotalSince(@Param("householdId") UUID householdId, @Param("since") LocalDateTime since);
 
     /** Distinct CNPJs the household has ever submitted a confirmed receipt from. */
     @Query("""

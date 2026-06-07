@@ -23,6 +23,7 @@ import com.relyon.economizai.repository.UserRepository;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.auth.EmailVerificationService;
 import com.relyon.economizai.service.auth.RefreshTokenService;
+import com.relyon.economizai.service.notifications.NotificationRuleService;
 import com.relyon.economizai.service.privacy.LogMasker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -45,6 +46,7 @@ public class UserService {
     private final HouseholdService householdService;
     private final EmailVerificationService emailVerificationService;
     private final RefreshTokenService refreshTokenService;
+    private final NotificationRuleService notificationRuleService;
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -72,6 +74,7 @@ public class UserService {
                 .build();
 
         var savedUser = userRepository.save(user);
+        notificationRuleService.ensureDefaults(savedUser);
         emailVerificationService.sendVerificationFor(savedUser);
         var token = jwtService.generateToken(savedUser);
         var refreshToken = refreshTokenService.issue(savedUser);

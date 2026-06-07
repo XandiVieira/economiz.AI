@@ -1,33 +1,39 @@
 package com.relyon.economizai.dto.response;
 
 import com.relyon.economizai.model.NotificationRule;
+import com.relyon.economizai.model.enums.NotificationChannel;
+import com.relyon.economizai.model.enums.NotificationType;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * Backward-compatible view of a PRICE_DROP {@link NotificationRule} for the
- * legacy {@code /api/v1/alerts} ("avise-me quando") endpoints.
- */
-public record PriceAlertResponse(
+public record NotificationRuleResponse(
         UUID id,
+        NotificationType type,
         UUID productId,
         String productName,
         BigDecimal thresholdPrice,
         Double radiusKm,
+        Integer leadTimeDays,
+        NotificationChannel channel,
         boolean active,
+        boolean isDefault,
         LocalDateTime lastFiredAt,
         LocalDateTime createdAt
 ) {
-    public static PriceAlertResponse from(NotificationRule rule) {
-        return new PriceAlertResponse(
+    public static NotificationRuleResponse from(NotificationRule rule) {
+        return new NotificationRuleResponse(
                 rule.getId(),
+                rule.getType(),
                 rule.getProduct() != null ? rule.getProduct().getId() : null,
                 rule.getProduct() != null ? rule.getProduct().getNormalizedName() : null,
                 rule.getThresholdPrice(),
                 rule.getRadiusKm(),
+                rule.getLeadTimeDays(),
+                rule.getChannel(),
                 rule.isActive(),
+                rule.isDefault(),
                 rule.getLastFiredAt(),
                 rule.getCreatedAt());
     }

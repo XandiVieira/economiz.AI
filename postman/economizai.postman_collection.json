@@ -2444,6 +2444,190 @@
    ]
   },
   {
+   "name": "Notification Rules",
+   "description": "Unified notification rules — create user rules (PRICE_ABOVE, PRICE_DROP, STOCKOUT/replenishment, BUDGET) and enable/disable any rule including the auto-seeded system defaults (PROMO_PERSONAL, PROMO_COMMUNITY, CHEAPER_MARKET, DIGEST). GET returns user rules + defaults as toggles. PATCH toggles 'active' (and for CHEAPER_MARKET, set radiusKm to also include markets near home in addition to your watched markets). The legacy /api/v1/alerts folder is a thin alias over PRICE_DROP rules.",
+   "item": [
+    {
+     "name": "List notification rules (user + defaults)",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Accept-Language",
+        "value": "pt"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/v1/notification-rules",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "v1",
+        "notification-rules"
+       ]
+      }
+     },
+     "response": []
+    },
+    {
+     "name": "Create price-ceiling rule (PRICE_ABOVE)",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Accept-Language",
+        "value": "pt"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/v1/notification-rules",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "v1",
+        "notification-rules"
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"type\": \"PRICE_ABOVE\",\n  \"productId\": \"{{productId}}\",\n  \"thresholdPrice\": 12.90\n}"
+      }
+     },
+     "response": []
+    },
+    {
+     "name": "Create replenishment rule (STOCKOUT)",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Accept-Language",
+        "value": "pt"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/v1/notification-rules",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "v1",
+        "notification-rules"
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"type\": \"STOCKOUT\",\n  \"productId\": \"{{productId}}\",\n  \"leadTimeDays\": 3\n}"
+      }
+     },
+     "response": []
+    },
+    {
+     "name": "Create monthly budget rule (BUDGET)",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Accept-Language",
+        "value": "pt"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/v1/notification-rules",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "v1",
+        "notification-rules"
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"type\": \"BUDGET\",\n  \"thresholdPrice\": 1500.00\n}"
+      }
+     },
+     "response": []
+    },
+    {
+     "name": "Enable/disable a rule (PATCH)",
+     "request": {
+      "method": "PATCH",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Accept-Language",
+        "value": "pt"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/v1/notification-rules/{{ruleId}}",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "v1",
+        "notification-rules",
+        "{{ruleId}}"
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"active\": false\n}"
+      }
+     },
+     "response": []
+    },
+    {
+     "name": "Delete a rule",
+     "request": {
+      "method": "DELETE",
+      "header": [
+       {
+        "key": "Accept-Language",
+        "value": "pt"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/v1/notification-rules/{{ruleId}}",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "v1",
+        "notification-rules",
+        "{{ruleId}}"
+       ]
+      }
+     },
+     "response": []
+    }
+   ]
+  },
+  {
    "name": "Items",
    "description": "Purchased line items flattened across all receipts. Item-level companion to Receipts (receipt rows) and Insights (aggregates). Same filter vocabulary as /insights/query — every filter optional, multi-value filters OR internally. CONFIRMED purchases only, newest first, paginated.",
    "item": [
@@ -5243,6 +5427,182 @@
         "type": "text/javascript",
         "exec": [
          "if (!pm.collectionVariables.get('e2eAlertId')) { pm.test.skip('No alert id — skipping'); return; }",
+         "pm.test('Returns 204', function () { pm.response.to.have.status(204); });"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "42a. Create notification rule (PRICE_ABOVE)",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Accept-Language",
+        "value": "pt"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/v1/notification-rules",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "v1",
+        "notification-rules"
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"type\": \"PRICE_ABOVE\",\n  \"productId\": \"{{e2eProductId}}\",\n  \"thresholdPrice\": 12.90\n}"
+      }
+     },
+     "response": [],
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "if (!pm.collectionVariables.get('e2eProductId')) { pm.test.skip('No product id — skipping'); return; }",
+         "pm.test('Returns 201', function () { pm.response.to.have.status(201); });",
+         "var d = pm.response.json();",
+         "pm.collectionVariables.set('e2eRuleId', d.id);",
+         "pm.test('Echoes type + product', function () {",
+         "    pm.expect(d.type).to.eql('PRICE_ABOVE');",
+         "    pm.expect(d.productId).to.eql(pm.collectionVariables.get('e2eProductId'));",
+         "});"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "42b. List rules includes the new one + seeded defaults",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Accept-Language",
+        "value": "pt"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/v1/notification-rules",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "v1",
+        "notification-rules"
+       ]
+      }
+     },
+     "response": [],
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "if (!pm.collectionVariables.get('e2eRuleId')) { pm.test.skip('No rule id — skipping'); return; }",
+         "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+         "var list = pm.response.json();",
+         "pm.test('Contains the created rule', function () {",
+         "    pm.expect(list.map(function (rule) { return rule.id; })).to.include(pm.collectionVariables.get('e2eRuleId'));",
+         "});",
+         "pm.test('Includes seeded default rules', function () {",
+         "    pm.expect(list.some(function (rule) { return rule.isDefault === true; })).to.eql(true);",
+         "});"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "42c. Disable the rule (PATCH active=false)",
+     "request": {
+      "method": "PATCH",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Accept-Language",
+        "value": "pt"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/v1/notification-rules/{{e2eRuleId}}",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "v1",
+        "notification-rules",
+        "{{e2eRuleId}}"
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"active\": false\n}"
+      }
+     },
+     "response": [],
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "if (!pm.collectionVariables.get('e2eRuleId')) { pm.test.skip('No rule id — skipping'); return; }",
+         "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+         "pm.test('Rule is now disabled', function () { pm.expect(pm.response.json().active).to.eql(false); });"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "42d. Delete the notification rule",
+     "request": {
+      "method": "DELETE",
+      "header": [
+       {
+        "key": "Accept-Language",
+        "value": "pt"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/v1/notification-rules/{{e2eRuleId}}",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "v1",
+        "notification-rules",
+        "{{e2eRuleId}}"
+       ]
+      }
+     },
+     "response": [],
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "if (!pm.collectionVariables.get('e2eRuleId')) { pm.test.skip('No rule id — skipping'); return; }",
          "pm.test('Returns 204', function () { pm.response.to.have.status(204); });"
         ]
        }

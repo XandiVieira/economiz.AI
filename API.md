@@ -630,7 +630,7 @@ POST /api/v1/notifications/{id}/read         → mark single as read
 POST /api/v1/notifications/mark-all-read     → { "marked": N }
 ```
 
-Each `NotificationResponse` carries `payload` — the JSON we attached when we generated the notification (`receiptId`, `productId`, `savingsPct`, etc) so cards can deep-link. `type` is one of `PROMO_PERSONAL`, `PRICE_DROP` (see §10e), `SYSTEM` (others reserved).
+Each `NotificationResponse` carries `payload` — the JSON we attached when we generated the notification (`receiptId`, `productId`, `savingsPct`, etc) so cards can deep-link. `type` is one of `PROMO_PERSONAL`, `PROMO_COMMUNITY`, `CHEAPER_MARKET`, `DIGEST`, `PRICE_DROP`, `PRICE_ABOVE`, `STOCKOUT`, `BUDGET`, `SYSTEM` — what triggers each and how to toggle it is in §10f.
 
 ---
 
@@ -715,7 +715,48 @@ DELETE /api/v1/alerts/{id}     → 204 (404 if not the caller's)
 - **`radiusKm`** is measured from the user's home. If set but home or market coordinates are unknown, the rule does **not** fire (constraint honored). Omit it to match anywhere in the network.
 - **No self-notify:** a rule never fires for the contributor's own household.
 - **Cooldown:** at most one fire per rule per 24h.
-- **Delivery:** fires a `PRICE_DROP` notification (see §10b) with `payload = { alertId, productId, observedPrice, thresholdPrice, marketCnpj, marketName }`.
+- **Delivery:** fires a `PRICE_DROP` notification (see §10b) with `payload = { ruleId, productId, observedPrice, thresholdPrice, marketCnpj, marketName }`.
+
+> **Note:** `/api/v1/alerts` is now a backward-compatible alias over the unified rule engine (§10f) — a price alert is a `PRICE_DROP` notification rule. New rule types and the enable/disable surface live under `/api/v1/notification-rules`.
+
+---
+
+## 10f. Notification rules (unified create / enable / disable)
+
+One surface for every notification trigger — the rules the user creates **and** the system defaults they can toggle. `GET` returns both (defaults are lazily seeded per user, active by default, `isDefault: true`).
+
+```
+GET    /api/v1/notification-rules            → 200 List<NotificationRuleResponse> (defaults first, then newest)
+POST   /api/v1/notification-rules            → 201 NotificationRuleResponse   (create/upsert a user rule)
+       { "type", "productId"?, "thresholdPrice"?, "radiusKm"?, "leadTimeDays"?, "channel"?, "active"? }
+PATCH  /api/v1/notification-rules/{id}       → 200 NotificationRuleResponse   (partial: any of active/thresholdPrice/radiusKm/leadTimeDays/channel)
+DELETE /api/v1/notification-rules/{id}       → 204 (defaults can't be deleted — disable instead → 400)
+```
+
+`NotificationRuleResponse`: `{ id, type, productId, productName, thresholdPrice, radiusKm, leadTimeDays, channel, active, isDefault, lastFiredAt, createdAt }`.
+
+**User-creatable types** (you supply the params; validated server-side):
+
+| type | needs | fires when |
+|------|-------|-----------|
+| `PRICE_DROP` | productId + thresholdPrice (+radiusKm?) | the product is seen at/below your price anywhere in the network (= "avise-me quando", §10e) |
+| `PRICE_ABOVE` | productId + thresholdPrice (+radiusKm?) | the product is seen at/above your ceiling |
+| `STOCKOUT` | productId (+leadTimeDays, default 3) | replenishment — we predict your usual product is about to run out (from your buying cadence) and warn you `leadTimeDays` ahead |
+| `BUDGET` | thresholdPrice | your household's confirmed spend this calendar month reaches the threshold |
+
+**System defaults** (auto-seeded, toggle `active`; no params needed):
+
+| type | fires when |
+|------|-----------|
+| `PROMO_PERSONAL` | you paid below your own historical median on a confirmed receipt |
+| `PROMO_COMMUNITY` | a product you've bought is flagged as a promo anywhere in the network |
+| `CHEAPER_MARKET` | a product you've bought is seen **at one of your watched markets** (§ Markets) below your last paid price — see drop rule below |
+| `DIGEST` | weekly (Mon 08:00) summary of your household's activity |
+
+- **`CHEAPER_MARKET` scope & toggle:** by default it watches only **your favourite/watched markets**. Set `radiusKm` on the rule (via PATCH) to *also* include any market within that distance of home. The required drop **scales with price**: ~20% on a ~R$1 item down to ~5% on a ~R$200 item (log-interpolated), so cheap items need a deep cut to ping you and pricey items trigger on a small %. Payload includes `lastPaidPrice` and `savingsPct`.
+- **Upsert:** `POST` of an existing `(type, productId)` updates it. Posting a default-scope type is rejected (`400`) — toggle it instead.
+- **Channel:** `channel` overrides the per-type preference (§10 preferences) for that one rule. Channels: `PUSH` (live), `EMAIL` (live once SMTP is wired), `ALEXA`/`SMS`/`WHATSAPP` (structure only — not yet functional), `NONE`.
+- **No self-notify / cooldown:** community rules never fire for the contributor's own household; at most one fire per rule per 24h.
 
 ---
 

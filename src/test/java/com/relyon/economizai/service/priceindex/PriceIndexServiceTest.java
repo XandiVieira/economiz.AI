@@ -11,8 +11,8 @@ import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.repository.PriceObservationAuditRepository;
 import com.relyon.economizai.repository.PriceObservationRepository;
-import com.relyon.economizai.service.alerts.PriceAlertService;
 import com.relyon.economizai.service.geo.MarketLocationService;
+import com.relyon.economizai.service.notifications.NotificationRuleEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,7 +43,7 @@ class PriceIndexServiceTest {
     @Mock private PriceObservationRepository observationRepository;
     @Mock private PriceObservationAuditRepository auditRepository;
     @Mock private MarketLocationService marketLocationService;
-    @Mock private PriceAlertService priceAlertService;
+    @Mock private NotificationRuleEngine notificationRuleEngine;
 
     private CollaborativeProperties properties;
     private PriceIndexService service;
@@ -52,7 +52,7 @@ class PriceIndexServiceTest {
     void setUp() {
         properties = new CollaborativeProperties();
         service = new PriceIndexService(observationRepository, auditRepository, properties,
-                marketLocationService, priceAlertService);
+                marketLocationService, notificationRuleEngine);
     }
 
     private Receipt buildConfirmedReceipt(boolean optIn, ReceiptItem... items) {
