@@ -71,6 +71,34 @@ function Ledger([string]$block) {
 
 function Stamp { return (Get-Date -Format "yyyy-MM-dd HH:mm:ss") }
 
+# Pull an HTTP status code (4xx/5xx) out of the error text, if present.
+function StatusCode([string]$text) {
+    if ($text -match '\b(4\d{2}|5\d{2})\b') { return $Matches[1] }
+    return ""
+}
+
+# Build the useful slice of a stacktrace for the ledger: the exception/message
+# line, plus the FIRST stack frame in OUR code (com.relyon...), plus the first
+# "Caused by:" if there is one. Avoids dumping a 60-line trace into the history.
+# $allLines = the full docker-logs array; $startIdx = index of the error line.
+function ErrorSnippet($allLines, [int]$startIdx) {
+    $out = New-Object System.Collections.ArrayList
+    [void]$out.Add(($allLines[$startIdx] -replace '\s+$',''))
+    $ourFrame = $null; $causedBy = $null
+    $limit = [Math]::Min($allLines.Count - 1, $startIdx + 40)
+    for ($i = $startIdx + 1; $i -le $limit; $i++) {
+        $l = "$($allLines[$i])"
+        if (-not $ourFrame -and $l -match '^\s*at\s+com\.relyon\.') { $ourFrame = $l.Trim() }
+        if (-not $causedBy -and $l -match '^\s*Caused by:') { $causedBy = $l.Trim() }
+        if ($ourFrame -and $causedBy) { break }
+        # stop once we've left this stacktrace (next timestamped log line)
+        if ($i -gt $startIdx + 1 -and $l -match '^\d{4}-\d{2}-\d{2} ') { break }
+    }
+    if ($ourFrame) { [void]$out.Add($ourFrame) }
+    if ($causedBy) { [void]$out.Add($causedBy) }
+    return ($out -join "`n")
+}
+
 # Reduce a log line to a stable signature so we don't fix the same bug twice.
 function Signature([string]$line) {
     $s = $line -replace '\d{4}-\d{2}-\d{2} [\d:.]+', '' `
@@ -125,16 +153,26 @@ while ($true) {
   try {
     $since = $lastLogTime.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
     $lastLogTime = Get-Date
-    $raw = & docker logs --since $since $container 2>&1
-    $errLines = $raw | Where-Object {
-        $_ -match 'ERROR|Exception|Caused by|FAILED|OutOfMemory|Unexpected error' -and
-        $_ -notmatch 'PageImpl|PagedModel|SpringDataJackson|WarningLoggingModifier'
-    }
+    $raw = @(& docker logs --since $since $container 2>&1)
 
-    foreach ($line in $errLines) {
+    # Iterate by index so we can reach into the following lines for the
+    # stacktrace snippet (status code + error message + our first frame).
+    for ($li = 0; $li -lt $raw.Count; $li++) {
+        $line = "$($raw[$li])"
+        if ($line -notmatch 'ERROR|Exception|Caused by|FAILED|OutOfMemory|Unexpected error') { continue }
+        if ($line -match 'PageImpl|PagedModel|SpringDataJackson|WarningLoggingModifier') { continue }
+
         $sig = Signature $line
         if ([string]::IsNullOrWhiteSpace($sig)) { continue }
         if ($seen.ContainsKey($sig)) { continue }
+
+        $snippet    = ErrorSnippet $raw $li
+        $statusCode = StatusCode $snippet
+        # Reusable diagnostic lines appended to every ledger entry for this error,
+        # so the bug-fix history always carries the status code + the meaningful
+        # slice of the stacktrace (message + our first frame), not just one line.
+        $statusLine = if ($statusCode) { "- **Status code:** $statusCode`r`n" } else { "" }
+        $diag = ("{0}- **Error snippet:**`r`n``````r`n{1}`r`n``````" -f $statusLine, $snippet)
         $seen[$sig] = Get-Date
 
         $shortSig = $sig.Substring(0, [Math]::Min(60, $sig.Length))
@@ -204,7 +242,7 @@ Rules:
                 Stop-Job $job -ErrorAction SilentlyContinue
                 Log ("claude.timeout {0} after {1}s; skipping (loop stays up)" -f $shortSig, $ClaudeTimeoutSec)
                 $failCount[$sig] = ([int]$failCount[$sig]) + 1
-                Ledger ("### [{0}] ⚠️ NEEDS-HUMAN · CLAUDE-TIMEOUT (attempt {1}x) - {2}`r`n- **Error:** ``{3}```r`n- **Outcome:** the fixer call exceeded {4}s and was killed; no change made.`r`n- **Note for human:** bug still live; autonomous diagnosis timed out - needs eyes." -f (Stamp), $failCount[$sig], $shortSig, $line, $ClaudeTimeoutSec)
+                Ledger ("### [$(Stamp)] ⚠️ NEEDS-HUMAN · CLAUDE-TIMEOUT (attempt $($failCount[$sig])x) - $shortSig`r`n$diag`r`n- **Outcome:** the fixer call exceeded ${ClaudeTimeoutSec}s and was killed; no change made.`r`n- **Note for human:** bug still live; autonomous diagnosis timed out - needs eyes.")
                 Remove-Job $job -Force -ErrorAction SilentlyContinue
                 continue
             }
@@ -212,7 +250,8 @@ Rules:
         } catch {
             Log ("claude.error {0}: {1}; skipping (loop stays up)" -f $shortSig, $_.Exception.Message)
             $failCount[$sig] = ([int]$failCount[$sig]) + 1
-            Ledger ("### [{0}] ⚠️ NEEDS-HUMAN · CLAUDE-ERROR (attempt {1}x) - {2}`r`n- **Error:** ``{3}```r`n- **Outcome:** the fixer call threw: {4}`r`n- **Note for human:** bug still live; autonomous diagnosis errored out - needs eyes." -f (Stamp), $failCount[$sig], $shortSig, $line, $_.Exception.Message)
+            $errMsg = $_.Exception.Message
+            Ledger ("### [$(Stamp)] ⚠️ NEEDS-HUMAN · CLAUDE-ERROR (attempt $($failCount[$sig])x) - $shortSig`r`n$diag`r`n- **Outcome:** the fixer call threw: $errMsg`r`n- **Note for human:** bug still live; autonomous diagnosis errored out - needs eyes.")
             continue
         }
         if ([string]::IsNullOrWhiteSpace($claudeOut)) {
@@ -224,7 +263,7 @@ Rules:
         if ($claudeOut -match 'REPRO_FAIL|NO_FIX_FOUND') {
             $failCount[$sig] = ([int]$failCount[$sig]) + 1
             & git checkout -- . 2>$null; & git clean -fd 2>$null   # drop any partial test
-            Ledger ("### [{0}] ⚠️ NEEDS-HUMAN · NO-REPRO (attempt {1}x) - {2}`r`n- **Error:** ``{3}```r`n- **Outcome:** could NOT reproduce the bug with a failing test; no code changed.`r`n- **Detail:** {4}`r`n- **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes." -f (Stamp), $failCount[$sig], $shortSig, $line, $claudeOut)
+            Ledger ("### [$(Stamp)] ⚠️ NEEDS-HUMAN · NO-REPRO (attempt $($failCount[$sig])x) - $shortSig`r`n$diag`r`n- **Outcome:** could NOT reproduce the bug with a failing test; no code changed.`r`n- **Detail:** $claudeOut`r`n- **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.")
             continue
         }
 
@@ -237,7 +276,7 @@ Rules:
         if ([string]::IsNullOrWhiteSpace($testRef)) {
             $failCount[$sig] = ([int]$failCount[$sig]) + 1
             & git checkout -- . 2>$null; & git clean -fd 2>$null
-            Ledger ("### [{0}] ⚠️ NEEDS-HUMAN · NO-TESTREF (attempt {1}x) - {2}`r`n- **Error:** ``{3}```r`n- **Claude:** {4}`r`n- **Outcome:** reply lacked a verifiable test reference; changes discarded (reproduction unproven).`r`n- **Note for human:** bug still live - needs eyes." -f (Stamp), $failCount[$sig], $shortSig, $line, $claudeOut)
+            Ledger ("### [$(Stamp)] ⚠️ NEEDS-HUMAN · NO-TESTREF (attempt $($failCount[$sig])x) - $shortSig`r`n$diag`r`n- **Claude:** $claudeOut`r`n- **Outcome:** reply lacked a verifiable test reference; changes discarded (reproduction unproven).`r`n- **Note for human:** bug still live - needs eyes.")
             continue
         }
         $testClass = ($testRef -split '#')[0]
@@ -246,7 +285,7 @@ Rules:
         if (-not $changedTests) {
             $failCount[$sig] = ([int]$failCount[$sig]) + 1
             & git checkout -- . 2>$null; & git clean -fd 2>$null
-            Ledger ("### [{0}] ⚠️ NEEDS-HUMAN · NO-TEST-DIFF (attempt {1}x) - {2}`r`n- **Error:** ``{3}```r`n- **Claude:** {4}`r`n- **Outcome:** claimed test ``{5}`` but no matching test file was added/changed; changes discarded.`r`n- **Note for human:** bug still live; reproduction not proven - needs eyes." -f (Stamp), $failCount[$sig], $shortSig, $line, $claudeOut, $testRef)
+            Ledger ("### [$(Stamp)] ⚠️ NEEDS-HUMAN · NO-TEST-DIFF (attempt $($failCount[$sig])x) - $shortSig`r`n$diag`r`n- **Claude:** $claudeOut`r`n- **Outcome:** claimed test ``$testRef`` but no matching test file was added/changed; changes discarded.`r`n- **Note for human:** bug still live; reproduction not proven - needs eyes.")
             continue
         }
         Log ("repro.verified test={0}" -f $testRef)
@@ -260,7 +299,7 @@ Rules:
             Log "build.fail discarding changes"
             & git checkout -- . 2>$null; & git clean -fd 2>$null
             $failCount[$sig] = ([int]$failCount[$sig]) + 1
-            Ledger ("### [{0}] ⚠️ NEEDS-HUMAN · BUILD-FAIL (attempt {1}x) - {2}`r`n- **Error:** ``{3}```r`n- **Attempted fix:** {4}`r`n- **Outcome:** fix discarded - mvnw test failed, nothing pushed.`r`n- **Note for human:** bug still live; the autonomous fix did not compile/pass tests - needs eyes." -f (Stamp), $failCount[$sig], $shortSig, $line, $claudeOut)
+            Ledger ("### [$(Stamp)] ⚠️ NEEDS-HUMAN · BUILD-FAIL (attempt $($failCount[$sig])x) - $shortSig`r`n$diag`r`n- **Attempted fix:** $claudeOut`r`n- **Outcome:** fix discarded - mvnw test failed, nothing pushed.`r`n- **Note for human:** bug still live; the autonomous fix did not compile/pass tests - needs eyes.")
             continue
         }
         Log "build.pass"
@@ -268,7 +307,7 @@ Rules:
         if ($DryRun) {
             Log "dryrun built OK; NOT pushing; reverting tree"
             & git stash -u 2>$null
-            Ledger ("### [{0}] DRYRUN - {1}`r`n- **Error:** ``{2}```r`n- **Claude:** {3}`r`n- **Build:** PASS`r`n- **Outcome:** dry-run - fix built but NOT pushed (stashed)." -f (Stamp), $shortSig, $line, $claudeOut)
+            Ledger ("### [$(Stamp)] DRYRUN - $shortSig`r`n$diag`r`n- **Claude:** $claudeOut`r`n- **Build:** PASS`r`n- **Outcome:** dry-run - fix built but NOT pushed (stashed).")
             continue
         }
 
@@ -287,7 +326,7 @@ Rules:
 
         if (WaitForDeployAndHealth) {
             Log ("deploy.healthy sha={0}" -f $sha)
-            Ledger ("### [{0}] FIX {1} - {2}`r`n- **Error:** ``{3}```r`n- **Reproduced by:** ``{4}`` (failed before fix, passes after)`r`n- **Root cause + fix:** {5}`r`n- **Build:** PASS (mvnw test, full suite)`r`n- **Deploy:** pushed {1} -> auto-deploy, health **UP**`r`n- **Outcome:** RESOLVED" -f (Stamp), $sha, $shortSig, $line, $testRef, $claudeOut)
+            Ledger ("### [$(Stamp)] FIX $sha - $shortSig`r`n$diag`r`n- **Reproduced by:** ``$testRef`` (failed before fix, passes after)`r`n- **Root cause + fix:** $claudeOut`r`n- **Build:** PASS (mvnw test, full suite)`r`n- **Deploy:** pushed $sha -> auto-deploy, health **UP**`r`n- **Outcome:** RESOLVED")
         } else {
             Log ("deploy.unhealthy auto-reverting sha={0}" -f $sha)
             & git revert --no-edit $sha 2>&1 | Out-Null
@@ -295,7 +334,7 @@ Rules:
             & git push origin $Branch 2>&1 | Out-Null
             $recovered = WaitForDeployAndHealth
             $failCount[$sig] = ([int]$failCount[$sig]) + 1
-            Ledger ("### [{0}] ⚠️ NEEDS-HUMAN · ROLLBACK {1} (attempt {6}x) - reverted {2}`r`n- **Error being fixed:** ``{3}```r`n- **Attempted fix:** {4}`r`n- **Why reverted:** /actuator/health did NOT return UP after deploy.`r`n- **Revert commit:** {1}, health recovered: {5}`r`n- **Loop state:** kept running. Signature left for human review.`r`n- **Note for human:** the autonomous fix for this bug FAILED in production - needs eyes." -f (Stamp), $rev, $sha, $line, $claudeOut, $recovered, $failCount[$sig])
+            Ledger ("### [$(Stamp)] ⚠️ NEEDS-HUMAN · ROLLBACK $rev (attempt $($failCount[$sig])x) - reverted $sha`r`n$diag`r`n- **Attempted fix:** $claudeOut`r`n- **Why reverted:** /actuator/health did NOT return UP after deploy.`r`n- **Revert commit:** $rev, health recovered: $recovered`r`n- **Loop state:** kept running. Signature left for human review.`r`n- **Note for human:** the autonomous fix for this bug FAILED in production - needs eyes.")
             $seen.Remove($sig)
         }
     }
