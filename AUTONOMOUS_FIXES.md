@@ -1,4 +1,4 @@
-# Autonomous Bug-Fix Ledger
+﻿# Autonomous Bug-Fix Ledger
 
 > **What this is.** `auto-fix-watchdog.ps1` watches the live `economizai-app`
 > logs and, when it detects an error, autonomously diagnoses it, writes a fix,
@@ -14,12 +14,12 @@
 > - **Reproduce-first gate:** the fixer must write a test that FAILS on the bug
 >   before fixing it. The watchdog independently verifies the named test exists
 >   and is in the diff; if it can't reproduce (`REPRO_FAIL`) or gives no
->   verifiable test, **no code is changed** — it's logged `NEEDS-HUMAN` and the
+>   verifiable test, **no code is changed** â€” it's logged `NEEDS-HUMAN` and the
 >   loop moves on. A bug is only auto-fixed once it's been proven real.
 > - Known-transient external errors (SEFAZ/geocoder/network/5xx) must **recur**
->   3× within 10 min before any fix is attempted — a one-off blip is ignored.
+>   3Ã— within 10 min before any fix is attempted â€” a one-off blip is ignored.
 > - The fixer call has a 600s timeout and is fully sandboxed in error handling:
->   a hang/crash logs `NEEDS-HUMAN` and the loop keeps running — it never freezes.
+>   a hang/crash logs `NEEDS-HUMAN` and the loop keeps running â€” it never freezes.
 > - A fix that fails `mvnw test` is **never pushed**.
 > - After deploy, if `/actuator/health` != `UP`, the commit is **auto-reverted**
 >   (restoring last-good) and the loop keeps running.
@@ -28,12 +28,12 @@
 > - Every entry here is written by the loop itself, newest at the top.
 >
 > **Finding what needs your attention.** Every block that failed and still needs
-> a human is tagged `⚠️ NEEDS-HUMAN` — grep for it to list all open items:
+> a human is tagged `âš ï¸ NEEDS-HUMAN` â€” grep for it to list all open items:
 > `grep "NEEDS-HUMAN" AUTONOMOUS_FIXES.md`. Three failure kinds carry it:
 > `NO-FIX` (couldn't diagnose), `BUILD-FAIL` (fix didn't pass `mvnw test`),
 > `ROLLBACK` (fix deployed but health stayed DOWN, so it was reverted). Each
-> shows `(attempt Nx)` — how many times an autonomous fix for that same error
-> signature has failed — so a recurring problem is obvious at a glance.
+> shows `(attempt Nx)` â€” how many times an autonomous fix for that same error
+> signature has failed â€” so a recurring problem is obvious at a glance.
 
 ---
 
@@ -68,5 +68,18 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
-_No autonomous fixes yet. The first entry will appear here once the watchdog
-acts on a detected bug._
+### [2026-06-07 22:46:08] âš ï¸ NEEDS-HUMAN Â· NO-REPRO (attempt 1x) - WARN  [    c.r.e.s.a.o.GoogleTokenVerifier - oauth.google.ve
+- **Error snippet:**
+```r
+2026-06-08 01:42:30.113 WARN  [req=898a10d9 user= rcpt= item=] c.r.e.s.a.o.GoogleTokenVerifier - oauth.google.verify_failed ParseException: Invalid serialized unsecured/JWS/JWE object: Missing part delimiters
+```
+- **Outcome:** could NOT reproduce the bug with a failing test; no code changed.
+- **Detail:** No production code changed; the throwaway probe is removed. 
+
+The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimiters ÔÇö an opaque/wrong/truncated value sent by the client in place of the Google ID token). `SignedJWT.parse` throws `ParseException`, which is already caught and converted to `InvalidOAuthTokenException`. A reproduction test of this input **passes** on current code (verified empirically), so there is no faulty behavior to expose ÔÇö it's a client-supplied bad token, not a code bug.
+
+REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
+- **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
+
+
