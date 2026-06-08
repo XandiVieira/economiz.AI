@@ -68,6 +68,23 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-06-08 11:10:56] FIX 47ae74a - ERROR [    c.r.e.e.GlobalExceptionHandler - Unexpected error
+- **Error snippet:**
+```r
+2026-06-08 13:23:36.220 ERROR [req=d05f6c30 user=xandivieira@outlook.com rcpt= item=] c.r.e.e.GlobalExceptionHandler - Unexpected error: org.springframework.web.bind.MissingServletRequestParameterException: Required request parameter 'description' for method parameter type List is not present
+```
+- **Reproduced by:** `com.relyon.economizai.controller.CategorizerControllerTest#classify_withoutDescriptionParam_passesEmptyListToService` (failed before fix, passes after)
+- **Root cause + fix:** All 7 tests pass (including my new `passesEmptyListToService` repro test). The fix is verified:
+
+- **Reproduced:** Reverting to `@RequestParam List<String> description` produced the exact logged `MissingServletRequestParameterException` ÔåÆ 500.
+- **Fixed:** `@RequestParam(required = false, defaultValue = "") List<String> description` returns 200 and passes an empty list to the service.
+- **No regressions:** all 7 tests in the class pass.
+
+FIXED com.relyon.economizai.controller.CategorizerControllerTest#classify_withoutDescriptionParam_passesEmptyListToService | Root cause: `/api/v1/categorizer/classify` declared `@RequestParam List<String> description` as required, so a request with no `description` param threw MissingServletRequestParameterException (500). Fix: made it `@RequestParam(required = false, defaultValue = "") List<String> description`, which Spring Boot 4 resolves to an empty list, so a no-arg call now returns 200 with an empty result.
+- **Build:** PASS (mvnw test, full suite)
+- **Deploy:** pushed 47ae74a -> auto-deploy, health **UP**
+- **Outcome:** RESOLVED
+
 ### [2026-06-08 11:03:36] âš ï¸ NEEDS-HUMAN Â· NO-REPRO (attempt 1x) - org.springframework.http.converter.HttpMessageNotReadableExc
 - **Error snippet:**
 ```r
@@ -153,6 +170,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
