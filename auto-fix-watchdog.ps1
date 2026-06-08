@@ -185,6 +185,19 @@ function CommitLedger {
     & git push origin $Branch 2>$null | Out-Null   # best-effort; SyncBranch reconciles next cycle
 }
 
+# Discard a fixer's HALF-FINISHED edits (prod + test files) after a fix attempt
+# bails out (timeout / error / empty reply / failed gate) WITHOUT leaving the tree
+# dirty. A dirty tree would make the next SyncBranch treat the leftovers as human
+# work and skip forever (a deadlock we hit live during an E2E run). We commit the
+# ledger first (preserving the audit entry), then hard-restore the rest from HEAD.
+# This is the single cleanup the failure paths must call instead of ad-hoc
+# `git checkout -- .` (which would also blow away the unsaved ledger entry).
+function CleanFixerEdits {
+    CommitLedger                              # save the audit entry as its own commit
+    & git checkout -- . 2>$null               # drop tracked-file edits the fixer made
+    & git clean -fd -e "*.log" 2>$null | Out-Null  # drop new untracked files (keep stray logs)
+}
+
 # Push the just-made commit, surviving the common race where another machine (or
 # the app's own CI) pushed between our commit and our push. Re-syncs and retries
 # up to $maxTries with a backoff. Returns $true on success; on exhaustion returns
@@ -460,6 +473,12 @@ Rules:
         # (A single un-timed `claude -p` previously took the whole watchdog down.)
         $ClaudeTimeoutSec = 600
         $claudeOut = ""
+        # Progress log: a fix cycle is the one place the loop goes silent for up to
+        # ClaudeTimeoutSec while the fixer reproduces + builds. Without this line a
+        # watcher (human or me) can't tell "working" from "hung". Emit start + the
+        # deadline so the silence is expected, not alarming.
+        $fixStarted = Get-Date
+        Log ("fix.start {0} invoking fixer (timeout {1}s, deadline {2})" -f $shortSig, $ClaudeTimeoutSec, $fixStarted.AddSeconds($ClaudeTimeoutSec).ToString('HH:mm:ss'))
         try {
             $job = Start-Job -ScriptBlock {
                 param($p)
@@ -469,21 +488,28 @@ Rules:
                 $claudeOut = (Receive-Job $job | Out-String).Trim()
             } else {
                 Stop-Job $job -ErrorAction SilentlyContinue
-                Log ("claude.timeout {0} after {1}s; skipping (loop stays up)" -f $shortSig, $ClaudeTimeoutSec)
+                # CRITICAL: a timed-out fixer leaves HALF-EDITED prod/test files in
+                # the tree. If we don't discard them, the dirty-tree guard treats
+                # them as 'human work' and DEADLOCKS every subsequent cycle. Clean
+                # the partial edits (preserving the ledger) before moving on.
+                CleanFixerEdits
+                Log ("claude.timeout {0} after {1}s; discarded partial edits; skipping (loop stays up)" -f $shortSig, $ClaudeTimeoutSec)
                 $failCount[$sig] = ([int]$failCount[$sig]) + 1
-                Ledger ("### [$(Stamp)] ⚠️ NEEDS-HUMAN · CLAUDE-TIMEOUT (attempt $($failCount[$sig])x) - $shortSig`r`n$diag`r`n- **Outcome:** the fixer call exceeded ${ClaudeTimeoutSec}s and was killed; no change made.`r`n- **Note for human:** bug still live; autonomous diagnosis timed out - needs eyes.")
+                Ledger ("### [$(Stamp)] ⚠️ NEEDS-HUMAN · CLAUDE-TIMEOUT (attempt $($failCount[$sig])x) - $shortSig`r`n$diag`r`n- **Outcome:** the fixer call exceeded ${ClaudeTimeoutSec}s and was killed; partial edits discarded.`r`n- **Note for human:** bug still live; autonomous diagnosis timed out - needs eyes.")
                 Remove-Job $job -Force -ErrorAction SilentlyContinue
                 continue
             }
             Remove-Job $job -Force -ErrorAction SilentlyContinue
         } catch {
-            Log ("claude.error {0}: {1}; skipping (loop stays up)" -f $shortSig, $_.Exception.Message)
+            CleanFixerEdits
+            Log ("claude.error {0}: {1}; discarded partial edits; skipping (loop stays up)" -f $shortSig, $_.Exception.Message)
             $failCount[$sig] = ([int]$failCount[$sig]) + 1
             $errMsg = $_.Exception.Message
             Ledger ("### [$(Stamp)] ⚠️ NEEDS-HUMAN · CLAUDE-ERROR (attempt $($failCount[$sig])x) - $shortSig`r`n$diag`r`n- **Outcome:** the fixer call threw: $errMsg`r`n- **Note for human:** bug still live; autonomous diagnosis errored out - needs eyes.")
             continue
         }
         if ([string]::IsNullOrWhiteSpace($claudeOut)) {
+            CleanFixerEdits
             Log ("claude.empty {0}; skipping" -f $shortSig)
             continue
         }
