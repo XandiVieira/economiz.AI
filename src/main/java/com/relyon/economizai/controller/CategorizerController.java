@@ -77,7 +77,8 @@ public class CategorizerController {
      * Repeat the param for several terms: {@code ?description=Milho&description=Lays}.
      */
     @GetMapping("/classify")
-    public ResponseEntity<List<CategorizationExplanation>> classify(@RequestParam List<String> description) {
+    public ResponseEntity<List<CategorizationExplanation>> classify(
+            @RequestParam(required = false, defaultValue = "") List<String> description) {
         return ResponseEntity.ok(categorizationDebugService.explainAll(description));
     }
 
@@ -87,7 +88,8 @@ public class CategorizerController {
      * The full chain (dictionary + ML + final decision) is {@code /classify}.
      */
     @GetMapping("/ml/predict")
-    public ResponseEntity<List<MlClassificationResponse>> mlPredict(@RequestParam List<String> description) {
+    public ResponseEntity<List<MlClassificationResponse>> mlPredict(
+            @RequestParam(required = false, defaultValue = "") List<String> description) {
         return ResponseEntity.ok(categorizationDebugService.mlPredictAll(description));
     }
 

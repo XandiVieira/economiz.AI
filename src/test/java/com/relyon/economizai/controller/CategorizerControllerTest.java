@@ -23,6 +23,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.Mockito.when;
@@ -56,6 +57,16 @@ class CategorizerControllerTest {
         var admin = principal();
         admin.setRole(Role.ADMIN);
         return admin;
+    }
+
+    @Test
+    void classify_withoutDescriptionParam_returnsEmptyListNotError() throws Exception {
+        when(categorizationDebugService.explainAll(List.of())).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/v1/categorizer/classify")
+                        .with(SecurityMockMvcRequestPostProcessors.user(principal())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
     }
 
     @Test
