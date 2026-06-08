@@ -218,8 +218,10 @@ function ReadNewLogLines([datetime]$since) {
             foreach ($l in $tail) {
                 $line = "$l"
                 if ($line -match '^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})') {
-                    $ts = $null
-                    if ([datetime]::TryParseExact($Matches[1], 'yyyy-MM-dd HH:mm:ss', $null, [System.Globalization.DateTimeStyles]::None, [ref]$ts)) {
+                    # $ts must be a typed [datetime] (not $null), or PowerShell 5.1
+                    # can't resolve the TryParseExact([ref]) overload and throws.
+                    $ts = [datetime]::MinValue
+                    if ([datetime]::TryParseExact($Matches[1], 'yyyy-MM-dd HH:mm:ss', [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::None, [ref]$ts)) {
                         if ($ts -lt $since) { continue }   # already processed in a prior poll
                     }
                 }
