@@ -68,6 +68,21 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-06-08 10:56:53] FIX 309eb2a - org.springframework.web.bind.MissingServletRequestParameterE
+- **Error snippet:**
+```r
+org.springframework.web.bind.MissingServletRequestParameterException: Required request parameter 'description' for method parameter type List is not present
+```
+- **Reproduced by:** `com.relyon.economizai.controller.CategorizerControllerTest#classify_withoutDescriptionParam_returnsEmptyListNotError` (failed before fix, passes after)
+- **Root cause + fix:** All 16 tests pass (6 in `CategorizerControllerTest` including my new repro test, 10 in the coverage test ÔÇö nothing broke). The fix is verified.
+
+**Summary:** The `/api/v1/categorizer/classify` (and `/ml/predict`) endpoints declared `@RequestParam List<String> description`, which is `required=true` by default. When a caller omitted the `description` query param, Spring threw `MissingServletRequestParameterException`; since `GlobalExceptionHandler` has no handler for it, it fell through to the generic handler and returned **500**. The downstream service already treats absent input as "no terms ÔåÆ empty result," so the fix makes the param optional (`required=false, defaultValue=""`), yielding `200 OK` with `[]`.
+
+FIXED com.relyon.economizai.controller.CategorizerControllerTest#classify_withoutDescriptionParam_returnsEmptyListNotError | Root cause: `@RequestParam List<String> description` on /categorizer/classify (and /ml/predict) was required-by-default, so an absent `description` query param threw MissingServletRequestParameterException ÔåÆ unhandled ÔåÆ HTTP 500. Fix: made the param `@RequestParam(required = false, defaultValue = "")` so a missing list binds to empty and returns 200 with `[]`, matching the service's existing empty-input behavior.
+- **Build:** PASS (mvnw test, full suite)
+- **Deploy:** pushed 309eb2a -> auto-deploy, health **UP**
+- **Outcome:** RESOLVED
+
 ### [2026-06-08 10:51:23] âš ï¸ NEEDS-HUMAN Â· NO-REPRO (attempt 1x) - org.springframework.http.converter.HttpMessageNotReadableExc
 - **Error snippet:**
 ```r
@@ -112,6 +127,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
