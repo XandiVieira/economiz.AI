@@ -228,12 +228,24 @@ function PushWithRetry([int]$maxTries = 6) {
 }
 
 # Reduce a log line to a stable signature so we don't fix the same bug twice.
-function Signature([string]$line) {
+#
+# $snippet (optional) is the ErrorSnippet - if given, we append the FIRST
+# `com.relyon.*` stack frame (class+line). This makes two DIFFERENT endpoints
+# throwing the SAME generic message (e.g. `IllegalArgumentException: -1` from
+# PriceIndexService.bestMarkets AND InsightsService.topMarkets) count as DISTINCT
+# bugs. Without it, fixing one marks the message `seen` and the watchdog goes
+# blind to the other - the exact failure we hit live with /best-markets.
+function Signature([string]$line, [string]$snippet = "") {
     $s = $line -replace '\d{4}-\d{2}-\d{2} [\d:.]+', '' `
                -replace 'req=[a-f0-9]+', '' -replace 'user=\S*', '' `
                -replace 'rcpt=\S*', '' -replace 'item=\S*', '' `
                -replace '"[^"]*"', 'X' -replace '\d+', 'N'
-    return $s.Trim()
+    $s = $s.Trim()
+    if ($snippet) {
+        $frame = ([regex]::Match($snippet, 'at\s+(com\.relyon\.[\w.$]+\([\w.]+:\d+\))')).Groups[1].Value
+        if ($frame) { $s = "$s @ $frame" }
+    }
+    return $s
 }
 
 # Read app log lines newer than $since. Prefers the PERSISTENT bind-mounted file
@@ -242,36 +254,31 @@ function Signature([string]$line) {
 # kept in chronological order so ErrorSnippet can still reach following frames.
 # We tail a bounded slice (the poll interval is short, so only a few lines are
 # ever new) and filter by each line's leading "yyyy-MM-dd HH:mm:ss" timestamp.
-function ReadNewLogLines([datetime]$since) {
+# Tracked by LINE COUNT (high-water mark), NOT timestamp. The app container and
+# this watchdog can run on different clocks/timezones (observed: app at 14:xx,
+# host at 11:xx). A timestamp filter then treats old lines as "future" and
+# re-processes already-resolved historical errors forever - the waste we saw.
+# Line offset is immune to clock skew. First call initializes the mark to the
+# current count (ignore all pre-existing history); a shrink (rotation/redeploy)
+# resets it. $script: so it persists across calls.
+$script:logLineMark = $null
+function ReadNewLogLines {
     $appLog = ResolveAppLog
     if (Test-Path $appLog) {
         try {
-            # Tail enough to cover a poll window comfortably without reading a 50MB
-            # file each cycle. A burst can't exceed this between 20s polls.
-            $tail = Get-Content -Path $appLog -Tail 2000 -ErrorAction Stop
-            $out = New-Object System.Collections.ArrayList
-            foreach ($l in $tail) {
-                $line = "$l"
-                if ($line -match '^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})') {
-                    # $ts must be a typed [datetime] (not $null), or PowerShell 5.1
-                    # can't resolve the TryParseExact([ref]) overload and throws.
-                    $ts = [datetime]::MinValue
-                    if ([datetime]::TryParseExact($Matches[1], 'yyyy-MM-dd HH:mm:ss', [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::None, [ref]$ts)) {
-                        if ($ts -lt $since) { continue }   # already processed in a prior poll
-                    }
-                }
-                # Lines without a parseable timestamp are stacktrace continuations -
-                # keep them (they belong to a kept error line above).
-                [void]$out.Add($line)
-            }
-            return ,@($out.ToArray())
+            $all = @(Get-Content -Path $appLog -ErrorAction Stop)
+            $count = $all.Count
+            if ($null -eq $script:logLineMark) { $script:logLineMark = $count; return ,@() }
+            if ($count -lt $script:logLineMark) { $script:logLineMark = 0 }
+            $new = if ($count -gt $script:logLineMark) { $all[$script:logLineMark..($count-1)] } else { @() }
+            $script:logLineMark = $count
+            return ,@($new)
         } catch {
             Log ("logread.file_error {0}; falling back to docker logs" -f $_.Exception.Message)
         }
     }
-    # Fallback: container logs (ephemeral, current container only).
-    $sinceArg = $since.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-    return ,@(& docker logs --since $sinceArg $container 2>&1)
+    # Fallback: container logs from the last ~2 min (only before the file exists).
+    return ,@(& docker logs --since 120s $container 2>&1)
 }
 
 function HealthCode {
@@ -310,7 +317,13 @@ $selfArgs += @('-PollSeconds', $PollSeconds, '-Branch', $Branch)
 # fix for the subtle bug where HEAD was already updated by a pull, so HEAD==origin
 # even though the RUNNING process still held old code in memory and never reloaded.
 $selfHashAtBoot = (Get-FileHash -Path $selfPath -Algorithm SHA256 -ErrorAction SilentlyContinue).Hash
-function SelfUpdateIfChanged {
+# Throttle: the fetch is network I/O; run at most every 60s, not every poll.
+# Called at the loop top AND right after each fix, so a watchdog kept busy by
+# back-to-back fixes (intense E2E) still adopts new code instead of starving.
+$script:lastSelfCheck = [datetime]::MinValue
+function SelfUpdateIfChanged([switch]$Force) {
+    if (-not $Force -and ((Get-Date) - $script:lastSelfCheck).TotalSeconds -lt 60) { return }
+    $script:lastSelfCheck = Get-Date
     try {
         # Pull the latest script blob from origin onto disk (without disturbing
         # other files): fetch, then checkout JUST our own script from origin if it
@@ -320,7 +333,15 @@ function SelfUpdateIfChanged {
         & git fetch origin $Branch 2>$null
         $diskBlob   = (& git hash-object $selfPath 2>$null)
         $originBlob = (& git rev-parse "origin/${Branch}:auto-fix-watchdog.ps1" 2>$null)
-        if ($originBlob -and $diskBlob -and ($originBlob -ne $diskBlob)) {
+        $headBlob   = (& git rev-parse "HEAD:auto-fix-watchdog.ps1" 2>$null)
+        # SAFETY: only overwrite the script from origin when the on-disk version
+        # matches HEAD (i.e. it has NO uncommitted local edits). If someone is
+        # editing the script (disk != HEAD AND HEAD != origin would be ambiguous),
+        # we must NOT `git checkout` over their work - that's exactly how an
+        # earlier version of this function ate in-progress edits. Only adopt when
+        # the local file is clean (disk == HEAD) and origin moved ahead.
+        $localClean = ($diskBlob -eq $headBlob)
+        if ($localClean -and $originBlob -and $diskBlob -and ($originBlob -ne $diskBlob)) {
             & git checkout "origin/$Branch" -- auto-fix-watchdog.ps1 2>$null | Out-Null
         }
         # Now decide purely on the FILE hash vs what we booted with - this catches
@@ -348,8 +369,34 @@ Log ("watchdog.start dryRun={0} branch={1} maxFixesPerHour={2}" -f $DryRun, $Bra
 $seen     = @{}
 $failCount = @{}   # signature -> how many times an autonomous fix has FAILED for it
 $transientHits = @{}   # signature -> ArrayList of timestamps (for transient recurrence gate)
-$fixTimes = New-Object System.Collections.ArrayList
-$lastLogTime = Get-Date
+
+# Circuit-breaker fix timestamps, PERSISTED to the data dir so the N/hour limit
+# survives a restart/self-relaunch. Was in-memory, so every restart zeroed it and
+# the breaker almost never tripped - couldn't protect against a runaway loop.
+$fixTimesFile = Join-Path $dataRoot "logs\watchdog-fixtimes.txt"
+function LoadFixTimes {
+    $list = New-Object System.Collections.ArrayList
+    if (Test-Path $fixTimesFile) {
+        $cut = (Get-Date).AddHours(-1)
+        foreach ($l in (Get-Content $fixTimesFile -ErrorAction SilentlyContinue)) {
+            $t = [datetime]::MinValue
+            if ([datetime]::TryParse($l, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::RoundtripKind, [ref]$t)) {
+                if ($t -gt $cut) { [void]$list.Add($t) }
+            }
+        }
+    }
+    return ,$list
+}
+function RecordFixTime {
+    [void]$fixTimes.Add((Get-Date))
+    try {
+        New-Item -ItemType Directory -Force -Path (Split-Path $fixTimesFile) | Out-Null
+        $cut = (Get-Date).AddHours(-1)
+        ($fixTimes | Where-Object { $_ -gt $cut } | ForEach-Object { $_.ToString('o') }) |
+            Set-Content -Path $fixTimesFile -Encoding ASCII -ErrorAction Stop
+    } catch { }
+}
+$fixTimes = LoadFixTimes
 
 # Errors from known external services (SEFAZ, geocoder, network) are often
 # transient - they fail once then succeed on retry. We must NOT change code for
@@ -376,9 +423,7 @@ while ($true) {
     }
 
   try {
-    $sinceTime = $lastLogTime
-    $lastLogTime = Get-Date
-    $raw = ReadNewLogLines $sinceTime
+    $raw = ReadNewLogLines   # new lines since last poll, tracked by line offset
 
     # Iterate by index so we can reach into the following lines for the
     # stacktrace snippet (status code + error message + our first frame).
@@ -409,11 +454,13 @@ while ($true) {
         if (-not $isError) { continue }
         if ($line -match 'PageImpl|PagedModel|SpringDataJackson|WarningLoggingModifier') { continue }
 
-        $sig = Signature $line
+        # Compute the snippet FIRST so the signature can include the offending
+        # com.relyon stack frame (distinguishes same-message bugs in different code).
+        $snippet    = ErrorSnippet $raw $li
+        $sig = Signature $line $snippet
         if ([string]::IsNullOrWhiteSpace($sig)) { continue }
         if ($seen.ContainsKey($sig)) { continue }
 
-        $snippet    = ErrorSnippet $raw $li
         $statusCode = StatusCode $snippet
         # Reusable diagnostic lines appended to every ledger entry for this error,
         # so the bug-fix history always carries the status code + the meaningful
@@ -486,7 +533,10 @@ Rules:
         # Call the headless fixer in a child job so a HANG can't freeze the loop,
         # and wrap in try/catch so a crash logs + skips instead of killing us.
         # (A single un-timed `claude -p` previously took the whole watchdog down.)
-        $ClaudeTimeoutSec = 600
+        # 300s (was 600): one hard bug must not block the loop for 10 min - other
+        # E2E errors and the self-update check starve that whole time. A legit
+        # reproduce+fix+test rarely exceeds 5 min; if it does, abort and retry.
+        $ClaudeTimeoutSec = 300
         $claudeOut = ""
         # Progress log: a fix cycle is the one place the loop goes silent for up to
         # ClaudeTimeoutSec while the fixer reproduces + builds. Without this line a
@@ -605,8 +655,11 @@ Rules:
             $seen.Remove($sig)
             continue
         }
-        [void]$fixTimes.Add((Get-Date))
+        RecordFixTime   # persist to disk so the breaker survives restarts
         Log ("push.done sha={0}" -f $sha)
+        # A fix just landed; check for our own updates before the long deploy/health
+        # wait, so a busy watchdog still adopts new code between fixes.
+        SelfUpdateIfChanged -Force
 
         if (WaitForDeployAndHealth) {
             Log ("deploy.healthy sha={0}" -f $sha)
