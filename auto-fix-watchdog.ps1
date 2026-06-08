@@ -1,4 +1,5 @@
 # economizai AUTONOMOUS bug-fix watchdog.
+# (self-update verified live 2026-06-08)
 # ---------------------------------------------------------------------------
 # Watches live app logs. On a NEW error signature, invokes headless Claude to
 # diagnose + fix, gates on `mvnw test`, commits/pushes (triggering auto-deploy),
