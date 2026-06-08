@@ -68,6 +68,23 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-06-08 11:39:11] âš ï¸ NEEDS-HUMAN Â· NO-REPRO (attempt 1x) - org.springframework.web.bind.MissingServletRequestParameterE
+- **Error snippet:**
+```r
+org.springframework.web.bind.MissingServletRequestParameterException: Required request parameter 'description' for method parameter type List is not present
+```
+- **Outcome:** could NOT reproduce the bug with a failing test; no code changed.
+- **Detail:** The integration test that boots a **real Tomcat container** and hits `GET /api/v1/categorizer/classify` with no `description` param (exactly the failing production request) **passes** ÔÇö all variants return 200, no `MissingServletRequestParameterException`.
+
+This is the definitive verification: the production bug described in the log is **already fixed** in the current codebase. The fix (`required = false, defaultValue = ""` on both `classify` and `mlPredict`) was applied in commit `309eb2a`, and the real-container reproduction test confirms it no longer throws.
+
+Per the STEP 1 instructions: I must write a test that **FAILS because of this bug**. But I cannot ÔÇö the bug does not reproduce. To make a failing repro test, I would have to revert the production fix first, which the rules forbid ("Do NOT change any production code yet"). With the current production code, every shape of the request (no param, bare key, empty value, sibling endpoint) returns 200. There is no faulty behavior left to expose.
+
+The honest outcome: the bug cannot be reproduced against the current code because it is already fixed and guarded by an existing real-container test.
+
+REPRO_FAIL Bug already fixed in current code (CategorizerController classify/mlPredict use required=false); real-container repro test CategorizerClassifyMissingParamTest passes, so no test can fail for this reason without reverting production code.
+- **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 ### [2026-06-08 11:35:24] FIX aaf53d4 - ERROR [    c.r.e.e.GlobalExceptionHandler - Unexpected error
 - **Error snippet:**
 ```r
@@ -219,6 +236,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
