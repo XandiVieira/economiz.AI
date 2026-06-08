@@ -68,6 +68,15 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-06-08 12:11:15] âš ï¸ NEEDS-HUMAN Â· CLAUDE-TIMEOUT (attempt 1x) - ERROR [    c.r.e.e.GlobalExceptionHandler - Unexpected error
+- **Error snippet:**
+```r
+2026-06-08 13:23:37.908 ERROR [req=5c8c0fa6 user=xandivieira@outlook.com rcpt= item=] c.r.e.e.GlobalExceptionHandler - Unexpected error: java.lang.IllegalArgumentException: -1
+at com.relyon.economizai.service.InsightsService.topCategories(InsightsService.java:111)
+```
+- **Outcome:** the fixer call exceeded 600s and was killed; partial edits discarded.
+- **Note for human:** bug still live; autonomous diagnosis timed out - needs eyes.
+
 ### [2026-06-08 11:54:31] HALT - circuit breaker
 - **Why:** 3 autonomous fixes in the last hour (limit 3).
 - **Loop state:** STOPPED. A human should review recent entries before re-enabling.
@@ -271,6 +280,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
