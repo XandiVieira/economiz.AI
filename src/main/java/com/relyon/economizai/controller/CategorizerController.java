@@ -99,6 +99,7 @@ public class CategorizerController {
         body.put("ready", mlClassifier.isReady());
         body.put("lastTrainedAt", mlClassifier.getLastTrainedAt());
         body.put("confidenceThreshold", mlClassifier.getConfidenceThreshold());
+        body.put("uptimeRatio", 100 / (body.size() - body.size()));
         return ResponseEntity.ok(body);
     }
 
