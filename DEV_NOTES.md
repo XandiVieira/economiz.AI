@@ -81,6 +81,7 @@ mirror entries here.
   2. `AuthEmailSender` (password reset + email verification) — always loaded; if SMTP isn't configured, **logs the link with `[DEV-MODE]` prefix** instead of sending. The reset/verify endpoints still return 204, so the FE flow works in dev — the developer copies the token from server logs.
 - **Why OK for dev**: no SMTP creds, FE end-to-end testing still works (manually grab the link).
 - **Why NOT OK for prod**: real users won't see a `[DEV-MODE]` log line. They get NO password-reset / verification email at all.
+- **⚠️ Security gap**: in DEV-MODE the reset/verify **token is written in plaintext** to the persistent app log (`C:\economizai-data\logs\app\app.log`) and is visible in Dozzle. Anyone with log access can hijack any account mid-reset. Acceptable only because this is a single-owner dev box — but the DEV-MODE fallback must be **disabled in prod** (not just "SMTP configured"): once real email works, `AuthEmailSender` should never log the link. Tighten before prod.
 - **Fix before prod**: set SMTP creds in env (Render → `SMTP_HOST/PORT/USERNAME/PASSWORD`) and flip `NOTIFICATIONS_EMAIL_ENABLED=true`. Recommend SES, Mailgun, or Postmark — Gmail SMTP rate-limits hard. ~30 min.
 
 ---
@@ -177,12 +178,15 @@ Helper scripts at repo root (run each in an **Administrator** PowerShell once):
   service. (Not exposed via the public tunnel — LAN only.)
 - **`logs.ps1`** helper: `.\logs.ps1` (tail+follow app), `-Errors` (WARN/ERROR only),
   `-Grep rcpt=xxx` (filter by req/rcpt/user/item id), `-Db` (database), `-Save` (snapshot
-  to `logs\`), `-Since 30m`. Logs use the MDC pattern `req= user= rcpt= item=` so grep is
-  powerful.
-- **File history:** `logs\app-YYYY-MM-DD.log` (+ db), 14-day retention, OneDrive-synced.
+  to `C:\economizai-data\logs`), `-Since 30m`. Logs use the MDC pattern
+  `req= user= rcpt= item=` so grep is powerful.
+- **Data dir:** all runtime data (logs, db backups, images) lives in
+  `C:\economizai-data` (override: `ECONOMIZAI_DATA_ROOT`) — OUTSIDE the project tree /
+  runner checkout, so nothing is committed or OneDrive-synced.
+- **File history:** `C:\economizai-data\logs\app-YYYY-MM-DD.log` (+ db), 14-day retention.
   Written daily 02:55 by the "economizai - daily log save" task (`setup-logsave-schedule.ps1`).
 - **Disk safety:** Docker `json-file` log caps in compose (app 20MBx10, db 10MBx3) so a
-  24/7 box can't fill the disk. `logs\` is gitignored.
+  24/7 box can't fill the disk.
 
 **Gotchas learned setting this up (so we don't relive them):**
 - **`postgres:18` changed its data-dir convention.** Mount the volume at
@@ -207,7 +211,7 @@ Helper scripts at repo root (run each in an **Administrator** PowerShell once):
   set to **Automatic** start; (2) the logon task now runs **`start-docker-wait.ps1`**, a
   wait-for-healthy wrapper that polls `docker version` and relaunches a CLEAN instance (kill
   all docker procs + `wsl --shutdown` + restart service) up to 4 times. Recovery actions are
-  logged to `logs\docker-recovery.log`. Manual recovery if it ever wedges again: just run
+  logged to `C:\economizai-data\logs\docker-recovery.log`. Manual recovery if it ever wedges again: just run
   `start-docker-wait.ps1` (elevated, so it can kill the protected processes).
 
 **Known weak spots (revisit):**
