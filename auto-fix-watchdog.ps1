@@ -41,7 +41,19 @@ $container = "economizai-app"
 # logs`, which only ever holds the current container's slice and is wiped on
 # every --build redeploy. Reading it lets the watchdog see error history across
 # deploys. Falls back to `docker logs` if the file isn't present yet.
-$appLog   = Join-Path $repo "logs\app\app.log"
+#
+# IMPORTANT: the running container is deployed from the GitHub Actions runner's
+# CHECKOUT, not this OneDrive working copy - so the bind-mounted log lives under
+# the runner's _work dir, NOT $repo\logs. Probe the known locations and use the
+# first that exists; fall back to the repo-local path for plain local dev.
+$appLogCandidates = @(
+    "C:\actions-runner\_work\economiz.AI\economiz.AI\logs\app\app.log",  # deployed (runner checkout)
+    (Join-Path $repo "logs\app\app.log")                                  # local dev
+)
+function ResolveAppLog {
+    foreach ($c in $appLogCandidates) { if (Test-Path $c) { return $c } }
+    return $appLogCandidates[0]
+}
 $MARKER   = "AUTONOMOUS ENTRIES BELOW"
 
 Set-Location $repo
@@ -179,6 +191,7 @@ function Signature([string]$line) {
 # We tail a bounded slice (the poll interval is short, so only a few lines are
 # ever new) and filter by each line's leading "yyyy-MM-dd HH:mm:ss" timestamp.
 function ReadNewLogLines([datetime]$since) {
+    $appLog = ResolveAppLog
     if (Test-Path $appLog) {
         try {
             # Tail enough to cover a poll window comfortably without reading a 50MB

@@ -17,6 +17,14 @@ if (-not (Test-Path $src)) { Write-Host "::error::.env not found at $src"; exit 
 Copy-Item -LiteralPath $src -Destination (Join-Path (Get-Location) ".env") -Force
 Write-Host "copied .env (exists: $(Test-Path '.env'))"
 
+# 1b) Ensure the host log dir exists BEFORE compose up. The app writes its
+#     persistent rolling log to ./logs/app (bind-mounted to /var/log/economizai).
+#     If the source dir is missing at container-create time, Docker Desktop/WSL2
+#     does not mount the real host folder and the log silently goes nowhere.
+$logDir = Join-Path (Get-Location) "logs\app"
+if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
+Write-Host "log dir ready: $logDir"
+
 # 2) Rebuild + restart. Pin docker context (resets to 'default' across restarts).
 #    docker writes normal status to stderr; capture it to a string (so it never
 #    propagates as an error to a parent shell running with ErrorActionPreference
