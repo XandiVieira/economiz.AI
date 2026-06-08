@@ -68,6 +68,20 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-06-08 12:16:18] âš ï¸ NEEDS-HUMAN Â· NO-REPRO (attempt 1x) - java.lang.IllegalArgumentException: -N
+- **Error snippet:**
+```r
+java.lang.IllegalArgumentException: -1
+at com.relyon.economizai.service.InsightsService.topCategories(InsightsService.java:111)
+```
+- **Outcome:** could NOT reproduce the bug with a failing test; no code changed.
+- **Detail:** The tree is restored to its original state ÔÇö no production or test changes remain.
+
+**Diagnosis:** The live log frame is `InsightsService.topCategories(InsightsService.java:111)` throwing `IllegalArgumentException: -1` ÔÇö a `?limit=-1` query param reaching `Stream.limit(-1)`. But the current `topCategories` already clamps via `safeLimit = Math.max(0, limit)` (line 108, guarding both the GLOBAL branch at 110 and the HOUSEHOLD branch at 112). I empirically verified this: a test calling `topCategories(..., -1, HOUSEHOLD)` and asserting it does not throw **passes** on the current tree. The fix landed earlier in commit `8eaf286` (per the ledger); the recurring log line is the same buffered error (timestamp `13:23:37`) replayed from the not-yet-redeployed binary. I cannot write a test that fails for this bug without reverting the existing production fix, which STEP 1 forbids.
+
+REPRO_FAIL Bug already fixed in current tree ÔÇö InsightsService.topCategories clamps limit with Math.max(0, limit) (commit 8eaf286), so ?limit=-1 no longer reaches Stream.limit(-1); a repro test calling topCategories(...,-1,HOUSEHOLD) passes (no throw), and the live log is the old pre-redeploy binary replaying a buffered error.
+- **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 ### [2026-06-08 12:11:15] âš ï¸ NEEDS-HUMAN Â· CLAUDE-TIMEOUT (attempt 1x) - ERROR [    c.r.e.e.GlobalExceptionHandler - Unexpected error
 - **Error snippet:**
 ```r
@@ -280,6 +294,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
