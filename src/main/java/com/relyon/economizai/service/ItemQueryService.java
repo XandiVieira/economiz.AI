@@ -133,16 +133,24 @@ public class ItemQueryService {
             bindings.put("marketCnpjRoots", f.marketCnpjRoots());
         }
         if (f.categories() != null) {
+            // Unmatched items (no product) and products with no category have a null
+            // p.category, which the insights breakdown buckets as OTHER. Mirror that:
+            // when OTHER is filtered, also include null-category rows so ?category=OTHER
+            // returns them instead of an empty page.
+            var includeUnmatched = f.categories().contains(ProductCategory.OTHER);
+            var enumMatch = includeUnmatched
+                    ? "(p.category IS NULL OR p.category IN (:categories))"
+                    : "p.category IN (:categories)";
             if (f.categoryView() == CategoryView.HOUSEHOLD) {
-                // Household lens: filter by EFFECTIVE category. A product matches when
-                // it has no override and its global category is in the list, OR its
-                // override targets an enum in the list. Products migrated to a custom
+                // Household lens: filter by EFFECTIVE category. A row matches when it has
+                // no override and its global category matches (incl. null→OTHER above), OR
+                // its override targets an enum in the list. Products migrated to a custom
                 // category (override.category IS NULL) or to a different enum are excluded.
                 join = " LEFT JOIN HouseholdProductCategoryOverride o"
                         + " ON o.product = p AND o.household.id = :householdId";
-                clauses.add("((o.id IS NULL AND p.category IN (:categories)) OR o.category IN (:categories))");
+                clauses.add("((o.id IS NULL AND " + enumMatch + ") OR o.category IN (:categories))");
             } else {
-                clauses.add("p.category IN (:categories)");
+                clauses.add(enumMatch);
             }
             bindings.put("categories", f.categories());
         }

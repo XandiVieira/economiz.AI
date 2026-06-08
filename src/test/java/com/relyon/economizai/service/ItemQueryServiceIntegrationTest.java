@@ -31,6 +31,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -236,6 +237,46 @@ class ItemQueryServiceIntegrationTest {
                         List.of(ProductCategory.MEAT_DAIRY), null, null, null, null),
                 PageRequest.of(0, 20));
         assertEquals(3, page.getTotalElements()); // still 3 — the excluded leite isn't counted
+    }
+
+    @Test
+    void filter_byOther_includesUnmatchedItemsWithNoProduct() {
+        // Unmatched line item (no linked product) — the insights breakdown buckets it as
+        // OTHER, so ?category=OTHER must return it too (regression: it returned empty before).
+        var receipt = Receipt.builder()
+                .user(user).household(user.getHousehold()).chaveAcesso(uniqueChave())
+                .uf(UnidadeFederativa.RS).cnpjEmitente("93015006005182").marketName("Zaffari")
+                .issuedAt(LocalDateTime.of(2026, 6, 2, 10, 0))
+                .totalAmount(new BigDecimal("7.00")).qrPayload("test")
+                .status(ReceiptStatus.CONFIRMED).confirmedAt(LocalDateTime.of(2026, 6, 2, 10, 0))
+                .build();
+        receipt.addItem(ReceiptItem.builder()
+                .product(null).lineNumber(1).rawDescription("PRODUTO DESCONHECIDO")
+                .quantity(BigDecimal.ONE).unit("UN")
+                .unitPrice(new BigDecimal("7.00")).totalPrice(new BigDecimal("7.00"))
+                .build());
+        receiptRepository.save(receipt);
+
+        var other = service.query(user,
+                ItemFilters.fromRequest(null, null, null, null,
+                        List.of(ProductCategory.OTHER), null, null, null, null),
+                PageRequest.of(0, 20));
+        assertEquals(1, other.getTotalElements());
+        assertNull(other.getContent().get(0).productId());
+
+        // GLOBAL lens behaves the same.
+        var otherGlobal = service.query(user,
+                ItemFilters.fromRequest(null, null, null, null,
+                        List.of(ProductCategory.OTHER), null, null, null, null, CategoryView.GLOBAL),
+                PageRequest.of(0, 20));
+        assertEquals(1, otherGlobal.getTotalElements());
+
+        // A non-OTHER filter must NOT pick up the unmatched item.
+        var groceries = service.query(user,
+                ItemFilters.fromRequest(null, null, null, null,
+                        List.of(ProductCategory.GROCERIES), null, null, null, null),
+                PageRequest.of(0, 20));
+        assertEquals(3, groceries.getTotalElements()); // arroz x3 only
     }
 
     private ItemFilters filters() {
