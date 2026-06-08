@@ -36,6 +36,12 @@ $logFile  = Join-Path $logDir "auto-fix-watchdog.log"
 $health   = "http://localhost:8080/actuator/health"
 $javaHome = "C:\Users\Xandi\.jdks\openjdk-21"
 $container = "economizai-app"
+# Persistent app log (host bind-mount of the container's /var/log/economizai).
+# This file SURVIVES container rebuilds and machine restarts - unlike `docker
+# logs`, which only ever holds the current container's slice and is wiped on
+# every --build redeploy. Reading it lets the watchdog see error history across
+# deploys. Falls back to `docker logs` if the file isn't present yet.
+$appLog   = Join-Path $repo "logs\app\app.log"
 $MARKER   = "AUTONOMOUS ENTRIES BELOW"
 
 Set-Location $repo
@@ -166,6 +172,41 @@ function Signature([string]$line) {
     return $s.Trim()
 }
 
+# Read app log lines newer than $since. Prefers the PERSISTENT bind-mounted file
+# ($appLog) so history spans container rebuilds; falls back to `docker logs` when
+# the file isn't there yet (first boot before the app has written it). Lines are
+# kept in chronological order so ErrorSnippet can still reach following frames.
+# We tail a bounded slice (the poll interval is short, so only a few lines are
+# ever new) and filter by each line's leading "yyyy-MM-dd HH:mm:ss" timestamp.
+function ReadNewLogLines([datetime]$since) {
+    if (Test-Path $appLog) {
+        try {
+            # Tail enough to cover a poll window comfortably without reading a 50MB
+            # file each cycle. A burst can't exceed this between 20s polls.
+            $tail = Get-Content -Path $appLog -Tail 2000 -ErrorAction Stop
+            $out = New-Object System.Collections.ArrayList
+            foreach ($l in $tail) {
+                $line = "$l"
+                if ($line -match '^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})') {
+                    $ts = $null
+                    if ([datetime]::TryParseExact($Matches[1], 'yyyy-MM-dd HH:mm:ss', $null, [System.Globalization.DateTimeStyles]::None, [ref]$ts)) {
+                        if ($ts -lt $since) { continue }   # already processed in a prior poll
+                    }
+                }
+                # Lines without a parseable timestamp are stacktrace continuations -
+                # keep them (they belong to a kept error line above).
+                [void]$out.Add($line)
+            }
+            return ,@($out.ToArray())
+        } catch {
+            Log ("logread.file_error {0}; falling back to docker logs" -f $_.Exception.Message)
+        }
+    }
+    # Fallback: container logs (ephemeral, current container only).
+    $sinceArg = $since.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+    return ,@(& docker logs --since $sinceArg $container 2>&1)
+}
+
 function HealthCode {
     try { return (Invoke-WebRequest -Uri $health -UseBasicParsing -TimeoutSec 8).StatusCode }
     catch { return 0 }
@@ -209,9 +250,9 @@ while ($true) {
     }
 
   try {
-    $since = $lastLogTime.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+    $sinceTime = $lastLogTime
     $lastLogTime = Get-Date
-    $raw = @(& docker logs --since $since $container 2>&1)
+    $raw = ReadNewLogLines $sinceTime
 
     # Iterate by index so we can reach into the following lines for the
     # stacktrace snippet (status code + error message + our first frame).
