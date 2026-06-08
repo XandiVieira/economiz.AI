@@ -1,6 +1,7 @@
 package com.relyon.economizai.security.ratelimit;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.relyon.economizai.service.LocalizedMessageService;
 import jakarta.servlet.FilterChain;
@@ -9,8 +10,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
+import java.time.LocalDateTime;
+
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -22,12 +27,16 @@ class RateLimitFilterTest {
     private RateLimitFilter filter;
     private FilterChain chain;
     private LocalizedMessageService messageService;
+    private ObjectMapper objectMapper;
 
     @BeforeEach
     void setUp() {
         messageService = mock(LocalizedMessageService.class);
         when(messageService.translate("rate.limit.exceeded")).thenReturn("Too many requests.");
-        var mapper = new ObjectMapper().registerModule(new JavaTimeModule());
+        var mapper = new ObjectMapper()
+                .registerModule(new JavaTimeModule())
+                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        objectMapper = mapper;
         filter = new RateLimitFilter(new RateLimitRegistry(), messageService, mapper);
         chain = mock(FilterChain.class);
     }
@@ -47,6 +56,26 @@ class RateLimitFilterTest {
         var blocked = invokeAuthRequest("5.6.7.8");
         assertEquals(429, blocked.getStatus());
         assertNotNull(blocked.getHeader("Retry-After"));
+    }
+
+    @Test
+    void blocked429BodyMatchesErrorResponseShapeWithIsoTimestamp() throws Exception {
+        for (var i = 0; i < 5; i++) invokeAuthRequest("7.7.7.7");
+        var blocked = invokeAuthRequest("7.7.7.7");
+
+        assertEquals(429, blocked.getStatus());
+        assertTrue(blocked.getContentType().startsWith("application/json"),
+                "content type must be JSON, was " + blocked.getContentType());
+        assertTrue(blocked.getCharacterEncoding().equalsIgnoreCase("UTF-8"),
+                "charset must be UTF-8, was " + blocked.getCharacterEncoding());
+
+        var json = objectMapper.readTree(blocked.getContentAsString());
+        assertEquals(429, json.get("status").asInt());
+        assertEquals("Too many requests.", json.get("message").asText());
+        // timestamp must be an ISO-8601 string, not a JSON array like [2026,6,8,...]
+        var timestamp = json.get("timestamp");
+        assertTrue(timestamp.isTextual(), "timestamp must serialize as an ISO string, was " + timestamp);
+        assertDoesNotThrow(() -> LocalDateTime.parse(timestamp.asText()));
     }
 
     @Test

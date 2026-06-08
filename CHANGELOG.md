@@ -16,6 +16,16 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-08 — validation hardening from a full API audit (behavior fixes)
+
+Four small behavior/validation fixes surfaced by an end-to-end endpoint audit:
+- **`GET /api/v1/receipts` now accepts a `status` filter** (`PENDING_CONFIRMATION|CONFIRMED|REJECTED|FAILED_PARSE`, optional). An **invalid value now returns 400** (it was previously ignored). Absent = all statuses, as before.
+- **Shopping-list items enforce "exactly one"** of `productId`/`freeText`: sending **both** now returns **400** (previously wrongly accepted); neither still 400; exactly one still 201.
+- **`POST/DELETE /api/v1/markets/watched/{cnpj}`** now returns **400** for a malformed CNPJ (was 404) and accepts formatted CNPJs (strips `.`/`/`/`-`) — consistent with the rename endpoints.
+- **Rate-limit `429` body** now matches the standard error shape (ISO-8601 string `timestamp`, UTF-8) instead of an array timestamp; `Retry-After` header unchanged.
+
+---
+
 ## 2026-06-07 — market rename now validates CNPJ (400 instead of 500)
 
 `PUT/DELETE /api/v1/markets/{cnpj}/name` used the `{cnpj}` path value as-is.

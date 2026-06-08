@@ -1,5 +1,6 @@
 package com.relyon.economizai.service.geo;
 
+import com.relyon.economizai.exception.InvalidCnpjException;
 import com.relyon.economizai.exception.MarketNotFoundException;
 import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.MarketLocation;
@@ -88,6 +89,34 @@ class WatchedMarketServiceTest {
     void unwatch_delegatesToRepo() {
         service.unwatch(user, "11111111000111");
         verify(watchedRepository).deleteByUserIdAndMarketCnpj(user.getId(), "11111111000111");
+    }
+
+    @Test
+    void watch_rejectsMalformedCnpjWith400() {
+        assertThrows(InvalidCnpjException.class, () -> service.watch(user, "123"));
+        verify(marketRepository, never()).findByCnpj(any());
+        verify(watchedRepository, never()).save(any());
+    }
+
+    @Test
+    void unwatch_rejectsMalformedCnpjWith400() {
+        assertThrows(InvalidCnpjException.class, () -> service.unwatch(user, "not-a-cnpj"));
+        verify(watchedRepository, never()).deleteByUserIdAndMarketCnpj(any(), any());
+    }
+
+    @Test
+    void watch_normalizesFormattedCnpjBeforeLookup() {
+        var location = market("11111111000111", "Mercado A");
+        when(marketRepository.findByCnpj(eq("11111111000111"))).thenReturn(Optional.of(location));
+        when(watchedRepository.findByUserIdAndMarketCnpj(eq(user.getId()), eq("11111111000111")))
+                .thenReturn(Optional.empty());
+        when(receiptRepository.findDistinctCnpjsByHousehold(eq(user.getHousehold().getId())))
+                .thenReturn(List.of());
+
+        var response = service.watch(user, "11.111.111/0001-11");
+
+        assertTrue(response.watching());
+        verify(watchedRepository).save(any());
     }
 
     @Test

@@ -169,7 +169,7 @@ class ReceiptServiceCoverageTest {
         when(receiptRepository.findAll(any(Specification.class), pageableCaptor.capture()))
                 .thenReturn(page);
 
-        var result = receiptService.list(user, null, null, null, null, null,
+        var result = receiptService.list(user, null, null, null, null, null, null,
                 PageRequest.of(0, 20));
 
         assertEquals(1, result.getContent().size());
@@ -193,6 +193,7 @@ class ReceiptServiceCoverageTest {
                 LocalDateTime.of(2026, 12, 31, 0, 0),
                 "  12345678000190  ",
                 List.of(ProductCategory.GROCERIES),
+                null,
                 "  arroz  ",
                 callerPageable);
 
@@ -208,7 +209,7 @@ class ReceiptServiceCoverageTest {
                 .thenReturn(new PageImpl<>(List.of()));
 
         // Blank cnpj/search should not blow up — they're trimmed to null.
-        var result = receiptService.list(user, null, null, "   ", null, "   ",
+        var result = receiptService.list(user, null, null, "   ", null, null, "   ",
                 PageRequest.of(0, 10));
 
         assertTrue(result.getContent().isEmpty());

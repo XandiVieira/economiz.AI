@@ -33,6 +33,7 @@ public final class ReceiptSpecifications {
                                                    LocalDateTime to,
                                                    String cnpj,
                                                    List<ProductCategory> categories,
+                                                   ReceiptStatus status,
                                                    String search,
                                                    boolean hideFailedParse) {
         return (root, query, cb) -> {
@@ -45,6 +46,9 @@ public final class ReceiptSpecifications {
             // failed scan, so it would just be noise in their "compras" list.
             if (hideFailedParse) {
                 predicates.add(cb.notEqual(root.get("status"), ReceiptStatus.FAILED_PARSE));
+            }
+            if (status != null) {
+                predicates.add(cb.equal(root.get("status"), status));
             }
             if (from != null) predicates.add(cb.greaterThanOrEqualTo(root.get("issuedAt"), from));
             if (to != null) predicates.add(cb.lessThanOrEqualTo(root.get("issuedAt"), to));

@@ -174,7 +174,7 @@ class ReceiptControllerTest {
         var summary = new ReceiptSummaryResponse(UUID.randomUUID(), "Mercado X", "Mercado X", LocalDateTime.now(),
                 new BigDecimal("57.80"), new BigDecimal("57.80"), null, 1, ReceiptStatus.CONFIRMED);
         Page<ReceiptSummaryResponse> page = new PageImpl<>(List.of(summary));
-        when(receiptService.list(any(User.class), isNull(), isNull(), isNull(), isNull(List.class), isNull(), any(Pageable.class)))
+        when(receiptService.list(any(User.class), isNull(), isNull(), isNull(), isNull(List.class), isNull(), isNull(), any(Pageable.class)))
                 .thenReturn(page);
 
         mockMvc.perform(get("/api/v1/receipts")
@@ -182,6 +182,33 @@ class ReceiptControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].marketName").value("Mercado X"))
                 .andExpect(jsonPath("$.content[0].itemCount").value(1));
+    }
+
+    @Test
+    void list_validStatus_isAccepted() throws Exception {
+        var user = buildUser();
+        var summary = new ReceiptSummaryResponse(UUID.randomUUID(), "Mercado X", "Mercado X", LocalDateTime.now(),
+                new BigDecimal("57.80"), new BigDecimal("57.80"), null, 1, ReceiptStatus.CONFIRMED);
+        Page<ReceiptSummaryResponse> page = new PageImpl<>(List.of(summary));
+        when(receiptService.list(any(User.class), isNull(), isNull(), isNull(), isNull(List.class),
+                eq(ReceiptStatus.CONFIRMED), isNull(), any(Pageable.class)))
+                .thenReturn(page);
+
+        mockMvc.perform(get("/api/v1/receipts")
+                        .param("status", "CONFIRMED")
+                        .with(SecurityMockMvcRequestPostProcessors.user(user)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].status").value("CONFIRMED"));
+    }
+
+    @Test
+    void list_invalidStatus_returns400() throws Exception {
+        var user = buildUser();
+
+        mockMvc.perform(get("/api/v1/receipts")
+                        .param("status", "GARBAGE")
+                        .with(SecurityMockMvcRequestPostProcessors.user(user)))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

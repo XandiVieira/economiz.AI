@@ -1373,7 +1373,7 @@
        }
       ],
       "url": {
-       "raw": "{{baseUrl}}/api/v1/receipts?q=leite condensado&from=2026-04-01T00:00:00&category=GROCERIES&category=CLEANING&page=0&size=20",
+       "raw": "{{baseUrl}}/api/v1/receipts?q=leite condensado&from=2026-04-01T00:00:00&category=GROCERIES&category=CLEANING&status=CONFIRMED&page=0&size=20",
        "host": [
         "{{baseUrl}}"
        ],
@@ -1398,6 +1398,10 @@
         {
          "key": "category",
          "value": "CLEANING"
+        },
+        {
+         "key": "status",
+         "value": "CONFIRMED"
         },
         {
          "key": "page",

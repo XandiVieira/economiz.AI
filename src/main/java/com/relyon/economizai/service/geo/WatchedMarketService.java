@@ -132,8 +132,9 @@ public class WatchedMarketService {
 
     @Transactional
     public MarketResponse watch(User user, String cnpj) {
-        var location = marketRepository.findByCnpj(cnpj).orElseThrow(() -> new MarketNotFoundException(cnpj));
-        var existing = watchedRepository.findByUserIdAndMarketCnpj(user.getId(), cnpj);
+        var normalized = CnpjNormalizer.normalize(cnpj);
+        var location = marketRepository.findByCnpj(normalized).orElseThrow(() -> new MarketNotFoundException(normalized));
+        var existing = watchedRepository.findByUserIdAndMarketCnpj(user.getId(), normalized);
         if (existing.isEmpty()) {
             // Cap only NEW pins — re-pinning an existing one is always allowed.
             var current = watchedRepository.findAllByUserId(user.getId()).size();
@@ -142,13 +143,13 @@ public class WatchedMarketService {
             }
             watchedRepository.save(UserWatchedMarket.builder()
                     .user(user)
-                    .marketCnpj(cnpj)
+                    .marketCnpj(normalized)
                     .build());
-            log.info("watched_market.added user={} cnpj={}", LogMasker.email(user.getEmail()), cnpj);
+            log.info("watched_market.added user={} cnpj={}", LogMasker.email(user.getEmail()), normalized);
         }
-        var visited = receiptRepository.findDistinctCnpjsByHousehold(user.getHousehold().getId()).contains(cnpj);
+        var visited = receiptRepository.findDistinctCnpjsByHousehold(user.getHousehold().getId()).contains(normalized);
         var response = MarketResponse.from(location, distanceFromHome(user, location), visited, true);
-        return response.withFriendlyName(marketNameService.resolve(user.getHousehold().getId(), cnpj, response.name()));
+        return response.withFriendlyName(marketNameService.resolve(user.getHousehold().getId(), normalized, response.name()));
     }
 
     /**
@@ -167,8 +168,9 @@ public class WatchedMarketService {
 
     @Transactional
     public void unwatch(User user, String cnpj) {
-        watchedRepository.deleteByUserIdAndMarketCnpj(user.getId(), cnpj);
-        log.info("watched_market.removed user={} cnpj={}", LogMasker.email(user.getEmail()), cnpj);
+        var normalized = CnpjNormalizer.normalize(cnpj);
+        watchedRepository.deleteByUserIdAndMarketCnpj(user.getId(), normalized);
+        log.info("watched_market.removed user={} cnpj={}", LogMasker.email(user.getEmail()), normalized);
     }
 
     private Double distanceFromHome(User user, MarketLocation location) {

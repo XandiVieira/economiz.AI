@@ -142,6 +142,7 @@ public class ReceiptService {
                                              LocalDateTime to,
                                              String cnpjEmitente,
                                              List<ProductCategory> categories,
+                                             ReceiptStatus status,
                                              String search,
                                              Pageable pageable) {
         var cnpj = Optional.ofNullable(cnpjEmitente).map(String::trim).filter(s -> !s.isBlank()).orElse(null);
@@ -151,7 +152,7 @@ public class ReceiptService {
                         Sort.by(Sort.Direction.DESC, "issuedAt"))
                 : pageable;
         var spec = ReceiptSpecifications.forSearch(
-                user.getHousehold().getId(), from, to, cnpj, categories, trimmedSearch, true);
+                user.getHousehold().getId(), from, to, cnpj, categories, status, trimmedSearch, true);
         var page = receiptRepository.findAll(spec, sortedPageable);
         var householdId = user.getHousehold().getId();
         var cnpjs = page.getContent().stream()

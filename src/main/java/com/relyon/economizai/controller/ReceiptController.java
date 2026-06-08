@@ -10,6 +10,7 @@ import com.relyon.economizai.dto.response.ReceiptResponse;
 import com.relyon.economizai.dto.response.ReceiptSummaryResponse;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.ProductCategory;
+import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.service.ReceiptService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -57,9 +58,10 @@ public class ReceiptController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
             @RequestParam(required = false) String marketCnpj,
             @RequestParam(required = false) List<ProductCategory> category,
+            @RequestParam(required = false) ReceiptStatus status,
             @RequestParam(required = false) String q,
             @PageableDefault(size = 20) Pageable pageable) {
-        return ResponseEntity.ok(receiptService.list(user, from, to, marketCnpj, category, q, pageable));
+        return ResponseEntity.ok(receiptService.list(user, from, to, marketCnpj, category, status, q, pageable));
     }
 
     @GetMapping("/{id}")

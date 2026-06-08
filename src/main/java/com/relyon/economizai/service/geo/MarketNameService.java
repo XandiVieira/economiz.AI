@@ -1,6 +1,5 @@
 package com.relyon.economizai.service.geo;
 
-import com.relyon.economizai.exception.InvalidCnpjException;
 import com.relyon.economizai.model.HouseholdMarketAlias;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.repository.HouseholdMarketAliasRepository;
@@ -56,7 +55,7 @@ public class MarketNameService {
 
     @Transactional
     public String setName(User user, String cnpj, String customName) {
-        var normalized = normalizeCnpj(cnpj);
+        var normalized = CnpjNormalizer.normalize(cnpj);
         var householdId = user.getHousehold().getId();
         var alias = aliasRepository.findByHouseholdIdAndMarketCnpj(householdId, normalized)
                 .orElseGet(() -> HouseholdMarketAlias.builder()
@@ -69,19 +68,8 @@ public class MarketNameService {
 
     @Transactional
     public void clearName(User user, String cnpj) {
-        var normalized = normalizeCnpj(cnpj);
+        var normalized = CnpjNormalizer.normalize(cnpj);
         aliasRepository.deleteByHouseholdIdAndMarketCnpj(user.getHousehold().getId(), normalized);
         log.info("market_alias.cleared user={} cnpj={}", LogMasker.email(user.getEmail()), normalized);
-    }
-
-    // Strip CNPJ formatting (dots/slash/dash) and require exactly 14 digits.
-    // Rejects malformed input with a 400 before it can overflow the 14-char
-    // market_cnpj column (which surfaced as an unhandled 500).
-    private static String normalizeCnpj(String cnpj) {
-        var digits = cnpj == null ? "" : cnpj.replaceAll("\\D", "");
-        if (digits.length() != 14) {
-            throw new InvalidCnpjException("market.cnpj.invalid");
-        }
-        return digits;
     }
 }

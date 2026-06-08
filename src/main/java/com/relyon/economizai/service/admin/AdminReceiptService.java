@@ -52,7 +52,7 @@ public class AdminReceiptService {
                 : pageable;
         // Admin sees FAILED_PARSE rows too — useful for parser triage.
         var spec = ReceiptSpecifications.forSearch(
-                householdId, from, to, trimmedCnpj, categories, trimmedSearch, false);
+                householdId, from, to, trimmedCnpj, categories, null, trimmedSearch, false);
         return receiptRepository.findAll(spec, sortedPageable).map(ReceiptSummaryResponse::from);
     }
 

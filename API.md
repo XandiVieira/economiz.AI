@@ -281,6 +281,7 @@ GET /api/v1/receipts
     &to=2026-04-30T23:59:59
     &marketCnpj=83261420003255
     &category=GROCERIES               ← multi-value: repeat for OR (?category=GROCERIES&category=CLEANING)
+    &status=CONFIRMED                  ← optional: PENDING_CONFIRMATION|CONFIRMED|REJECTED|FAILED_PARSE (invalid → 400; absent → all)
     &q=leite condensado
     &page=0&size=20
 → Page<ReceiptSummaryResponse>  (each row has marketName, issuedAt, totalAmount, householdTotalAmount, approxTaxTotal, itemCount, status)

@@ -201,6 +201,33 @@ class ShoppingListServiceTest {
     }
 
     @Test
+    void addItem_throwsWhenBothProductAndFreeText() {
+        var list = list("Compras", List.of());
+        when(listRepository.findById(list.getId())).thenReturn(Optional.of(list));
+
+        // Exactly-one rule: providing BOTH productId and freeText is invalid.
+        var request = new AddShoppingListItemRequest(UUID.randomUUID(), "leite", BigDecimal.ONE);
+        assertThrows(InvalidShoppingListItemException.class,
+                () -> service.addItem(user, list.getId(), request));
+        verify(itemRepository, never()).save(any());
+        verify(productRepository, never()).findById(any());
+    }
+
+    @Test
+    void create_throwsWhenItemHasBothProductAndFreeText() {
+        when(listRepository.save(any())).thenAnswer(invocation -> {
+            var toSave = (ShoppingList) invocation.getArgument(0);
+            toSave.setId(UUID.randomUUID());
+            return toSave;
+        });
+
+        var items = List.of(new CreateShoppingListRequest.Item(UUID.randomUUID(), "papel", BigDecimal.ONE));
+        assertThrows(InvalidShoppingListItemException.class,
+                () -> service.create(user, new CreateShoppingListRequest("Compras", items)));
+        verify(itemRepository, never()).save(any());
+    }
+
+    @Test
     void addItem_throwsWhenProductMissing() {
         var list = list("Compras", List.of());
         var missingProductId = UUID.randomUUID();

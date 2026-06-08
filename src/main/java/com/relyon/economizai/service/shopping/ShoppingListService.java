@@ -131,7 +131,8 @@ public class ShoppingListService {
     private ShoppingListItem buildItem(UUID productId, String freeText, BigDecimal quantity, int position) {
         var hasProduct = productId != null;
         var hasFreeText = freeText != null && !freeText.isBlank();
-        if (!hasProduct && !hasFreeText) {
+        if (hasProduct == hasFreeText) {
+            // Exactly one of productId/freeText is required — reject neither and both.
             throw new InvalidShoppingListItemException();
         }
         var builder = ShoppingListItem.builder()

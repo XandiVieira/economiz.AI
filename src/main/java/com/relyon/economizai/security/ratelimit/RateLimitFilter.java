@@ -16,6 +16,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -101,6 +102,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private void writeTooManyRequestsResponse(HttpServletResponse response, long retryAfterSeconds) throws IOException {
         response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setHeader("Retry-After", String.valueOf(retryAfterSeconds));
         var message = messageService.translate("rate.limit.exceeded");
         var body = new ErrorResponse(HttpStatus.TOO_MANY_REQUESTS.value(), message, LocalDateTime.now());

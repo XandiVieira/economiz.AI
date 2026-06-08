@@ -69,21 +69,21 @@ class ReceiptListCategoryFilterIntegrationTest {
 
     @Test
     void noCategory_returnsAll() {
-        var page = receiptService.list(user, null, null, null, null, null, PageRequest.of(0, 20));
+        var page = receiptService.list(user, null, null, null, null, null, null, PageRequest.of(0, 20));
         assertEquals(3, page.getTotalElements());
     }
 
     @Test
     void singleCategory_narrowsToOne() {
         var page = receiptService.list(user, null, null, null,
-                List.of(ProductCategory.GROCERIES), null, PageRequest.of(0, 20));
+                List.of(ProductCategory.GROCERIES), null, null, PageRequest.of(0, 20));
         assertEquals(1, page.getTotalElements());
     }
 
     @Test
     void multipleCategories_orThemTogether() {
         var page = receiptService.list(user, null, null, null,
-                List.of(ProductCategory.GROCERIES, ProductCategory.CLEANING), null, PageRequest.of(0, 20));
+                List.of(ProductCategory.GROCERIES, ProductCategory.CLEANING), null, null, PageRequest.of(0, 20));
         assertEquals(2, page.getTotalElements());
     }
 
