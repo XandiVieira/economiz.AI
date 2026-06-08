@@ -68,6 +68,21 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-06-08 11:44:41] FIX 8ccbd16 - ERROR [    c.r.e.e.GlobalExceptionHandler - Unexpected error
+- **Status code:** 490
+- **Error snippet:**
+```r
+2026-06-08 13:23:37.490 ERROR [req=8b64f4ea user=xandivieira@outlook.com rcpt= item=] c.r.e.e.GlobalExceptionHandler - Unexpected error: java.lang.IllegalArgumentException: -1
+at com.relyon.economizai.service.InsightsService.topMarkets(InsightsService.java:96)
+```
+- **Reproduced by:** `com.relyon.economizai.service.priceindex.PriceIndexServiceTest#bestMarkets_negativeLimitDoesNotThrow` (failed before fix, passes after)
+- **Root cause + fix:** All 11 tests pass, BUILD SUCCESS. The reproducing test now passes after the fix, and the rest of the class is unaffected.
+
+FIXED com.relyon.economizai.service.priceindex.PriceIndexServiceTest#bestMarkets_negativeLimitDoesNotThrow | `PriceIndexController.bestMarkets` passes the raw `?limit` query param (e.g. -1) straight to `PriceIndexService.bestMarkets`, where `Stream.limit(limit)` throws `IllegalArgumentException: -1` for any negative value. Fixed by clamping with `Math.max(0, limit)` at the `.limit(...)` call, matching the existing defensive pattern in `InsightsService`.
+- **Build:** PASS (mvnw test, full suite)
+- **Deploy:** pushed 8ccbd16 -> auto-deploy, health **UP**
+- **Outcome:** RESOLVED
+
 ### [2026-06-08 11:39:11] âš ï¸ NEEDS-HUMAN Â· NO-REPRO (attempt 1x) - org.springframework.web.bind.MissingServletRequestParameterE
 - **Error snippet:**
 ```r
@@ -236,6 +251,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
