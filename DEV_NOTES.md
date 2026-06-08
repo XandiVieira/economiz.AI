@@ -10,10 +10,12 @@ mirror entries here.
 
 ---
 
-## Billing webhook fails closed without a secret
-- **Now**: `SubscriptionWebhookController` rejects ALL calls when `economizai.billing.webhook-secret` (`BILLING_WEBHOOK_SECRET`) is blank — the webhook is disabled until a secret is set. Comparison is constant-time.
-- **Why OK for dev**: dev grants PRO via the admin set-tier endpoint, so the webhook isn't needed locally.
-- **Before prod**: set `BILLING_WEBHOOK_SECRET` (and point the provider at the webhook) or paid activations silently 401.
+## Billing: apps ready (RevenueCat), web still pending
+- **Now**: two webhook paths feed the same entitlement engine. **RevenueCat** (`POST /webhooks/revenuecat`, Authorization header == `REVENUECAT_WEBHOOK_AUTH`) covers iOS/Android IAP; the generic `POST /webhooks/subscription` (`BILLING_WEBHOOK_SECRET`, `X-Webhook-Secret`) is the seam for a web provider. Both **fail closed** when their secret is blank (constant-time compare). A scheduled `SubscriptionExpiryService` downgrades lapsed PRO hourly.
+- **Why OK for dev**: dev grants PRO via the admin set-tier endpoint; webhooks aren't needed locally.
+- **Before prod**:
+  - **Apps:** set `REVENUECAT_WEBHOOK_AUTH`, and the app must set RevenueCat `app_user_id` = our user UUID (or email). That's it — env-var ready.
+  - **Web:** NOT built yet — needs a Mercado Pago/Stripe **create-checkout endpoint** + a provider-specific webhook adapter (signature verify + event→activate/cancel mapping). Pending the provider choice (PIX-recurring vs one-off).
 
 ## LGPD data-export is incomplete
 - **Now**: `UserService.exportData` covers the core account/receipt data but OMITS notification rules, watched markets, subscription, push token, manual purchases, and household market aliases / custom categories / category overrides.

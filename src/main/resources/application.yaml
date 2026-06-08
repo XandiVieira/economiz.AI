@@ -69,6 +69,9 @@ economizai:
     # Master paywall switch. OFF by default — every feature is allowed for all users
     # and the FREE caps below are dormant. Set SUBSCRIPTION_ENFORCE=true to turn paywalls on.
     enforce: ${SUBSCRIPTION_ENFORCE:false}
+    # Safety-net sweep: downgrades a PRO whose paid period elapsed without a renewal.
+    expiry-interval-ms: ${SUBSCRIPTION_EXPIRY_INTERVAL_MS:3600000}   # hourly
+    expiry-initial-delay-ms: 120000
     free:
       watched-markets: 3                       # FREE: max pinned markets (PRO unlimited)
       history-days: 90                         # FREE: rolling analytics/history window (PRO unlimited)
@@ -78,6 +81,11 @@ economizai:
     # verifies via the X-Webhook-Secret header. EMPTY in dev = check skipped.
     # In prod set this AND configure the provider (Stripe/Mercado Pago) to send it.
     webhook-secret: ${BILLING_WEBHOOK_SECRET:}
+    revenuecat:
+      # The fixed string RevenueCat sends in the Authorization header of its webhook
+      # (RevenueCat → Integrations → Webhooks → "Authorization header value").
+      # Empty = the /api/v1/webhooks/revenuecat endpoint is disabled (fail-closed).
+      auth-header: ${REVENUECAT_WEBHOOK_AUTH:}
   collaborative:
     enabled: true                              # master switch — disables all observation writes/reads
     min-households-for-public: 3               # k-anon: aggregate queries return empty until this many distinct households contributed

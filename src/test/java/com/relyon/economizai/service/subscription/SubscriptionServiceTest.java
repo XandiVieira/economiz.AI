@@ -86,6 +86,21 @@ class SubscriptionServiceTest {
     }
 
     @Test
+    void expire_marksSubscriptionExpiredAndDropsTier() {
+        var user = User.builder().id(UUID.randomUUID()).email("u@e")
+                .subscriptionTier(SubscriptionTier.PRO).build();
+        var subscription = Subscription.builder().user(user).status(SubscriptionStatus.ACTIVE)
+                .currentPeriodEnd(LocalDateTime.now().minusDays(1)).build();
+
+        service.expire(subscription);
+
+        assertEquals(SubscriptionStatus.EXPIRED, subscription.getStatus());
+        assertEquals(SubscriptionTier.FREE, user.getSubscriptionTier());
+        verify(subscriptionRepository).save(subscription);
+        verify(userRepository).save(user);
+    }
+
+    @Test
     void cancel_dropsTierEvenWhenNoSubscriptionRow() {
         var user = User.builder().id(UUID.randomUUID()).email("u@e")
                 .subscriptionTier(SubscriptionTier.PRO).build();

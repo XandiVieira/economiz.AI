@@ -16,6 +16,17 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-08 — RevenueCat billing webhook + subscription expiry (apps are PRO-ready)
+
+The mobile PRO flow is now backend-complete. The apps integrate **RevenueCat** (one SDK over Apple StoreKit + Google Play Billing); when a purchase/renewal/expiration happens, RevenueCat calls **`POST /api/v1/webhooks/revenuecat`** and we sync the user's tier automatically.
+
+- **FE/RevenueCat config (the only thing needed):** set RevenueCat's `app_user_id` to **our user's UUID** (preferred) or email so the webhook resolves the right account, and set the webhook **Authorization header** value (matched against `REVENUECAT_WEBHOOK_AUTH`; empty = endpoint disabled/fail-closed).
+- Purchases/renewals → PRO until the period end; expirations → FREE; a bare cancellation keeps access until the period actually lapses.
+- New **safety-net sweep** downgrades a PRO whose paid period elapsed without a renewal (failed payment/provider hiccup), so no one stays PRO for free.
+- Nothing changes for the FE's PRO checks — keep reading `subscriptionTier` from the user. Web (Mercado Pago/PIX) is the remaining piece, pending your provider choice.
+
+---
+
 ## 2026-06-08 — validation hardening from a full API audit (behavior fixes)
 
 Four small behavior/validation fixes surfaced by an end-to-end endpoint audit:

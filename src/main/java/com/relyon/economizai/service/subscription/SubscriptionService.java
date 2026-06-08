@@ -50,6 +50,22 @@ public class SubscriptionService {
     }
 
     /**
+     * Mark a lapsed subscription EXPIRED and drop its user to FREE. Used by the
+     * expiry sweep and by provider "expiration" webhooks. The subscription is
+     * passed in with its user already loaded.
+     */
+    @Transactional
+    public void expire(Subscription subscription) {
+        subscription.setStatus(SubscriptionStatus.EXPIRED);
+        subscriptionRepository.save(subscription);
+        var user = subscription.getUser();
+        user.setSubscriptionTier(SubscriptionTier.FREE);
+        userRepository.save(user);
+        log.info("subscription.expired user={} periodEnd={}",
+                LogMasker.email(user.getEmail()), subscription.getCurrentPeriodEnd());
+    }
+
+    /**
      * Mark the user's subscription CANCELED and drop their tier to FREE. No-op
      * on the subscription row when none exists (tier still forced to FREE).
      */
