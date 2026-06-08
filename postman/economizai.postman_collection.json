@@ -5848,7 +5848,7 @@
      ]
     },
     {
-     "name": "38b. Grant PRO via billing webhook (dev secret empty)",
+     "name": "38b. Billing webhook is fail-closed without a secret (401)",
      "request": {
       "method": "POST",
       "header": [
@@ -5877,7 +5877,7 @@
         "subscription"
        ]
       },
-      "description": "Provider-agnostic webhook grants PRO so the next step (basket optimization, PRO-only) succeeds. In dev the webhook secret is empty so the X-Webhook-Secret check is skipped."
+      "description": "Security: when economizai.billing.webhook-secret is unset the webhook fails closed and rejects every call (401), so PRO can't be granted unauthenticated. (Premium enforcement is also OFF by default, so basket optimization below works for all users regardless of tier.)"
      },
      "response": [],
      "event": [
@@ -5886,7 +5886,7 @@
        "script": {
         "type": "text/javascript",
         "exec": [
-         "pm.test('Webhook ACTIVATE returns 200', function () { pm.response.to.have.status(200); });"
+         "pm.test('Webhook fails closed without secret (401)', function () { pm.response.to.have.status(401); });"
         ]
        }
       }
@@ -5943,7 +5943,7 @@
      ]
     },
     {
-     "name": "39b. Cancel PRO via billing webhook (back to FREE)",
+     "name": "39b. Billing webhook rejects CANCEL without a secret (401)",
      "request": {
       "method": "POST",
       "header": [
@@ -5972,7 +5972,7 @@
         "subscription"
        ]
       },
-      "description": "Cancels the PRO grant from step 38b, returning the user to FREE."
+      "description": "Same fail-closed guard for the CANCEL action (401 when no secret is configured)."
      },
      "response": [],
      "event": [
@@ -5981,7 +5981,7 @@
        "script": {
         "type": "text/javascript",
         "exec": [
-         "pm.test('Webhook CANCEL returns 200', function () { pm.response.to.have.status(200); });"
+         "pm.test('Webhook fails closed without secret (401)', function () { pm.response.to.have.status(401); });"
         ]
        }
       }
