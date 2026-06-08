@@ -96,7 +96,7 @@ public class ConsumptionIntelligenceService {
         }
         var upcoming = predictions.stream()
                 .filter(p -> p.status() == ConsumptionPredictionResponse.Status.OK)
-                .limit(upcomingLimit)
+                .limit(Math.max(0, upcomingLimit))
                 .toList();
         var combined = new ArrayList<ConsumptionPredictionResponse>(lowOrOut.size() + upcoming.size());
         combined.addAll(lowOrOut);

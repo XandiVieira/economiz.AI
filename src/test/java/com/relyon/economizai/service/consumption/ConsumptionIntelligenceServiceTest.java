@@ -171,6 +171,22 @@ class ConsumptionIntelligenceServiceTest {
                 .anyMatch(p -> p.status() == ConsumptionPredictionResponse.Status.OK));
     }
 
+    @Test
+    void suggestedList_negativeUpcomingLimitDoesNotThrow() {
+        var okProduct = product("Detergente");
+        var now = LocalDateTime.now();
+        var items = new ArrayList<ReceiptItem>();
+        // Detergente: monthly, just bought → OK → flows into the limit(upcomingLimit) branch
+        for (int d : new int[]{90, 60, 30, 0}) items.add(purchase(okProduct, now.minusDays(d), BigDecimal.ONE));
+        when(receiptItemRepository.findConfirmedHistoryForHousehold(any())).thenReturn(items);
+
+        // A client passing ?includeUpcoming=true&upcomingLimit=-1 must not blow up with
+        // IllegalArgumentException: -1 from Stream.limit(-1).
+        var suggested = service.suggestedList(user, true, -1);
+
+        assertTrue(suggested.items().isEmpty());
+    }
+
     private Product product(String name) {
         return Product.builder().id(UUID.randomUUID()).normalizedName(name).build();
     }
