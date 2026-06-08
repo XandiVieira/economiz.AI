@@ -68,6 +68,14 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-06-08 10:39:03] âš ï¸ NEEDS-HUMAN Â· CLAUDE-TIMEOUT (attempt 1x) - org.springframework.http.converter.HttpMessageNotReadableExc
+- **Error snippet:**
+```r
+org.springframework.http.converter.HttpMessageNotReadableException: JSON parse error: Cannot deserialize value of type `com.relyon.economizai.model.enums.NotificationType` from String "GARBAGE": not one of the values accepted for Enum class: [PROMO_PERSONAL, DIGEST, BUDGET, PRICE_ABOVE, STOCKOUT, PROMO_COMMUNITY, SYSTEM, PRICE_DROP, CHEAPER_MARKET]
+```
+- **Outcome:** the fixer call exceeded 600s and was killed; no change made.
+- **Note for human:** bug still live; autonomous diagnosis timed out - needs eyes.
+
 ### [2026-06-08 10:13:34] FIX 3aa6bc0 - org.springframework.http.converter.HttpMessageNotReadableExc
 - **Error snippet:**
 ```r
@@ -93,6 +101,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
