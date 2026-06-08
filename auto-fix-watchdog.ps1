@@ -298,26 +298,36 @@ $selfPath = $PSCommandPath
 $selfArgs = @()
 if ($DryRun)        { $selfArgs += '-DryRun' }
 $selfArgs += @('-MaxFixesPerHour', $MaxFixesPerHour, '-PollSeconds', $PollSeconds, '-Branch', $Branch)
+# Hash of OUR OWN script file as it was on disk when this process started. Each
+# cycle we re-hash the file; if it differs, the on-disk script changed out from
+# under the running process (a git pull, the auto-deploy, a manual edit) and we
+# relaunch to adopt it. Comparing the file hash - NOT git HEAD vs origin - is the
+# fix for the subtle bug where HEAD was already updated by a pull, so HEAD==origin
+# even though the RUNNING process still held old code in memory and never reloaded.
+$selfHashAtBoot = (Get-FileHash -Path $selfPath -Algorithm SHA256 -ErrorAction SilentlyContinue).Hash
 function SelfUpdateIfChanged {
     try {
-        # Only act when the tree has no human edits (SyncBranch's guard) - reuse it.
+        # Pull the latest script blob from origin onto disk (without disturbing
+        # other files): fetch, then checkout JUST our own script from origin if it
+        # differs. This is self-sufficient - it doesn't depend on a fix-triggered
+        # SyncBranch having run. Only touches auto-fix-watchdog.ps1, so it can't
+        # clobber human edits to other files.
         & git fetch origin $Branch 2>$null
-        $localSha  = (& git rev-parse "HEAD:auto-fix-watchdog.ps1" 2>$null)
-        $remoteSha = (& git rev-parse "origin/${Branch}:auto-fix-watchdog.ps1" 2>$null)
-        if (-not $localSha -or -not $remoteSha -or $localSha -eq $remoteSha) { return }
-        # The script changed upstream. Don't clobber human edits: only update when
-        # the only non-ledger dirt is absent. CommitLedger first to keep tree clean.
-        CommitLedger
-        $ledgerRel = [regex]::Escape((Split-Path $ledger -Leaf))
-        $humanDirty = @(& git status --porcelain 2>$null | Where-Object { $_ -notmatch $ledgerRel })
-        if ($humanDirty.Count -gt 0) {
-            Log ("selfupdate.defer script changed upstream but {0} human change(s) present; will retry" -f $humanDirty.Count)
-            return
+        $diskBlob   = (& git hash-object $selfPath 2>$null)
+        $originBlob = (& git rev-parse "origin/${Branch}:auto-fix-watchdog.ps1" 2>$null)
+        if ($originBlob -and $diskBlob -and ($originBlob -ne $diskBlob)) {
+            & git checkout "origin/$Branch" -- auto-fix-watchdog.ps1 2>$null | Out-Null
         }
-        & git rebase "origin/$Branch" 2>$null | Out-Null
-        if ($LASTEXITCODE -ne 0) { & git rebase --abort 2>$null | Out-Null; & git reset --hard "origin/$Branch" 2>$null | Out-Null }
-        Log ("selfupdate.relaunch script changed ($localSha -> $remoteSha); restarting with new code")
-        # Detached relaunch so we can exit cleanly; the new process is independent.
+        # Now decide purely on the FILE hash vs what we booted with - this catches
+        # the checkout above AND any other on-disk change (manual edit, deploy).
+        # Comparing the file (not git HEAD vs origin) fixes the bug where a prior
+        # pull made HEAD==origin while the running process still held old code.
+        $now = (Get-FileHash -Path $selfPath -Algorithm SHA256 -ErrorAction SilentlyContinue).Hash
+        if (-not $now -or -not $selfHashAtBoot -or $now -eq $selfHashAtBoot) { return }
+        Log "selfupdate.relaunch own script changed on disk; restarting with new code"
+        # Detached relaunch so we can exit cleanly; the new process re-reads the
+        # (now-updated) file from disk. Restore index so the checkout isn't staged.
+        & git reset -q 2>$null | Out-Null
         Start-Process -FilePath "powershell.exe" `
             -ArgumentList (@('-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File', $selfPath) + $selfArgs) `
             -WindowStyle Hidden | Out-Null
