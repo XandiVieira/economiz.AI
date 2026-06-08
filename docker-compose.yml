@@ -61,8 +61,14 @@ services:
       # rebuilds — /tmp is wiped on every --build redeploy, which silently
       # orphaned the DB key and made avatars "disappear".
       PROFILE_PICTURE_DIR: /data/profile-pics
+      # write the app log to the bind-mounted host folder below, so log HISTORY
+      # survives rebuilds/restarts (the in-container json-file log does not).
+      LOG_FILE: /var/log/economizai/app.log
     volumes:
       - economizai-profilepics:/data/profile-pics
+      # host-side log folder: persistent, human-readable, rotated by logback
+      # (50MB x 10, 500MB cap). The watchdog tails ./logs/app/app.log.
+      - ./logs/app:/var/log/economizai
     ports:
       - "8080:10000"                # host 8080 -> container 10000 (Dockerfile port)
     restart: unless-stopped

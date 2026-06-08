@@ -201,7 +201,23 @@ logging:
   level:
     com.relyon.economizai: INFO
     org.springframework.security: WARN
+  # Persist logs to a file as well as the console. In the container this path is a
+  # host bind-mount (see docker-compose `app.volumes`), so history SURVIVES every
+  # rebuild/redeploy and machine restart - the json-file container log does NOT
+  # (it's recreated empty on every --build). The watchdog reads this file so it
+  # can see error history beyond the current container's lifetime.
+  file:
+    name: ${LOG_FILE:logs/app.log}
+  logback:
+    rollingpolicy:
+      # Roll at 50MB, keep ~10 files, hard-cap total at 500MB - logback deletes the
+      # oldest automatically, so the disk can't fill (the "clean when too large").
+      file-name-pattern: ${LOG_FILE:logs/app.log}.%d{yyyy-MM-dd}.%i.gz
+      max-file-size: 50MB
+      max-history: 10
+      total-size-cap: 500MB
   pattern:
     # MDC tags in brackets: requestId user receipt item. Empty when not in scope.
     # To deep-debug a flow: filter by receipt=<8-char-id> in your log viewer.
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [req=%X{requestId:-} user=%X{userId:-} rcpt=%X{receiptId:-} item=%X{itemId:-}] %logger{30} - %msg%n"
+    file:    "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [req=%X{requestId:-} user=%X{userId:-} rcpt=%X{receiptId:-} item=%X{itemId:-}] %logger{30} - %msg%n"
