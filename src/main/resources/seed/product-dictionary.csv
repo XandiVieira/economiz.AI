@@ -419,6 +419,8 @@ ultragrip,Aparelho de Barbear,PERSONAL_CARE
 # Household / pest control
 naftalina,Naftalina,CLEANING
 mata ratos,Raticida,CLEANING
+# Trash bags (sold as "saco xadrez", a printed-pattern garbage bag)
+saco xadrez,Saco de Lixo,CLEANING
 # Bakery sweets — fried dough "sonho" variants (P. prefix = padaria)
 calca virada,Cueca Virada,BAKERY
 cueca virada,Cueca Virada,BAKERY
