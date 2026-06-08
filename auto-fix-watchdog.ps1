@@ -80,6 +80,39 @@ function Log([string]$msg) {
     [void](Write-FileWithRetry { Add-Content -Path $logFile -Value $line -ErrorAction Stop })
 }
 
+# OBSERVABILITY: a single JSON status file that an external watcher (a human or
+# Claude monitoring this) can read to get a CONCLUSIVE picture - what state the
+# loop is in, when it last ticked (heartbeat), the running PID, and fix counts.
+# This is the antidote to guessing "is it stuck / orphaned?" from log silence or
+# process lists: if `heartbeatUtc` is recent, it's alive; `state` says what it's
+# doing. Written atomically (temp + move) so a reader never sees a half file.
+$statusFile = Join-Path $dataRoot "logs\watchdog-status.json"
+$script:wdState = "STARTING"
+$script:wdDetail = ""
+function SetStatus([string]$state, [string]$detail = "") {
+    $script:wdState = $state
+    if ($detail) { $script:wdDetail = $detail }
+    try {
+        $obj = [ordered]@{
+            state        = $script:wdState
+            detail       = $script:wdDetail
+            pid          = $PID
+            heartbeatUtc = (Get-Date).ToUniversalTime().ToString('o')
+            dryRun       = [bool]$DryRun
+            fixesLastHour = @($fixTimes | Where-Object { $_ -gt (Get-Date).AddHours(-1) }).Count
+            maxFixesPerHour = $MaxFixesPerHour
+            scriptHash   = $selfHashAtBoot
+        }
+        $json = $obj | ConvertTo-Json -Compress
+        $tmp = "$statusFile.tmp"
+        [void](Write-FileWithRetry {
+            New-Item -ItemType Directory -Force -Path (Split-Path $statusFile) | Out-Null
+            Set-Content -Path $tmp -Value $json -Encoding ASCII -ErrorAction Stop
+            Move-Item -Path $tmp -Destination $statusFile -Force -ErrorAction Stop
+        })
+    } catch { }
+}
+
 # Insert a finished markdown block into the ledger, right after the marker line.
 function Ledger([string]$block) {
     [void](Write-FileWithRetry {
@@ -397,6 +430,7 @@ function RecordFixTime {
     } catch { }
 }
 $fixTimes = LoadFixTimes
+SetStatus "STARTING"   # first heartbeat, now that fixTimes is loaded
 
 # Errors from known external services (SEFAZ, geocoder, network) are often
 # transient - they fail once then succeed on retry. We must NOT change code for
@@ -407,6 +441,12 @@ function IsTransient([string]$line) {
     return ($line -match 'SEFAZ|Sefaz|Svrs|Nominatim|geocode|SocketTimeout|ConnectException|UnknownHost|Read timed out|Connection reset|503|502|504|HttpServerErrorException|ResourceAccessException|RestClientException')
 }
 
+# CRASH-RECOVERY: the per-iteration try/catch below handles normal errors, but a
+# fatal error OUTSIDE it (e.g. in SelfUpdateIfChanged, the breaker, or Start-Sleep)
+# would kill the process - and the Scheduled Task only relaunches at logon, so the
+# watchdog would stay dead for hours. Wrap the whole loop: on any escape, log it,
+# mark status CRASHED, and RELAUNCH ourselves so the watchdog is self-resurrecting.
+try {
 while ($true) {
     # First thing each cycle: adopt our own latest code if it changed upstream.
     # This is what makes the watchdog self-healing - my fixes to THIS script go
@@ -543,6 +583,7 @@ Rules:
         # watcher (human or me) can't tell "working" from "hung". Emit start + the
         # deadline so the silence is expected, not alarming.
         $fixStarted = Get-Date
+        SetStatus "FIXING" ("{0} (deadline {1})" -f $shortSig, $fixStarted.AddSeconds($ClaudeTimeoutSec).ToString('HH:mm:ss'))
         Log ("fix.start {0} invoking fixer (timeout {1}s, deadline {2})" -f $shortSig, $ClaudeTimeoutSec, $fixStarted.AddSeconds($ClaudeTimeoutSec).ToString('HH:mm:ss'))
         try {
             $job = Start-Job -ScriptBlock {
@@ -657,6 +698,7 @@ Rules:
         }
         RecordFixTime   # persist to disk so the breaker survives restarts
         Log ("push.done sha={0}" -f $sha)
+        SetStatus "DEPLOYING" ("sha={0}" -f $sha)
         # A fix just landed; check for our own updates before the long deploy/health
         # wait, so a busy watchdog still adopts new code between fixes.
         SelfUpdateIfChanged -Force
@@ -680,7 +722,25 @@ Rules:
     # Any unexpected error in one poll cycle (docker hiccup, git, etc.) must NOT
     # kill the watchdog. Log it and keep going.
     Log ("loop.error {0}; continuing" -f $_.Exception.Message)
+    SetStatus "ERROR" ("loop.error: " + (OneLine $_.Exception.Message))
   }
 
+    # End of a clean poll: heartbeat as IDLE so a watcher knows we're alive and
+    # just waiting for the next error (not stuck).
+    SetStatus "IDLE"
     Start-Sleep -Seconds $PollSeconds
+}
+} catch {
+    # The loop escaped (fatal/unexpected). Don't die silently - relaunch ourselves
+    # so the watchdog recovers without waiting for the next logon. The breaker
+    # (persisted fixTimes) and seen-history reset on relaunch, which is acceptable
+    # for a crash-recovery path. A relaunch failure is the only true dead end.
+    try { Log ("FATAL loop escaped: {0}; relaunching" -f $_.Exception.Message) } catch { }
+    try { SetStatus "CRASHED" (OneLine $_.Exception.Message) } catch { }
+    try {
+        Start-Process -FilePath "powershell.exe" `
+            -ArgumentList (@('-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File', $selfPath) + $selfArgs) `
+            -WindowStyle Hidden | Out-Null
+    } catch { }
+    exit 1
 }
