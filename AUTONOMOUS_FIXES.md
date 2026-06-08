@@ -68,6 +68,17 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-06-08 10:51:23] âš ï¸ NEEDS-HUMAN Â· NO-REPRO (attempt 1x) - org.springframework.http.converter.HttpMessageNotReadableExc
+- **Error snippet:**
+```r
+org.springframework.http.converter.HttpMessageNotReadableException: JSON parse error: Cannot deserialize value of type `com.relyon.economizai.model.enums.NotificationType` from String "GARBAGE": not one of the values accepted for Enum class: [PROMO_PERSONAL, DIGEST, BUDGET, PRICE_ABOVE, STOCKOUT, PROMO_COMMUNITY, SYSTEM, PRICE_DROP, CHEAPER_MARKET]
+```
+- **Outcome:** could NOT reproduce the bug with a failing test; no code changed.
+- **Detail:** Clean tree, no changes left behind. The WARN log line is `GlobalExceptionHandler.handleNotReadable` correctly catching an invalid client enum and returning HTTP 400 ÔÇö verified by a passing `@WebMvcTest` against both endpoints that deserialize `NotificationType` (notification-rules create and admin test-notification). It is logged-but-correctly-handled invalid input, not a code defect.
+
+REPRO_FAIL Invalid "GARBAGE" NotificationType in request body is already correctly caught by GlobalExceptionHandler.handleNotReadable and returns HTTP 400 (verified via @WebMvcTest); the log line is an expected WARN, not a 5xx/escaped-exception bug ÔÇö no faulty behavior to reproduce.
+- **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 ### [2026-06-08 10:39:03] âš ï¸ NEEDS-HUMAN Â· CLAUDE-TIMEOUT (attempt 1x) - org.springframework.http.converter.HttpMessageNotReadableExc
 - **Error snippet:**
 ```r
@@ -101,6 +112,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
