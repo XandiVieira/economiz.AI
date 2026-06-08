@@ -68,6 +68,19 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-06-08 11:03:36] âš ï¸ NEEDS-HUMAN Â· NO-REPRO (attempt 1x) - org.springframework.http.converter.HttpMessageNotReadableExc
+- **Error snippet:**
+```r
+org.springframework.http.converter.HttpMessageNotReadableException: JSON parse error: Cannot deserialize value of type `com.relyon.economizai.dto.response.HouseholdPreferenceResponse$BrandStrength` from String "GARBAGE": not one of the values accepted for Enum class: [PREFERRED, MUST_HAVE]
+```
+- **Outcome:** could NOT reproduce the bug with a failing test; no code changed.
+- **Detail:** The file is now restored to its original state. No production or test code changes remain.
+
+The log line is a correctly-handled validation event, not a bug: `GlobalExceptionHandler.handleNotReadable` already catches the `HttpMessageNotReadableException`, logs it at WARN, and returns a clean 400 Bad Request. A test sending `"GARBAGE"` as the `strength` field passes (verified ÔÇö 400 returned), so there is no faulty behavior to expose with a failing test.
+
+REPRO_FAIL Invalid enum "GARBAGE" is already handled correctly ÔÇö GlobalExceptionHandler.handleNotReadable returns 400 + logs WARN; the log line is expected client-error validation, not a code bug.
+- **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 ### [2026-06-08 11:00:20] âš ï¸ NEEDS-HUMAN Â· NO-REPRO (attempt 1x) - org.springframework.http.converter.HttpMessageNotReadableExc
 - **Error snippet:**
 ```r
@@ -140,6 +153,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
