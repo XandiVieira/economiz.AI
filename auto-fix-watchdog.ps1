@@ -76,6 +76,15 @@ function Ledger([string]$block) {
 
 function Stamp { return (Get-Date -Format "yyyy-MM-dd HH:mm:ss") }
 
+# Collapse multi-line command output to a single trimmed line, capped, so a git
+# error can be logged on one line without flooding the log.
+function OneLine([string]$text) {
+    if ([string]::IsNullOrWhiteSpace($text)) { return "" }
+    $s = ($text -replace '[\r\n]+', ' ').Trim()
+    if ($s.Length -gt 200) { $s = $s.Substring(0, 200) }
+    return $s
+}
+
 # Pull an HTTP status code (4xx/5xx) out of the error text, if present.
 function StatusCode([string]$text) {
     if ($text -match '\b(4\d{2}|5\d{2})\b') { return $Matches[1] }
@@ -122,21 +131,28 @@ function SyncBranch {
 
 # Push the just-made commit, surviving the common race where another machine (or
 # the app's own CI) pushed between our commit and our push. Re-syncs and retries
-# up to $maxTries with a short backoff. Returns $true on success; on exhaustion
-# returns $false WITHOUT touching the tree (caller decides how to clean up).
-function PushWithRetry([int]$maxTries = 3) {
+# up to $maxTries with a backoff. Returns $true on success; on exhaustion returns
+# $false WITHOUT touching the tree (caller decides how to clean up).
+#
+# Retry budget is generous on purpose: when a human is actively pushing from
+# another machine (feature work, E2E runs), a 3-retry/~14s window loses the race
+# and a verified good fix gets discarded. 6 tries with a longer backoff rides out
+# a burst. We CAPTURE git's stderr and log it (don't 2>$null it) so a real push
+# failure - auth, hook, protected branch - is diagnosable instead of a silent
+# "push-rejected".
+function PushWithRetry([int]$maxTries = 6) {
     for ($t = 1; $t -le $maxTries; $t++) {
-        & git pull --rebase origin $Branch 2>$null | Out-Null
+        $pullErr = (& git pull --rebase origin $Branch 2>&1) | Out-String
         if ($LASTEXITCODE -ne 0) {
-            & git rebase --abort 2>$null | Out-Null
-            Log ("push.retry rebase-conflict try=$t/$maxTries")
-            Start-Sleep -Seconds ($t * 3)
+            & git rebase --abort 2>&1 | Out-Null
+            Log ("push.retry rebase-conflict try=$t/$maxTries :: " + (OneLine $pullErr))
+            Start-Sleep -Seconds ([Math]::Min(30, $t * 5))
             continue
         }
-        & git push origin $Branch 2>$null | Out-Null
+        $pushErr = (& git push origin $Branch 2>&1) | Out-String
         if ($LASTEXITCODE -eq 0) { return $true }
-        Log ("push.retry push-rejected try=$t/$maxTries")
-        Start-Sleep -Seconds ($t * 3)
+        Log ("push.retry push-rejected try=$t/$maxTries :: " + (OneLine $pushErr))
+        Start-Sleep -Seconds ([Math]::Min(30, $t * 5))
     }
     return $false
 }
@@ -201,12 +217,18 @@ while ($true) {
     # stacktrace snippet (status code + error message + our first frame).
     for ($li = 0; $li -lt $raw.Count; $li++) {
         $line = "$($raw[$li])"
-        # Only treat ERROR/FATAL-level lines (or raw stacktrace continuations) as
-        # bugs. Matching bare 'Exception' anywhere caught the logger CLASS NAME
-        # 'GlobalExceptionHandler' on EVERY line it logged - including expected
-        # WARN/400 validation messages. Gate on the log LEVEL token instead.
+        # A stacktrace continuation ('at ...', 'Caused by:', '... N more') is part
+        # of the PRECEDING error's trace - ErrorSnippet already folds those frames
+        # into the detection below. They must NOT be treated as standalone bugs, or
+        # every frame of one 500 becomes its own "new signature" and burns a full
+        # 600s Claude call apiece. Skip continuations outright.
+        if ($line -match '^\s*(at\s+\w|Caused by:|\.\.\.\s+\d+\s+more|\.\.\.\s+\d+\s+common\s+frames)') { continue }
+        # Trigger only on a real error HEADER: an ERROR/FATAL log line, an actual
+        # exception message, or OOM/Unexpected. Matching bare 'Exception' anywhere
+        # caught the logger CLASS NAME 'GlobalExceptionHandler' on EVERY line it
+        # logged - including expected WARN/400 validation messages. Gate on the log
+        # LEVEL token (or a true 'Exception:'/'in thread' message) instead.
         $isError = ($line -match '\b(ERROR|FATAL)\b') -or
-                   ($line -match '^\s*(at\s+\w|Caused by:|\.\.\.\s+\d+\s+more)') -or
                    ($line -match 'Exception(:| in thread)') -or
                    ($line -match 'OutOfMemory|Unexpected error')
         if (-not $isError) { continue }
@@ -381,13 +403,17 @@ Rules:
         $sha = (& git rev-parse --short HEAD).Trim()
 
         # Resilient push: re-sync + retry through races. If it still can't land,
-        # discard the local commit (reset to origin) so nothing stays stuck and
-        # the next cycle starts clean - then flag for a human and move on.
+        # the fix is BUILD-VERIFIED - don't just throw it away. Save it as a patch
+        # OUTSIDE the repo (the log dir survives the reset --hard), reset the tree
+        # so the next cycle starts clean, and point the human at the patch so a
+        # proven fix can be applied by hand instead of being silently lost.
         if (-not (PushWithRetry)) {
-            Log ("push.failed sha={0} discarding local commit after retries" -f $sha)
-            & git reset --hard "origin/$Branch" 2>$null | Out-Null
+            $patchFile = Join-Path $logDir ("autofix-{0}-{1}.patch" -f (Get-Date -Format "yyyyMMdd-HHmmss"), $sha)
+            [void](Write-FileWithRetry { & git format-patch -1 $sha --stdout 2>$null | Out-File -FilePath $patchFile -Encoding utf8 })
+            Log ("push.failed sha={0} fix saved to {1}; resetting tree" -f $sha, $patchFile)
+            & git reset --hard "origin/$Branch" 2>&1 | Out-Null
             $failCount[$sig] = ([int]$failCount[$sig]) + 1
-            Ledger ("### [$(Stamp)] ⚠️ NEEDS-HUMAN · PUSH-FAILED (attempt $($failCount[$sig])x) - $shortSig`r`n$diag`r`n- **Attempted fix:** $claudeOut`r`n- **Outcome:** fix built + committed locally but could NOT be pushed after retries; local commit discarded to keep the tree clean.`r`n- **Note for human:** bug still live; the fix is reproducible - re-run or apply manually - needs eyes.")
+            Ledger ("### [$(Stamp)] ⚠️ NEEDS-HUMAN · PUSH-FAILED (attempt $($failCount[$sig])x) - $shortSig`r`n$diag`r`n- **Attempted fix:** $claudeOut`r`n- **Outcome:** fix built + committed locally ($sha) but could NOT be pushed after retries.`r`n- **Saved patch:** ``$patchFile`` - apply with ``git am`` (the fix is build-verified, not lost).`r`n- **Note for human:** bug still live; apply the saved patch or re-run - needs eyes.")
             $seen.Remove($sig)
             continue
         }
