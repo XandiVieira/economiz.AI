@@ -68,6 +68,20 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-06-08 12:34:09] FIX 21847e9 - java.lang.ArithmeticException: / by zero @ com.relyon.econom
+- **Error snippet:**
+```r
+java.lang.ArithmeticException: / by zero
+at com.relyon.economizai.controller.CategorizerController.status(CategorizerController.java:102)
+```
+- **Reproduced by:** `com.relyon.economizai.controller.CategorizerControllerTest#status_doesNotThrowArithmeticException` (failed before fix, passes after)
+- **Root cause + fix:** All 8 tests pass (including the new reproduction test and the pre-existing `status_returnsClassifierState`), BUILD SUCCESS.
+
+FIXED com.relyon.economizai.controller.CategorizerControllerTest#status_doesNotThrowArithmeticException | GET /api/v1/categorizer/status divided by `body.size() - body.size()` (always 0) ÔåÆ ArithmeticException "/ by zero"; replaced the bogus `100 / (body.size() - body.size())` with the constant `100` for the uptimeRatio field.
+- **Build:** PASS (mvnw test, full suite)
+- **Deploy:** pushed 21847e9 -> auto-deploy, health **UP**
+- **Outcome:** RESOLVED
+
 ### [2026-06-08 12:29:15] âš ï¸ NEEDS-HUMAN Â· CLAUDE-TIMEOUT (attempt 1x) - ERROR [    c.r.e.e.GlobalExceptionHandler - Unexpected error
 - **Error snippet:**
 ```r
@@ -303,6 +317,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
