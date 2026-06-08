@@ -403,3 +403,19 @@ gaze,Gaze,HEALTH
 seringa,Seringa,HEALTH
 termometro,Termômetro,HEALTH
 algodao,Algodão,HEALTH
+
+# Terms found landing in OTHER on real receipts (added 2026-06-08)
+# Açougue / meat cuts
+chuleta,Chuleta,MEAT_DAIRY
+miudeza,Miudeza,MEAT_DAIRY
+coxa,Coxa de Frango,MEAT_DAIRY
+# Produce
+bergamota,Bergamota,PRODUCE
+# Sweets / chocolate (abbrev "choc" on NFC-e)
+bombom,Bombom,GROCERIES
+choc,Chocolate,GROCERIES
+# Personal care (razor / aparelho de barbear)
+ultragrip,Aparelho de Barbear,PERSONAL_CARE
+# Household / pest control
+naftalina,Naftalina,CLEANING
+mata ratos,Raticida,CLEANING
