@@ -68,6 +68,21 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-06-08 11:16:42] FIX 662454b - ERROR [    c.r.e.e.GlobalExceptionHandler - Unexpected error
+- **Status code:** 490
+- **Error snippet:**
+```r
+2026-06-08 13:23:37.490 ERROR [req=8b64f4ea user=xandivieira@outlook.com rcpt= item=] c.r.e.e.GlobalExceptionHandler - Unexpected error: java.lang.IllegalArgumentException: -1
+at com.relyon.economizai.service.InsightsService.topMarkets(InsightsService.java:96)
+```
+- **Reproduced by:** `com.relyon.economizai.service.consumption.ConsumptionIntelligenceServiceTest#suggestedList_negativeUpcomingLimitDoesNotThrow` (failed before fix, passes after)
+- **Root cause + fix:** All 8 tests pass (the new repro test now passes, the 7 existing tests still pass). Fix verified.
+
+FIXED com.relyon.economizai.service.consumption.ConsumptionIntelligenceServiceTest#suggestedList_negativeUpcomingLimitDoesNotThrow | Root cause: `suggestedList` passed the unvalidated `upcomingLimit` request param straight to `Stream.limit()`, so `?includeUpcoming=true&upcomingLimit=-1` threw `IllegalArgumentException: -1`; fix clamps it with `Math.max(0, upcomingLimit)`.
+- **Build:** PASS (mvnw test, full suite)
+- **Deploy:** pushed 662454b -> auto-deploy, health **UP**
+- **Outcome:** RESOLVED
+
 ### [2026-06-08 11:10:56] FIX 47ae74a - ERROR [    c.r.e.e.GlobalExceptionHandler - Unexpected error
 - **Error snippet:**
 ```r
@@ -170,6 +185,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
