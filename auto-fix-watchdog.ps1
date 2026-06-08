@@ -140,28 +140,49 @@ function ErrorSnippet($allLines, [int]$startIdx) {
 # dirty - in which case the caller must abort this cycle, not fix on a bad base.
 #
 # SAFETY GUARD: this runs against the OneDrive working copy, which is ALSO the
-# human's editing checkout. If the tree has uncommitted changes (someone is
-# mid-edit), we must NEVER `git reset --hard` - that silently destroys their
+# human's editing checkout. If the tree has uncommitted HUMAN changes (someone
+# is mid-edit), we must NEVER `git reset --hard` - that silently destroys their
 # work. Skip the whole cycle instead and log it; the human commits when ready.
+#
+# CRUCIAL: the ledger ($ledger, AUTONOMOUS_FIXES.md) is written by THIS watchdog
+# every time it acts. On the NEEDS-HUMAN paths it is written but NOT committed,
+# so it would leave the tree dirty forever and DEADLOCK this guard (the watchdog
+# writes the ledger, then skips every future cycle because its own ledger write
+# made the tree dirty). To prevent that, the ledger is auto-committed right after
+# each write (see CommitLedger), so by the time we get here the tree should carry
+# only genuine human edits. We still exclude the ledger defensively.
 # (TODO(prod): move the watchdog to a dedicated clone outside OneDrive so it can
 # never collide with human edits - see INFRASTRUCTURE.md.)
 function SyncBranch {
-    $dirty = & git status --porcelain 2>$null
-    if ($dirty) {
-        Log ("sync.skip working tree dirty ({0} change(s)) - not resetting; deferring to protect uncommitted work" -f (@($dirty).Count))
+    $ledgerRel = [regex]::Escape((Split-Path $ledger -Leaf))
+    $dirty = @(& git status --porcelain 2>$null | Where-Object { $_ -notmatch $ledgerRel })
+    if ($dirty.Count -gt 0) {
+        Log ("sync.skip {0} uncommitted human change(s) - not resetting; deferring to protect work" -f $dirty.Count)
         return $false
     }
+    # Belt-and-suspenders: if the ledger somehow stayed dirty, commit it now so
+    # the rebase has a clean tree (never reset --hard over an unsaved ledger).
+    CommitLedger
     & git fetch origin $Branch 2>$null
     & git rebase "origin/$Branch" 2>$null | Out-Null
     if ($LASTEXITCODE -ne 0) {
-        # Conflict or other rebase failure - abort cleanly. Tree was clean on
-        # entry (guarded above), so reset --hard here only discards the failed
-        # rebase state, never human work.
         & git rebase --abort 2>$null | Out-Null
         & git reset --hard "origin/$Branch" 2>$null | Out-Null
         return $false
     }
     return $true
+}
+
+# Commit (and best-effort push) the ledger on its own, so a NEEDS-HUMAN write
+# doesn't leave the tree dirty and deadlock SyncBranch. Audit entries becoming
+# their own commits is desirable - the ledger history is the autonomy audit log.
+# Failures are swallowed: a push race or offline moment must never kill the loop.
+function CommitLedger {
+    $ledgerDirty = (& git status --porcelain -- $ledger 2>$null)
+    if (-not $ledgerDirty) { return }
+    & git add -- $ledger 2>$null | Out-Null
+    & git commit -q -m "chore(watchdog): ledger entry" -- $ledger 2>$null | Out-Null
+    & git push origin $Branch 2>$null | Out-Null   # best-effort; SyncBranch reconciles next cycle
 }
 
 # Push the just-made commit, surviving the common race where another machine (or
@@ -296,6 +317,14 @@ while ($true) {
         # every frame of one 500 becomes its own "new signature" and burns a full
         # 600s Claude call apiece. Skip continuations outright.
         if ($line -match '^\s*(at\s+\w|Caused by:|\.\.\.\s+\d+\s+more|\.\.\.\s+\d+\s+common\s+frames)') { continue }
+        # A WARN line is, by definition, a handled/expected condition the app
+        # CHOSE to warn about (e.g. `oauth.google.verify_failed ParseException` =
+        # the verifier correctly rejecting a bad client token). It is NOT an
+        # unhandled failure, so it must never trigger an autonomous fix - even
+        # when its message text contains "Exception:". Skip WARN lines outright.
+        # (A genuine bug surfaces as an ERROR/FATAL line or an uncaught stacktrace,
+        # caught by the rules below; a WARN about an exception is the app working.)
+        if ($line -match '\bWARN\b') { continue }
         # Trigger only on a real error HEADER: an ERROR/FATAL log line, an actual
         # exception message, or OOM/Unexpected. Matching bare 'Exception' anywhere
         # caught the logger CLASS NAME 'GlobalExceptionHandler' on EVERY line it
