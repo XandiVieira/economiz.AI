@@ -275,6 +275,46 @@ function WaitForDeployAndHealth([int]$timeoutSec = 420) {
     return $false
 }
 
+# SELF-UPDATE: a watchdog that needs a manual restart to pick up its own bug
+# fixes is not truly autonomous. Once per cycle we check whether THIS script
+# changed on origin; if so we fast-forward and RELAUNCH ourselves with the same
+# args, then exit. The Scheduled Task / parent keeps no state, so a clean new
+# process running the new code takes over within one poll interval - no human
+# restart, ever. Guarded so a fetch/relaunch failure just logs and continues.
+$selfPath = $PSCommandPath
+$selfArgs = @()
+if ($DryRun)        { $selfArgs += '-DryRun' }
+$selfArgs += @('-MaxFixesPerHour', $MaxFixesPerHour, '-PollSeconds', $PollSeconds, '-Branch', $Branch)
+function SelfUpdateIfChanged {
+    try {
+        # Only act when the tree has no human edits (SyncBranch's guard) - reuse it.
+        & git fetch origin $Branch 2>$null
+        $localSha  = (& git rev-parse "HEAD:auto-fix-watchdog.ps1" 2>$null)
+        $remoteSha = (& git rev-parse "origin/${Branch}:auto-fix-watchdog.ps1" 2>$null)
+        if (-not $localSha -or -not $remoteSha -or $localSha -eq $remoteSha) { return }
+        # The script changed upstream. Don't clobber human edits: only update when
+        # the only non-ledger dirt is absent. CommitLedger first to keep tree clean.
+        CommitLedger
+        $ledgerRel = [regex]::Escape((Split-Path $ledger -Leaf))
+        $humanDirty = @(& git status --porcelain 2>$null | Where-Object { $_ -notmatch $ledgerRel })
+        if ($humanDirty.Count -gt 0) {
+            Log ("selfupdate.defer script changed upstream but {0} human change(s) present; will retry" -f $humanDirty.Count)
+            return
+        }
+        & git rebase "origin/$Branch" 2>$null | Out-Null
+        if ($LASTEXITCODE -ne 0) { & git rebase --abort 2>$null | Out-Null; & git reset --hard "origin/$Branch" 2>$null | Out-Null }
+        Log ("selfupdate.relaunch script changed ($localSha -> $remoteSha); restarting with new code")
+        # Detached relaunch so we can exit cleanly; the new process is independent.
+        Start-Process -FilePath "powershell.exe" `
+            -ArgumentList (@('-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File', $selfPath) + $selfArgs) `
+            -WindowStyle Hidden | Out-Null
+        Log "selfupdate.exit old process exiting; new code has taken over"
+        exit 0
+    } catch {
+        Log ("selfupdate.error {0}; continuing on current code" -f $_.Exception.Message)
+    }
+}
+
 Log ("watchdog.start dryRun={0} branch={1} maxFixesPerHour={2}" -f $DryRun, $Branch, $MaxFixesPerHour)
 
 $seen     = @{}
@@ -293,6 +333,11 @@ function IsTransient([string]$line) {
 }
 
 while ($true) {
+    # First thing each cycle: adopt our own latest code if it changed upstream.
+    # This is what makes the watchdog self-healing - my fixes to THIS script go
+    # live within one poll interval without any manual restart.
+    SelfUpdateIfChanged
+
     $cutoff = (Get-Date).AddHours(-1)
     $fixTimes = [System.Collections.ArrayList]@($fixTimes | Where-Object { $_ -gt $cutoff })
     if ($fixTimes.Count -ge $MaxFixesPerHour) {
