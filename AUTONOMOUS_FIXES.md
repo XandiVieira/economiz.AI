@@ -68,6 +68,20 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-06-08 11:24:12] FIX 8eaf286 - java.lang.IllegalArgumentException: -N
+- **Error snippet:**
+```r
+java.lang.IllegalArgumentException: -1
+at com.relyon.economizai.service.InsightsService.topMarkets(InsightsService.java:96)
+```
+- **Reproduced by:** `com.relyon.economizai.service.InsightsServiceTest#topMarkets_negativeLimit_returnsEmptyInsteadOfThrowing` (failed before fix, passes after)
+- **Root cause + fix:** All 12 tests pass, including the new reproduction test. The fix is verified: `topMarkets`/`topCategories` now clamp negative limits to 0 (returning an empty list) instead of throwing `IllegalArgumentException: -1`, matching the existing `Math.max(0, ...)` convention in `ConsumptionIntelligenceService`.
+
+FIXED com.relyon.economizai.service.InsightsServiceTest#topMarkets_negativeLimit_returnsEmptyInsteadOfThrowing | Root cause: `GET /api/v1/insights/markets/top?limit=-1` (and `/categories/top`) bound an unvalidated negative `int limit` that flowed into `Stream.limit(-1)`, throwing `IllegalArgumentException: -1`. Fix: clamp with `Math.max(0, limit)` in `InsightsService.topMarkets` and both `topCategories` branches.
+- **Build:** PASS (mvnw test, full suite)
+- **Deploy:** pushed 8eaf286 -> auto-deploy, health **UP**
+- **Outcome:** RESOLVED
+
 ### [2026-06-08 11:16:42] FIX 662454b - ERROR [    c.r.e.e.GlobalExceptionHandler - Unexpected error
 - **Status code:** 490
 - **Error snippet:**
@@ -185,6 +199,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
