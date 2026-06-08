@@ -68,6 +68,19 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-06-08 11:00:20] âš ï¸ NEEDS-HUMAN Â· NO-REPRO (attempt 1x) - org.springframework.http.converter.HttpMessageNotReadableExc
+- **Error snippet:**
+```r
+org.springframework.http.converter.HttpMessageNotReadableException: JSON parse error: Cannot deserialize value of type `com.relyon.economizai.model.enums.SubscriptionTier` from String "GOLD": not one of the values accepted for Enum class: [FREE, PRO]
+```
+- **Outcome:** could NOT reproduce the bug with a failing test; no code changed.
+- **Detail:** Test and production code are back to their original state. No changes made.
+
+The log line is the `GlobalExceptionHandler.handleNotReadable` WARN trace for an invalid enum value; the same code already returns a clean HTTP 400 and never invokes the service. I verified this empirically ÔÇö a repro test asserting any faulty (e.g. 5xx) behavior cannot fail, because the deserialization error for `"GOLD"` is already correctly mapped to 400. This is expected client-error handling, not a code bug.
+
+REPRO_FAIL Invalid SubscriptionTier "GOLD" already yields a correct 400 (GlobalExceptionHandler.handleNotReadable); the log WARN is by-design client-error handling, no faulty behavior to reproduce.
+- **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 ### [2026-06-08 10:56:53] FIX 309eb2a - org.springframework.web.bind.MissingServletRequestParameterE
 - **Error snippet:**
 ```r
@@ -127,6 +140,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
