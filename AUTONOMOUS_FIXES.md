@@ -68,6 +68,26 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-06-08 11:35:24] FIX aaf53d4 - ERROR [    c.r.e.e.GlobalExceptionHandler - Unexpected error
+- **Error snippet:**
+```r
+2026-06-08 13:23:36.220 ERROR [req=d05f6c30 user=xandivieira@outlook.com rcpt= item=] c.r.e.e.GlobalExceptionHandler - Unexpected error: org.springframework.web.bind.MissingServletRequestParameterException: Required request parameter 'description' for method parameter type List is not present
+```
+- **Reproduced by:** `com.relyon.economizai.integration.CategorizerClassifyMissingParamTest#classify_variantsThatCouldTriggerMissingParam_allReturnOk` (failed before fix, passes after)
+- **Root cause + fix:** All 8 tests pass (1 new integration repro + 7 existing controller tests). 
+
+Summary of what happened:
+- **Reproduced**: Wrote `CategorizerClassifyMissingParamTest` using a real servlet container (`RANDOM_PORT` + JDK `HttpClient`) ÔÇö the only path that surfaces this bug, since `@WebMvcTest`/MockMvc honors `defaultValue` and masks it. With the pre-fix annotation (`@RequestParam List<String>`), the test failed with the **exact** production error: `MissingServletRequestParameterException: Required request parameter 'description' for method parameter type List is not present`.
+- **Root cause**: `@RequestParam List<String> description` on `/classify` (and `/ml/predict`) had no `required=false`/`defaultValue`, so an absent `description` param threw a 400/500 instead of treating it as empty.
+- **Fix**: `@RequestParam(required = false, defaultValue = "")` makes the param optional, yielding `200` + `[]`. This fix was already present in the working tree (commit `309eb2a`) but had only been verified via MockMvc, which couldn't actually catch the bug; my integration test now genuinely guards it.
+
+The `/ml/predict` sibling already carried the same fix and is covered by the variant probe in the test.
+
+FIXED com.relyon.economizai.integration.CategorizerClassifyMissingParamTest#classify_variantsThatCouldTriggerMissingParam_allReturnOk | Root cause: GET /api/v1/categorizer/classify declared `@RequestParam List<String> description` with no optionality, so an absent param threw MissingServletRequestParameterException (only reproducible via a real servlet container, not @WebMvcTest); fix makes it `@RequestParam(required = false, defaultValue = "")` so a missing param yields 200 + empty list.
+- **Build:** PASS (mvnw test, full suite)
+- **Deploy:** pushed aaf53d4 -> auto-deploy, health **UP**
+- **Outcome:** RESOLVED
+
 ### [2026-06-08 11:24:12] FIX 8eaf286 - java.lang.IllegalArgumentException: -N
 - **Error snippet:**
 ```r
@@ -199,6 +219,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
