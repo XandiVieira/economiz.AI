@@ -117,6 +117,16 @@ class ItemControllerTest {
     }
 
     @Test
+    void list_invalidCategoryEnum_returns400() throws Exception {
+        mockMvc.perform(get("/api/v1/items")
+                        .param("category", "BOGUS")
+                        .with(SecurityMockMvcRequestPostProcessors.user(principal())))
+                .andExpect(status().isBadRequest());
+
+        verify(itemQueryService, never()).query(any(User.class), any(ItemFilters.class), any(Pageable.class));
+    }
+
+    @Test
     void list_passesPaginationAndFilters() throws Exception {
         Page<PurchasedItemResponse> empty = new PageImpl<>(List.of(), Pageable.ofSize(5), 0);
         when(itemQueryService.query(any(User.class), any(ItemFilters.class), any(Pageable.class)))
