@@ -165,6 +165,26 @@ class HouseholdProductServiceTest {
     }
 
     @Test
+    void productMarkets_communityMedianRoundedToTwoDecimals() {
+        var product = product("Leite");
+        when(productRepository.findById(product.getId())).thenReturn(Optional.of(product));
+        when(receiptItemRepository.findHouseholdHistoryForProduct(product.getId(), HOUSEHOLD_ID))
+                .thenReturn(List.of());
+        when(marketLocationService.findByCnpjs(any())).thenReturn(Map.of());
+        when(watchedMarketService.watchedCnpjs(user)).thenReturn(Set.of());
+        // A scale-4 median (5.3350) must be rounded HALF_UP to 5.34 in the response.
+        when(priceIndexService.bestMarkets(eq(product.getId()), anyInt(), any(), any(), isNull(), any()))
+                .thenReturn(List.of(new MarketPriceRow(CNPJ_NACIONAL, "99887766", "Nacional",
+                        new BigDecimal("5.3350"), new BigDecimal("3.50"), 5, 3L, 2.0, false)));
+
+        var result = service.productMarkets(user, product.getId(), false, null);
+
+        assertEquals(1, result.size());
+        assertEquals(new BigDecimal("5.34"), result.get(0).price());
+        assertEquals(2, result.get(0).price().scale());
+    }
+
+    @Test
     void productMarkets_friendlyNameReflectsOverride() {
         var product = product("Leite");
         when(productRepository.findById(product.getId())).thenReturn(Optional.of(product));

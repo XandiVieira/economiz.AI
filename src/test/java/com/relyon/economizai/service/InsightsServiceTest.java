@@ -201,10 +201,12 @@ class InsightsServiceTest {
                         new Object[]{leite, ProductCategory.MEAT_DAIRY, new BigDecimal("10.00"), 2L},
                         new Object[]{arroz, ProductCategory.GROCERIES, new BigDecimal("30.00"), 3L},
                         new Object[]{sabao, ProductCategory.CLEANING, new BigDecimal("5.00"), 1L}));
-        when(categoryOverrideService.overridesByProduct(eq(householdId),
+        var customId = UUID.randomUUID();
+        when(categoryOverrideService.overrideKeysByProduct(eq(householdId),
                 any())).thenReturn(Map.of(
-                        leite, "GROCERIES",
-                        sabao, "Produtos de Limpeza"));
+                        leite, new HouseholdProductCategoryOverrideService.OverrideKey("enum:GROCERIES", "GROCERIES"),
+                        sabao, new HouseholdProductCategoryOverrideService.OverrideKey(
+                                "custom:" + customId, "Produtos de Limpeza")));
 
         var buckets = insightsService.topCategories(user, null, null, 10, CategoryView.HOUSEHOLD);
 
@@ -223,13 +225,40 @@ class InsightsServiceTest {
     }
 
     @Test
+    void topCategories_householdLens_customCategoryNamedLikeEnum_doesNotMergeWithEnumBucket() {
+        var user = buildUser();
+        var householdId = user.getHousehold().getId();
+        var arroz = UUID.randomUUID();   // global OTHER, no override
+        var sabao = UUID.randomUUID();   // moved into a custom category literally named "OTHER"
+        var customId = UUID.randomUUID();
+        when(insightsRepository.spendByProduct(householdId, EPOCH_FLOOR, EPOCH_CEIL))
+                .thenReturn(List.<Object[]>of(
+                        new Object[]{arroz, ProductCategory.OTHER, new BigDecimal("12.00"), 2L},
+                        new Object[]{sabao, ProductCategory.CLEANING, new BigDecimal("7.00"), 1L}));
+        when(categoryOverrideService.overrideKeysByProduct(eq(householdId), any()))
+                .thenReturn(Map.of(sabao,
+                        new HouseholdProductCategoryOverrideService.OverrideKey("custom:" + customId, "OTHER")));
+
+        var buckets = insightsService.topCategories(user, null, null, 10, CategoryView.HOUSEHOLD);
+
+        // Two distinct buckets despite both labeled "OTHER": the enum one (12.00) and
+        // the custom one (7.00) must NOT merge into a single 19.00 bucket.
+        var labeledOther = buckets.stream().filter(b -> "OTHER".equals(b.label())).toList();
+        assertEquals(2, labeledOther.size());
+        var enumBucket = labeledOther.stream().filter(b -> b.category() == ProductCategory.OTHER).findFirst().orElseThrow();
+        var customBucket = labeledOther.stream().filter(b -> b.category() == null).findFirst().orElseThrow();
+        assertEquals(0, new BigDecimal("12.00").compareTo(enumBucket.total()));
+        assertEquals(0, new BigDecimal("7.00").compareTo(customBucket.total()));
+    }
+
+    @Test
     void topCategories_householdLens_isTheDefault() {
         var user = buildUser();
         var householdId = user.getHousehold().getId();
         var arroz = UUID.randomUUID();
         when(insightsRepository.spendByProduct(householdId, EPOCH_FLOOR, EPOCH_CEIL))
                 .thenReturn(List.<Object[]>of(new Object[]{arroz, ProductCategory.GROCERIES, new BigDecimal("30.00"), 3L}));
-        when(categoryOverrideService.overridesByProduct(eq(householdId), any())).thenReturn(Map.of());
+        when(categoryOverrideService.overrideKeysByProduct(eq(householdId), any())).thenReturn(Map.of());
 
         var buckets = insightsService.topCategories(user, null, null, 10);
 

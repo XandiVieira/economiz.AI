@@ -25,11 +25,11 @@ overflowed the DB column. Now the CNPJ is normalized (formatting like
 14 digits returns **400 `market.cnpj.invalid`**. **FE action:** none, unless you
 were sending formatted/invalid CNPJs — those now get a clean 400.
 
-## 2026-06-07 — PRO tier enforced: paywall gates, 402, admin set-tier, billing webhook
+## 2026-06-07 — PRO tier mechanism (gates DORMANT by default), admin set-tier, billing webhook
 
-The FREE/PRO subscription tier (`User.subscriptionTier`) is now **enforced** end-to-end through a single `SubscriptionGateService`. New **HTTP 402 `subscription.upgrade_required`** error when a FREE user hits a PRO gate (body: standard error shape; message arg = the gated feature name).
+The FREE/PRO subscription tier (`User.subscriptionTier`) has a complete gating mechanism behind a single `SubscriptionGateService` — but **enforcement is OFF by default** (`SUBSCRIPTION_ENFORCE=false`). **Nothing is gated today: every feature is allowed for all users.** There are **no 402s** and no history/limit clamps until monetization launches; flip `SUBSCRIPTION_ENFORCE=true` to activate the caps below. When enforced, a FREE user hitting a PRO gate gets **HTTP 402 `subscription.upgrade_required`**.
 
-**Gates now active (FREE limits; PRO = unlimited):**
+**Gates when enforcement is ON (FREE limits; PRO = unlimited):**
 - **Watched markets** — FREE pins up to **3** markets. Pinning a 4th → 402. Unpin / re-pin of an existing one is always allowed.
 - **Receipt uploads** — FREE may submit **5 receipts per calendar month** (counts ALL statuses to prevent reject/resubmit gaming). The 6th `POST /receipts` → 402.
 - **History window** — FREE analytics/history is clamped to the last **90 days**. Affects `GET /insights/spend`, `/insights/query`, `/insights/categories|markets/top`, `/insights/products/{id}/price-history`, and `GET /items`: a `from` older than 90d (or omitted) is silently floored. PRO unaffected. (No error — results are just windowed.)
@@ -38,9 +38,9 @@ The FREE/PRO subscription tier (`User.subscriptionTier`) is now **enforced** end
 
 **New endpoints:**
 - `PUT /api/v1/admin/users/{id}/subscription-tier` (ADMIN) — body `{ "tier": "PRO" | "FREE" }`; returns the admin user detail. PRO activates a manual subscription, FREE cancels it.
-- `POST /api/v1/webhooks/subscription` (public; provider-agnostic) — body `{ "userEmail", "action": "ACTIVATE"|"CANCEL", "provider", "providerRef", "currentPeriodEnd" }`. Verified by the `X-Webhook-Secret` header against `economizai.billing.webhook-secret` (empty in dev = check skipped; wrong/missing when set → 401). This is the seam a real payment provider (Stripe / Mercado Pago) maps its webhook onto.
+- `POST /api/v1/webhooks/subscription` (public; provider-agnostic) — body `{ "userEmail", "action": "ACTIVATE"|"CANCEL", "provider", "providerRef", "currentPeriodEnd" }`. Verified by the `X-Webhook-Secret` header against `economizai.billing.webhook-secret` (**fails closed**: when the secret is unset the webhook rejects everything; wrong secret → 401; constant-time compare; unknown user → 200 no-op). This is the seam a real payment provider (Stripe / Mercado Pago) maps its webhook onto.
 
-**Heads-up for FE:** handle **402** as "show upgrade prompt" (distinct from 403 forbidden). FREE dashboards will show at most 90 days even if a wider range is requested.
+**Heads-up for FE:** today nothing is gated (enforcement off) — no 402s, full history for everyone. Build the **402 → "show upgrade prompt"** handling now (distinct from 403) so the FE is ready when enforcement flips on; at that point FREE dashboards will window to 90 days.
 
 ## 2026-06-07 — Category lens: one product = one category, household vs global view
 

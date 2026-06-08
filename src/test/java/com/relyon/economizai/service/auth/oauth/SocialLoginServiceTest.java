@@ -149,6 +149,65 @@ class SocialLoginServiceTest {
     }
 
     @Test
+    void loginWithGoogle_unverifiedEmailMatchingLocalAccount_rejectedAndNotLinked() {
+        var local = User.builder()
+                .id(UUID.randomUUID())
+                .name("Maria")
+                .email("maria@example.com")
+                .password("encoded")
+                .authProvider(AuthProvider.LOCAL)
+                .build();
+        when(googleTokenVerifier.verify("id-token"))
+                .thenReturn(new GoogleTokenVerifier.GoogleClaims("sub-1", "maria@example.com", false, "Maria"));
+        when(userRepository.findByAuthProviderAndProviderSubject(AuthProvider.GOOGLE, "sub-1"))
+                .thenReturn(Optional.empty());
+        when(userRepository.findByEmail("maria@example.com")).thenReturn(Optional.of(local));
+
+        assertThrows(InvalidOAuthTokenException.class,
+                () -> socialLoginService.loginWithGoogle(new GoogleLoginRequest("id-token")));
+
+        assertEquals(AuthProvider.LOCAL, local.getAuthProvider());
+        assertNull(local.getProviderSubject());
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void loginWithApple_unverifiedEmailMatchingLocalAccount_rejectedAndNotLinked() {
+        var local = User.builder()
+                .id(UUID.randomUUID())
+                .name("Joao")
+                .email("joao@example.com")
+                .password("encoded")
+                .authProvider(AuthProvider.LOCAL)
+                .build();
+        when(appleTokenVerifier.verify("identity-token", "Joao"))
+                .thenReturn(new AppleTokenVerifier.AppleClaims("apple-sub-1", "joao@example.com", false, "Joao"));
+        when(userRepository.findByAuthProviderAndProviderSubject(AuthProvider.APPLE, "apple-sub-1"))
+                .thenReturn(Optional.empty());
+        when(userRepository.findByEmail("joao@example.com")).thenReturn(Optional.of(local));
+
+        assertThrows(InvalidOAuthTokenException.class,
+                () -> socialLoginService.loginWithApple(new AppleLoginRequest("identity-token", "Joao")));
+
+        assertEquals(AuthProvider.LOCAL, local.getAuthProvider());
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void loginWithGoogle_newUserWithNullEmail_rejected() {
+        when(googleTokenVerifier.verify("id-token"))
+                .thenReturn(new GoogleTokenVerifier.GoogleClaims("sub-1", null, true, "Maria"));
+        when(userRepository.findByAuthProviderAndProviderSubject(AuthProvider.GOOGLE, "sub-1"))
+                .thenReturn(Optional.empty());
+
+        assertThrows(InvalidOAuthTokenException.class,
+                () -> socialLoginService.loginWithGoogle(new GoogleLoginRequest("id-token")));
+
+        verify(userRepository, never()).save(any(User.class));
+        verify(householdService, never()).createSoloHousehold();
+    }
+
+    @Test
     void loginWithGoogle_blankSubject_rejected() {
         when(googleTokenVerifier.verify("id-token"))
                 .thenReturn(new GoogleTokenVerifier.GoogleClaims("", "maria@example.com", true, "Maria"));
@@ -160,7 +219,7 @@ class SocialLoginServiceTest {
     @Test
     void loginWithApple_newUser_usesForwardedNameAndCreatesUser() {
         when(appleTokenVerifier.verify("identity-token", "Joao"))
-                .thenReturn(new AppleTokenVerifier.AppleClaims("apple-sub-1", "joao@example.com", "Joao"));
+                .thenReturn(new AppleTokenVerifier.AppleClaims("apple-sub-1", "joao@example.com", true, "Joao"));
         when(userRepository.findByAuthProviderAndProviderSubject(AuthProvider.APPLE, "apple-sub-1"))
                 .thenReturn(Optional.empty());
         when(userRepository.findByEmail("joao@example.com")).thenReturn(Optional.empty());
@@ -190,7 +249,7 @@ class SocialLoginServiceTest {
     @Test
     void loginWithApple_newUserWithoutName_fallsBackToDefault() {
         when(appleTokenVerifier.verify("identity-token", null))
-                .thenReturn(new AppleTokenVerifier.AppleClaims("apple-sub-2", "joao2@example.com", null));
+                .thenReturn(new AppleTokenVerifier.AppleClaims("apple-sub-2", "joao2@example.com", true, null));
         when(userRepository.findByAuthProviderAndProviderSubject(AuthProvider.APPLE, "apple-sub-2"))
                 .thenReturn(Optional.empty());
         when(userRepository.findByEmail("joao2@example.com")).thenReturn(Optional.empty());

@@ -18,6 +18,12 @@ import java.time.LocalDateTime;
  * <p>PRO allows everything. FREE is allowed only the features that aren't gated;
  * the typed limit helpers expose the numeric caps (watched markets, history
  * window, monthly receipts) so callers enforce them consistently.
+ *
+ * <p><strong>Enforcement is OFF by default</strong>
+ * ({@code economizai.subscription.enforce=false}). While off, every call here
+ * behaves as if the user were PRO — nothing is blocked, no cap applies — so the
+ * paywall is fully dormant but the wiring stays in place. Flip the flag (env
+ * {@code SUBSCRIPTION_ENFORCE=true}) to turn the FREE caps on.
  */
 @Slf4j
 @Service
@@ -26,9 +32,9 @@ public class SubscriptionGateService {
 
     private final CollaborativeProperties properties;
 
-    /** True when the user's tier grants the feature. PRO → always true. */
+    /** True when the user's tier grants the feature. Enforcement off or PRO → always true. */
     public boolean allows(User user, Feature feature) {
-        if (isPro(user)) return true;
+        if (unlimited(user)) return true;
         // FREE users are blocked from every PRO-gated feature. The numeric
         // caps (watched markets, receipts, history) are enforced by the
         // dedicated limit helpers below, not by allows().
@@ -44,19 +50,19 @@ public class SubscriptionGateService {
         }
     }
 
-    /** Max pinned watched markets: FREE = config, PRO = unlimited. */
+    /** Max pinned watched markets: FREE = config, PRO/enforcement-off = unlimited. */
     public int watchedMarketLimit(User user) {
-        return isPro(user) ? Integer.MAX_VALUE : free().getWatchedMarkets();
+        return unlimited(user) ? Integer.MAX_VALUE : free().getWatchedMarkets();
     }
 
-    /** FREE rolling history window in days; null for PRO (unlimited). */
+    /** FREE rolling history window in days; null for PRO/enforcement-off (unlimited). */
     public Integer freeHistoryWindowDays(User user) {
-        return isPro(user) ? null : free().getHistoryDays();
+        return unlimited(user) ? null : free().getHistoryDays();
     }
 
-    /** Max receipt submissions per calendar month: FREE = config, PRO = unlimited. */
+    /** Max receipt submissions per calendar month: FREE = config, PRO/enforcement-off = unlimited. */
     public int monthlyReceiptLimit(User user) {
-        return isPro(user) ? Integer.MAX_VALUE : free().getMonthlyReceipts();
+        return unlimited(user) ? Integer.MAX_VALUE : free().getMonthlyReceipts();
     }
 
     /**
@@ -71,6 +77,11 @@ public class SubscriptionGateService {
         var floor = LocalDateTime.now().minusDays(windowDays);
         if (requestedFrom == null || requestedFrom.isBefore(floor)) return floor;
         return requestedFrom;
+    }
+
+    /** No cap applies when enforcement is off (paywall dormant) or the user is PRO. */
+    private boolean unlimited(User user) {
+        return !properties.getSubscription().isEnforce() || isPro(user);
     }
 
     private boolean isPro(User user) {

@@ -11,8 +11,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.Date;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
@@ -55,6 +57,34 @@ class AppleTokenVerifierTest {
         assertEquals("apple-sub-1", claims.subject());
         assertEquals("joao@example.com", claims.email());
         assertEquals("Joao", claims.name());
+    }
+
+    @Test
+    void verify_emailVerifiedBooleanClaim_isThreaded() {
+        var token = tokens.sign(baseClaims().claim("email_verified", true).build());
+
+        assertTrue(verifier(CLIENT_ID).verify(token, "Joao").emailVerified());
+    }
+
+    @Test
+    void verify_emailVerifiedStringTrueClaim_isThreaded() {
+        var token = tokens.sign(baseClaims().claim("email_verified", "true").build());
+
+        assertTrue(verifier(CLIENT_ID).verify(token, "Joao").emailVerified());
+    }
+
+    @Test
+    void verify_emailVerifiedFalseClaim_isThreaded() {
+        var token = tokens.sign(baseClaims().claim("email_verified", false).build());
+
+        assertFalse(verifier(CLIENT_ID).verify(token, "Joao").emailVerified());
+    }
+
+    @Test
+    void verify_emailVerifiedAbsent_defaultsToTrue() {
+        var token = tokens.sign(baseClaims().build());
+
+        assertTrue(verifier(CLIENT_ID).verify(token, "Joao").emailVerified());
     }
 
     @Test

@@ -1,7 +1,6 @@
 package com.relyon.economizai.controller;
 
 import com.relyon.economizai.config.SecurityConfig;
-import com.relyon.economizai.exception.UserNotFoundException;
 import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.repository.UserRepository;
@@ -103,14 +102,17 @@ class SubscriptionWebhookControllerTest {
     }
 
     @Test
-    void unknownUser_returns404() throws Exception {
+    void unknownUser_isNoOp200_doesNotTouchService() throws Exception {
         when(userRepository.findByEmail("u@test.com")).thenReturn(Optional.empty());
 
         mockMvc.perform(post("/api/v1/webhooks/subscription")
                         .header("X-Webhook-Secret", "topsecret")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(BODY_ACTIVATE))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isOk());
+
+        verify(subscriptionService, never()).activatePro(any(), any(), any(), any());
+        verify(subscriptionService, never()).cancel(any());
     }
 
     @Test

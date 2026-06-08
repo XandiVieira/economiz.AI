@@ -58,5 +58,16 @@ public class HouseholdProductCategoryOverride extends BaseEntity {
         if (customCategory != null) return customCategory.getName();
         return category != null ? category.name() : null;
     }
+
+    /**
+     * A discriminated bucket key that never collides across the custom/enum spaces:
+     * {@code "custom:<id>"} for a custom category, {@code "enum:<name>"} for an enum.
+     * Two different categories that happen to share a display label (e.g. a custom
+     * category literally named "OTHER") therefore stay in separate buckets.
+     */
+    public String effectiveKey() {
+        if (customCategory != null) return "custom:" + customCategory.getId();
+        return category != null ? "enum:" + category.name() : null;
+    }
 }
 

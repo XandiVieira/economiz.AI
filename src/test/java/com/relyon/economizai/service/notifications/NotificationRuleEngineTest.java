@@ -32,6 +32,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -228,6 +229,33 @@ class NotificationRuleEngineTest {
     }
 
     // ---- PROMO_COMMUNITY ----
+
+    @Test
+    void communityDefault_firesOnceWhenTwoProductsBoughtOnSameReceipt() {
+        var owner = owner(null, null);
+        var rule = defaultRule(NotificationType.PROMO_COMMUNITY, null, owner);
+        var secondProductId = UUID.randomUUID();
+        var secondProduct = Product.builder().id(secondProductId).normalizedName("Café").build();
+
+        when(ruleRepository.findActiveProductRules(any(), any())).thenReturn(List.of());
+        lenient().when(marketLocationService.findByCnpjs(any())).thenReturn(Map.of());
+        // The SAME single rule is returned for both products (the user has one default rule).
+        when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(eq(NotificationType.PROMO_COMMUNITY), any()))
+                .thenReturn(List.of(rule));
+        when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(eq(NotificationType.CHEAPER_MARKET), any()))
+                .thenReturn(List.of());
+
+        var promoForFirst = promoObservation(new BigDecimal("3.99"));
+        var promoForSecond = PriceObservation.builder()
+                .product(secondProduct).marketCnpj(CNPJ).marketCnpjRoot("12345678")
+                .marketName("Zaffari").unitPrice(new BigDecimal("8.00")).quantity(BigDecimal.ONE)
+                .promoFlag(true).observedAt(LocalDateTime.now()).build();
+
+        engine.evaluate(List.of(promoForFirst, promoForSecond), CONTRIBUTOR_HOUSEHOLD);
+
+        // Despite two products matching the same rule, the rule fires exactly once.
+        verify(notificationService, times(1)).notify(any());
+    }
 
     @Test
     void promoCommunity_firesWhenObservationFlaggedPromo() {

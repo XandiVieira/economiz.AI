@@ -17,7 +17,9 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.time.format.TextStyle;
 import java.util.ArrayList;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -62,9 +64,11 @@ public class BudgetMonitorService {
 
     private void notify(NotificationRule rule, BigDecimal spend) {
         var title = "Orçamento do mês atingido";
+        var monthName = LocalDate.now().getMonth()
+                .getDisplayName(TextStyle.FULL, Locale.forLanguageTag("pt-BR"));
         var body = String.format(
                 "Seu domicílio já gastou R$ %s em %s, atingindo o limite de R$ %s que você definiu.",
-                spend, LocalDate.now().getMonth(), rule.getThresholdPrice());
+                spend, monthName, rule.getThresholdPrice());
         notificationService.notify(new NotificationPayload(
                 rule.getUser(), NotificationType.BUDGET, title, body,
                 Map.of(

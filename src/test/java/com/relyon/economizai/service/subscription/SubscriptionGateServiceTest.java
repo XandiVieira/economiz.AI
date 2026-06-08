@@ -23,8 +23,27 @@ class SubscriptionGateServiceTest {
     @BeforeEach
     void setUp() {
         var properties = new CollaborativeProperties();
-        // defaults: watchedMarkets=3, historyDays=90, monthlyReceipts=5
+        // Enforcement is OFF by default (paywall dormant); these tests exercise the
+        // ENFORCED behavior, so turn it on. free defaults: watchedMarkets=3, historyDays=90, monthlyReceipts=5
+        properties.getSubscription().setEnforce(true);
         gate = new SubscriptionGateService(properties);
+    }
+
+    @Test
+    void enforcementOff_allowsEverythingForFreeUsers() {
+        var properties = new CollaborativeProperties(); // enforce defaults to false
+        var dormant = new SubscriptionGateService(properties);
+        var free = user(SubscriptionTier.FREE);
+
+        for (var feature : Feature.values()) {
+            assertTrue(dormant.allows(free, feature), "dormant gate should allow " + feature);
+        }
+        assertEquals(Integer.MAX_VALUE, dormant.watchedMarketLimit(free));
+        assertEquals(Integer.MAX_VALUE, dormant.monthlyReceiptLimit(free));
+        assertNull(dormant.freeHistoryWindowDays(free));
+        var old = LocalDateTime.now().minusYears(3);
+        assertEquals(old, dormant.clampFrom(free, old));
+        dormant.require(free, Feature.BASKET_OPTIMIZATION); // no exception
     }
 
     private User user(SubscriptionTier tier) {

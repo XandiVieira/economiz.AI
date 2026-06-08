@@ -860,9 +860,15 @@ the register request.
 
 Every user has a `subscriptionTier` (`FREE` default, or `PRO`), exposed on
 `UserResponse` and admin user views. All paywall decisions go through one
-gating service — gates below are **enforced**.
+gating service.
 
-**What's gated (FREE limit → PRO):**
+> **Enforcement is OFF by default** (`SUBSCRIPTION_ENFORCE=false`). Right now
+> **nothing is gated — every feature is allowed for all users** (no 402s, full
+> history). The table below is the behavior **once enforcement is enabled**
+> (set `SUBSCRIPTION_ENFORCE=true` at monetization launch). Build the FE's
+> 402-handling now so it's ready.
+
+**What's gated when enforcement is ON (FREE limit → PRO):**
 
 | Capability | FREE | PRO | Enforcement |
 | --- | --- | --- | --- |

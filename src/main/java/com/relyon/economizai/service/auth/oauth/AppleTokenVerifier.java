@@ -42,14 +42,27 @@ public class AppleTokenVerifier {
                 .toList();
     }
 
-    public record AppleClaims(String subject, String email, String name) {}
+    public record AppleClaims(String subject, String email, boolean emailVerified, String name) {}
 
     public AppleClaims verify(String identityToken, String name) {
         var claims = parseAndVerifySignature(identityToken);
         validateIssuer(claims);
         validateExpiry(claims);
         validateAudience(claims);
-        return new AppleClaims(claims.getSubject(), getString(claims, "email"), name);
+        return new AppleClaims(claims.getSubject(), getString(claims, "email"),
+                emailVerified(claims), name);
+    }
+
+    /**
+     * Apple sends {@code email_verified} as a boolean or the string "true". When the
+     * claim is absent we default to true — Apple verifies the addresses it issues
+     * (including private relay addresses).
+     */
+    private static boolean emailVerified(JWTClaimsSet claims) {
+        var raw = claims.getClaim("email_verified");
+        if (raw == null) return true;
+        if (raw instanceof Boolean bool) return bool;
+        return "true".equalsIgnoreCase(raw.toString());
     }
 
     private JWTClaimsSet parseAndVerifySignature(String identityToken) {

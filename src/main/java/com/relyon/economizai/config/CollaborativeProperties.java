@@ -24,8 +24,17 @@ public class CollaborativeProperties {
      * changes. PRO bypasses all of these (treated as unlimited).
      */
     public static class Subscription {
+        /**
+         * Master paywall switch. When false (the default), gating is DORMANT —
+         * every feature is allowed for every user regardless of tier; the
+         * mechanism stays wired so it can be turned on later by setting
+         * {@code SUBSCRIPTION_ENFORCE=true}. When true, FREE caps below apply.
+         */
+        private boolean enforce = false;
         private final Free free = new Free();
 
+        public boolean isEnforce() { return enforce; }
+        public void setEnforce(boolean v) { this.enforce = v; }
         public Free getFree() { return free; }
 
         public static class Free {

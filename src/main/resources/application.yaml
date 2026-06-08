@@ -66,6 +66,9 @@ economizai:
         # need a dedicated adapter — the SVRS URL won't serve their cupons.
         states: ${SEFAZ_SVRS_STATES:RS}
   subscription:
+    # Master paywall switch. OFF by default — every feature is allowed for all users
+    # and the FREE caps below are dormant. Set SUBSCRIPTION_ENFORCE=true to turn paywalls on.
+    enforce: ${SUBSCRIPTION_ENFORCE:false}
     free:
       watched-markets: 3                       # FREE: max pinned markets (PRO unlimited)
       history-days: 90                         # FREE: rolling analytics/history window (PRO unlimited)

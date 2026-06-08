@@ -49,7 +49,7 @@ public interface ReceiptItemRepository extends JpaRepository<ReceiptItem, UUID> 
           AND r.household.id = :householdId
           AND r.status = 'CONFIRMED'
           AND ri.excluded = false
-        ORDER BY r.issuedAt ASC
+        ORDER BY r.issuedAt ASC NULLS FIRST
     """)
     List<ReceiptItem> findHouseholdHistoryForProduct(@Param("productId") UUID productId,
                                                      @Param("householdId") UUID householdId);
@@ -64,7 +64,7 @@ public interface ReceiptItemRepository extends JpaRepository<ReceiptItem, UUID> 
           AND r.status = 'CONFIRMED'
           AND ri.product IS NOT NULL
           AND ri.excluded = false
-        ORDER BY r.issuedAt ASC, ri.lineNumber ASC
+        ORDER BY r.issuedAt ASC NULLS FIRST, ri.lineNumber ASC
     """)
     List<ReceiptItem> findConfirmedHistoryForHousehold(@Param("householdId") UUID householdId);
 }

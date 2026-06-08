@@ -10,6 +10,23 @@ mirror entries here.
 
 ---
 
+## Billing webhook fails closed without a secret
+- **Now**: `SubscriptionWebhookController` rejects ALL calls when `economizai.billing.webhook-secret` (`BILLING_WEBHOOK_SECRET`) is blank — the webhook is disabled until a secret is set. Comparison is constant-time.
+- **Why OK for dev**: dev grants PRO via the admin set-tier endpoint, so the webhook isn't needed locally.
+- **Before prod**: set `BILLING_WEBHOOK_SECRET` (and point the provider at the webhook) or paid activations silently 401.
+
+## LGPD data-export is incomplete
+- **Now**: `UserService.exportData` covers the core account/receipt data but OMITS notification rules, watched markets, subscription, push token, manual purchases, and household market aliases / custom categories / category overrides.
+- **Why OK for dev**: no real right-of-access requests yet.
+- **Before prod**: extend `exportData` to include those entities for a complete, defensible LGPD export. ~half a day.
+
+## `bestMarkets` k-anon count is an N+1
+- **Now**: the distinct-household k-anonymity count is queried per market in `bestMarkets`.
+- **Why OK for dev**: small market counts, low traffic.
+- **Before prod / at scale**: batch the distinct-household counts into a single query. ~1-2 hr.
+
+---
+
 ## Social login (Google/Apple): audience check skipped until client IDs are set
 - **Now**: `POST /api/v1/auth/google` and `/auth/apple` verify the provider token's signature (RS256 via the provider JWKS), issuer, and expiry. The **audience (`aud`) check only runs when `GOOGLE_OAUTH_CLIENT_IDS` / `APPLE_OAUTH_CLIENT_IDS` are configured**; when empty (dev default) it's skipped with a WARN.
 - **Why OK for dev**: signature+issuer+expiry still prove the token is a genuine, current Google/Apple token. Fine for local testing.

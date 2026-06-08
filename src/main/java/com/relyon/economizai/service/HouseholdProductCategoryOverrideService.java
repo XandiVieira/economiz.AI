@@ -75,4 +75,22 @@ public class HouseholdProductCategoryOverrideService {
                 .filter(override -> override.effectiveLabel() != null)
                 .collect(Collectors.toMap(o -> o.getProduct().getId(), HouseholdProductCategoryOverride::effectiveLabel));
     }
+
+    /**
+     * Map of productId → effective category KEY+LABEL for a household. The key is
+     * discriminated ({@code custom:<id>} / {@code enum:<name>}) so spend-bucket
+     * accumulators never merge a custom category with an enum that shares its label.
+     */
+    @Transactional(readOnly = true)
+    public Map<UUID, OverrideKey> overrideKeysByProduct(UUID householdId, List<UUID> productIds) {
+        if (productIds.isEmpty()) return Map.of();
+        return overrideRepository.findByHouseholdIdAndProductIdIn(householdId, productIds).stream()
+                .filter(override -> override.effectiveKey() != null)
+                .collect(Collectors.toMap(
+                        override -> override.getProduct().getId(),
+                        override -> new OverrideKey(override.effectiveKey(), override.effectiveLabel())));
+    }
+
+    /** A product's effective category as a discriminated key plus its display label. */
+    public record OverrideKey(String key, String label) {}
 }

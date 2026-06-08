@@ -154,16 +154,23 @@ public class NotificationRuleEngine {
                                                              UUID contributingHouseholdId,
                                                              LocalDateTime now) {
         var byProduct = observations.stream().collect(Collectors.groupingBy(o -> o.getProduct().getId()));
+        // Shared across products: a user's single default rule must fire at most once
+        // even when they bought several products on the same receipt (the cooldown isn't
+        // persisted within this evaluation, so we dedup by rule id in-memory).
+        var firedRuleIds = new HashSet<UUID>();
         var fired = new ArrayList<NotificationRule>();
         for (var entry : byProduct.entrySet()) {
-            fired.addAll(firePromoCommunity(entry.getKey(), entry.getValue(), contributingHouseholdId, now));
-            fired.addAll(fireCheaperMarket(entry.getKey(), entry.getValue(), locations, contributingHouseholdId, now));
+            fired.addAll(firePromoCommunity(entry.getKey(), entry.getValue(),
+                    contributingHouseholdId, now, firedRuleIds));
+            fired.addAll(fireCheaperMarket(entry.getKey(), entry.getValue(), locations,
+                    contributingHouseholdId, now, firedRuleIds));
         }
         return fired;
     }
 
     private List<NotificationRule> firePromoCommunity(UUID productId, List<PriceObservation> observations,
-                                                      UUID contributingHouseholdId, LocalDateTime now) {
+                                                      UUID contributingHouseholdId, LocalDateTime now,
+                                                      Set<UUID> firedRuleIds) {
         var promo = observations.stream()
                 .filter(PriceObservation::isPromoFlag)
                 .min(Comparator.comparing(PriceObservation::getUnitPrice))
@@ -173,6 +180,7 @@ public class NotificationRuleEngine {
         var owners = ruleRepository.findActiveDefaultRuleOwnersWhoBought(NotificationType.PROMO_COMMUNITY, productId);
         var fired = new ArrayList<NotificationRule>();
         for (var rule : owners) {
+            if (firedRuleIds.contains(rule.getId())) continue;
             if (sameHousehold(rule, contributingHouseholdId) || inCooldown(rule, now)) continue;
             var productName = promo.getProduct().getNormalizedName();
             notificationService.notify(new NotificationPayload(
@@ -182,6 +190,7 @@ public class NotificationRuleEngine {
                             productName, promo.getUnitPrice(), friendlyMarketName(rule, promo)),
                     baseExtras(rule, promo)));
             rule.setLastFiredAt(now);
+            firedRuleIds.add(rule.getId());
             fired.add(rule);
         }
         return fired;
@@ -195,12 +204,14 @@ public class NotificationRuleEngine {
      */
     private List<NotificationRule> fireCheaperMarket(UUID productId, List<PriceObservation> observations,
                                                      Map<String, MarketLocation> locations,
-                                                     UUID contributingHouseholdId, LocalDateTime now) {
+                                                     UUID contributingHouseholdId, LocalDateTime now,
+                                                     Set<UUID> firedRuleIds) {
         var owners = ruleRepository.findActiveDefaultRuleOwnersWhoBought(NotificationType.CHEAPER_MARKET, productId);
         if (owners.isEmpty()) return List.of();
 
         var fired = new ArrayList<NotificationRule>();
         for (var rule : owners) {
+            if (firedRuleIds.contains(rule.getId())) continue;
             if (sameHousehold(rule, contributingHouseholdId) || inCooldown(rule, now)) continue;
             var householdId = rule.getUser().getHousehold().getId();
             var lastPaid = lastPaidPrice(productId, householdId);
@@ -229,6 +240,7 @@ public class NotificationRuleEngine {
                             lastPaid.setScale(2, RoundingMode.HALF_UP)),
                     extras));
             rule.setLastFiredAt(now);
+            firedRuleIds.add(rule.getId());
             fired.add(rule);
         }
         return fired;

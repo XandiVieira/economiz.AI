@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -112,9 +113,12 @@ public class HouseholdProductService {
                 includeNearby ? radiusKm : null, watchedCnpjs);
         for (var row : communityRows) {
             if (rowsByCnpj.containsKey(row.cnpj())) continue; // own exact price wins over community median
+            var medianPrice = row.medianPrice() != null
+                    ? row.medianPrice().setScale(2, RoundingMode.HALF_UP)
+                    : null;
             rowsByCnpj.put(row.cnpj(), new ProductMarketPriceResponse(
                     row.cnpj(), row.cnpjRoot(), row.marketName(), row.marketName(),
-                    row.medianPrice(), PriceType.COMMUNITY_MEDIAN,
+                    medianPrice, PriceType.COMMUNITY_MEDIAN,
                     row.minPrice(), row.sampleCount(), row.distinctHouseholds(),
                     row.distanceKm(), row.watching(), false, null));
         }

@@ -129,7 +129,7 @@ public class InsightsService {
                 .filter(id -> id != null)
                 .distinct()
                 .toList();
-        var overrides = categoryOverrideService.overridesByProduct(householdId, productIds);
+        var overrides = categoryOverrideService.overrideKeysByProduct(householdId, productIds);
 
         var accumulators = new LinkedHashMap<String, CategoryAccumulator>();
         for (var row : rows) {
@@ -137,13 +137,16 @@ public class InsightsService {
             var globalCategory = (ProductCategory) row[1];
             var total = toBigDecimal(row[2]);
             var itemCount = ((Number) row[3]).longValue();
-            var overrideLabel = productId != null ? overrides.get(productId) : null;
-            var effectiveCategory = overrideLabel == null
-                    ? (globalCategory != null ? globalCategory : ProductCategory.OTHER)
-                    : enumNamed(overrideLabel);
-            var label = overrideLabel != null ? overrideLabel
+            var override = productId != null ? overrides.get(productId) : null;
+            var label = override != null ? override.label()
                     : (globalCategory != null ? globalCategory.name() : ProductCategory.OTHER.name());
-            accumulators.computeIfAbsent(label, key -> new CategoryAccumulator(effectiveCategory, key))
+            // Discriminated bucket key so a custom category named like an enum doesn't merge.
+            var bucketKey = override != null ? override.key()
+                    : "enum:" + (globalCategory != null ? globalCategory.name() : ProductCategory.OTHER.name());
+            // Derive the enum category from the (collision-free) key, not the label: a
+            // custom bucket carries a null enum even when its name matches one.
+            var effectiveCategory = categoryFromKey(bucketKey);
+            accumulators.computeIfAbsent(bucketKey, key -> new CategoryAccumulator(effectiveCategory, label))
                     .add(total, itemCount);
         }
         return accumulators.values().stream()
@@ -152,10 +155,15 @@ public class InsightsService {
                 .toList();
     }
 
-    /** The enum a label maps to, or null when the label is a custom category name. */
-    private static ProductCategory enumNamed(String label) {
+    /**
+     * The enum category a discriminated bucket key maps to. A {@code custom:...} key
+     * has no enum (returns null); an {@code enum:NAME} key resolves to that enum.
+     */
+    private static ProductCategory categoryFromKey(String bucketKey) {
+        if (!bucketKey.startsWith("enum:")) return null;
+        var name = bucketKey.substring("enum:".length());
         for (var category : ProductCategory.values()) {
-            if (category.name().equals(label)) return category;
+            if (category.name().equals(name)) return category;
         }
         return null;
     }

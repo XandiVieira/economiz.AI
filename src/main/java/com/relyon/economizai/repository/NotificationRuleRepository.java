@@ -56,7 +56,7 @@ public interface NotificationRuleRepository extends JpaRepository<NotificationRu
     @Query("""
         SELECT r FROM NotificationRule r
         JOIN FETCH r.user u
-        WHERE r.type = :type AND r.active = true
+        WHERE r.type = :type AND r.active = true AND r.isDefault = true
           AND u.household.id IN (
               SELECT ri.receipt.household.id FROM ReceiptItem ri
               WHERE ri.product.id = :productId

@@ -5,6 +5,7 @@ import com.relyon.economizai.dto.request.ResetPasswordRequest;
 import com.relyon.economizai.exception.InvalidAuthTokenException;
 import com.relyon.economizai.model.PasswordResetToken;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.AuthProvider;
 import com.relyon.economizai.repository.PasswordResetTokenRepository;
 import com.relyon.economizai.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -59,6 +60,20 @@ class PasswordResetServiceTest {
         when(userRepository.findByEmail("ghost@example.com")).thenReturn(Optional.empty());
 
         passwordResetService.requestReset(new ForgotPasswordRequest("ghost@example.com"));
+
+        verify(tokenRepository, never()).save(any());
+        verifyNoInteractions(emailSender);
+    }
+
+    @Test
+    void requestResetForSocialOnlyAccountIsNoOp() {
+        var socialUser = User.builder().id(UUID.randomUUID())
+                .email("maria@example.com")
+                .authProvider(AuthProvider.GOOGLE)
+                .build();
+        when(userRepository.findByEmail("maria@example.com")).thenReturn(Optional.of(socialUser));
+
+        passwordResetService.requestReset(new ForgotPasswordRequest("maria@example.com"));
 
         verify(tokenRepository, never()).save(any());
         verifyNoInteractions(emailSender);

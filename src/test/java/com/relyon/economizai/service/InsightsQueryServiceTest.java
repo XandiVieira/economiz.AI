@@ -131,7 +131,7 @@ class InsightsQueryServiceTest {
         assertEquals(ProductCategory.OTHER.name(), response.buckets().get(1).key());
         verify(bucketQuery).setMaxResults(100);
         // GLOBAL lens never consults the override service.
-        verify(categoryOverrideService, never()).overridesByProduct(any(), any());
+        verify(categoryOverrideService, never()).overrideKeysByProduct(any(), any());
     }
 
     @Test
@@ -149,8 +149,9 @@ class InsightsQueryServiceTest {
                 new Object[]{leite, ProductCategory.MEAT_DAIRY, receiptOne, new BigDecimal("10.00"), 1L},
                 new Object[]{arroz, ProductCategory.GROCERIES, receiptOne, new BigDecimal("20.00"), 1L},
                 new Object[]{arroz, ProductCategory.GROCERIES, receiptTwo, new BigDecimal("10.00"), 1L}));
-        when(categoryOverrideService.overridesByProduct(eq(householdId), any()))
-                .thenReturn(Map.of(leite, "GROCERIES"));
+        when(categoryOverrideService.overrideKeysByProduct(eq(householdId), any()))
+                .thenReturn(Map.of(leite,
+                        new HouseholdProductCategoryOverrideService.OverrideKey("enum:GROCERIES", "GROCERIES")));
 
         var response = insightsQueryService.query(user, filtersWith(InsightsGroupBy.CATEGORY));
 
@@ -163,6 +164,33 @@ class InsightsQueryServiceTest {
         assertEquals(0, new BigDecimal("40.00").compareTo(bucket.total()));
         assertEquals(2L, bucket.receiptCount());
         assertEquals(3L, bucket.itemCount());
+    }
+
+    @Test
+    void query_groupByCategory_householdLens_customNamedLikeEnum_doesNotMerge() {
+        var arroz = UUID.randomUUID();   // global OTHER, no override
+        var sabao = UUID.randomUUID();   // moved into a custom category literally named "OTHER"
+        var customId = UUID.randomUUID();
+        var receiptOne = UUID.randomUUID();
+        var receiptTwo = UUID.randomUUID();
+        when(entityManager.createQuery(anyString(), eq(Object[].class)))
+                .thenReturn(summaryQuery, bucketQuery);
+        when(summaryQuery.getSingleResult())
+                .thenReturn(new Object[]{new BigDecimal("19.00"), 2L, 2L});
+        when(bucketQuery.getResultList()).thenReturn(List.<Object[]>of(
+                new Object[]{arroz, ProductCategory.OTHER, receiptOne, new BigDecimal("12.00"), 1L},
+                new Object[]{sabao, ProductCategory.CLEANING, receiptTwo, new BigDecimal("7.00"), 1L}));
+        when(categoryOverrideService.overrideKeysByProduct(eq(householdId), any()))
+                .thenReturn(Map.of(sabao,
+                        new HouseholdProductCategoryOverrideService.OverrideKey("custom:" + customId, "OTHER")));
+
+        var response = insightsQueryService.query(user, filtersWith(InsightsGroupBy.CATEGORY));
+
+        // Two buckets despite both labeled "OTHER": discriminated keys keep them separate.
+        var labeledOther = response.buckets().stream().filter(b -> "OTHER".equals(b.label())).toList();
+        assertEquals(2, labeledOther.size());
+        assertTrue(labeledOther.stream().anyMatch(b -> new BigDecimal("12.00").compareTo(b.total()) == 0));
+        assertTrue(labeledOther.stream().anyMatch(b -> new BigDecimal("7.00").compareTo(b.total()) == 0));
     }
 
     @Test

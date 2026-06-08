@@ -3,6 +3,7 @@ package com.relyon.economizai.service.auth.oauth;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.relyon.economizai.exception.InvalidOAuthTokenException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -21,12 +22,19 @@ import java.util.concurrent.ConcurrentHashMap;
 public class CachingJwksKeySource implements JwksKeySource {
 
     private static final Duration TTL = Duration.ofHours(1);
+    private static final int CONNECT_TIMEOUT_MS = 5000;
+    private static final int READ_TIMEOUT_MS = 10000;
 
     private final RestClient restClient;
     private final ConcurrentHashMap<String, CachedKeySet> cache = new ConcurrentHashMap<>();
 
     public CachingJwksKeySource(RestClient.Builder builder) {
-        this.restClient = builder.build();
+        // Explicit timeouts — without them a hung provider JWKS endpoint would block
+        // the login thread indefinitely.
+        var requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(CONNECT_TIMEOUT_MS);
+        requestFactory.setReadTimeout(READ_TIMEOUT_MS);
+        this.restClient = builder.requestFactory(requestFactory).build();
     }
 
     @Override
@@ -35,9 +43,20 @@ public class CachingJwksKeySource implements JwksKeySource {
         if (cached != null && !cached.isExpired()) {
             return cached.keySet();
         }
-        var fetched = fetch(jwksUrl);
-        cache.put(jwksUrl, new CachedKeySet(fetched, Instant.now().plus(TTL)));
-        return fetched;
+        try {
+            var fetched = fetch(jwksUrl);
+            cache.put(jwksUrl, new CachedKeySet(fetched, Instant.now().plus(TTL)));
+            return fetched;
+        } catch (Exception ex) {
+            // A transient JWKS blip shouldn't fail all logins: serve the last-good
+            // cached set if we have one; otherwise propagate.
+            if (cached != null) {
+                log.warn("oauth.jwks.refresh_failed_serving_stale url={} {}: {}",
+                        jwksUrl, ex.getClass().getSimpleName(), ex.getMessage());
+                return cached.keySet();
+            }
+            throw ex;
+        }
     }
 
     private JWKSet fetch(String jwksUrl) {

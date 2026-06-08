@@ -5,6 +5,7 @@ import com.relyon.economizai.dto.request.ResetPasswordRequest;
 import com.relyon.economizai.exception.InvalidAuthTokenException;
 import com.relyon.economizai.model.PasswordResetToken;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.AuthProvider;
 import com.relyon.economizai.repository.PasswordResetTokenRepository;
 import com.relyon.economizai.repository.UserRepository;
 import com.relyon.economizai.service.privacy.LogMasker;
@@ -49,6 +50,12 @@ public class PasswordResetService {
             return;
         }
         var user = userOpt.get();
+        if (user.getAuthProvider() != AuthProvider.LOCAL) {
+            // Social-only account has no password to reset — silent no-op, same as an
+            // unknown email, so we don't leak which accounts are social.
+            log.info("password_reset.requested social_account_noop user={}", LogMasker.email(user.getEmail()));
+            return;
+        }
         var token = generateToken();
         tokenRepository.save(PasswordResetToken.builder()
                 .user(user)

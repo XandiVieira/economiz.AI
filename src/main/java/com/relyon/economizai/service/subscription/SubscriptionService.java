@@ -6,6 +6,7 @@ import com.relyon.economizai.model.enums.SubscriptionStatus;
 import com.relyon.economizai.model.enums.SubscriptionTier;
 import com.relyon.economizai.repository.SubscriptionRepository;
 import com.relyon.economizai.repository.UserRepository;
+import com.relyon.economizai.service.privacy.LogMasker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -44,7 +45,7 @@ public class SubscriptionService {
         user.setSubscriptionTier(SubscriptionTier.PRO);
         userRepository.save(user);
         log.info("subscription.activated user={} provider={} periodEnd={}",
-                user.getEmail(), provider, periodEnd);
+                LogMasker.email(user.getEmail()), provider, periodEnd);
         return saved;
     }
 
@@ -60,6 +61,6 @@ public class SubscriptionService {
         });
         user.setSubscriptionTier(SubscriptionTier.FREE);
         userRepository.save(user);
-        log.info("subscription.canceled user={}", user.getEmail());
+        log.info("subscription.canceled user={}", LogMasker.email(user.getEmail()));
     }
 }

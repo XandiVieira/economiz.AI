@@ -28,9 +28,10 @@ import java.time.LocalDateTime;
  * shape the password login returns.
  *
  * <p>Account resolution, in order: (1) match by (provider, subject); (2) match
- * by email and link the provider onto that existing account; (3) create a new
- * solo-household user with no password and emailVerified=true (the provider
- * already vouched for the address — we don't send our verification email).
+ * by email and link the provider onto that existing LOCAL account — only when
+ * the provider asserts the email is verified (else reject, to prevent takeover);
+ * (3) create a new solo-household user with no password, carrying the provider's
+ * emailVerified claim (a missing email is rejected outright).
  */
 @Slf4j
 @Service
@@ -53,7 +54,8 @@ public class SocialLoginService {
         if (claims.subject() == null || claims.subject().isBlank()) {
             throw new InvalidOAuthTokenException();
         }
-        var user = resolveUser(AuthProvider.GOOGLE, claims.subject(), claims.email(), claims.name());
+        var user = resolveUser(AuthProvider.GOOGLE, claims.subject(), claims.email(),
+                claims.emailVerified(), claims.name());
         return issueAuth(user);
     }
 
@@ -63,11 +65,13 @@ public class SocialLoginService {
         if (claims.subject() == null || claims.subject().isBlank()) {
             throw new InvalidOAuthTokenException();
         }
-        var user = resolveUser(AuthProvider.APPLE, claims.subject(), claims.email(), claims.name());
+        var user = resolveUser(AuthProvider.APPLE, claims.subject(), claims.email(),
+                claims.emailVerified(), claims.name());
         return issueAuth(user);
     }
 
-    private User resolveUser(AuthProvider provider, String subject, String email, String name) {
+    private User resolveUser(AuthProvider provider, String subject, String email,
+                            boolean emailVerified, String name) {
         var bySubject = userRepository.findByAuthProviderAndProviderSubject(provider, subject);
         if (bySubject.isPresent()) {
             var user = bySubject.get();
@@ -77,14 +81,22 @@ public class SocialLoginService {
         if (email != null && !email.isBlank()) {
             var byEmail = userRepository.findByEmail(email);
             if (byEmail.isPresent()) {
-                return linkProvider(byEmail.get(), provider, subject);
+                return linkProvider(byEmail.get(), provider, subject, emailVerified);
             }
         }
-        return createSocialUser(provider, subject, email, name);
+        return createSocialUser(provider, subject, email, emailVerified, name);
     }
 
-    private User linkProvider(User user, AuthProvider provider, String subject) {
+    private User linkProvider(User user, AuthProvider provider, String subject, boolean emailVerified) {
         if (user.getAuthProvider() == AuthProvider.LOCAL) {
+            // Only auto-link a provider onto an existing password account when the provider
+            // asserts the email is verified — otherwise an unverified token could take over
+            // the local account by claiming its email.
+            if (!emailVerified) {
+                log.warn("social.login link_rejected_unverified_email provider={} user={}",
+                        provider, LogMasker.email(user.getEmail()));
+                throw new InvalidOAuthTokenException();
+            }
             user.setAuthProvider(provider);
             user.setProviderSubject(subject);
             user = userRepository.save(user);
@@ -95,7 +107,12 @@ public class SocialLoginService {
         return user;
     }
 
-    private User createSocialUser(AuthProvider provider, String subject, String email, String name) {
+    private User createSocialUser(AuthProvider provider, String subject, String email,
+                                  boolean emailVerified, String name) {
+        if (email == null || email.isBlank()) {
+            log.warn("social.login create_rejected_missing_email provider={}", provider);
+            throw new InvalidOAuthTokenException();
+        }
         var household = householdService.createSoloHousehold();
         var resolvedName = (name != null && !name.isBlank()) ? name : DEFAULT_NAME;
         var user = User.builder()
@@ -105,8 +122,8 @@ public class SocialLoginService {
                 .authProvider(provider)
                 .providerSubject(subject)
                 .household(household)
-                .emailVerified(true)
-                .emailVerifiedAt(LocalDateTime.now())
+                .emailVerified(emailVerified)
+                .emailVerifiedAt(emailVerified ? LocalDateTime.now() : null)
                 .acceptedTermsVersion(LegalDocuments.CURRENT_TERMS_VERSION)
                 .acceptedPrivacyVersion(LegalDocuments.CURRENT_PRIVACY_VERSION)
                 .acceptedLegalAt(LocalDateTime.now())

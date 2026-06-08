@@ -169,7 +169,7 @@ public class InsightsQueryService {
                 .filter(id -> id != null)
                 .distinct()
                 .toList();
-        var overrides = categoryOverrideService.overridesByProduct(f.householdId(), productIds);
+        var overrides = categoryOverrideService.overrideKeysByProduct(f.householdId(), productIds);
 
         var accumulators = new LinkedHashMap<String, CategoryAccumulator>();
         for (var row : rows) {
@@ -178,10 +178,13 @@ public class InsightsQueryService {
             var receiptId = (UUID) row[2];
             var total = (BigDecimal) row[3];
             var itemCount = ((Number) row[4]).longValue();
-            var overrideLabel = productId != null ? overrides.get(productId) : null;
-            var label = overrideLabel != null ? overrideLabel
+            var override = productId != null ? overrides.get(productId) : null;
+            var label = override != null ? override.label()
                     : (globalCategory != null ? globalCategory.name() : ProductCategory.OTHER.name());
-            accumulators.computeIfAbsent(label, CategoryAccumulator::new)
+            // Discriminated bucket key so a custom category named like an enum doesn't merge.
+            var bucketKey = override != null ? override.key()
+                    : "enum:" + (globalCategory != null ? globalCategory.name() : ProductCategory.OTHER.name());
+            accumulators.computeIfAbsent(bucketKey, key -> new CategoryAccumulator(label))
                     .add(total, itemCount, receiptId);
         }
         return accumulators.values().stream()
