@@ -1,5 +1,6 @@
 package com.relyon.economizai.service.geo;
 
+import com.relyon.economizai.exception.InvalidCnpjException;
 import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.HouseholdMarketAlias;
 import com.relyon.economizai.model.User;
@@ -17,9 +18,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -124,6 +127,55 @@ class MarketNameServiceTest {
         assertEquals("Novo nome", result);
         assertEquals("Novo nome", existing.getCustomName());
         verify(aliasRepository).save(existing);
+    }
+
+    @Test
+    void setName_normalizesFormattedCnpjToFourteenDigits() {
+        var user = user();
+        when(aliasRepository.findByHouseholdIdAndMarketCnpj(HOUSEHOLD_ID, CNPJ)).thenReturn(Optional.empty());
+        when(aliasRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.setName(user, "12.345.678/0001-99", "Zaffari de casa");
+
+        var captor = ArgumentCaptor.forClass(HouseholdMarketAlias.class);
+        verify(aliasRepository).save(captor.capture());
+        assertEquals(CNPJ, captor.getValue().getMarketCnpj());
+    }
+
+    @Test
+    void setName_rejectsTooLongCnpj() {
+        var user = user();
+
+        // The live bug: a >14-char value (here an unresolved test placeholder)
+        // hit the DB and overflowed VARCHAR(14) as a 500. Now a clean 400.
+        assertThrows(InvalidCnpjException.class,
+                () -> service.setName(user, "{{e2eMarketCnpj}}", "Mercado"));
+        verify(aliasRepository, never()).save(any());
+    }
+
+    @Test
+    void setName_rejectsCnpjWithFewerThanFourteenDigits() {
+        var user = user();
+
+        assertThrows(InvalidCnpjException.class, () -> service.setName(user, "123", "Mercado"));
+        verify(aliasRepository, never()).save(any());
+    }
+
+    @Test
+    void clearName_normalizesFormattedCnpj() {
+        var user = user();
+
+        service.clearName(user, "12.345.678/0001-99");
+
+        verify(aliasRepository).deleteByHouseholdIdAndMarketCnpj(eq(HOUSEHOLD_ID), eq(CNPJ));
+    }
+
+    @Test
+    void clearName_rejectsInvalidCnpj() {
+        var user = user();
+
+        assertThrows(InvalidCnpjException.class, () -> service.clearName(user, "{{e2eMarketCnpj}}"));
+        verify(aliasRepository, never()).deleteByHouseholdIdAndMarketCnpj(any(), any());
     }
 
     @Test

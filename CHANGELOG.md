@@ -16,6 +16,15 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-07 — market rename now validates CNPJ (400 instead of 500)
+
+`PUT/DELETE /api/v1/markets/{cnpj}/name` used the `{cnpj}` path value as-is.
+A malformed CNPJ (e.g. a wrong-length value) crashed with a **500** when it
+overflowed the DB column. Now the CNPJ is normalized (formatting like
+`12.345.678/0001-99` is accepted and stripped) and a value that isn't exactly
+14 digits returns **400 `market.cnpj.invalid`**. **FE action:** none, unless you
+were sending formatted/invalid CNPJs — those now get a clean 400.
+
 ## 2026-06-07 — PRO tier enforced: paywall gates, 402, admin set-tier, billing webhook
 
 The FREE/PRO subscription tier (`User.subscriptionTier`) is now **enforced** end-to-end through a single `SubscriptionGateService`. New **HTTP 402 `subscription.upgrade_required`** error when a FREE user hits a PRO gate (body: standard error shape; message arg = the gated feature name).
