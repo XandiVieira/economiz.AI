@@ -192,7 +192,7 @@ public class PriceIndexService {
                 .sorted(Comparator
                         .comparing(MarketPriceRow::watching, Comparator.reverseOrder())
                         .thenComparing(MarketPriceRow::medianPrice))
-                .limit(limit)
+                .limit(Math.max(0, limit))
                 .toList();
     }
 

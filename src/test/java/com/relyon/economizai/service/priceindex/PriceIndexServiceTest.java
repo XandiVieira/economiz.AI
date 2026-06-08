@@ -263,6 +263,23 @@ class PriceIndexServiceTest {
         assertTrue(rows.get(0).watching());
     }
 
+    @Test
+    void bestMarkets_negativeLimitDoesNotThrow() {
+        var productId = UUID.randomUUID();
+        var observations = new ArrayList<PriceObservation>();
+        for (var i = 0; i < 5; i++) observations.add(obsAt(productId, "AAAAAAAA000111", "A", new BigDecimal("10")));
+
+        when(observationRepository.findRecentByProduct(eq(productId), any())).thenReturn(observations);
+        when(auditRepository.countDistinctHouseholdsForProductMarket(eq(productId), eq("AAAAAAAA000111"), any())).thenReturn(3L);
+        when(marketLocationService.findByCnpjs(any())).thenReturn(Map.of());
+
+        // limit=-1 (e.g. ?limit=-1 on the endpoint) must not reach Stream.limit(-1),
+        // which throws IllegalArgumentException: -1.
+        var rows = service.bestMarkets(productId, -1, null, null, null, Set.of());
+
+        assertTrue(rows.isEmpty(), "non-positive limit must return no rows, not throw");
+    }
+
     private PriceObservation obs(UUID productId, BigDecimal price) {
         return obsAt(productId, "93015006005182", "Mercado X", price);
     }
