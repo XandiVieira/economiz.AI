@@ -60,6 +60,24 @@ function ResolveAppLog {
 }
 $MARKER   = "AUTONOMOUS ENTRIES BELOW"
 
+# SINGLE-INSTANCE MUTEX: only ONE watchdog may run at a time. Multiple instances
+# (e.g. a stray DryRun that self-relaunched, or a double Start) would fight over
+# the working tree and corrupt each other's fix cycles - observed live. A named
+# system mutex is atomic and auto-released when the holder dies (even on a hard
+# kill), so it's self-healing: a crashed instance frees the slot for the next.
+# We hold it for the process lifetime; a second instance exits immediately.
+$script:wdMutex = New-Object System.Threading.Mutex($false, "Global\economizai-autofix-watchdog")
+if (-not $script:wdMutex.WaitOne(0)) {
+    Write-Host "another watchdog instance is already running; exiting (single-instance mutex)"
+    exit 0
+}
+# Release the mutex right BEFORE a self-relaunch, so the freshly spawned process
+# can immediately acquire it (otherwise the new instance would see it held by the
+# still-exiting old one and quit, killing the watchdog on every self-update).
+function ReleaseMutex {
+    try { if ($script:wdMutex) { $script:wdMutex.ReleaseMutex(); $script:wdMutex.Dispose(); $script:wdMutex = $null } } catch { }
+}
+
 Set-Location $repo
 $env:JAVA_HOME = $javaHome
 
@@ -387,6 +405,7 @@ function SelfUpdateIfChanged([switch]$Force) {
         # Detached relaunch so we can exit cleanly; the new process re-reads the
         # (now-updated) file from disk. Restore index so the checkout isn't staged.
         & git reset -q 2>$null | Out-Null
+        ReleaseMutex   # free the single-instance lock so the new process can grab it
         Start-Process -FilePath "powershell.exe" `
             -ArgumentList (@('-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File', $selfPath) + $selfArgs) `
             -WindowStyle Hidden | Out-Null
@@ -402,6 +421,7 @@ Log ("watchdog.start dryRun={0} branch={1} maxFixesPerHour={2}" -f $DryRun, $Bra
 $seen     = @{}
 $failCount = @{}   # signature -> how many times an autonomous fix has FAILED for it
 $transientHits = @{}   # signature -> ArrayList of timestamps (for transient recurrence gate)
+$deferredOnce = @{}    # raw error line -> deferred one poll to await its full stacktrace
 
 # Circuit-breaker fix timestamps, PERSISTED to the data dir so the N/hour limit
 # survives a restart/self-relaunch. Was in-memory, so every restart zeroed it and
@@ -497,6 +517,18 @@ while ($true) {
         # Compute the snippet FIRST so the signature can include the offending
         # com.relyon stack frame (distinguishes same-message bugs in different code).
         $snippet    = ErrorSnippet $raw $li
+        # If this error has NO com.relyon frame yet AND it's near the tail of this
+        # batch, the stacktrace probably hasn't fully flushed to the log (the ERROR
+        # header lands a few ms before its frames). Acting now yields a GENERIC
+        # signature and wastes a fix cycle (observed: a 300s timeout burned before
+        # the specific re-detect). Defer to the next poll ONCE for precision - but
+        # only once, so a genuinely frame-less error (framework-only, OOM) still
+        # gets handled rather than skipped forever.
+        $rawKey = ($line -replace '\d{4}-\d{2}-\d{2} [\d:.]+', '').Trim()
+        if ($snippet -notmatch 'at\s+com\.relyon\.' -and $li -ge ($raw.Count - 3) -and -not $deferredOnce.ContainsKey($rawKey)) {
+            $deferredOnce[$rawKey] = $true
+            continue   # wait one poll for the full trace
+        }
         $sig = Signature $line $snippet
         if ([string]::IsNullOrWhiteSpace($sig)) { continue }
         if ($seen.ContainsKey($sig)) { continue }
@@ -601,7 +633,7 @@ Rules:
                 CleanFixerEdits
                 Log ("claude.timeout {0} after {1}s; discarded partial edits; skipping (loop stays up)" -f $shortSig, $ClaudeTimeoutSec)
                 $failCount[$sig] = ([int]$failCount[$sig]) + 1
-                Ledger ("### [$(Stamp)] ⚠️ NEEDS-HUMAN · CLAUDE-TIMEOUT (attempt $($failCount[$sig])x) - $shortSig`r`n$diag`r`n- **Outcome:** the fixer call exceeded ${ClaudeTimeoutSec}s and was killed; partial edits discarded.`r`n- **Note for human:** bug still live; autonomous diagnosis timed out - needs eyes.")
+                Ledger ("### [$(Stamp)] [NEEDS-HUMAN] CLAUDE-TIMEOUT (attempt $($failCount[$sig])x) - $shortSig`r`n$diag`r`n- **Outcome:** the fixer call exceeded ${ClaudeTimeoutSec}s and was killed; partial edits discarded.`r`n- **Note for human:** bug still live; autonomous diagnosis timed out - needs eyes.")
                 Remove-Job $job -Force -ErrorAction SilentlyContinue
                 continue
             }
@@ -611,7 +643,7 @@ Rules:
             Log ("claude.error {0}: {1}; discarded partial edits; skipping (loop stays up)" -f $shortSig, $_.Exception.Message)
             $failCount[$sig] = ([int]$failCount[$sig]) + 1
             $errMsg = $_.Exception.Message
-            Ledger ("### [$(Stamp)] ⚠️ NEEDS-HUMAN · CLAUDE-ERROR (attempt $($failCount[$sig])x) - $shortSig`r`n$diag`r`n- **Outcome:** the fixer call threw: $errMsg`r`n- **Note for human:** bug still live; autonomous diagnosis errored out - needs eyes.")
+            Ledger ("### [$(Stamp)] [NEEDS-HUMAN] CLAUDE-ERROR (attempt $($failCount[$sig])x) - $shortSig`r`n$diag`r`n- **Outcome:** the fixer call threw: $errMsg`r`n- **Note for human:** bug still live; autonomous diagnosis errored out - needs eyes.")
             continue
         }
         if ([string]::IsNullOrWhiteSpace($claudeOut)) {
@@ -624,7 +656,7 @@ Rules:
         if ($claudeOut -match 'REPRO_FAIL|NO_FIX_FOUND') {
             $failCount[$sig] = ([int]$failCount[$sig]) + 1
             & git checkout -- . 2>$null; & git clean -fd 2>$null   # drop any partial test
-            Ledger ("### [$(Stamp)] ⚠️ NEEDS-HUMAN · NO-REPRO (attempt $($failCount[$sig])x) - $shortSig`r`n$diag`r`n- **Outcome:** could NOT reproduce the bug with a failing test; no code changed.`r`n- **Detail:** $claudeOut`r`n- **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.")
+            Ledger ("### [$(Stamp)] [NEEDS-HUMAN] NO-REPRO (attempt $($failCount[$sig])x) - $shortSig`r`n$diag`r`n- **Outcome:** could NOT reproduce the bug with a failing test; no code changed.`r`n- **Detail:** $claudeOut`r`n- **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.")
             continue
         }
 
@@ -637,7 +669,7 @@ Rules:
         if ([string]::IsNullOrWhiteSpace($testRef)) {
             $failCount[$sig] = ([int]$failCount[$sig]) + 1
             & git checkout -- . 2>$null; & git clean -fd 2>$null
-            Ledger ("### [$(Stamp)] ⚠️ NEEDS-HUMAN · NO-TESTREF (attempt $($failCount[$sig])x) - $shortSig`r`n$diag`r`n- **Claude:** $claudeOut`r`n- **Outcome:** reply lacked a verifiable test reference; changes discarded (reproduction unproven).`r`n- **Note for human:** bug still live - needs eyes.")
+            Ledger ("### [$(Stamp)] [NEEDS-HUMAN] NO-TESTREF (attempt $($failCount[$sig])x) - $shortSig`r`n$diag`r`n- **Claude:** $claudeOut`r`n- **Outcome:** reply lacked a verifiable test reference; changes discarded (reproduction unproven).`r`n- **Note for human:** bug still live - needs eyes.")
             continue
         }
         $testClass = ($testRef -split '#')[0]
@@ -646,7 +678,7 @@ Rules:
         if (-not $changedTests) {
             $failCount[$sig] = ([int]$failCount[$sig]) + 1
             & git checkout -- . 2>$null; & git clean -fd 2>$null
-            Ledger ("### [$(Stamp)] ⚠️ NEEDS-HUMAN · NO-TEST-DIFF (attempt $($failCount[$sig])x) - $shortSig`r`n$diag`r`n- **Claude:** $claudeOut`r`n- **Outcome:** claimed test ``$testRef`` but no matching test file was added/changed; changes discarded.`r`n- **Note for human:** bug still live; reproduction not proven - needs eyes.")
+            Ledger ("### [$(Stamp)] [NEEDS-HUMAN] NO-TEST-DIFF (attempt $($failCount[$sig])x) - $shortSig`r`n$diag`r`n- **Claude:** $claudeOut`r`n- **Outcome:** claimed test ``$testRef`` but no matching test file was added/changed; changes discarded.`r`n- **Note for human:** bug still live; reproduction not proven - needs eyes.")
             continue
         }
         Log ("repro.verified test={0}" -f $testRef)
@@ -660,7 +692,7 @@ Rules:
             Log "build.fail discarding changes"
             & git checkout -- . 2>$null; & git clean -fd 2>$null
             $failCount[$sig] = ([int]$failCount[$sig]) + 1
-            Ledger ("### [$(Stamp)] ⚠️ NEEDS-HUMAN · BUILD-FAIL (attempt $($failCount[$sig])x) - $shortSig`r`n$diag`r`n- **Attempted fix:** $claudeOut`r`n- **Outcome:** fix discarded - mvnw test failed, nothing pushed.`r`n- **Note for human:** bug still live; the autonomous fix did not compile/pass tests - needs eyes.")
+            Ledger ("### [$(Stamp)] [NEEDS-HUMAN] BUILD-FAIL (attempt $($failCount[$sig])x) - $shortSig`r`n$diag`r`n- **Attempted fix:** $claudeOut`r`n- **Outcome:** fix discarded - mvnw test failed, nothing pushed.`r`n- **Note for human:** bug still live; the autonomous fix did not compile/pass tests - needs eyes.")
             continue
         }
         Log "build.pass"
@@ -692,7 +724,7 @@ Rules:
             Log ("push.failed sha={0} fix saved to {1}; resetting tree" -f $sha, $patchFile)
             & git reset --hard "origin/$Branch" 2>&1 | Out-Null
             $failCount[$sig] = ([int]$failCount[$sig]) + 1
-            Ledger ("### [$(Stamp)] ⚠️ NEEDS-HUMAN · PUSH-FAILED (attempt $($failCount[$sig])x) - $shortSig`r`n$diag`r`n- **Attempted fix:** $claudeOut`r`n- **Outcome:** fix built + committed locally ($sha) but could NOT be pushed after retries.`r`n- **Saved patch:** ``$patchFile`` - apply with ``git am`` (the fix is build-verified, not lost).`r`n- **Note for human:** bug still live; apply the saved patch or re-run - needs eyes.")
+            Ledger ("### [$(Stamp)] [NEEDS-HUMAN] PUSH-FAILED (attempt $($failCount[$sig])x) - $shortSig`r`n$diag`r`n- **Attempted fix:** $claudeOut`r`n- **Outcome:** fix built + committed locally ($sha) but could NOT be pushed after retries.`r`n- **Saved patch:** ``$patchFile`` - apply with ``git am`` (the fix is build-verified, not lost).`r`n- **Note for human:** bug still live; apply the saved patch or re-run - needs eyes.")
             $seen.Remove($sig)
             continue
         }
@@ -714,7 +746,7 @@ Rules:
             if (-not (PushWithRetry)) { Log ("revert.push_failed rev={0} - manual restore may be needed" -f $rev) }
             $recovered = WaitForDeployAndHealth
             $failCount[$sig] = ([int]$failCount[$sig]) + 1
-            Ledger ("### [$(Stamp)] ⚠️ NEEDS-HUMAN · ROLLBACK $rev (attempt $($failCount[$sig])x) - reverted $sha`r`n$diag`r`n- **Attempted fix:** $claudeOut`r`n- **Why reverted:** /actuator/health did NOT return UP after deploy.`r`n- **Revert commit:** $rev, health recovered: $recovered`r`n- **Loop state:** kept running. Signature left for human review.`r`n- **Note for human:** the autonomous fix for this bug FAILED in production - needs eyes.")
+            Ledger ("### [$(Stamp)] [NEEDS-HUMAN] ROLLBACK $rev (attempt $($failCount[$sig])x) - reverted $sha`r`n$diag`r`n- **Attempted fix:** $claudeOut`r`n- **Why reverted:** /actuator/health did NOT return UP after deploy.`r`n- **Revert commit:** $rev, health recovered: $recovered`r`n- **Loop state:** kept running. Signature left for human review.`r`n- **Note for human:** the autonomous fix for this bug FAILED in production - needs eyes.")
             $seen.Remove($sig)
         }
     }
@@ -737,6 +769,7 @@ Rules:
     # for a crash-recovery path. A relaunch failure is the only true dead end.
     try { Log ("FATAL loop escaped: {0}; relaunching" -f $_.Exception.Message) } catch { }
     try { SetStatus "CRASHED" (OneLine $_.Exception.Message) } catch { }
+    try { ReleaseMutex } catch { }   # free the lock so the relaunched process can acquire it
     try {
         Start-Process -FilePath "powershell.exe" `
             -ArgumentList (@('-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File', $selfPath) + $selfArgs) `
