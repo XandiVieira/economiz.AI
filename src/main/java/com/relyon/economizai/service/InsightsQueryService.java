@@ -356,7 +356,7 @@ public class InsightsQueryService {
                     f.minReceiptTotal(),
                     f.maxReceiptTotal(),
                     f.groupBy(),
-                    f.limit(),
+                    clampLimit(f.limit()),
                     f.categoryView() != null ? f.categoryView() : CategoryView.HOUSEHOLD
             );
         }

@@ -358,6 +358,33 @@ class InsightsQueryServiceTest {
     }
 
     @Test
+    void query_householdCategoryLens_negativeLimit_doesNotThrow() {
+        var arroz = UUID.randomUUID();
+        var receiptOne = UUID.randomUUID();
+        when(entityManager.createQuery(anyString(), eq(Object[].class)))
+                .thenReturn(summaryQuery, bucketQuery);
+        when(summaryQuery.getSingleResult())
+                .thenReturn(new Object[]{new BigDecimal("20.00"), 1L, 1L});
+        when(bucketQuery.getResultList()).thenReturn(List.<Object[]>of(
+                new Object[]{arroz, ProductCategory.GROCERIES, receiptOne, new BigDecimal("20.00"), 1L}));
+        when(categoryOverrideService.overrideKeysByProduct(eq(householdId), any()))
+                .thenReturn(Map.of());
+
+        // A QueryFilters carrying a negative limit reaches the service via the
+        // canonical constructor (which, unlike fromRequest, doesn't clamp). The
+        // HOUSEHOLD category lens streams .limit(f.limit()), which threw
+        // IllegalArgumentException: -1 until normalize() began clamping the limit.
+        var input = new QueryFilters(null, null, null, null, null,
+                List.of(ProductCategory.GROCERIES), null, null, null, null,
+                InsightsGroupBy.CATEGORY, -1, CategoryView.HOUSEHOLD);
+
+        var response = insightsQueryService.query(user, input);
+
+        assertEquals(1, response.buckets().size());
+        assertEquals("GROCERIES", response.buckets().get(0).key());
+    }
+
+    @Test
     void query_bindsAllOptionalFilterParameters() {
         when(entityManager.createQuery(anyString(), eq(Object[].class))).thenReturn(summaryQuery);
         when(summaryQuery.getSingleResult())
