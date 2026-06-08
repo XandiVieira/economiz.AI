@@ -220,7 +220,7 @@ class CanonicalizationServiceTest {
     void leavesItemUnmatchedWhenNoEanAndNoAlias() {
         var receipt = buildReceipt(item("ITEM DESCONHECIDO", null));
         when(aliasRepository.findByNormalizedDescription(anyString())).thenReturn(Optional.empty());
-        when(productExtractor.extract(any())).thenReturn(ProductExtraction.empty());
+        when(productExtractor.extract(any())).thenReturn(ProductExtraction.EMPTY);
 
         var outcome = service.canonicalize(receipt);
 

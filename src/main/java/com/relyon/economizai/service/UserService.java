@@ -8,8 +8,17 @@ import com.relyon.economizai.dto.request.UpdateHomeLocationRequest;
 import com.relyon.economizai.dto.request.UpdateUserRequest;
 import com.relyon.economizai.dto.response.AuthResponse;
 import com.relyon.economizai.dto.response.HouseholdResponse;
+import com.relyon.economizai.dto.response.NotificationResponse;
+import com.relyon.economizai.dto.response.NotificationRuleResponse;
 import com.relyon.economizai.dto.response.ReceiptResponse;
 import com.relyon.economizai.dto.response.UserDataExportResponse;
+import com.relyon.economizai.dto.response.UserDataExportResponse.AccountExtras;
+import com.relyon.economizai.dto.response.UserDataExportResponse.CategoryOverride;
+import com.relyon.economizai.dto.response.UserDataExportResponse.CustomCategory;
+import com.relyon.economizai.dto.response.UserDataExportResponse.ManualPurchaseSummary;
+import com.relyon.economizai.dto.response.UserDataExportResponse.MarketAlias;
+import com.relyon.economizai.dto.response.UserDataExportResponse.ShoppingListSummary;
+import com.relyon.economizai.dto.response.UserDataExportResponse.SubscriptionSummary;
 import com.relyon.economizai.dto.response.UserResponse;
 import com.relyon.economizai.exception.EmailAlreadyExistsException;
 import com.relyon.economizai.exception.InvalidCredentialsException;
@@ -17,9 +26,19 @@ import com.relyon.economizai.exception.InvalidCurrentPasswordException;
 import com.relyon.economizai.exception.InvalidLegalVersionException;
 import com.relyon.economizai.legal.LegalDocuments;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.repository.HouseholdCustomCategoryRepository;
+import com.relyon.economizai.repository.HouseholdMarketAliasRepository;
+import com.relyon.economizai.repository.HouseholdProductCategoryOverrideRepository;
 import com.relyon.economizai.repository.HouseholdRepository;
+import com.relyon.economizai.repository.ManualPurchaseRepository;
+import com.relyon.economizai.repository.NotificationRepository;
+import com.relyon.economizai.repository.NotificationRuleRepository;
 import com.relyon.economizai.repository.ReceiptRepository;
+import com.relyon.economizai.repository.ShoppingListRepository;
+import com.relyon.economizai.repository.SubscriptionRepository;
 import com.relyon.economizai.repository.UserRepository;
+import com.relyon.economizai.repository.UserWatchedMarketRepository;
+import com.relyon.economizai.model.UserWatchedMarket;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.auth.EmailVerificationService;
 import com.relyon.economizai.service.auth.RefreshTokenService;
@@ -27,6 +46,7 @@ import com.relyon.economizai.service.notifications.NotificationRuleService;
 import com.relyon.economizai.service.privacy.LogMasker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,6 +61,15 @@ public class UserService {
     private final UserRepository userRepository;
     private final HouseholdRepository householdRepository;
     private final ReceiptRepository receiptRepository;
+    private final NotificationRuleRepository notificationRuleRepository;
+    private final UserWatchedMarketRepository userWatchedMarketRepository;
+    private final SubscriptionRepository subscriptionRepository;
+    private final HouseholdMarketAliasRepository householdMarketAliasRepository;
+    private final HouseholdCustomCategoryRepository householdCustomCategoryRepository;
+    private final HouseholdProductCategoryOverrideRepository householdProductCategoryOverrideRepository;
+    private final ManualPurchaseRepository manualPurchaseRepository;
+    private final ShoppingListRepository shoppingListRepository;
+    private final NotificationRepository notificationRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final HouseholdService householdService;
@@ -138,18 +167,81 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public UserDataExportResponse exportData(User user) {
-        var household = householdRepository.findById(user.getHousehold().getId())
+        var userId = user.getId();
+        var householdId = user.getHousehold().getId();
+        var household = householdRepository.findById(householdId)
                 .orElseThrow(() -> new IllegalStateException("Household missing for user " + LogMasker.email(user.getEmail())));
-        var members = userRepository.findAllByHouseholdId(household.getId());
+        var members = userRepository.findAllByHouseholdId(householdId);
         var receipts = receiptRepository
-                .findAll((root, query, cb) -> cb.equal(root.get("user").get("id"), user.getId())).stream()
+                .findAll((root, query, cb) -> cb.equal(root.get("user").get("id"), userId)).stream()
                 .map(ReceiptResponse::from)
                 .toList();
-        log.info("Data export for user {}: {} receipts", LogMasker.email(user.getEmail()), receipts.size());
+
+        var accountExtras = new AccountExtras(
+                user.getPushDeviceToken(),
+                user.isEmailVerified(),
+                user.getEmailVerifiedAt(),
+                user.isContributionOptIn());
+
+        var notificationRules = notificationRuleRepository.findAllByUserId(userId).stream()
+                .map(NotificationRuleResponse::from)
+                .toList();
+
+        var watchedMarketCnpjs = userWatchedMarketRepository.findAllByUserId(userId).stream()
+                .map(UserWatchedMarket::getMarketCnpj)
+                .toList();
+
+        var subscription = subscriptionRepository.findByUserId(userId)
+                .map(record -> new SubscriptionSummary(
+                        record.getProvider(), record.getStatus(), record.getCurrentPeriodEnd()))
+                .orElse(null);
+
+        var marketAliases = householdMarketAliasRepository.findAllByHouseholdId(householdId).stream()
+                .map(alias -> new MarketAlias(alias.getMarketCnpj(), alias.getCustomName()))
+                .toList();
+
+        var customCategories = householdCustomCategoryRepository.findByHouseholdIdOrderByName(householdId).stream()
+                .map(category -> new CustomCategory(category.getId(), category.getName()))
+                .toList();
+
+        var categoryOverrides = householdProductCategoryOverrideRepository.findAllByHouseholdId(householdId).stream()
+                .map(override -> new CategoryOverride(override.getProduct().getId(), override.effectiveLabel()))
+                .toList();
+
+        var manualPurchases = manualPurchaseRepository.findAllByHouseholdId(householdId).stream()
+                .map(purchase -> new ManualPurchaseSummary(
+                        purchase.getProduct().getId(), purchase.getQuantity(), purchase.getPurchasedAt()))
+                .toList();
+
+        var shoppingLists = shoppingListRepository.findAllByHouseholdIdOrderByCreatedAtDesc(householdId).stream()
+                .map(list -> new ShoppingListSummary(list.getId(), list.getName()))
+                .toList();
+
+        var notifications = notificationRepository
+                .findAllByUserIdOrderByCreatedAtDesc(userId, PageRequest.of(0, 500))
+                .getContent().stream()
+                .map(NotificationResponse::from)
+                .toList();
+
+        log.info("Data export for user {}: {} receipts, {} rules, {} watched, {} aliases, {} overrides, {} manual, {} lists, {} notifications",
+                LogMasker.email(user.getEmail()), receipts.size(), notificationRules.size(),
+                watchedMarketCnpjs.size(), marketAliases.size(), categoryOverrides.size(),
+                manualPurchases.size(), shoppingLists.size(), notifications.size());
+
         return new UserDataExportResponse(
                 UserResponse.from(user),
+                accountExtras,
                 HouseholdResponse.from(household, members),
                 receipts,
+                notificationRules,
+                watchedMarketCnpjs,
+                subscription,
+                marketAliases,
+                customCategories,
+                categoryOverrides,
+                manualPurchases,
+                shoppingLists,
+                notifications,
                 LocalDateTime.now()
         );
     }

@@ -56,7 +56,7 @@ public class PromoDetector {
                     .map(p -> p.getUnitPrice())
                     .toList());
             var threshold = median
-                    .multiply(BigDecimal.valueOf(100 - properties.getPersonalPromo().getThresholdPct()))
+                    .multiply(BigDecimal.valueOf(100L - properties.getPersonalPromo().getThresholdPct()))
                     .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
 
             if (item.getUnitPrice().compareTo(threshold) < 0) {

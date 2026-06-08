@@ -205,7 +205,11 @@ class UserControllerTest {
                 UUID.randomUUID(), "ABC123", LocalDateTime.now().plusHours(48),
                 List.of(new HouseholdResponse.HouseholdMember(user.getId(), user.getName(), user.getEmail())),
                 LocalDateTime.now());
-        var export = new UserDataExportResponse(ur, hr, List.of(), LocalDateTime.now());
+        var accountExtras = new UserDataExportResponse.AccountExtras(null, true, null, true);
+        var export = new UserDataExportResponse(
+                ur, accountExtras, hr, List.of(), List.of(), List.of(), null,
+                List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
+                LocalDateTime.now());
         when(userService.exportData(any(User.class))).thenReturn(export);
 
         mockMvc.perform(get("/api/v1/users/me/export")

@@ -53,6 +53,7 @@ public class InsightsQueryService {
     private static final LocalDateTime EPOCH_CEIL = LocalDateTime.of(2999, 12, 31, 23, 59, 59);
     private static final int DEFAULT_LIMIT = 100;
     private static final int MAX_LIMIT = 500;
+    private static final String ORDER_BY_TOTAL_DESC = "SUM(ri.totalPrice) DESC";
 
     private final HouseholdProductCategoryOverrideService categoryOverrideService;
     private final SubscriptionGateService subscriptionGate;
@@ -425,7 +426,7 @@ public class InsightsQueryService {
         MARKET(
                 "r.cnpjEmitente, MAX(r.marketName)",
                 "r.cnpjEmitente",
-                "SUM(ri.totalPrice) DESC") {
+                ORDER_BY_TOTAL_DESC) {
             @Override Bucket toBucket(Object[] row) {
                 var cnpj = (String) row[0];
                 var marketName = (String) row[1];
@@ -435,7 +436,7 @@ public class InsightsQueryService {
         CHAIN(
                 "SUBSTRING(r.cnpjEmitente, 1, 8), MAX(r.marketName)",
                 "SUBSTRING(r.cnpjEmitente, 1, 8)",
-                "SUM(ri.totalPrice) DESC") {
+                ORDER_BY_TOTAL_DESC) {
             @Override Bucket toBucket(Object[] row) {
                 var cnpjRoot = (String) row[0];
                 var sampleName = (String) row[1];
@@ -445,7 +446,7 @@ public class InsightsQueryService {
         CATEGORY(
                 "p.category",
                 "p.category",
-                "SUM(ri.totalPrice) DESC") {
+                ORDER_BY_TOTAL_DESC) {
             @Override Bucket toBucket(Object[] row) {
                 var category = row[0] == null ? ProductCategory.OTHER : (ProductCategory) row[0];
                 return bucketOf(category.name(), category.name(), row, 1);
@@ -454,7 +455,7 @@ public class InsightsQueryService {
         PRODUCT(
                 "p.id, MAX(p.normalizedName)",
                 "p.id",
-                "SUM(ri.totalPrice) DESC") {
+                ORDER_BY_TOTAL_DESC) {
             @Override Bucket toBucket(Object[] row) {
                 var productId = row[0] == null ? null : ((UUID) row[0]).toString();
                 var name = (String) row[1];

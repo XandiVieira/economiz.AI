@@ -53,14 +53,14 @@ class ProductExtractorCascadeTest {
     void blankDescriptionReturnsEmptyWithoutTouchingCollaborators() {
         var result = extractor.extract("   ");
 
-        assertSame(ProductExtraction.empty(), result);
+        assertSame(ProductExtraction.EMPTY, result);
         verify(brandExtractor, never()).find(anyString());
         verify(dictionaryClassifier, never()).classify(anyString());
     }
 
     @Test
     void nullDescriptionReturnsEmpty() {
-        assertSame(ProductExtraction.empty(), extractor.extract(null));
+        assertSame(ProductExtraction.EMPTY, extractor.extract(null));
     }
 
     @Test

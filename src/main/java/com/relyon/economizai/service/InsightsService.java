@@ -32,6 +32,7 @@ public class InsightsService {
 
     private static final LocalDateTime EPOCH_FLOOR = LocalDateTime.of(1900, 1, 1, 0, 0);
     private static final LocalDateTime EPOCH_CEIL = LocalDateTime.of(2999, 12, 31, 23, 59, 59);
+    private static final String ENUM_PREFIX = "enum:";
 
     private final InsightsRepository insightsRepository;
     private final ProductRepository productRepository;
@@ -143,7 +144,7 @@ public class InsightsService {
                     : (globalCategory != null ? globalCategory.name() : ProductCategory.OTHER.name());
             // Discriminated bucket key so a custom category named like an enum doesn't merge.
             var bucketKey = override != null ? override.key()
-                    : "enum:" + (globalCategory != null ? globalCategory.name() : ProductCategory.OTHER.name());
+                    : ENUM_PREFIX + (globalCategory != null ? globalCategory.name() : ProductCategory.OTHER.name());
             // Derive the enum category from the (collision-free) key, not the label: a
             // custom bucket carries a null enum even when its name matches one.
             var effectiveCategory = categoryFromKey(bucketKey);
@@ -161,8 +162,8 @@ public class InsightsService {
      * has no enum (returns null); an {@code enum:NAME} key resolves to that enum.
      */
     private static ProductCategory categoryFromKey(String bucketKey) {
-        if (!bucketKey.startsWith("enum:")) return null;
-        var name = bucketKey.substring("enum:".length());
+        if (!bucketKey.startsWith(ENUM_PREFIX)) return null;
+        var name = bucketKey.substring(ENUM_PREFIX.length());
         for (var category : ProductCategory.values()) {
             if (category.name().equals(name)) return category;
         }

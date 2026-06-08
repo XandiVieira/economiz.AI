@@ -25,20 +25,22 @@ public final class UnitConverter {
     /** A computed normalized price tied to its base unit. */
     public record NormalizedPrice(BaseUnit baseUnit, BigDecimal pricePerBaseUnit) {}
 
+    private static final BigDecimal MILLI = new BigDecimal("0.001");
+
     private static final Map<String, UnitFactor> CONVERSIONS = Map.ofEntries(
             // Mass
             Map.entry("kg",  new UnitFactor(BaseUnit.KG, new BigDecimal("1"))),
             Map.entry("kgr", new UnitFactor(BaseUnit.KG, new BigDecimal("1"))),
             Map.entry("k",   new UnitFactor(BaseUnit.KG, new BigDecimal("1"))),
-            Map.entry("g",   new UnitFactor(BaseUnit.KG, new BigDecimal("0.001"))),
-            Map.entry("gr",  new UnitFactor(BaseUnit.KG, new BigDecimal("0.001"))),
-            Map.entry("grs", new UnitFactor(BaseUnit.KG, new BigDecimal("0.001"))),
+            Map.entry("g",   new UnitFactor(BaseUnit.KG, MILLI)),
+            Map.entry("gr",  new UnitFactor(BaseUnit.KG, MILLI)),
+            Map.entry("grs", new UnitFactor(BaseUnit.KG, MILLI)),
             Map.entry("mg",  new UnitFactor(BaseUnit.KG, new BigDecimal("0.000001"))),
             // Volume
             Map.entry("l",   new UnitFactor(BaseUnit.L,  new BigDecimal("1"))),
             Map.entry("lt",  new UnitFactor(BaseUnit.L,  new BigDecimal("1"))),
             Map.entry("lts", new UnitFactor(BaseUnit.L,  new BigDecimal("1"))),
-            Map.entry("ml",  new UnitFactor(BaseUnit.L,  new BigDecimal("0.001"))),
+            Map.entry("ml",  new UnitFactor(BaseUnit.L,  MILLI)),
             Map.entry("cl",  new UnitFactor(BaseUnit.L,  new BigDecimal("0.01"))),
             // Discrete count — common Portuguese pack synonyms
             Map.entry("un",  new UnitFactor(BaseUnit.UN, new BigDecimal("1"))),

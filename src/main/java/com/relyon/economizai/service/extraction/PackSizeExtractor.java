@@ -6,11 +6,11 @@ import java.util.regex.Pattern;
 public final class PackSizeExtractor {
 
     private static final Pattern WEIGHT_VOLUME = Pattern.compile(
-            "(\\d+(?:[.,]\\d+)?)\\s*(KG|G|MG|L|ML|CL)\\b",
+            "(\\d++(?:[.,]\\d++)?)\\s*+(KG|G|MG|L|ML|CL)\\b",
             Pattern.CASE_INSENSITIVE);
 
     private static final Pattern PACK_COUNT = Pattern.compile(
-            "(?:C\\s*[/.]|CX\\s*[/.]|PCT\\s*[/.]|COM\\s+)\\s*(\\d+)",
+            "(?:C\\s*+[/.]|CX\\s*+[/.]|PCT\\s*+[/.]|COM\\s++)\\s*+(\\d++)",
             Pattern.CASE_INSENSITIVE);
 
     private PackSizeExtractor() {}

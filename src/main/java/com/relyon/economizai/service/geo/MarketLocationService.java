@@ -35,6 +35,7 @@ public class MarketLocationService {
 
     private static final int MAX_GEOCODE_ATTEMPTS = 3;
     private static final int MAX_SEGMENT_ATTEMPTS = 3;
+    private static final String BRASIL_SUFFIX = ", Brasil";
 
     private final MarketLocationRepository repository;
     private final NominatimGeocoder geocoder;
@@ -182,11 +183,11 @@ public class MarketLocationService {
 
     private String buildGeocodeQuery(MarketLocation market) {
         if (market.getAddress() != null && !market.getAddress().isBlank()) {
-            return market.getAddress() + ", Brasil";
+            return market.getAddress() + BRASIL_SUFFIX;
         }
         if (market.getName() != null && !market.getName().isBlank()) {
-            return market.getName() + ", Brasil";
+            return market.getName() + BRASIL_SUFFIX;
         }
-        return "CNPJ " + market.getCnpj() + ", Brasil";
+        return "CNPJ " + market.getCnpj() + BRASIL_SUFFIX;
     }
 }

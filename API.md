@@ -109,7 +109,7 @@ GET    /api/v1/users/me                 → current user
 PUT    /api/v1/users/me                 { "name": "..." }
 PUT    /api/v1/users/me/password        { "currentPassword": "...", "newPassword": "..." }
 DELETE /api/v1/users/me                 → LGPD account deletion (cascades all data)
-GET    /api/v1/users/me/export          → LGPD data export (user + household + receipts)
+GET    /api/v1/users/me/export          → LGPD data export (ALL personal data: user + accountExtras + household + receipts + notificationRules + watchedMarketCnpjs + subscription + marketAliases + customCategories + categoryOverrides + manualPurchases + shoppingLists + notifications)
 PATCH  /api/v1/users/me/contribution    { "contributionOptIn": false }   ← LGPD opt-out from collaborative panel
 PATCH  /api/v1/users/me/location        { "latitude": -30.0277, "longitude": -51.2287 }
 PATCH  /api/v1/users/me/push-token      { "pushDeviceToken": "<FCM>" }   ← null/empty to clear

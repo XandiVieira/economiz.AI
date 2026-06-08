@@ -32,7 +32,7 @@ public class ProductExtractor {
 
     public ProductExtraction extract(String rawDescription) {
         if (rawDescription == null || rawDescription.isBlank()) {
-            return ProductExtraction.empty();
+            return ProductExtraction.EMPTY;
         }
         var packSize = PackSizeExtractor.extract(rawDescription);
         var brand = brandExtractor.find(rawDescription);

@@ -35,10 +35,10 @@ import javax.imageio.ImageIO;
 @RequiredArgsConstructor
 public class ProfilePictureService {
 
-    private static final Set<String> ALLOWED_TYPES = Set.of("image/jpeg", "image/jpg", "image/png", "image/webp");
+    private static final String FALLBACK_CONTENT_TYPE = "image/png";
+    private static final Set<String> ALLOWED_TYPES = Set.of("image/jpeg", "image/jpg", FALLBACK_CONTENT_TYPE, "image/webp");
     private static final int MAX_DIMENSION_PX = 512;
     private static final int FALLBACK_DIMENSION_PX = 256;
-    private static final String FALLBACK_CONTENT_TYPE = "image/png";
     // Hand-picked palette of brand-friendly background tones for the fallback
     // avatar. Picked deterministically by hashing the user's email so the same
     // user always gets the same color.
@@ -148,14 +148,14 @@ public class ProfilePictureService {
             var w = (int) Math.round(source.getWidth() * scale);
             var h = (int) Math.round(source.getHeight() * scale);
             var resized = new BufferedImage(w, h,
-                    "image/png".equalsIgnoreCase(contentType) ? BufferedImage.TYPE_INT_ARGB : BufferedImage.TYPE_INT_RGB);
+                    FALLBACK_CONTENT_TYPE.equalsIgnoreCase(contentType) ? BufferedImage.TYPE_INT_ARGB : BufferedImage.TYPE_INT_RGB);
             var g = resized.createGraphics();
             g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
             g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
             g.drawImage(source, 0, 0, w, h, null);
             g.dispose();
             var out = new ByteArrayOutputStream();
-            var format = "image/png".equalsIgnoreCase(contentType) ? "png" : "jpeg";
+            var format = FALLBACK_CONTENT_TYPE.equalsIgnoreCase(contentType) ? "png" : "jpeg";
             ImageIO.write(resized, format, out);
             return new ProcessedImage(out.toByteArray(), contentType);
         } catch (IOException ex) {

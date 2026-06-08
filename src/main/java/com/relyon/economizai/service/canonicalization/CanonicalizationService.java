@@ -57,6 +57,7 @@ public class CanonicalizationService {
                     case MATCHED -> matched++;
                     case CREATED -> created++;
                     case UNMATCHED -> unmatched++;
+                    default -> throw new IllegalStateException("Unexpected canonicalization result: " + result);
                 }
                 applyHouseholdFriendlyName(receipt, item);
             } finally {

@@ -28,6 +28,7 @@ public class HouseholdService {
     private static final int INVITE_LENGTH = 6;
     private static final int MAX_INVITE_ATTEMPTS = 10;
     private static final int INVITE_TTL_HOURS = 48;
+    private static final String HOUSEHOLD_MISSING_MSG = "Household missing for user ";
 
     private final HouseholdRepository householdRepository;
     private final UserRepository userRepository;
@@ -48,7 +49,7 @@ public class HouseholdService {
     @Transactional
     public HouseholdResponse regenerateInviteCode(User user) {
         var household = householdRepository.findById(user.getHousehold().getId())
-                .orElseThrow(() -> new IllegalStateException("Household missing for user " + LogMasker.email(user.getEmail())));
+                .orElseThrow(() -> new IllegalStateException(HOUSEHOLD_MISSING_MSG + LogMasker.email(user.getEmail())));
         household.setInviteCode(generateUniqueInviteCode());
         household.setInviteCodeExpiresAt(LocalDateTime.now().plusHours(INVITE_TTL_HOURS));
         var saved = householdRepository.save(household);
@@ -59,7 +60,7 @@ public class HouseholdService {
     @Transactional
     public HouseholdResponse removeMember(User actor, UUID memberId) {
         var household = householdRepository.findById(actor.getHousehold().getId())
-                .orElseThrow(() -> new IllegalStateException("Household missing for user " + LogMasker.email(actor.getEmail())));
+                .orElseThrow(() -> new IllegalStateException(HOUSEHOLD_MISSING_MSG + LogMasker.email(actor.getEmail())));
         if (actor.getId().equals(memberId)) {
             throw new IllegalArgumentException("Use POST /households/me/leave to leave on your own — kick is for others");
         }
@@ -78,7 +79,7 @@ public class HouseholdService {
     @Transactional(readOnly = true)
     public HouseholdResponse getMine(User user) {
         var household = householdRepository.findById(user.getHousehold().getId())
-                .orElseThrow(() -> new IllegalStateException("Household missing for user " + LogMasker.email(user.getEmail())));
+                .orElseThrow(() -> new IllegalStateException(HOUSEHOLD_MISSING_MSG + LogMasker.email(user.getEmail())));
         var members = userRepository.findAllByHouseholdId(household.getId());
         return HouseholdResponse.from(household, members);
     }

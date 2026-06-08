@@ -131,7 +131,7 @@ public class CommunityPromoService {
                 var recentMedian = PriceIndexService.median(recentPrices);
                 var baselineMedian = PriceIndexService.median(baselinePrices);
                 var threshold = baselineMedian
-                        .multiply(BigDecimal.valueOf(100 - properties.getCollaborative().getCommunityPromoThresholdPct()))
+                        .multiply(BigDecimal.valueOf(100L - properties.getCollaborative().getCommunityPromoThresholdPct()))
                         .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
 
                 if (recentMedian.compareTo(threshold) < 0) {

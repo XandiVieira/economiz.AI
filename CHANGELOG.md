@@ -16,6 +16,12 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-08 — LGPD data export is now complete (response grew)
+
+`GET /api/v1/users/me/export` now returns **all** of the user's personal data, not just account + household + receipts. New sections on `UserDataExportResponse`: `accountExtras` (push token, emailVerified/At, contributionOptIn), `notificationRules`, `watchedMarketCnpjs`, `subscription`, `marketAliases`, `customCategories`, `categoryOverrides`, `manualPurchases`, `shoppingLists`, and `notifications` (inbox). Purely additive — existing fields unchanged. (Account **deletion** — `DELETE /users/me` — was already complete: cascades all personal data, deletes the household when its last member leaves, and leaves anonymized price data intact per LGPD.)
+
+---
+
 ## 2026-06-08 — RevenueCat billing webhook + subscription expiry (apps are PRO-ready)
 
 The mobile PRO flow is now backend-complete. The apps integrate **RevenueCat** (one SDK over Apple StoreKit + Google Play Billing); when a purchase/renewal/expiration happens, RevenueCat calls **`POST /api/v1/webhooks/revenuecat`** and we sync the user's tier automatically.

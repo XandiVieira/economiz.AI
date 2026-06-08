@@ -66,7 +66,7 @@ class CategorizationBenchmarkServiceCoverageTest {
     void nullExtraction_countsUncategorized_andFailsBrandAndQuantity() {
         when(mlClassifier.getConfidenceThreshold()).thenReturn(0.75);
         // Extractor returns nothing → null category, null brand, null pack.
-        when(productExtractor.extract(anyString())).thenReturn(ProductExtraction.empty());
+        when(productExtractor.extract(anyString())).thenReturn(ProductExtraction.EMPTY);
         // ML shadow is below threshold → never counts as correct.
         when(mlClassifier.predictCategory(anyString()))
                 .thenReturn(new MlPrediction<>(ProductCategory.GROCERIES, 0.10));

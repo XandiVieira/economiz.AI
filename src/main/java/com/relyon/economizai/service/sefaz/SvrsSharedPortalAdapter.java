@@ -43,13 +43,13 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
 
     private static final String PORTAL_URL = "https://dfe-portal.svrs.rs.gov.br/Dfe/QrCodeNFce";
     private static final DateTimeFormatter ISSUED_AT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
-    private static final Pattern CNPJ = Pattern.compile("CNPJ\\s*:?\\s*([\\d./-]{14,18})", Pattern.CASE_INSENSITIVE);
-    private static final Pattern EMISSION = Pattern.compile("Emiss[aã]o\\s*:?\\s*(\\d{2}/\\d{2}/\\d{4}\\s+\\d{2}:\\d{2}:\\d{2})", Pattern.CASE_INSENSITIVE);
+    private static final Pattern CNPJ = Pattern.compile("CNPJ\\s*+:?\\s*+([\\d./-]{14,18})", Pattern.CASE_INSENSITIVE);
+    private static final Pattern EMISSION = Pattern.compile("Emiss[aã]o\\s*+:?\\s*+(\\d{2}/\\d{2}/\\d{4}\\s++\\d{2}:\\d{2}:\\d{2})", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     // IBPT-source line required by Lei 12.741/2012. Format observed across SVRS:
     //   "Trib aprox R$ 51,73 Federal, R$ 49,35 Estadual Fonte: IBPT B46141"
     // Decimal separator is comma (pt-BR); thousands separator is dot.
     private static final Pattern IBPT_TAX = Pattern.compile(
-            "Trib(?:utos)?\\s*aprox(?:imados)?\\s*R\\$?\\s*([\\d.,]+)\\s*Federal\\s*[,;]?\\s*R\\$?\\s*([\\d.,]+)\\s*Estadual",
+            "Trib(?:utos)?\\s*+aprox(?:imados)?\\s*+R\\$?\\s*+([\\d.,]++)\\s*+Federal\\s*+[,;]?\\s*+R\\$?\\s*+([\\d.,]++)\\s*+Estadual",
             Pattern.CASE_INSENSITIVE);
 
     private final RestClient restClient;

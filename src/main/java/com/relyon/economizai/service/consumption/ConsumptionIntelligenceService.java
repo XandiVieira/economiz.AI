@@ -21,9 +21,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -186,8 +186,7 @@ public class ConsumptionIntelligenceService {
         var adjustedInterval = avgIntervalDays * qtyMultiplier;
 
         var nextPurchase = lastEvent.date().plusDays(Math.round(adjustedInterval));
-        var daysUntil = Duration.between(LocalDate.now().atStartOfDay(),
-                nextPurchase.atStartOfDay()).toDays();
+        var daysUntil = ChronoUnit.DAYS.between(LocalDate.now(), nextPurchase);
         var status = classifyStatus(daysUntil, cfg);
 
         return new ConsumptionPredictionResponse(
@@ -220,8 +219,7 @@ public class ConsumptionIntelligenceService {
     private double averageIntervalDays(List<LocalDate> dates) {
         var intervals = new ArrayList<Long>();
         for (int i = 1; i < dates.size(); i++) {
-            intervals.add(Duration.between(dates.get(i - 1).atStartOfDay(),
-                    dates.get(i).atStartOfDay()).toDays());
+            intervals.add(ChronoUnit.DAYS.between(dates.get(i - 1), dates.get(i)));
         }
         return intervals.stream().mapToLong(Long::longValue).average().orElse(0);
     }

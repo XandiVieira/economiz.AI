@@ -71,7 +71,7 @@ class CategorizationDebugServiceTest {
 
     @Test
     void explain_handlesNoMlPrediction() {
-        when(productExtractor.extract("Xyz")).thenReturn(ProductExtraction.empty());
+        when(productExtractor.extract("Xyz")).thenReturn(ProductExtraction.EMPTY);
         when(dictionaryClassifier.classify("Xyz")).thenReturn(DictEntry.EMPTY);
         when(mlClassifier.getConfidenceThreshold()).thenReturn(0.75);
         when(mlClassifier.predictCategory("Xyz")).thenReturn(MlPrediction.empty());
@@ -87,7 +87,7 @@ class CategorizationDebugServiceTest {
 
     @Test
     void explainAll_skipsNulls() {
-        when(productExtractor.extract("A")).thenReturn(ProductExtraction.empty());
+        when(productExtractor.extract("A")).thenReturn(ProductExtraction.EMPTY);
         when(dictionaryClassifier.classify("A")).thenReturn(DictEntry.EMPTY);
         when(mlClassifier.getConfidenceThreshold()).thenReturn(0.75);
         when(mlClassifier.predictCategory("A")).thenReturn(MlPrediction.empty());

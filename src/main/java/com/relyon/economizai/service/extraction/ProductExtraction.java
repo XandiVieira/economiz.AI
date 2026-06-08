@@ -15,8 +15,4 @@ public record ProductExtraction(
 ) {
     public static final ProductExtraction EMPTY =
             new ProductExtraction(null, null, null, null, null, CategorizationSource.NONE);
-
-    public static ProductExtraction empty() {
-        return EMPTY;
-    }
 }

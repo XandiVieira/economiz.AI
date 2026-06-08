@@ -244,8 +244,8 @@ public class AdminProductService {
         var products = productRepository.findDuplicateCandidates();
         var groups = new LinkedHashMap<String, List<Product>>();
         for (var p : products) {
-            var key = p.getGenericName() + " " + p.getBrand() + " "
-                    + p.getPackSize() + " " + p.getPackUnit();
+            var key = p.getGenericName() + " " + p.getBrand() + " "
+                    + p.getPackSize() + " " + p.getPackUnit();
             groups.computeIfAbsent(key, k -> new ArrayList<>()).add(p);
         }
         var result = new ArrayList<DuplicateProductGroupResponse>(groups.size());
