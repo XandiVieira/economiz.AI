@@ -13,6 +13,7 @@ import com.relyon.economizai.service.extraction.CategorizationQualityService;
 import com.relyon.economizai.service.extraction.ConsensusPromotionService;
 import com.relyon.economizai.service.extraction.ml.MlClassifierService;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -26,6 +27,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -67,6 +70,19 @@ class CategorizerControllerTest {
                         .with(SecurityMockMvcRequestPostProcessors.user(principal())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray());
+    }
+
+    @Test
+    void classify_withoutDescriptionParam_passesEmptyListToService() throws Exception {
+        when(categorizationDebugService.explainAll(List.of())).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/v1/categorizer/classify")
+                        .with(SecurityMockMvcRequestPostProcessors.user(principal())))
+                .andExpect(status().isOk());
+
+        var captor = ArgumentCaptor.forClass(List.class);
+        verify(categorizationDebugService).explainAll(captor.capture());
+        assertThat(captor.getValue()).isEmpty();
     }
 
     @Test
