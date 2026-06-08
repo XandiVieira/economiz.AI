@@ -68,6 +68,19 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-06-08 10:13:34] FIX 3aa6bc0 - org.springframework.http.converter.HttpMessageNotReadableExc
+- **Error snippet:**
+```r
+org.springframework.http.converter.HttpMessageNotReadableException: JSON parse error: Cannot deserialize value of type `com.relyon.economizai.model.enums.NotificationChannel` from String "GARBAGE": not one of the values accepted for Enum class: [WHATSAPP, ALEXA, NONE, SMS, PUSH, EMAIL]
+```
+- **Reproduced by:** `com.relyon.economizai.controller.NotificationRuleControllerTest#create_withUnknownChannelEnum_returns400` (failed before fix, passes after)
+- **Root cause + fix:** Test now passes (build succeeded ÔÇö no FAILURE/ERROR lines, and the new warn log shows the handler catching the exact log-line error). The fix is minimal, follows existing conventions, and is global so it covers all endpoints (including the `UpdateNotificationPreferencesRequest` path that produced the original log).
+
+FIXED com.relyon.economizai.controller.NotificationRuleControllerTest#create_withUnknownChannelEnum_returns400 | Root cause: no @ExceptionHandler for HttpMessageNotReadableException, so an invalid enum value (e.g. channel="GARBAGE") in a request body fell through to the generic Exception handler and returned 500 instead of 400. Fix: added a handler in GlobalExceptionHandler that maps HttpMessageNotReadableException to 400 BAD_REQUEST with the existing "validation.failed" i18n message.
+- **Build:** PASS (mvnw test, full suite)
+- **Deploy:** pushed 3aa6bc0 -> auto-deploy, health **UP**
+- **Outcome:** RESOLVED
+
 ### [2026-06-07 22:46:08] âš ï¸ NEEDS-HUMAN Â· NO-REPRO (attempt 1x) - WARN  [    c.r.e.s.a.o.GoogleTokenVerifier - oauth.google.ve
 - **Error snippet:**
 ```r
@@ -80,6 +93,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
