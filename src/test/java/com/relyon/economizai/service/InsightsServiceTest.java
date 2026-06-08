@@ -173,6 +173,23 @@ class InsightsServiceTest {
     }
 
     @Test
+    void topMarkets_negativeLimit_returnsEmptyInsteadOfThrowing() {
+        var user = buildUser();
+        var householdId = user.getHousehold().getId();
+        stubEmptyAggregates(householdId, EPOCH_FLOOR, EPOCH_CEIL);
+        when(insightsRepository.spendByMarket(householdId, EPOCH_FLOOR, EPOCH_CEIL))
+                .thenReturn(List.of(
+                        new Object[]{"111", "A", new BigDecimal("30.00"), 3L},
+                        new Object[]{"222", "B", new BigDecimal("20.00"), 2L}));
+
+        // A negative limit reaches the controller unvalidated (?limit=-1) and would
+        // otherwise hit Stream.limit(-1), which throws IllegalArgumentException: -1.
+        var top = insightsService.topMarkets(user, null, null, -1);
+
+        assertTrue(top.isEmpty());
+    }
+
+    @Test
     void topCategories_globalLens_appliesLimitOverGlobalEnumGrouping() {
         var user = buildUser();
         var householdId = user.getHousehold().getId();

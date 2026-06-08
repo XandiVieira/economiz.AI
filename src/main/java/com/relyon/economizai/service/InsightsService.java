@@ -93,7 +93,7 @@ public class InsightsService {
 
     @Transactional(readOnly = true)
     public List<SpendInsightsResponse.MarketBucket> topMarkets(User user, LocalDateTime from, LocalDateTime to, int limit) {
-        return spend(user, from, to).byMarket().stream().limit(limit).toList();
+        return spend(user, from, to).byMarket().stream().limit(Math.max(0, limit)).toList();
     }
 
     /** Backwards-compatible entry point — uses the default HOUSEHOLD lens. */
@@ -105,10 +105,11 @@ public class InsightsService {
     @Transactional(readOnly = true)
     public List<CategoryBucket> topCategories(User user, LocalDateTime from, LocalDateTime to,
                                               int limit, CategoryView categoryView) {
+        var safeLimit = Math.max(0, limit);
         if (categoryView == CategoryView.GLOBAL) {
-            return spend(user, from, to).byCategory().stream().limit(limit).toList();
+            return spend(user, from, to).byCategory().stream().limit(safeLimit).toList();
         }
-        return householdCategoryBuckets(user, from, to).stream().limit(limit).toList();
+        return householdCategoryBuckets(user, from, to).stream().limit(safeLimit).toList();
     }
 
     /**
