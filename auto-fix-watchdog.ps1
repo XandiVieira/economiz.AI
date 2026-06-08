@@ -15,7 +15,7 @@
 # ---------------------------------------------------------------------------
 param(
     [switch]$DryRun,
-    [int]$MaxFixesPerHour = 3,
+    [int]$MaxFixesPerHour = 6,   # raised 3->6 during E2E: many legit fixes expected
     [int]$PollSeconds     = 20,
     [string]$Branch       = "development"
 )
@@ -296,9 +296,13 @@ function WaitForDeployAndHealth([int]$timeoutSec = 420) {
 # process running the new code takes over within one poll interval - no human
 # restart, ever. Guarded so a fetch/relaunch failure just logs and continues.
 $selfPath = $PSCommandPath
+# Relaunch args: only carry NON-default overrides. We deliberately DON'T pass
+# -MaxFixesPerHour so a relaunched process picks up the script's current default
+# (so bumping the default in the param block takes effect on the next self-update,
+# no need to also touch the Scheduled Task, which invokes with no args anyway).
 $selfArgs = @()
 if ($DryRun)        { $selfArgs += '-DryRun' }
-$selfArgs += @('-MaxFixesPerHour', $MaxFixesPerHour, '-PollSeconds', $PollSeconds, '-Branch', $Branch)
+$selfArgs += @('-PollSeconds', $PollSeconds, '-Branch', $Branch)
 # Hash of OUR OWN script file as it was on disk when this process started. Each
 # cycle we re-hash the file; if it differs, the on-disk script changed out from
 # under the running process (a git pull, the auto-deploy, a manual edit) and we
