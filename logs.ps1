@@ -5,12 +5,13 @@
 #   .\logs.ps1 -Errors        # only WARN/ERROR lines (live)
 #   .\logs.ps1 -Grep rcpt=abc # filter live app logs by a string (req/rcpt/user/item id)
 #   .\logs.ps1 -Db            # follow the database logs instead of the app
-#   .\logs.ps1 -Save          # dump current logs to logs\app-YYYY-MM-DD.log (+ db), then exit
+#   .\logs.ps1 -Save          # dump current logs to C:\economizai-data\logs\app-YYYY-MM-DD.log (+ db), then exit
 #   .\logs.ps1 -Since 30m     # show app logs from the last 30 minutes
 #
 # The -Save mode is also run daily by a scheduled task so you keep history on
 # disk (Docker's own json-file logs rotate at 20MB x10; -Save snapshots them to
-# readable dated files in logs\ , 14-day retention, OneDrive-synced).
+# readable dated files in C:\economizai-data\logs , 14-day retention). The data
+# dir lives OFF the project tree so logs are never committed or OneDrive-synced.
 # ---------------------------------------------------------------------------
 param(
     [switch]$Errors,
@@ -28,7 +29,8 @@ Set-Location $repo
 $container = if ($Db) { "economizai-db" } else { "economizai-app" }
 
 if ($Save) {
-    $logDir = Join-Path $repo "logs"
+    $dataRoot = $env:ECONOMIZAI_DATA_ROOT; if (-not $dataRoot) { $dataRoot = "C:\economizai-data" }
+    $logDir = Join-Path $dataRoot "logs"
     New-Item -ItemType Directory -Force -Path $logDir | Out-Null
     $date = Get-Date -Format "yyyy-MM-dd"
     foreach ($c in @("economizai-app", "economizai-db")) {

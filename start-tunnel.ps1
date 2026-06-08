@@ -7,18 +7,20 @@
 # What it does each start:
 #   1. launch cloudflared quick tunnel -> http://localhost:8080
 #   2. capture the random https://*.trycloudflare.com URL
-#   3. write it to current-tunnel-url.txt (so you can always find the live URL)
+#   3. write it to C:\economizai-data\logs\current-tunnel-url.txt (live URL)
 #   4. update .env CORS_ORIGINS (swap the old tunnel entry for the new one)
 #   5. restart the app container so the new origin is allowed for browser FE
 #   6. block on cloudflared (stays connected)
 # ---------------------------------------------------------------------------
 $ErrorActionPreference = "Continue"
 $repo    = "C:\Users\Xandi\OneDrive\Documents\projects\economiz.AI"
+$dataRoot = $env:ECONOMIZAI_DATA_ROOT; if (-not $dataRoot) { $dataRoot = "C:\economizai-data" }
+New-Item -ItemType Directory -Force -Path (Join-Path $dataRoot "logs") | Out-Null
 $cf      = "C:\Users\Xandi\AppData\Local\Microsoft\WinGet\Packages\Cloudflare.cloudflared_Microsoft.Winget.Source_8wekyb3d8bbwe\cloudflared.exe"
-$logFile = Join-Path $repo "tunnel.log"
-$urlFile = Join-Path $repo "current-tunnel-url.txt"
+$logFile = Join-Path $dataRoot "logs\tunnel.log"
+$urlFile = Join-Path $dataRoot "logs\current-tunnel-url.txt"
 $envFile = Join-Path $repo ".env"
-$cfLog   = Join-Path $repo "cf-quick.log"
+$cfLog   = Join-Path $dataRoot "logs\cf-quick.log"
 
 function Log($m){ Add-Content -Path $logFile -Value ("{0}  {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $m) }
 

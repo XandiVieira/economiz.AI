@@ -42,13 +42,16 @@ $container = "economizai-app"
 # every --build redeploy. Reading it lets the watchdog see error history across
 # deploys. Falls back to `docker logs` if the file isn't present yet.
 #
-# IMPORTANT: the running container is deployed from the GitHub Actions runner's
-# CHECKOUT, not this OneDrive working copy - so the bind-mounted log lives under
-# the runner's _work dir, NOT $repo\logs. Probe the known locations and use the
-# first that exists; fall back to the repo-local path for plain local dev.
+# The container bind-mounts its log to an ABSOLUTE machine path (see
+# docker-compose.yml), so the persistent app log lives in the machine data dir -
+# the same place regardless of whether the stack was started from the runner
+# checkout or a local working copy. Older deploys wrote it under the runner's
+# _work dir, so probe that legacy location too and use the first that exists.
+$dataRoot = $env:ECONOMIZAI_DATA_ROOT; if (-not $dataRoot) { $dataRoot = "C:\economizai-data" }
 $appLogCandidates = @(
-    "C:\actions-runner\_work\economiz.AI\economiz.AI\logs\app\app.log",  # deployed (runner checkout)
-    (Join-Path $repo "logs\app\app.log")                                  # local dev
+    (Join-Path $dataRoot "logs\app\app.log"),                            # current (machine data dir)
+    "C:\actions-runner\_work\economiz.AI\economiz.AI\logs\app\app.log",  # legacy (old runner-checkout mount)
+    (Join-Path $repo "logs\app\app.log")                                  # legacy (old local-dev mount)
 )
 function ResolveAppLog {
     foreach ($c in $appLogCandidates) { if (Test-Path $c) { return $c } }
@@ -135,11 +138,25 @@ function ErrorSnippet($allLines, [int]$startIdx) {
 # Claude fix and the build run against the latest code. Returns $true if the tree
 # is clean and current; $false if a rebase conflict (or other error) left it
 # dirty - in which case the caller must abort this cycle, not fix on a bad base.
+#
+# SAFETY GUARD: this runs against the OneDrive working copy, which is ALSO the
+# human's editing checkout. If the tree has uncommitted changes (someone is
+# mid-edit), we must NEVER `git reset --hard` - that silently destroys their
+# work. Skip the whole cycle instead and log it; the human commits when ready.
+# (TODO(prod): move the watchdog to a dedicated clone outside OneDrive so it can
+# never collide with human edits - see INFRASTRUCTURE.md.)
 function SyncBranch {
+    $dirty = & git status --porcelain 2>$null
+    if ($dirty) {
+        Log ("sync.skip working tree dirty ({0} change(s)) - not resetting; deferring to protect uncommitted work" -f (@($dirty).Count))
+        return $false
+    }
     & git fetch origin $Branch 2>$null
     & git rebase "origin/$Branch" 2>$null | Out-Null
     if ($LASTEXITCODE -ne 0) {
-        # Conflict or other rebase failure - abort cleanly, leave a pristine tree.
+        # Conflict or other rebase failure - abort cleanly. Tree was clean on
+        # entry (guarded above), so reset --hard here only discards the failed
+        # rebase state, never human work.
         & git rebase --abort 2>$null | Out-Null
         & git reset --hard "origin/$Branch" 2>$null | Out-Null
         return $false

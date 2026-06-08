@@ -16,7 +16,9 @@ $dockerExe   = "C:\Program Files\Docker\Docker\Docker Desktop.exe"
 $maxAttempts = 4            # clean (re)launches before giving up
 $pollSeconds = 10          # gap between 'docker version' polls
 $pollsPerTry = 18          # 18 * 10s = 3 min wait per launch attempt
-$logFile     = "C:\Users\Xandi\OneDrive\Documents\projects\economiz.AI\logs\docker-recovery.log"
+$dataRoot    = $env:ECONOMIZAI_DATA_ROOT; if (-not $dataRoot) { $dataRoot = "C:\economizai-data" }
+New-Item -ItemType Directory -Force -Path (Join-Path $dataRoot "logs") | Out-Null
+$logFile     = Join-Path $dataRoot "logs\docker-recovery.log"
 
 function Log($msg) {
     $line = "[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $msg

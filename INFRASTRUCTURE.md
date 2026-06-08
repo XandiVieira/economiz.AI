@@ -73,7 +73,7 @@ FE anywhere ──https──▶ economizai.economizai.workers.dev   (permanent 
   namespace (`TUNNEL`, key `origin`).
 - **Tunnel** (`start-tunnel.ps1`): on each start it captures the new `trycloudflare`
   URL, **writes it into the Worker's KV** (so the permanent URL auto-follows), and
-  publishes it to `current-tunnel-url.txt`. Kept alive by a logon task.
+  publishes it to `C:\economizai-data\logs\current-tunnel-url.txt`. Kept alive by a logon task.
 - **LAN path** (no internet needed): `http://192.168.68.108:8080` — needs same Wi-Fi +
   the firewall rule (TCP 8080, Private).
 - **→ prod:** replace the quick-tunnel + Worker with a **named Cloudflare tunnel on a
@@ -130,15 +130,35 @@ FE anywhere ──https──▶ economizai.economizai.workers.dev   (permanent 
 
 ---
 
+## Data directory
+
+All runtime data lives in the **machine data dir `C:\economizai-data`** (override via
+the `ECONOMIZAI_DATA_ROOT` env var), deliberately OUTSIDE the project tree / runner
+checkout so it's never committed or OneDrive-synced:
+- `C:\economizai-data\db-backups\` — `pg_dump` files
+- `C:\economizai-data\logs\` — app, tunnel, watchdog, recovery logs + `current-tunnel-url.txt`
+- `C:\economizai-data\logs\app\app.log` — persistent rolling app log (compose bind mount)
+- `C:\economizai-data\images\` — reserved for future host-side image storage
+
+DB data and profile pictures already live in Docker named volumes
+(`economizai-pgdata`, `economizai-profilepics`), also outside the tree.
+
+> **TODO (watchdog isolation):** the autonomous bug-fix watchdog currently runs git
+> ops against the OneDrive working copy (the human's editing checkout). A dirty-tree
+> guard now stops it from `reset --hard`-ing over uncommitted work, but the proper
+> fix is a dedicated clone outside OneDrive (e.g. `C:\economizai-watchdog`) so it can
+> never collide with edits. Not done yet — the runner checkout can't be reused (it's
+> Administrators-owned and rewritten on every deploy).
+
 ## Backups
 
-- **DB:** `backup-db.ps1` → compressed `pg_dump` to `db-backups\` (OneDrive-synced,
-  14-day retention, monthly anchors). Daily 03:00 via task `economizai - daily db backup`.
+- **DB:** `backup-db.ps1` → compressed `pg_dump` to `C:\economizai-data\db-backups\`
+  (14-day retention, monthly anchors). Daily 03:00 via task `economizai - daily db backup`.
   Verified restorable. Restore: `pg_restore -d <db> <file>.dump`.
-- **Logs:** `logs.ps1 -Save` → dated files in `logs\` (14-day). Daily 02:55 via task
-  `economizai - daily log save`.
-- **⚠️ Single-machine risk:** OneDrive sync is the only off-box copy. For real safety,
-  add a second destination (external drive / cloud bucket).
+- **Logs:** `logs.ps1 -Save` → dated files in `C:\economizai-data\logs\` (14-day). Daily
+  02:55 via task `economizai - daily log save`.
+- **⚠️ Off-box copy:** the data dir is no longer OneDrive-synced. For disaster recovery
+  add a second destination (external drive / cloud bucket / scheduled OneDrive copy).
 - **→ prod:** managed Postgres with automated backups + PITR; ship logs to a real
   aggregator.
 
@@ -151,7 +171,7 @@ FE anywhere ──https──▶ economizai.economizai.workers.dev   (permanent 
 - **CLI:** `logs.ps1` — `-Errors`, `-Grep rcpt=xxx`, `-Db`, `-Save`, `-Since 30m`.
   App logs carry MDC `req= user= rcpt= item=` — grep by `rcpt=<id>` to trace one
   receipt end-to-end.
-- **History:** `logs\*.log` (14-day, OneDrive-synced).
+- **History:** `C:\economizai-data\logs\*.log` (14-day; off the project tree).
 - **→ prod:** centralized logging (Loki/Grafana, Better Stack, New Relic) with longer
   retention + alerting; protect/disable Dozzle.
 

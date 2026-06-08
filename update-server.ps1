@@ -3,12 +3,14 @@
 # Manual:   powershell -ExecutionPolicy Bypass -File .\update-server.ps1
 # Auto:     run by the "economizai - auto update" Scheduled Task (see
 #           setup-autoupdate.ps1). Only rebuilds when there are NEW commits,
-#           so it's cheap to run often. Logs to update-server.log.
+#           so it's cheap to run often. Logs to the machine data dir.
 # ---------------------------------------------------------------------------
 $ErrorActionPreference = "Continue"
 $repo    = "C:\Users\Xandi\OneDrive\Documents\projects\economiz.AI"
+$dataRoot = $env:ECONOMIZAI_DATA_ROOT; if (-not $dataRoot) { $dataRoot = "C:\economizai-data" }
+New-Item -ItemType Directory -Force -Path (Join-Path $dataRoot "logs") | Out-Null
 $branch  = "development"
-$logFile = Join-Path $repo "update-server.log"
+$logFile = Join-Path $dataRoot "logs\update-server.log"
 function Log($m){ Add-Content -Path $logFile -Value ("{0}  {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $m) }
 
 Set-Location $repo

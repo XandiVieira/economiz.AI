@@ -1,9 +1,11 @@
 # economizai stack watchdog — keeps the dev server up.
 # Invoked by the "economizai - stack watchdog" Scheduled Task (at startup +
-# every 5 min). Safe to run manually too. Logs to stack-watchdog.log.
+# every 5 min). Safe to run manually too. Logs to the machine data dir.
 # ---------------------------------------------------------------------------
 $repo    = "C:\Users\Xandi\OneDrive\Documents\projects\economiz.AI"
-$logFile = Join-Path $repo "stack-watchdog.log"
+$dataRoot = $env:ECONOMIZAI_DATA_ROOT; if (-not $dataRoot) { $dataRoot = "C:\economizai-data" }
+New-Item -ItemType Directory -Force -Path (Join-Path $dataRoot "logs") | Out-Null
+$logFile = Join-Path $dataRoot "logs\stack-watchdog.log"
 $compose = "docker compose --profile server"
 $health  = "http://localhost:8080/actuator/health"
 

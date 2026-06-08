@@ -3,14 +3,14 @@
 # Manual:  powershell -ExecutionPolicy Bypass -File .\backup-db.ps1
 # Auto:    run by the "economizai - daily db backup" Scheduled Task.
 #
-# Writes a compressed pg_dump to db-backups\ (kept in OneDrive so it's also
-# synced off-machine -> survives a disk failure). Keeps the last 14 days,
-# plus the 1st-of-month dumps for longer history. Logs to db-backup.log.
+# Writes a compressed pg_dump to C:\economizai-data\db-backups (machine data
+# dir, OUTSIDE the project/runner checkout). Keeps the last 14 days, plus the
+# 1st-of-month dumps for longer history. Logs to the data dir's logs folder.
 # ---------------------------------------------------------------------------
 $ErrorActionPreference = "Stop"
-$repo    = "C:\Users\Xandi\OneDrive\Documents\projects\economiz.AI"
-$bkpDir  = Join-Path $repo "db-backups"
-$logFile = Join-Path $repo "db-backup.log"
+$dataRoot = $env:ECONOMIZAI_DATA_ROOT; if (-not $dataRoot) { $dataRoot = "C:\economizai-data" }
+$bkpDir  = Join-Path $dataRoot "db-backups"
+$logFile = Join-Path $dataRoot "logs\db-backup.log"
 $db      = "economizai"
 $dbUser  = "economizai"
 $keepDays = 14
@@ -18,6 +18,7 @@ $keepDays = 14
 function Log($m){ Add-Content -Path $logFile -Value ("{0}  {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $m) }
 
 New-Item -ItemType Directory -Force -Path $bkpDir | Out-Null
+New-Item -ItemType Directory -Force -Path (Split-Path $logFile) | Out-Null
 
 # Timestamp comes from the OS (this script runs on the machine, not in the
 # restricted workflow sandbox, so Get-Date is fine here).

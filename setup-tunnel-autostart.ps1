@@ -3,7 +3,8 @@
 #
 # Registers a Scheduled Task that runs start-tunnel.ps1 at logon and keeps the
 # Cloudflare tunnel alive (restarts it if it exits). start-tunnel.ps1 also
-# auto-syncs CORS and publishes the live URL to current-tunnel-url.txt.
+# auto-syncs CORS and publishes the live URL to
+# C:\economizai-data\logs\current-tunnel-url.txt.
 # ---------------------------------------------------------------------------
 $repo   = "C:\Users\Xandi\OneDrive\Documents\projects\economiz.AI"
 $user   = "$env:USERDOMAIN\$env:USERNAME"
@@ -22,4 +23,5 @@ Register-ScheduledTask -TaskName $task -Action $action -Trigger $trigger -Settin
 
 Write-Host "Tunnel auto-start task registered: '$task'" -ForegroundColor Green
 Get-ScheduledTask -TaskName $task | Select-Object TaskName, State | Format-List
-Write-Host "Live URL is always in: $repo\current-tunnel-url.txt" -ForegroundColor Cyan
+$dataRoot = $env:ECONOMIZAI_DATA_ROOT; if (-not $dataRoot) { $dataRoot = "C:\economizai-data" }
+Write-Host "Live URL is always in: $dataRoot\logs\current-tunnel-url.txt" -ForegroundColor Cyan
