@@ -39,7 +39,8 @@ mirror entries here.
 
 ## Community-default notifications: backfill + owners-query batched — MOSTLY RESOLVED (2026-06-09)
 - **Fixed**: a startup `NotificationDefaultsBackfill` (`ApplicationRunner`) now proactively materializes missing default rule rows for **all existing users** (idempotent bulk `INSERT...SELECT`, one query per default type), so community notifications no longer wait for the user to open settings. (Lazy seeding on `GET /notification-rules` + absent-as-enabled still apply as a fallback.) Also `NotificationRuleEngine` community defaults now run **2 queries per receipt** (one `IN` query per type over all products) instead of 2·P — the per-product `findActiveDefaultRuleOwnersWhoBought` N+1.
-- **Still open (smaller)**: the per-candidate `lastPaidPrice(productId, householdId)` lookup inside `fireCheaperMarket` is still one query per matching rule — fine at current volume, batch/cache before high write throughput. The 24h cooldown is per default-rule (coarse) — revisit if users want per-product granularity.
+- **Also fixed (2026-06-09)**: the per-candidate last-paid lookup in `fireCheaperMarket` is now batched — one `findLastPaidHistoryForProductByHouseholds(productId, householdIds)` query per product builds a `Map<householdId, lastPaid>`, replacing the former one-query-per-rule. So the community write path is now bounded (no per-rule N+1).
+- **Still open (minor)**: the 24h cooldown is per default-rule (coarse, one community ping/type/day/user) — revisit if users want per-product granularity.
 
 ---
 

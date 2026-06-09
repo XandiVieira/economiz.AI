@@ -221,12 +221,17 @@ public class NotificationRuleEngine {
                                                      Set<UUID> firedRuleIds) {
         if (owners.isEmpty()) return List.of();
 
+        var householdIds = owners.stream()
+                .map(rule -> rule.getUser().getHousehold().getId())
+                .collect(Collectors.toSet());
+        var lastPaidByHousehold = lastPaidByHousehold(productId, householdIds);
+
         var fired = new ArrayList<NotificationRule>();
         for (var rule : owners) {
             if (firedRuleIds.contains(rule.getId())) continue;
             if (sameHousehold(rule, contributingHouseholdId) || inCooldown(rule, now)) continue;
             var householdId = rule.getUser().getHousehold().getId();
-            var lastPaid = lastPaidPrice(productId, householdId);
+            var lastPaid = lastPaidByHousehold.get(householdId);
             if (lastPaid == null) continue;
             var requiredDrop = requiredDropFraction(lastPaid);
             var threshold = lastPaid.multiply(BigDecimal.valueOf(1.0 - requiredDrop));
@@ -290,11 +295,13 @@ public class NotificationRuleEngine {
                 .setScale(0, RoundingMode.HALF_UP);
     }
 
-    private BigDecimal lastPaidPrice(UUID productId, UUID householdId) {
-        var history = receiptItemRepository.findHouseholdHistoryForProduct(productId, householdId);
-        BigDecimal lastPaid = null;
-        for (var item : history) { // ordered oldest -> newest; keep the latest non-null unit price
-            if (item.getUnitPrice() != null) lastPaid = item.getUnitPrice();
+    /** Latest non-null unit price each household last paid for the product, in one query
+     *  (batches the former per-rule lookup). Rows arrive oldest->newest per household, so
+     *  the last non-null put wins. */
+    private Map<UUID, BigDecimal> lastPaidByHousehold(UUID productId, Set<UUID> householdIds) {
+        var lastPaid = new HashMap<UUID, BigDecimal>();
+        for (var row : receiptItemRepository.findLastPaidHistoryForProductByHouseholds(productId, householdIds)) {
+            if (row.getUnitPrice() != null) lastPaid.put(row.getHouseholdId(), row.getUnitPrice());
         }
         return lastPaid;
     }

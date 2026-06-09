@@ -11,6 +11,7 @@ import com.relyon.economizai.model.enums.NotificationType;
 import com.relyon.economizai.repository.NotificationRuleRepository;
 import com.relyon.economizai.repository.NotificationRuleRepository.ProductRuleOwner;
 import com.relyon.economizai.repository.ReceiptItemRepository;
+import com.relyon.economizai.repository.ReceiptItemRepository.HouseholdProductPrice;
 import com.relyon.economizai.repository.UserWatchedMarketRepository;
 import com.relyon.economizai.service.geo.MarketLocationService;
 import com.relyon.economizai.service.geo.MarketNameService;
@@ -102,6 +103,13 @@ class NotificationRuleEngineTest {
 
     private MarketLocation marketAt(BigDecimal latitude, BigDecimal longitude) {
         return MarketLocation.builder().cnpj(CNPJ).latitude(latitude).longitude(longitude).build();
+    }
+
+    private HouseholdProductPrice lastPaid(UUID householdId, BigDecimal unitPrice) {
+        return new HouseholdProductPrice() {
+            public UUID getHouseholdId() { return householdId; }
+            public BigDecimal getUnitPrice() { return unitPrice; }
+        };
     }
 
     private ProductRuleOwner ruleOwner(UUID productId, NotificationRule rule) {
@@ -201,8 +209,8 @@ class NotificationRuleEngineTest {
                 .thenReturn(List.of(ruleOwner(PRODUCT_ID, rule)));
         lenient().when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(eq(NotificationType.PROMO_COMMUNITY), anyCollection()))
                 .thenReturn(List.of());
-        when(receiptItemRepository.findHouseholdHistoryForProduct(PRODUCT_ID, OWNER_HOUSEHOLD))
-                .thenReturn(List.of(ReceiptItem.builder().unitPrice(new BigDecimal("10.00")).build()));
+        when(receiptItemRepository.findLastPaidHistoryForProductByHouseholds(eq(PRODUCT_ID), anyCollection()))
+                .thenReturn(List.of(lastPaid(OWNER_HOUSEHOLD, new BigDecimal("10.00"))));
         when(watchedMarketRepository.existsByUserIdAndMarketCnpj(owner.getId(), CNPJ)).thenReturn(true);
 
         engine.evaluate(List.of(observation(new BigDecimal("5.00"))), CONTRIBUTOR_HOUSEHOLD); // 50% drop
@@ -222,8 +230,8 @@ class NotificationRuleEngineTest {
                 .thenReturn(List.of(ruleOwner(PRODUCT_ID, rule)));
         lenient().when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(eq(NotificationType.PROMO_COMMUNITY), anyCollection()))
                 .thenReturn(List.of());
-        when(receiptItemRepository.findHouseholdHistoryForProduct(PRODUCT_ID, OWNER_HOUSEHOLD))
-                .thenReturn(List.of(ReceiptItem.builder().unitPrice(new BigDecimal("10.00")).build()));
+        when(receiptItemRepository.findLastPaidHistoryForProductByHouseholds(eq(PRODUCT_ID), anyCollection()))
+                .thenReturn(List.of(lastPaid(OWNER_HOUSEHOLD, new BigDecimal("10.00"))));
         when(watchedMarketRepository.existsByUserIdAndMarketCnpj(owner.getId(), CNPJ)).thenReturn(false);
 
         engine.evaluate(List.of(observation(new BigDecimal("5.00"))), CONTRIBUTOR_HOUSEHOLD);
@@ -241,8 +249,8 @@ class NotificationRuleEngineTest {
                 .thenReturn(List.of(ruleOwner(PRODUCT_ID, rule)));
         lenient().when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(eq(NotificationType.PROMO_COMMUNITY), anyCollection()))
                 .thenReturn(List.of());
-        when(receiptItemRepository.findHouseholdHistoryForProduct(PRODUCT_ID, OWNER_HOUSEHOLD))
-                .thenReturn(List.of(ReceiptItem.builder().unitPrice(new BigDecimal("10.00")).build()));
+        when(receiptItemRepository.findLastPaidHistoryForProductByHouseholds(eq(PRODUCT_ID), anyCollection()))
+                .thenReturn(List.of(lastPaid(OWNER_HOUSEHOLD, new BigDecimal("10.00"))));
         lenient().when(watchedMarketRepository.existsByUserIdAndMarketCnpj(owner.getId(), CNPJ)).thenReturn(true);
 
         engine.evaluate(List.of(observation(new BigDecimal("9.90"))), CONTRIBUTOR_HOUSEHOLD); // 1% drop

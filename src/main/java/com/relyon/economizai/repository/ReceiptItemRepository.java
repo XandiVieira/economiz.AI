@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -53,6 +55,28 @@ public interface ReceiptItemRepository extends JpaRepository<ReceiptItem, UUID> 
     """)
     List<ReceiptItem> findHouseholdHistoryForProduct(@Param("productId") UUID productId,
                                                      @Param("householdId") UUID householdId);
+
+    /** Batched version of the above for many households at once (avoids an N+1 over
+     *  candidate rules in the community write path). Rows ordered oldest->newest per
+     *  household so the caller keeps the latest non-null unit price per household. */
+    @Query("""
+        SELECT r.household.id AS householdId, ri.unitPrice AS unitPrice
+        FROM ReceiptItem ri
+        JOIN ri.receipt r
+        WHERE ri.product.id = :productId
+          AND r.household.id IN :householdIds
+          AND r.status = 'CONFIRMED'
+          AND ri.excluded = false
+        ORDER BY r.household.id, r.issuedAt ASC NULLS FIRST
+    """)
+    List<HouseholdProductPrice> findLastPaidHistoryForProductByHouseholds(@Param("productId") UUID productId,
+                                                                          @Param("householdIds") Collection<UUID> householdIds);
+
+    /** Projection for {@link #findLastPaidHistoryForProductByHouseholds}. */
+    interface HouseholdProductPrice {
+        UUID getHouseholdId();
+        BigDecimal getUnitPrice();
+    }
 
     /** All confirmed, non-excluded purchases of any product by this household, oldest first.
      *  Joins receipt + product so callers can build per-product histories without N+1. */
