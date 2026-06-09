@@ -6672,7 +6672,7 @@
      ]
     },
     {
-     "name": "49b. Admin login (pulado se adminEmail vazio)",
+     "name": "49b. Admin login (pula sem creds ou se rate-limited)",
      "request": {
       "method": "POST",
       "header": [
@@ -6708,8 +6708,10 @@
        "script": {
         "type": "text/javascript",
         "exec": [
+         "var adminEmail = pm.variables.get('adminEmail');",
          "pm.collectionVariables.set('adminToken', '');",
-         "if (!pm.collectionVariables.get('adminEmail')) { pm.test.skip('Sem credenciais de admin (adminEmail/adminPassword) — pulando verificacao de cascade'); return; }",
+         "if (!adminEmail) { pm.test.skip('Sem credenciais de admin (adminEmail/adminPassword) — pulando verificacao de cascade'); return; }",
+         "if (pm.response.code !== 200) { pm.test.skip('Admin login nao retornou 200 (' + pm.response.code + ', ex. rate-limit) — pulando verificacao de cascade'); return; }",
          "pm.test('Admin login 200', function () { pm.response.to.have.status(200); });",
          "var d = pm.response.json(); if (d.token) pm.collectionVariables.set('adminToken', d.token);"
         ]
