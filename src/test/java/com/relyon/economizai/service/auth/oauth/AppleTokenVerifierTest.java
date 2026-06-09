@@ -110,29 +110,33 @@ class AppleTokenVerifierTest {
         var token = tokens.sign(baseClaims()
                 .expirationTime(new Date(System.currentTimeMillis() - 60_000))
                 .build());
+        var verifier = verifier(CLIENT_ID);
 
-        assertThrows(InvalidOAuthTokenException.class, () -> verifier(CLIENT_ID).verify(token, "Joao"));
+        assertThrows(InvalidOAuthTokenException.class, () -> verifier.verify(token, "Joao"));
     }
 
     @Test
     void verify_wrongIssuer_rejected() {
         var token = tokens.sign(baseClaims().issuer("https://evil.example.com").build());
+        var verifier = verifier(CLIENT_ID);
 
-        assertThrows(InvalidOAuthTokenException.class, () -> verifier(CLIENT_ID).verify(token, "Joao"));
+        assertThrows(InvalidOAuthTokenException.class, () -> verifier.verify(token, "Joao"));
     }
 
     @Test
     void verify_wrongAudience_rejected_whenConfigured() {
         var token = tokens.sign(baseClaims().audience("some-other-app").build());
+        var verifier = verifier(CLIENT_ID);
 
-        assertThrows(InvalidOAuthTokenException.class, () -> verifier(CLIENT_ID).verify(token, "Joao"));
+        assertThrows(InvalidOAuthTokenException.class, () -> verifier.verify(token, "Joao"));
     }
 
     @Test
     void verify_badSignature_rejected() {
         var token = tokens.sign(baseClaims().build());
         when(keySource.keySet(JWKS_URL)).thenReturn(OAuthTestTokens.unrelatedJwks());
+        var verifier = verifier(CLIENT_ID);
 
-        assertThrows(InvalidOAuthTokenException.class, () -> verifier(CLIENT_ID).verify(token, "Joao"));
+        assertThrows(InvalidOAuthTokenException.class, () -> verifier.verify(token, "Joao"));
     }
 }
