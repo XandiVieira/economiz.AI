@@ -10,7 +10,9 @@ import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.service.priceindex.PriceIndexService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +44,13 @@ public class MarketLocationService {
     private final CnpjActivityClient cnpjActivityClient;
     private final ProductRepository productRepository;
 
+    // Self-reference so per-item @Transactional calls go through the Spring proxy
+    // (a direct call would bypass it). Defaults to `this` for plain unit tests;
+    // Spring replaces it with the lazy proxy at runtime.
+    @Lazy
+    @Autowired
+    private MarketLocationService self = this;
+
     @Value("${economizai.geo.geocode-delay-ms:1100}")
     private long geocodeDelayMs;
 
@@ -69,7 +78,7 @@ public class MarketLocationService {
         if (pending.isEmpty()) return;
         log.info("geocode.batch.start pending={}", pending.size());
         for (var market : pending) {
-            geocodeOne(market);
+            self.geocodeOne(market);
             // Throttle to respect Nominatim's 1 req/sec policy
             try {
                 Thread.sleep(geocodeDelayMs);
@@ -128,7 +137,7 @@ public class MarketLocationService {
         var other = 0;
         var unknown = 0;
         for (var market : pending) {
-            classifySegmentOne(market);
+            self.classifySegmentOne(market);
             switch (market.getSegment()) {
                 case PHARMACY -> pharmacy++;
                 case SUPERMARKET -> supermarket++;
