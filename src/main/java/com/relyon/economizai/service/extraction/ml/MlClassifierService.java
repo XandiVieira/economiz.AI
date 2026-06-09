@@ -68,6 +68,12 @@ public class MlClassifierService {
 
     @PostConstruct
     void trainOnStartup() {
+        // INTENTIONALLY this.retrain(), NOT self.retrain() (Sonar S6809 is a false
+        // positive here): during @PostConstruct the bean is still being created, so
+        // calling through the @Lazy self proxy triggers BeanCurrentlyInCreation
+        // (circular reference) and the context fails to start. The proxy is only
+        // safe AFTER construction (see scheduledRetrain). The startup transaction
+        // isn't critical - findAll() works fine without the read-only optimization.
         retrain();
     }
 
