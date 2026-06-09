@@ -68,6 +68,14 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-06-08 13:14:30] [NEEDS-HUMAN] CLAUDE-TIMEOUT (attempt 1x) - org.springframework.web.HttpRequestMethodNotSupportedExcepti
+- **Error snippet:**
+```r
+org.springframework.web.HttpRequestMethodNotSupportedException: Request method 'GET' is not supported
+```
+- **Outcome:** the fixer call exceeded 300s and was killed; partial edits discarded.
+- **Note for human:** bug still live; autonomous diagnosis timed out - needs eyes.
+
 ### [2026-06-08 13:09:22] [NEEDS-HUMAN] NO-TEST-DIFF (attempt 1x) - ERROR [    c.r.e.e.GlobalExceptionHandler - Unexpected error
 - **Error snippet:**
 ```r
@@ -328,6 +336,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
