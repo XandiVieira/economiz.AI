@@ -76,6 +76,21 @@
    "value": "",
    "type": "string",
    "description": "economizai.billing.webhook-secret value; empty in dev (check skipped)."
+  },
+  {
+   "key": "adminEmail",
+   "value": "",
+   "type": "string"
+  },
+  {
+   "key": "adminPassword",
+   "value": "",
+   "type": "string"
+  },
+  {
+   "key": "adminToken",
+   "value": "",
+   "type": "string"
   }
  ],
  "item": [
@@ -6603,13 +6618,189 @@
          "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
          "// Clear correlation variables so a re-run starts clean",
          "pm.collectionVariables.set('token', '');",
-         "pm.collectionVariables.set('e2eReceiptId', '');",
          "pm.collectionVariables.set('e2eReceiptItemId', '');",
          "pm.collectionVariables.set('e2eProductId', '');",
          "pm.collectionVariables.set('e2eAlertId', '');",
-         "pm.collectionVariables.set('e2eHouseholdId', '');",
          "pm.collectionVariables.set('e2eMarketCnpj', '');",
          "pm.collectionVariables.set('e2eCustomCategoryId', '');"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "49a. Login com credenciais deletadas falha (conta apagada)",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/v1/auth/login",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "v1",
+        "auth",
+        "login"
+       ]
+      },
+      "auth": {
+       "type": "noauth"
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"email\": \"{{e2eEmail}}\",\n  \"password\": \"{{e2ePassword}}\"\n}"
+      }
+     },
+     "response": [],
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Login da conta deletada retorna 401', function () { pm.response.to.have.status(401); });"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "49b. Admin login (pulado se adminEmail vazio)",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/v1/auth/login",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "v1",
+        "auth",
+        "login"
+       ]
+      },
+      "auth": {
+       "type": "noauth"
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+      }
+     },
+     "response": [],
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.collectionVariables.set('adminToken', '');",
+         "if (!pm.collectionVariables.get('adminEmail')) { pm.test.skip('Sem credenciais de admin (adminEmail/adminPassword) — pulando verificacao de cascade'); return; }",
+         "pm.test('Admin login 200', function () { pm.response.to.have.status(200); });",
+         "var d = pm.response.json(); if (d.token) pm.collectionVariables.set('adminToken', d.token);"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "49c. Admin: a conta deletada nao existe mais (404)",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Authorization",
+        "value": "Bearer {{adminToken}}"
+       },
+       {
+        "key": "Accept-Language",
+        "value": "pt"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/v1/admin/users/{{e2eUserId}}",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "v1",
+        "admin",
+        "users",
+        "{{e2eUserId}}"
+       ]
+      }
+     },
+     "response": [],
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "if (!pm.collectionVariables.get('adminToken')) { pm.test.skip('Sem admin — pulando'); return; }",
+         "pm.test('GET /admin/users/{deletedId} -> 404', function () { pm.response.to.have.status(404); });"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "49d. Admin: a nota do usuario sumiu (404, prova do cascade)",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Authorization",
+        "value": "Bearer {{adminToken}}"
+       },
+       {
+        "key": "Accept-Language",
+        "value": "pt"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/v1/admin/receipts/{{e2eReceiptId}}",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "v1",
+        "admin",
+        "receipts",
+        "{{e2eReceiptId}}"
+       ]
+      }
+     },
+     "response": [],
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "if (pm.collectionVariables.get('adminToken') && pm.collectionVariables.get('e2eReceiptId')) {",
+         "    pm.test('GET /admin/receipts/{deletedReceiptId} -> 404 (cascade)', function () { pm.response.to.have.status(404); });",
+         "} else { pm.test.skip('Sem admin ou sem nota — pulando'); }",
+         "// limpeza final das variaveis",
+         "pm.collectionVariables.set('e2eReceiptId', '');",
+         "pm.collectionVariables.set('e2eHouseholdId', '');",
+         "pm.collectionVariables.set('adminToken', '');"
         ]
        }
       }
