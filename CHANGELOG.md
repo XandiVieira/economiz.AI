@@ -16,6 +16,18 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-09 — "Ofertas pra você": new `GET /api/v1/deals` screen endpoint
+
+New endpoint: `GET /api/v1/deals` (JWT, scoped to your household). The active, ranked list of discounts relevant to you right now — for each product your household buys, the best **currently-observed** community price at a relevant market that beats what you last paid by a meaningful margin.
+
+- Params (all optional): `includeNearby` (default `false` = watched markets only; `true` also pulls in markets within `radiusKm` of home), `radiusKm`, `limit` (default 20; `limit <= 0` → `[]`).
+- Each row carries `productId`, `productName`, `category`, `marketCnpj`, `marketName` (your friendly name), `currentPrice`, `lastPaidPrice`, `savingsAmount`, `savingsPct`, `discountFraction`, `distinctHouseholds`, `distanceKm` (nullable), `isWatched`, `observedAt`.
+- Ranked by savings desc; trivial drops are filtered out (progressive bar: ~20% on cheap items, ~5% on pricey ones). K-anon protected — community price shows only when ≥ 3 households contributed. Returns `[]` when the index is off or nothing qualifies.
+
+FE reminder: this endpoint is read-only and fires **no** telemetry. Fire `SCREEN_OPENED` when the screen opens, and `DEAL_VIEWED` / `DEAL_TAPPED` as the user scrolls/taps, via `POST /api/v1/notifications/events` — key them by the row's `productId` + `marketCnpj`. See API.md §7b.
+
+---
+
 ## 2026-06-09 — Notification telemetry: report client-side engagement events
 
 New endpoint: `POST /api/v1/notifications/events` (JWT, scoped to you) — body `{ "type": "...", "notificationId"?, "productId"?, "marketCnpj"? }`, returns `202`.

@@ -53,14 +53,6 @@ public class NotificationRuleEngine {
     /** Don't fire the same rule more than once within this window. */
     private static final Duration COOLDOWN = Duration.ofHours(24);
 
-    // Cheaper-market default: the required drop scales with price. A 20% cut on a
-    // R$1 item matters; on a R$200 item even 5% is real money. We interpolate the
-    // required drop on log-price between the anchors below, clamped to [MIN, MAX].
-    private static final double MAX_DROP = 0.20;                          // cheap items need a deep cut
-    private static final double MIN_DROP = 0.05;                          // pricey items: small % still matters
-    private static final BigDecimal LOW_PRICE_ANCHOR = new BigDecimal("1");    // R$1  -> 20% required
-    private static final BigDecimal HIGH_PRICE_ANCHOR = new BigDecimal("200"); // R$200 -> 5% required
-
     private final NotificationRuleRepository ruleRepository;
     private final ReceiptItemRepository receiptItemRepository;
     private final UserWatchedMarketRepository watchedMarketRepository;
@@ -240,7 +232,7 @@ public class NotificationRuleEngine {
             var householdId = rule.getUser().getHousehold().getId();
             var lastPaid = lastPaidByHousehold.get(householdId);
             if (lastPaid == null) continue;
-            var requiredDrop = requiredDropFraction(lastPaid);
+            var requiredDrop = RelevanceThreshold.requiredDropFraction(lastPaid);
             var threshold = lastPaid.multiply(BigDecimal.valueOf(1.0 - requiredDrop));
 
             var hit = observations.stream()
@@ -278,21 +270,6 @@ public class NotificationRuleEngine {
         }
         return rule.getRadiusKm() != null
                 && withinRadius(rule.getRadiusKm(), rule.getUser(), observation, locations);
-    }
-
-    /**
-     * Required drop fraction for a cheaper-market hit, scaled by price: a deep cut on a
-     * cheap item, a shallow one on a pricey item. Interpolated on log-price between the
-     * anchors and clamped to [{@link #MIN_DROP}, {@link #MAX_DROP}].
-     */
-    private double requiredDropFraction(BigDecimal lastPaid) {
-        var price = lastPaid.doubleValue();
-        var low = LOW_PRICE_ANCHOR.doubleValue();
-        var high = HIGH_PRICE_ANCHOR.doubleValue();
-        if (price <= low) return MAX_DROP;
-        if (price >= high) return MIN_DROP;
-        var position = Math.log(price / low) / Math.log(high / low); // 0 at low, 1 at high
-        return MAX_DROP - (MAX_DROP - MIN_DROP) * position;
     }
 
     private BigDecimal savingsPercent(BigDecimal lastPaid, BigDecimal observed) {

@@ -28,6 +28,12 @@ mirror entries here.
 - **LGPD**: `notification_events` is per-user behavioral data on the user's own account. The DB FK is `ON DELETE CASCADE` (account delete reaps it), but it is **NOT yet in `UserService.exportData`** — fold it into the LGPD data-export when that's extended (see the entry above). Flagged.
 - **Before prod / before the learning phase**: build the digest/screen/attribution producers that emit SENT/DELIVERED/CONVERTED and the consumer that ranks on this data; revisit jsonb + export.
 
+## Deals screen ("Ofertas pra você") — Phase B of the notifications overhaul (2026-06-09)
+- **Now**: `GET /api/v1/deals` + `DealsService` compute the household's currently-relevant discounts on demand. For each product the household bought, it calls `PriceIndexService.bestMarkets` (k-anon + radius + watched logic reused as-is) and keeps the cheapest market that beats last-paid by the progressive `RelevanceThreshold.requiredDropFraction` bar (extracted out of `NotificationRuleEngine` so the engine and the deals screen share one definition). Ranked by savings desc, tie-broken by purchase frequency.
+- **Query cost**: one history query for the household, then one `bestMarkets` lookup per distinct product bought (each a couple of small queries). On-demand single-user, so acceptable — but it's an **N-product fan-out** that will want batching once a household buys hundreds of distinct products or once the digest (Phase C) computes this for many users at once.
+- **Phase C (digest) reuses this**: the same deal computation feeds the future digest push, which will dedup against `deal_surface_state` (created in Phase A, still unread) so it only re-pushes a deal when the discount/price meaningfully changes. Savings **attribution** (did the user actually buy it cheaper after we surfaced it?) is also a later phase.
+- **Telemetry**: this endpoint emits none by design — the app self-reports `SCREEN_OPENED` / `DEAL_VIEWED` / `DEAL_TAPPED` via the Phase A events API.
+
 ## ~~`bestMarkets` k-anon count is an N+1~~ — RESOLVED (2026-06-09)
 - **Fixed**: `bestMarkets` now batches the distinct-household k-anon counts into one `GROUP BY` query (`countDistinctHouseholdsForProductByMarket` → `Map<cnpj,count>`) instead of one query per market. `referencePrice` still uses the single-market count (one product+market, no N+1).
 

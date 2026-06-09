@@ -587,6 +587,52 @@ GET /api/v1/price-index/promos?radiusKm=5
 
 ---
 
+## 7b. Deals — "Ofertas pra você"
+
+The active, ranked list of discounts currently relevant to the household: for
+every product the household has bought, the best **currently-observed** community
+price at a relevant market that beats what the household last paid by a
+meaningful margin. This is the screen a future digest push will deep-link into.
+
+```
+GET /api/v1/deals?includeNearby=false&radiusKm=5&limit=20
+→ [
+    {
+      "productId":        "…",
+      "productName":      "Leite Integral 1L",
+      "category":         "MEAT_DAIRY",
+      "marketCnpj":       "12345678000199",
+      "marketName":       "Atacadão (Centro)",   // household friendly name
+      "currentPrice":     7.00,                   // k-anon community median
+      "lastPaidPrice":    10.00,
+      "savingsAmount":    3.00,
+      "savingsPct":       30.00,
+      "discountFraction": 0.3000,
+      "distinctHouseholds": 4,
+      "distanceKm":       2.3,                    // nullable
+      "isWatched":        true,
+      "observedAt":       "2026-06-01T18:00:00"
+    }
+  ]
+```
+
+Params (all optional): `includeNearby` (default `false` — watched markets only;
+`true` also considers markets within `radiusKm` of home), `radiusKm`,
+`limit` (default 20; `limit <= 0` returns `[]`).
+
+Ranking: by savings (discount fraction) desc, tie-broken by purchase frequency.
+The discount bar is **progressive** — ~20% required on a R$1 item, ~5% on a
+R$200 one — so trivial drops don't surface. K-anonymity protected: the community
+price is disclosed only when ≥ 3 distinct households contributed; below that the
+market is dropped. Returns `[]` when the collaborative index is off or nothing
+qualifies.
+
+This endpoint emits **no** telemetry. The app reports `SCREEN_OPENED` on open and
+`DEAL_VIEWED` / `DEAL_TAPPED` on interaction itself, via
+`POST /api/v1/notifications/events` (§10b), keyed by `productId` + `marketCnpj`.
+
+---
+
 ## 8. Consumption intelligence
 
 Per-product purchase prediction + suggested shopping list, derived from
