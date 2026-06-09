@@ -26,14 +26,26 @@ public final class JaroWinklerSimilarity {
         var len2 = s2.length();
         if (len1 == 0 || len2 == 0) return 0.0;
 
-        var matchDistance = Math.max(len1, len2) / 2 - 1;
         var s1Matches = new boolean[len1];
         var s2Matches = new boolean[len2];
+        var matches = findMatches(s1, s2, s1Matches, s2Matches);
+        if (matches == 0) return 0.0;
 
+        var transpositions = countTranspositions(s1, s2, s1Matches, s2Matches);
+        var jaro = jaroScore(matches, transpositions, len1, len2);
+        return applyPrefixBoost(s1, s2, jaro);
+    }
+
+    /**
+     * Mark, in s1Matches/s2Matches, the characters that match within the Jaro
+     * match window, and return how many matched.
+     */
+    private static int findMatches(String s1, String s2, boolean[] s1Matches, boolean[] s2Matches) {
+        var matchDistance = Math.max(s1.length(), s2.length()) / 2 - 1;
         var matches = 0;
-        for (var i = 0; i < len1; i++) {
+        for (var i = 0; i < s1.length(); i++) {
             var start = Math.max(0, i - matchDistance);
-            var end = Math.min(i + matchDistance + 1, len2);
+            var end = Math.min(i + matchDistance + 1, s2.length());
             for (var j = start; j < end; j++) {
                 if (s2Matches[j] || s1.charAt(i) != s2.charAt(j)) continue;
                 s1Matches[i] = true;
@@ -42,22 +54,31 @@ public final class JaroWinklerSimilarity {
                 break;
             }
         }
-        if (matches == 0) return 0.0;
+        return matches;
+    }
 
+    /** Count matched characters that appear in a different order between the strings. */
+    private static int countTranspositions(String s1, String s2, boolean[] s1Matches, boolean[] s2Matches) {
         var k = 0;
         var transpositions = 0;
-        for (var i = 0; i < len1; i++) {
+        for (var i = 0; i < s1.length(); i++) {
             if (!s1Matches[i]) continue;
             while (!s2Matches[k]) k++;
             if (s1.charAt(i) != s2.charAt(k)) transpositions++;
             k++;
         }
+        return transpositions;
+    }
 
+    private static double jaroScore(int matches, int transpositions, int len1, int len2) {
         var m = (double) matches;
-        var jaro = (m / len1 + m / len2 + (m - transpositions / 2.0) / m) / 3.0;
+        return (m / len1 + m / len2 + (m - transpositions / 2.0) / m) / 3.0;
+    }
 
+    /** Boost the Jaro score for a shared leading prefix (up to PREFIX_MAX chars). */
+    private static double applyPrefixBoost(String s1, String s2, double jaro) {
         var prefix = 0;
-        var prefixLimit = Math.min(Math.min(len1, len2), PREFIX_MAX);
+        var prefixLimit = Math.min(Math.min(s1.length(), s2.length()), PREFIX_MAX);
         for (var i = 0; i < prefixLimit; i++) {
             if (s1.charAt(i) == s2.charAt(i)) prefix++;
             else break;
