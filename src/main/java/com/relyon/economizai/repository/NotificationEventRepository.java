@@ -22,7 +22,7 @@ public interface NotificationEventRepository extends JpaRepository<NotificationE
         FROM NotificationEvent event
         WHERE event.user.id IN :userIds
           AND event.eventType = 'CONVERTED'
-          AND (:since IS NULL OR event.occurredAt >= :since)
+          AND (CAST(:since AS java.time.OffsetDateTime) IS NULL OR event.occurredAt >= :since)
     """)
     SavingsRollup sumConvertedSavings(@Param("userIds") Collection<UUID> userIds,
                                       @Param("since") OffsetDateTime since);
