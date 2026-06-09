@@ -1,6 +1,7 @@
 package com.relyon.economizai.service.priceindex;
 
 import com.relyon.economizai.config.CollaborativeProperties;
+import com.relyon.economizai.model.MarketLocation;
 import com.relyon.economizai.model.PriceObservation;
 import com.relyon.economizai.model.PriceObservationAudit;
 import com.relyon.economizai.model.Receipt;
@@ -21,6 +22,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -171,32 +173,43 @@ public class PriceIndexService {
                 .collect(Collectors.toMap(MarketHouseholdCount::getCnpj, MarketHouseholdCount::getHouseholds));
 
         return byMarket.entrySet().stream()
-                .map(entry -> {
-                    var cnpj = entry.getKey();
-                    var rows = entry.getValue();
-                    if (rows.size() < properties.getCollaborative().getMinObservationsPerProductMarket()) return null;
-                    var distinct = householdCounts.getOrDefault(cnpj, 0L);
-                    if (distinct < properties.getCollaborative().getMinHouseholdsForPublic()) return null;
-                    var location = locations.get(cnpj);
-                    var isWatched = watched.contains(cnpj);
-                    Double distanceKm = null;
-                    if (userLatitude != null && userLongitude != null && location != null && location.hasCoordinates()) {
-                        distanceKm = DistanceCalculator.kmBetween(
-                                userLatitude, userLongitude, location.getLatitude(), location.getLongitude());
-                        if (radiusKm != null && distanceKm > radiusKm && !isWatched) return null;
-                    } else if (radiusKm != null && userLatitude != null && !isWatched) {
-                        return null;
-                    }
-                    var prices = rows.stream().map(PriceObservation::getUnitPrice).toList();
-                    return new MarketPriceRow(cnpj, cnpjRoot(cnpj), rows.get(0).getMarketName(),
-                            median(prices), min(prices), rows.size(), distinct, distanceKm, isWatched);
-                })
+                .map(entry -> toMarketRow(entry.getKey(), entry.getValue(),
+                        householdCounts, locations, watched, userLatitude, userLongitude, radiusKm))
                 .filter(Objects::nonNull)
                 .sorted(Comparator
                         .comparing(MarketPriceRow::watching, Comparator.reverseOrder())
                         .thenComparing(MarketPriceRow::medianPrice))
                 .limit(Math.max(0, limit))
                 .toList();
+    }
+
+    /**
+     * Build a public MarketPriceRow for one market's observations, or null if it
+     * doesn't qualify: too few observations, fails k-anonymity, or (when a radius
+     * is set) is out of range and not watched. Extracted from bestMarkets to keep
+     * that method's cognitive complexity within bounds (S3776).
+     */
+    private MarketPriceRow toMarketRow(String cnpj, List<PriceObservation> rows,
+                                       Map<String, Long> householdCounts,
+                                       Map<String, MarketLocation> locations,
+                                       Set<String> watched,
+                                       BigDecimal userLatitude, BigDecimal userLongitude, Double radiusKm) {
+        if (rows.size() < properties.getCollaborative().getMinObservationsPerProductMarket()) return null;
+        var distinct = householdCounts.getOrDefault(cnpj, 0L);
+        if (distinct < properties.getCollaborative().getMinHouseholdsForPublic()) return null;
+        var location = locations.get(cnpj);
+        var isWatched = watched.contains(cnpj);
+        Double distanceKm = null;
+        if (userLatitude != null && userLongitude != null && location != null && location.hasCoordinates()) {
+            distanceKm = DistanceCalculator.kmBetween(
+                    userLatitude, userLongitude, location.getLatitude(), location.getLongitude());
+            if (radiusKm != null && distanceKm > radiusKm && !isWatched) return null;
+        } else if (radiusKm != null && userLatitude != null && !isWatched) {
+            return null;
+        }
+        var prices = rows.stream().map(PriceObservation::getUnitPrice).toList();
+        return new MarketPriceRow(cnpj, cnpjRoot(cnpj), rows.get(0).getMarketName(),
+                median(prices), min(prices), rows.size(), distinct, distanceKm, isWatched);
     }
 
     /** Median (50th percentile) of a price list. Returns null on empty. */
