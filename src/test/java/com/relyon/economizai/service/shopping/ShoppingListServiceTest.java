@@ -98,9 +98,10 @@ class ShoppingListServiceTest {
                 .createdBy(user)
                 .name("Alheia")
                 .build();
-        when(listRepository.findById(foreignList.getId())).thenReturn(Optional.of(foreignList));
+        var foreignListId = foreignList.getId();
+        when(listRepository.findById(foreignListId)).thenReturn(Optional.of(foreignList));
 
-        assertThrows(ShoppingListNotFoundException.class, () -> service.get(user, foreignList.getId()));
+        assertThrows(ShoppingListNotFoundException.class, () -> service.get(user, foreignListId));
     }
 
     @Test
@@ -196,8 +197,9 @@ class ShoppingListServiceTest {
         when(listRepository.findById(list.getId())).thenReturn(Optional.of(list));
 
         var request = new AddShoppingListItemRequest(null, "   ", BigDecimal.ONE);
+        var listId = list.getId();
         assertThrows(InvalidShoppingListItemException.class,
-                () -> service.addItem(user, list.getId(), request));
+                () -> service.addItem(user, listId, request));
     }
 
     @Test
@@ -207,8 +209,9 @@ class ShoppingListServiceTest {
 
         // Exactly-one rule: providing BOTH productId and freeText is invalid.
         var request = new AddShoppingListItemRequest(UUID.randomUUID(), "leite", BigDecimal.ONE);
+        var listId = list.getId();
         assertThrows(InvalidShoppingListItemException.class,
-                () -> service.addItem(user, list.getId(), request));
+                () -> service.addItem(user, listId, request));
         verify(itemRepository, never()).save(any());
         verify(productRepository, never()).findById(any());
     }
@@ -222,8 +225,9 @@ class ShoppingListServiceTest {
         });
 
         var items = List.of(new CreateShoppingListRequest.Item(UUID.randomUUID(), "papel", BigDecimal.ONE));
+        var createRequest = new CreateShoppingListRequest("Compras", items);
         assertThrows(InvalidShoppingListItemException.class,
-                () -> service.create(user, new CreateShoppingListRequest("Compras", items)));
+                () -> service.create(user, createRequest));
         verify(itemRepository, never()).save(any());
     }
 
@@ -235,8 +239,9 @@ class ShoppingListServiceTest {
         when(productRepository.findById(missingProductId)).thenReturn(Optional.empty());
 
         var request = new AddShoppingListItemRequest(missingProductId, null, BigDecimal.ONE);
+        var listId = list.getId();
         assertThrows(ProductNotFoundException.class,
-                () -> service.addItem(user, list.getId(), request));
+                () -> service.addItem(user, listId, request));
     }
 
     @Test
@@ -271,9 +276,11 @@ class ShoppingListServiceTest {
     void toggleItem_throwsWhenItemNotOnList() {
         var list = list("Compras", List.of(item("arroz", 0)));
         when(listRepository.findById(list.getId())).thenReturn(Optional.of(list));
+        var listId = list.getId();
+        var missingItemId = UUID.randomUUID();
 
         assertThrows(ShoppingListNotFoundException.class,
-                () -> service.toggleItem(user, list.getId(), UUID.randomUUID()));
+                () -> service.toggleItem(user, listId, missingItemId));
     }
 
     @Test
@@ -294,9 +301,11 @@ class ShoppingListServiceTest {
     void removeItem_throwsWhenItemNotOnList() {
         var list = list("Compras", List.of(item("arroz", 0)));
         when(listRepository.findById(list.getId())).thenReturn(Optional.of(list));
+        var listId = list.getId();
+        var missingItemId = UUID.randomUUID();
 
         assertThrows(ShoppingListNotFoundException.class,
-                () -> service.removeItem(user, list.getId(), UUID.randomUUID()));
+                () -> service.removeItem(user, listId, missingItemId));
     }
 
     private ShoppingList list(String name, List<ShoppingListItem> items) {
