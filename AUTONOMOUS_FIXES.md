@@ -68,6 +68,16 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-06-09 17:45:01] [NEEDS-HUMAN] NO-REPRO (attempt 1x) - org.springframework.dao.InvalidDataAccessResourceUsageExcept
+- **Error snippet:**
+```r
+org.springframework.dao.InvalidDataAccessResourceUsageException: JDBC exception executing SQL [ERROR: could not determine data type of parameter $2] [select coalesce(sum(ne1_0.savings_amount),0),count(ne1_0.id) from notification_events ne1_0 where ne1_0.user_id in (?) and ne1_0.event_type='CONVERTED' and (? is null or ne1_0.occurred_at>=?)]; SQL [select coalesce(sum(ne1_0.savings_amount),0),count(ne1_0.id) from notification_events ne1_0 where ne1_0.user_id in (?) and ne1_0.event_type='CONVERTED' and (? is null or ne1_0.occurred_at>=?)]
+at com.relyon.economizai.service.notifications.SavingsService.summarize(SavingsService.java:38)
+```
+- **Outcome:** could NOT reproduce the bug with a failing test; no code changed.
+- **Detail:** REPRO_FAIL Bug is PostgreSQL-only (param-type inference on `:since IS NULL`); test profile runs H2/H2Dialect with no Testcontainers, and the identical SQL passes on H2 ÔÇö cannot write a test that fails for the right reason.
+- **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 ### [2026-06-09 17:41:54] [NEEDS-HUMAN] NO-REPRO (attempt 1x) - ERROR [    c.r.e.e.GlobalExceptionHandler - Unexpected error
 - **Status code:** 542
 - **Error snippet:**
@@ -392,6 +402,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
