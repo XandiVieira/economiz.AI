@@ -84,26 +84,7 @@ public class AutoPromotionService {
 
     @Transactional
     public synchronized PromotionOutcome promote() {
-        var products = productRepository.findAll();
-        var byToken = new HashMap<String, TokenStats>();
-
-        for (var p : products) {
-            if (p.getNormalizedName() == null) continue;
-            var tokens = phraseTokens(p.getNormalizedName());
-            for (var token : tokens) {
-                var stats = byToken.computeIfAbsent(token, k -> new TokenStats());
-                if (p.getCategorizationSource() == CategorizationSource.USER) {
-                    stats.userOverrides++;
-                } else if (p.getCategorizationSource() == CategorizationSource.ML
-                        && p.getCategory() != null) {
-                    stats.mlSamples++;
-                    stats.categoryCounts.merge(p.getCategory(), 1, Integer::sum);
-                    if (p.getGenericName() != null) {
-                        stats.genericNameCounts.merge(p.getGenericName(), 1, Integer::sum);
-                    }
-                }
-            }
-        }
+        var byToken = aggregateTokenStats(productRepository.findAll());
 
         var promoted = 0;
         var skippedHuman = 0;
@@ -138,6 +119,32 @@ public class AutoPromotionService {
         var outcome = new PromotionOutcome(promoted, skippedHuman, skippedAgreement, skippedSamples, totalLearned);
         log.info("auto_promote.done {}", outcome);
         return outcome;
+    }
+
+    /**
+     * Aggregate per-token stats across all products: user-override counts and ML
+     * sample/category/genericName tallies. Extracted from promote() to keep its
+     * cognitive complexity within bounds (S3776).
+     */
+    private HashMap<String, TokenStats> aggregateTokenStats(List<Product> products) {
+        var byToken = new HashMap<String, TokenStats>();
+        for (var p : products) {
+            if (p.getNormalizedName() == null) continue;
+            for (var token : phraseTokens(p.getNormalizedName())) {
+                var stats = byToken.computeIfAbsent(token, k -> new TokenStats());
+                if (p.getCategorizationSource() == CategorizationSource.USER) {
+                    stats.userOverrides++;
+                } else if (p.getCategorizationSource() == CategorizationSource.ML
+                        && p.getCategory() != null) {
+                    stats.mlSamples++;
+                    stats.categoryCounts.merge(p.getCategory(), 1, Integer::sum);
+                    if (p.getGenericName() != null) {
+                        stats.genericNameCounts.merge(p.getGenericName(), 1, Integer::sum);
+                    }
+                }
+            }
+        }
+        return byToken;
     }
 
     private int refreshClassifierMemory() {
