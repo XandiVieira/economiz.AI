@@ -15,8 +15,13 @@ import com.relyon.economizai.model.enums.SubscriptionTier;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.LocalizedMessageService;
 import com.relyon.economizai.service.UserService;
+import com.relyon.economizai.dto.request.UpdatePhoneRequest;
+import com.relyon.economizai.dto.request.VerifyPhoneRequest;
+import com.relyon.economizai.exception.InvalidPhoneNumberException;
+import com.relyon.economizai.exception.InvalidPhoneVerificationException;
 import com.relyon.economizai.service.notifications.NotificationPreferenceService;
 import com.relyon.economizai.service.auth.EmailVerificationService;
+import com.relyon.economizai.service.auth.PhoneVerificationService;
 import com.relyon.economizai.service.profile.ProfilePictureService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,6 +45,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -74,6 +80,9 @@ class UserControllerTest {
 
     @MockitoBean
     private EmailVerificationService emailVerificationService;
+
+    @MockitoBean
+    private PhoneVerificationService phoneVerificationService;
 
     private User buildUser() {
         var user = User.builder()
@@ -218,6 +227,70 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.user.email").value(user.getEmail()))
                 .andExpect(jsonPath("$.household.inviteCode").value("ABC123"))
                 .andExpect(jsonPath("$.receipts").isArray());
+    }
+
+    @Test
+    void updatePhone_returns204OnValidE164() throws Exception {
+        var user = buildUser();
+        var request = new UpdatePhoneRequest("+5551999999999");
+
+        mockMvc.perform(patch("/api/v1/users/me/phone")
+                        .with(SecurityMockMvcRequestPostProcessors.user(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void updatePhone_returns400ForMalformedNumber() throws Exception {
+        var user = buildUser();
+        var request = new UpdatePhoneRequest("5551999999999");
+
+        mockMvc.perform(patch("/api/v1/users/me/phone")
+                        .with(SecurityMockMvcRequestPostProcessors.user(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void updatePhone_returns400WhenServiceRejectsNumber() throws Exception {
+        var user = buildUser();
+        var request = new UpdatePhoneRequest("+5551999999999");
+        doThrow(new InvalidPhoneNumberException())
+                .when(phoneVerificationService).setPhoneAndSendOtp(any(User.class), any(String.class));
+
+        mockMvc.perform(patch("/api/v1/users/me/phone")
+                        .with(SecurityMockMvcRequestPostProcessors.user(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void verifyPhone_returns204OnCorrectCode() throws Exception {
+        var user = buildUser();
+        var request = new VerifyPhoneRequest("123456");
+
+        mockMvc.perform(post("/api/v1/users/me/phone/verify")
+                        .with(SecurityMockMvcRequestPostProcessors.user(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void verifyPhone_returns400OnWrongOrExpiredCode() throws Exception {
+        var user = buildUser();
+        var request = new VerifyPhoneRequest("000000");
+        doThrow(new InvalidPhoneVerificationException())
+                .when(phoneVerificationService).verify(any(User.class), any(String.class));
+
+        mockMvc.perform(post("/api/v1/users/me/phone/verify")
+                        .with(SecurityMockMvcRequestPostProcessors.user(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

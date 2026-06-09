@@ -17,6 +17,7 @@ import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.LocalizedMessageService;
 import com.relyon.economizai.service.UserService;
 import com.relyon.economizai.service.auth.EmailVerificationService;
+import com.relyon.economizai.service.auth.PhoneVerificationService;
 import com.relyon.economizai.service.notifications.NotificationPreferenceService;
 import com.relyon.economizai.service.profile.ProfilePictureService;
 import org.junit.jupiter.api.Test;
@@ -61,6 +62,7 @@ class UserControllerCoverageTest {
     @MockitoBean private NotificationPreferenceService notificationPreferenceService;
     @MockitoBean private ProfilePictureService profilePictureService;
     @MockitoBean private EmailVerificationService emailVerificationService;
+    @MockitoBean private PhoneVerificationService phoneVerificationService;
     @MockitoBean private JwtService jwtService;
     @MockitoBean private UserDetailsService userDetailsService;
 

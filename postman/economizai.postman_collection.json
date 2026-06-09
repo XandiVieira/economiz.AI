@@ -663,6 +663,75 @@
      "response": []
     },
     {
+     "name": "Set phone number (sends OTP)",
+     "request": {
+      "method": "PATCH",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Accept-Language",
+        "value": "pt"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/v1/users/me/phone",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "v1",
+        "users",
+        "me",
+        "phone"
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"phoneNumber\": \"+5551999999999\"\n}"
+      }
+     },
+     "response": []
+    },
+    {
+     "name": "Verify phone (OTP)",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Accept-Language",
+        "value": "pt"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/v1/users/me/phone/verify",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "v1",
+        "users",
+        "me",
+        "phone",
+        "verify"
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"code\": \"123456\"\n}"
+      }
+     },
+     "response": []
+    },
+    {
      "name": "Get notification preferences",
      "request": {
       "method": "GET",

@@ -34,4 +34,10 @@ public final class LogMasker {
         if (token == null || token.length() < 8) return token == null ? null : "****";
         return "****" + token.substring(token.length() - 4);
     }
+
+    /** E.164 phone → "****<last 2>"; keep just enough to correlate. null/short passes through. */
+    public static String phone(String phone) {
+        if (phone == null || phone.length() < 2) return phone;
+        return "****" + phone.substring(phone.length() - 2);
+    }
 }

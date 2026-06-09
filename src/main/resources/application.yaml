@@ -148,14 +148,19 @@ economizai:
         # work for moderate volume; setting this raises rate limits and powers Expo's
         # analytics dashboard. Generate at https://expo.dev → Account → Access Tokens.
         access-token: ${EXPO_ACCESS_TOKEN:}
-    # Stub channels — structure only, dispatch records a "not implemented" failure.
-    # Wire credentials + the provider call in each *Dispatcher before flipping these on.
+    # Twilio backs BOTH the SMS and WhatsApp channels (one Messages API). Off by
+    # default — a channel only delivers when its From number + creds are set AND
+    # the target user has a verified phone; otherwise the dispatcher records a
+    # graceful "twilio_not_configured" / "phone_not_verified" failure. Swappable:
+    # TwilioMessageClient is the only seam to replace for another provider.
+    twilio:
+      account-sid: ${TWILIO_ACCOUNT_SID:}
+      auth-token: ${TWILIO_AUTH_TOKEN:}
+      from-sms: ${TWILIO_FROM_SMS:}              # e.g. +15551234567
+      from-whatsapp: ${TWILIO_FROM_WHATSAPP:}    # e.g. +14155238886 (Twilio WhatsApp sender, no whatsapp: prefix)
+    # Alexa remains a stub — structure only, dispatch records a "not implemented" failure.
     alexa:
       enabled: ${NOTIFICATIONS_ALEXA_ENABLED:false}     # Alexa Skill Messaging / Proactive Events
-    sms:
-      enabled: ${NOTIFICATIONS_SMS_ENABLED:false}       # Twilio / Zenvia
-    whatsapp:
-      enabled: ${NOTIFICATIONS_WHATSAPP_ENABLED:false}  # WhatsApp Cloud API (Meta)
     # Background jobs that drive scheduled notification types.
     replenishment:
       interval-ms: ${NOTIFICATIONS_REPLENISHMENT_INTERVAL_MS:21600000}   # every 6h: predict product runout

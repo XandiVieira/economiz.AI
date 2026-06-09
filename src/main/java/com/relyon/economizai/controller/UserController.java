@@ -4,8 +4,10 @@ import com.relyon.economizai.dto.request.ChangePasswordRequest;
 import com.relyon.economizai.dto.request.UpdateContributionRequest;
 import com.relyon.economizai.dto.request.UpdateHomeLocationRequest;
 import com.relyon.economizai.dto.request.UpdateNotificationPreferencesRequest;
+import com.relyon.economizai.dto.request.UpdatePhoneRequest;
 import com.relyon.economizai.dto.request.UpdatePushTokenRequest;
 import com.relyon.economizai.dto.request.UpdateUserRequest;
+import com.relyon.economizai.dto.request.VerifyPhoneRequest;
 import com.relyon.economizai.dto.response.NotificationPreferenceResponse;
 import com.relyon.economizai.dto.response.UserDataExportResponse;
 import com.relyon.economizai.dto.response.UserResponse;
@@ -13,6 +15,7 @@ import com.relyon.economizai.model.User;
 import com.relyon.economizai.service.LocalizedMessageService;
 import com.relyon.economizai.service.UserService;
 import com.relyon.economizai.service.auth.EmailVerificationService;
+import com.relyon.economizai.service.auth.PhoneVerificationService;
 import com.relyon.economizai.service.notifications.NotificationPreferenceService;
 import com.relyon.economizai.service.profile.ProfilePictureService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -46,6 +49,7 @@ public class UserController {
     private final NotificationPreferenceService notificationPreferenceService;
     private final ProfilePictureService profilePictureService;
     private final EmailVerificationService emailVerificationService;
+    private final PhoneVerificationService phoneVerificationService;
 
     @GetMapping("/me")
     public ResponseEntity<UserResponse> getProfile(@AuthenticationPrincipal User user) {
@@ -137,6 +141,20 @@ public class UserController {
     @PostMapping("/me/email-verification/resend")
     public ResponseEntity<Void> resendEmailVerification(@AuthenticationPrincipal User user) {
         emailVerificationService.resend(user);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/me/phone")
+    public ResponseEntity<Void> updatePhone(@AuthenticationPrincipal User user,
+                                            @Valid @RequestBody UpdatePhoneRequest request) {
+        phoneVerificationService.setPhoneAndSendOtp(user, request.phoneNumber());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/me/phone/verify")
+    public ResponseEntity<Void> verifyPhone(@AuthenticationPrincipal User user,
+                                            @Valid @RequestBody VerifyPhoneRequest request) {
+        phoneVerificationService.verify(user, request.code());
         return ResponseEntity.noContent().build();
     }
 }

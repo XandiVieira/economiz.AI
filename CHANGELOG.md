@@ -16,6 +16,16 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-09 — Phone number + verification; SMS/WhatsApp notifications now deliver
+
+New endpoints to set and verify a user phone:
+- `PATCH /api/v1/users/me/phone` — body `{ "phoneNumber": "+5551999999999" }` (E.164). Stores the number (as unverified), generates a 6-digit OTP, and sends it via SMS. Returns `204`. Malformed/non-E.164 number → `400`.
+- `POST /api/v1/users/me/phone/verify` — body `{ "code": "123456" }`. Correct + unexpired code marks the phone verified and returns `204`; wrong/expired/missing → `400`.
+
+The `User` now has `phoneNumber` (E.164, nullable) and `phoneVerified` (boolean) on the backend. The **SMS** and **WHATSAPP** notification channels are now real: when the server has Twilio configured **and** the user has a verified phone, notifications routed to those channels actually deliver (via Twilio's Messages API). If Twilio isn't configured or the phone isn't verified, dispatch degrades gracefully (the in-app inbox row is still written, marked not-delivered with a `twilio_not_configured` / `phone_not_verified` reason) — no error to the user. ALEXA remains a stub.
+
+---
+
 ## 2026-06-09 — Default notification rules backfilled for existing users
 
 Default notification rules (PROMO_COMMUNITY, CHEAPER_MARKET, DIGEST, PROMO_PERSONAL) are now materialized for **all existing users** on startup, not just new signups / first time the screen is opened. `GET /api/v1/notification-rules` already seeds them lazily, so the response shape is unchanged — but accounts that never opened the screen will now have the toggles present immediately. Idempotent; triggers were already firing regardless (an absent default counts as enabled).

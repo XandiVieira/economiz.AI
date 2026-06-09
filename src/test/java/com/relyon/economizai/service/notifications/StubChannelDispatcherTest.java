@@ -28,24 +28,4 @@ class StubChannelDispatcherTest {
         assertFalse(result.delivered());
         assertNotNull(result.failureReason());
     }
-
-    @Test
-    void smsDispatcher_reportsChannelAndUndeliveredStub() {
-        var dispatcher = new SmsDispatcher();
-
-        assertEquals(NotificationChannel.SMS, dispatcher.channel());
-        var result = dispatcher.dispatch(payload());
-        assertFalse(result.delivered());
-        assertNotNull(result.failureReason());
-    }
-
-    @Test
-    void whatsAppDispatcher_reportsChannelAndUndeliveredStub() {
-        var dispatcher = new WhatsAppDispatcher();
-
-        assertEquals(NotificationChannel.WHATSAPP, dispatcher.channel());
-        var result = dispatcher.dispatch(payload());
-        assertFalse(result.delivered());
-        assertNotNull(result.failureReason());
-    }
 }

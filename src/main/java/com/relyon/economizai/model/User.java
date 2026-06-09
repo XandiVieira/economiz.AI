@@ -120,6 +120,14 @@ public class User extends BaseEntity implements UserDetails {
     @Column(name = "email_verified_at")
     private LocalDateTime emailVerifiedAt;
 
+    // E.164 phone number (e.g. +5551999999999). Nullable until the user sets it.
+    @Column(name = "phone_number", length = 20)
+    private String phoneNumber;
+
+    @Column(name = "phone_verified", nullable = false)
+    @Builder.Default
+    private boolean phoneVerified = false;
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));

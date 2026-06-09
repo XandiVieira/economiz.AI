@@ -113,6 +113,8 @@ GET    /api/v1/users/me/export          → LGPD data export (ALL personal data:
 PATCH  /api/v1/users/me/contribution    { "contributionOptIn": false }   ← LGPD opt-out from collaborative panel
 PATCH  /api/v1/users/me/location        { "latitude": -30.0277, "longitude": -51.2287 }
 PATCH  /api/v1/users/me/push-token      { "pushDeviceToken": "<FCM>" }   ← null/empty to clear
+PATCH  /api/v1/users/me/phone           { "phoneNumber": "+5551999999999" }  → 204 (E.164; sends a 6-digit OTP via SMS)
+POST   /api/v1/users/me/phone/verify    { "code": "123456" }                 → 204 (400 on wrong/expired code)
 GET    /api/v1/users/me/notification-preferences
 PUT    /api/v1/users/me/notification-preferences
        { "preferences": [ { "type": "PROMO_PERSONAL", "channel": "PUSH" }, ... ] }
@@ -144,6 +146,17 @@ POST /api/v1/users/me/email-verification/resend                               �
 **Dev mode**: when SMTP isn't configured (current Render setup), the link is logged with a `[DEV-MODE]` prefix in the server logs instead of being emailed. The endpoints still return 204, so the flow works for FE testing — grab the token from logs.
 
 `UserResponse` now includes `emailVerified` + `emailVerifiedAt`. You can gate features behind `emailVerified === true` if you want.
+
+### Phone verification (for SMS / WhatsApp notifications)
+
+```
+PATCH /api/v1/users/me/phone         { "phoneNumber": "+5551999999999" }  → 204
+POST  /api/v1/users/me/phone/verify  { "code": "123456" }                 → 204
+```
+
+`phoneNumber` must be E.164 (leading `+`, country code, 8–15 digits) — otherwise `400`. Setting the phone stores it as **unverified** and sends a 6-digit OTP (10-minute TTL) over SMS. Submit that code to `…/phone/verify`; a correct, unexpired code marks the phone verified (`204`). Wrong, expired, or missing code → `400`.
+
+A verified phone is required for the **SMS** and **WHATSAPP** notification channels to actually deliver. **Dev mode**: when Twilio isn't configured, the OTP is logged with a `[DEV-MODE] phone OTP for …` prefix in the server logs instead of being texted — the endpoint still returns 204, so grab the code from the logs.
 
 ---
 
