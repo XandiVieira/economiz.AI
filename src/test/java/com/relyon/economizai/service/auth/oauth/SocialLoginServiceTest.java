@@ -162,9 +162,10 @@ class SocialLoginServiceTest {
         when(userRepository.findByAuthProviderAndProviderSubject(AuthProvider.GOOGLE, "sub-1"))
                 .thenReturn(Optional.empty());
         when(userRepository.findByEmail("maria@example.com")).thenReturn(Optional.of(local));
+        var request = new GoogleLoginRequest("id-token");
 
         assertThrows(InvalidOAuthTokenException.class,
-                () -> socialLoginService.loginWithGoogle(new GoogleLoginRequest("id-token")));
+                () -> socialLoginService.loginWithGoogle(request));
 
         assertEquals(AuthProvider.LOCAL, local.getAuthProvider());
         assertNull(local.getProviderSubject());
@@ -185,9 +186,10 @@ class SocialLoginServiceTest {
         when(userRepository.findByAuthProviderAndProviderSubject(AuthProvider.APPLE, "apple-sub-1"))
                 .thenReturn(Optional.empty());
         when(userRepository.findByEmail("joao@example.com")).thenReturn(Optional.of(local));
+        var request = new AppleLoginRequest("identity-token", "Joao");
 
         assertThrows(InvalidOAuthTokenException.class,
-                () -> socialLoginService.loginWithApple(new AppleLoginRequest("identity-token", "Joao")));
+                () -> socialLoginService.loginWithApple(request));
 
         assertEquals(AuthProvider.LOCAL, local.getAuthProvider());
         verify(userRepository, never()).save(any(User.class));
@@ -199,9 +201,10 @@ class SocialLoginServiceTest {
                 .thenReturn(new GoogleTokenVerifier.GoogleClaims("sub-1", null, true, "Maria"));
         when(userRepository.findByAuthProviderAndProviderSubject(AuthProvider.GOOGLE, "sub-1"))
                 .thenReturn(Optional.empty());
+        var request = new GoogleLoginRequest("id-token");
 
         assertThrows(InvalidOAuthTokenException.class,
-                () -> socialLoginService.loginWithGoogle(new GoogleLoginRequest("id-token")));
+                () -> socialLoginService.loginWithGoogle(request));
 
         verify(userRepository, never()).save(any(User.class));
         verify(householdService, never()).createSoloHousehold();
@@ -211,9 +214,10 @@ class SocialLoginServiceTest {
     void loginWithGoogle_blankSubject_rejected() {
         when(googleTokenVerifier.verify("id-token"))
                 .thenReturn(new GoogleTokenVerifier.GoogleClaims("", "maria@example.com", true, "Maria"));
+        var request = new GoogleLoginRequest("id-token");
 
         assertThrows(InvalidOAuthTokenException.class,
-                () -> socialLoginService.loginWithGoogle(new GoogleLoginRequest("id-token")));
+                () -> socialLoginService.loginWithGoogle(request));
     }
 
     @Test

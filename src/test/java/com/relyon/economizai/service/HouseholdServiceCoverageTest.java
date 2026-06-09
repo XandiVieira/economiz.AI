@@ -134,8 +134,9 @@ class HouseholdServiceCoverageTest {
         var household = buildHousehold("FAM111");
         var actor = buildUser(household);
         when(householdRepository.findById(household.getId())).thenReturn(Optional.of(household));
+        var actorId = actor.getId();
 
-        assertThrows(IllegalArgumentException.class, () -> householdService.removeMember(actor, actor.getId()));
+        assertThrows(IllegalArgumentException.class, () -> householdService.removeMember(actor, actorId));
         verify(userRepository, never()).save(any());
     }
 
@@ -144,9 +145,10 @@ class HouseholdServiceCoverageTest {
         var household = buildHousehold("FAM111");
         var actor = buildUser(household);
         when(householdRepository.findById(household.getId())).thenReturn(Optional.empty());
+        var memberId = UUID.randomUUID();
 
         assertThrows(IllegalStateException.class,
-                () -> householdService.removeMember(actor, UUID.randomUUID()));
+                () -> householdService.removeMember(actor, memberId));
     }
 
     @Test
@@ -168,8 +170,9 @@ class HouseholdServiceCoverageTest {
         var target = buildUser(otherHousehold);
         when(householdRepository.findById(actorHousehold.getId())).thenReturn(Optional.of(actorHousehold));
         when(userRepository.findById(target.getId())).thenReturn(Optional.of(target));
+        var targetId = target.getId();
 
-        assertThrows(NotInHouseholdException.class, () -> householdService.removeMember(actor, target.getId()));
+        assertThrows(NotInHouseholdException.class, () -> householdService.removeMember(actor, targetId));
         verify(userRepository, never()).save(any());
     }
 
@@ -182,9 +185,10 @@ class HouseholdServiceCoverageTest {
         target.setInviteCodeExpiresAt(LocalDateTime.now().minusHours(1));
         var user = buildUser(current);
         when(householdRepository.findByInviteCode("EXP456")).thenReturn(Optional.of(target));
+        var request = new JoinHouseholdRequest("exp456");
 
         assertThrows(InvalidInviteCodeException.class,
-                () -> householdService.join(user, new JoinHouseholdRequest("exp456")));
+                () -> householdService.join(user, request));
         verify(userRepository, never()).save(any());
     }
 }
