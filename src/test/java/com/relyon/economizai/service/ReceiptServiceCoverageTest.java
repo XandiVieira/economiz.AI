@@ -124,8 +124,9 @@ class ReceiptServiceCoverageTest {
         when(sefazIngestionService.fetch(CHAVE_RS)).thenReturn(fetched);
         when(sefazIngestionService.parse(fetched)).thenThrow(parseException);
 
+        var request = new SubmitReceiptRequest(CHAVE_RS);
         var thrown = assertThrows(ReceiptParseException.class,
-                () -> receiptService.submit(user, new SubmitReceiptRequest(CHAVE_RS)));
+                () -> receiptService.submit(user, request));
 
         assertSame(parseException, thrown);
         verify(failedParseRecorder).record(user, CHAVE_RS, fetched, parseException);
@@ -272,9 +273,10 @@ class ReceiptServiceCoverageTest {
         when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId()))
                 .thenReturn(Optional.of(receipt));
 
+        var receiptId = receipt.getId();
+        var missingItemId = UUID.randomUUID();
         assertThrows(ReceiptItemNotFoundException.class,
-                () -> receiptService.updateItemCategory(user, receipt.getId(),
-                        UUID.randomUUID(), ProductCategory.GROCERIES));
+                () -> receiptService.updateItemCategory(user, receiptId, missingItemId, ProductCategory.GROCERIES));
         verify(categoryOverrideService, never()).setOverride(any(), any(), any());
     }
 
@@ -420,9 +422,10 @@ class ReceiptServiceCoverageTest {
         var request = new AddReceiptItemRequest(
                 "OVOS DZ", null, new BigDecimal("1"), "DZ",
                 new BigDecimal("12.00"), new BigDecimal("12.00"), null);
+        var receiptId = receipt.getId();
 
         assertThrows(ReceiptNotEditableException.class,
-                () -> receiptService.addItem(user, receipt.getId(), request));
+                () -> receiptService.addItem(user, receiptId, request));
         verify(receiptItemRepository, never()).save(any());
     }
 
@@ -460,9 +463,11 @@ class ReceiptServiceCoverageTest {
 
         var request = new UpdateReceiptItemRequest(
                 "x", null, new BigDecimal("1"), null, null, new BigDecimal("1"), null, null);
+        var receiptId = receipt.getId();
+        var itemId = item.getId();
 
         assertThrows(ReceiptNotEditableException.class,
-                () -> receiptService.updateItem(user, receipt.getId(), item.getId(), request));
+                () -> receiptService.updateItem(user, receiptId, itemId, request));
     }
 
     // ---------------------------------------------------------------- fixtures

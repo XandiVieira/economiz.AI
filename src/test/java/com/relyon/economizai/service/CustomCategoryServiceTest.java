@@ -75,10 +75,13 @@ class CustomCategoryServiceTest {
     @Test
     void migrate_requiresExactlyOneTarget() {
         var user = user();
+        var ids1 = List.of(UUID.randomUUID());
+        var targetId = UUID.randomUUID();
         assertThrows(InvalidCategoryMigrationException.class, () ->
-                service.migrate(user, List.of(UUID.randomUUID()), ProductCategory.PRODUCE, UUID.randomUUID()));
+                service.migrate(user, ids1, ProductCategory.PRODUCE, targetId));
+        var ids2 = List.of(UUID.randomUUID());
         assertThrows(InvalidCategoryMigrationException.class, () ->
-                service.migrate(user, List.of(UUID.randomUUID()), null, null));
+                service.migrate(user, ids2, null, null));
     }
 
     @Test
@@ -105,8 +108,9 @@ class CustomCategoryServiceTest {
         var id = UUID.randomUUID();
         when(customCategoryRepository.findByIdAndHouseholdId(id, user.getHousehold().getId()))
                 .thenReturn(Optional.empty());
+        var productIds = List.of(UUID.randomUUID());
         assertThrows(CustomCategoryNotFoundException.class, () ->
-                service.migrate(user, List.of(UUID.randomUUID()), null, id));
+                service.migrate(user, productIds, null, id));
     }
 
     @Test

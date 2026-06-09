@@ -134,9 +134,10 @@ class PasswordResetServiceTest {
     @Test
     void resetPasswordWithUnknownTokenThrowsAndChangesNothing() {
         when(tokenRepository.findByToken("missing")).thenReturn(Optional.empty());
+        var request = new ResetPasswordRequest("missing", "brand-new-password");
 
         assertThrows(InvalidAuthTokenException.class, () ->
-                passwordResetService.resetPassword(new ResetPasswordRequest("missing", "brand-new-password")));
+                passwordResetService.resetPassword(request));
 
         verify(userRepository, never()).save(any());
         verify(passwordEncoder, never()).encode(anyString());
@@ -152,9 +153,10 @@ class PasswordResetServiceTest {
                 .consumedAt(LocalDateTime.now().minusMinutes(1))
                 .build();
         when(tokenRepository.findByToken("consumed-token")).thenReturn(Optional.of(consumedToken));
+        var request = new ResetPasswordRequest("consumed-token", "brand-new-password");
 
         assertThrows(InvalidAuthTokenException.class, () ->
-                passwordResetService.resetPassword(new ResetPasswordRequest("consumed-token", "brand-new-password")));
+                passwordResetService.resetPassword(request));
 
         verify(userRepository, never()).save(any());
         verify(passwordEncoder, never()).encode(anyString());
@@ -169,9 +171,10 @@ class PasswordResetServiceTest {
                 .expiresAt(LocalDateTime.now().minusMinutes(1))
                 .build();
         when(tokenRepository.findByToken("expired-token")).thenReturn(Optional.of(expiredToken));
+        var request = new ResetPasswordRequest("expired-token", "brand-new-password");
 
         assertThrows(InvalidAuthTokenException.class, () ->
-                passwordResetService.resetPassword(new ResetPasswordRequest("expired-token", "brand-new-password")));
+                passwordResetService.resetPassword(request));
 
         verify(userRepository, never()).save(any());
         verify(passwordEncoder, never()).encode(anyString());

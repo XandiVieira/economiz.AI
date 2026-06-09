@@ -119,9 +119,11 @@ class ProductServiceTest {
         var product = Product.builder().id(UUID.randomUUID()).normalizedName("Arroz").build();
         when(productRepository.findById(product.getId())).thenReturn(Optional.of(product));
         when(aliasRepository.existsByNormalizedDescription("arroz tio joao")).thenReturn(true);
+        var productId = product.getId();
+        var request = new CreateAliasRequest("ARROZ TIO JOAO");
 
         assertThrows(ProductAliasConflictException.class,
-                () -> productService.addAlias(user, product.getId(), new CreateAliasRequest("ARROZ TIO JOAO")));
+                () -> productService.addAlias(user, productId, request));
     }
 
     @Test
@@ -129,9 +131,10 @@ class ProductServiceTest {
         var user = buildUser();
         var id = UUID.randomUUID();
         when(productRepository.findById(id)).thenReturn(Optional.empty());
+        var request = new CreateAliasRequest("ARROZ");
 
         assertThrows(ProductNotFoundException.class,
-                () -> productService.addAlias(user, id, new CreateAliasRequest("ARROZ")));
+                () -> productService.addAlias(user, id, request));
     }
 
     @Test
