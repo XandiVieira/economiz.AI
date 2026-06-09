@@ -68,6 +68,19 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-06-09 12:56:27] [NEEDS-HUMAN] BUILD-FAIL (attempt 1x) - Error starting ApplicationContext. To display the condition 
+- **Error snippet:**
+```r
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+at com.relyon.economizai.EconomizaiApplication.main(EconomizaiApplication.java:12)
+Caused by: org.springframework.beans.factory.BeanCreationException: Error creating bean with name 'notificationRuleRepository' defined in com.relyon.economizai.repository.NotificationRuleRepository defined in @EnableJpaRepositories declared on DataJpaRepositoriesRegistrar.EnableJpaRepositoriesConfiguration: Query validation failed for 'SELECT r FROM NotificationRule r JOIN FETCH r.user u WHERE r.type = :type AND r.active = true AND r.isDefault = true AND u.household.id IN (SELECT ri.receipt.household.id FROM ReceiptItem ri WHERE ri.product.id = :productId AND ri.receipt.status = 'CONFIRMED' AND ri.excluded = false)'
+```
+- **Attempted fix:** Test passes (1 run, 0 failures). The fix is minimal and correct: removing the Java `transient` keyword restores the JPA `@ManyToOne` mapping, and making `BaseEntity` implement `Serializable` preserves the original S1948 safety goal (the `Household` principal is now serializable) without breaking persistence.
+
+FIXED com.relyon.economizai.repository.UserHouseholdMappingTest#householdAssociationIsPersistedAndQueryable | Java `transient` on `User.household` made JPA treat the `@ManyToOne` as non-persistent, dropping the `household_id` mapping so every JPQL path through `u.household` failed to resolve at bootstrap (UnknownPathException ÔåÆ ApplicationContext startup failure). Removed `transient` to restore the mapping and made `BaseEntity implements Serializable` so the original S1948 concern (serializable principal) is still satisfied.
+- **Outcome:** fix discarded - mvnw test failed, nothing pushed.
+- **Note for human:** bug still live; the autonomous fix did not compile/pass tests - needs eyes.
+
 ### [2026-06-08 13:14:30] [NEEDS-HUMAN] CLAUDE-TIMEOUT (attempt 1x) - org.springframework.web.HttpRequestMethodNotSupportedExcepti
 - **Error snippet:**
 ```r
@@ -336,6 +349,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
