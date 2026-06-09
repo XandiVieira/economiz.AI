@@ -63,7 +63,7 @@ class MarketLocationServiceTest {
     @Test
     void registerMarketFromReceipt_skipsWhenAlreadyRegistered() {
         var receipt = receipt("11111111000111", "Mercado", "Rua A");
-        when(repository.findByCnpj(eq("11111111000111")))
+        when(repository.findByCnpj("11111111000111"))
                 .thenReturn(Optional.of(new MarketLocation()));
 
         service.registerMarketFromReceipt(receipt);
@@ -74,7 +74,7 @@ class MarketLocationServiceTest {
     @Test
     void registerMarketFromReceipt_savesNewLocationWithCnpjRoot() {
         var receipt = receipt("11111111000199", "Zaffari Centro", "Av Brasil, 100");
-        when(repository.findByCnpj(eq("11111111000199"))).thenReturn(Optional.empty());
+        when(repository.findByCnpj("11111111000199")).thenReturn(Optional.empty());
 
         service.registerMarketFromReceipt(receipt);
 
@@ -158,33 +158,33 @@ class MarketLocationServiceTest {
     void buildGeocodeQuery_prefersAddress() {
         var market = MarketLocation.builder().cnpj("c").cnpjRoot("cccccccc")
                 .address("Rua X").name("Nome").build();
-        when(geocoder.geocode(eq("Rua X, Brasil"))).thenReturn(Optional.empty());
+        when(geocoder.geocode("Rua X, Brasil")).thenReturn(Optional.empty());
 
         service.geocodeOne(market);
 
-        verify(geocoder).geocode(eq("Rua X, Brasil"));
+        verify(geocoder).geocode("Rua X, Brasil");
     }
 
     @Test
     void buildGeocodeQuery_fallsBackToNameWhenAddressBlank() {
         var market = MarketLocation.builder().cnpj("c").cnpjRoot("cccccccc")
                 .address("  ").name("Mercado Nome").build();
-        when(geocoder.geocode(eq("Mercado Nome, Brasil"))).thenReturn(Optional.empty());
+        when(geocoder.geocode("Mercado Nome, Brasil")).thenReturn(Optional.empty());
 
         service.geocodeOne(market);
 
-        verify(geocoder).geocode(eq("Mercado Nome, Brasil"));
+        verify(geocoder).geocode("Mercado Nome, Brasil");
     }
 
     @Test
     void buildGeocodeQuery_fallsBackToCnpjWhenAddressAndNameMissing() {
         var market = MarketLocation.builder().cnpj("11111111000111").cnpjRoot("11111111")
                 .address(null).name(null).build();
-        when(geocoder.geocode(eq("CNPJ 11111111000111, Brasil"))).thenReturn(Optional.empty());
+        when(geocoder.geocode("CNPJ 11111111000111, Brasil")).thenReturn(Optional.empty());
 
         service.geocodeOne(market);
 
-        verify(geocoder).geocode(eq("CNPJ 11111111000111, Brasil"));
+        verify(geocoder).geocode("CNPJ 11111111000111, Brasil");
     }
 
     // ---------- classifyPendingSegments ----------
@@ -220,11 +220,11 @@ class MarketLocationServiceTest {
         when(cnpjActivityClient.isEnabled()).thenReturn(true);
         when(repository.findAllBySegmentAndSegmentAttemptsLessThan(eq(MerchantSegment.UNKNOWN), anyInt()))
                 .thenReturn(List.of(pharmacyMarket, supermarketMarket, otherMarket, unknownMarket));
-        when(cnpjActivityClient.classify(eq("p"))).thenReturn(MerchantSegment.PHARMACY);
-        when(cnpjActivityClient.classify(eq("s"))).thenReturn(MerchantSegment.SUPERMARKET);
-        when(cnpjActivityClient.classify(eq("o"))).thenReturn(MerchantSegment.OTHER);
-        when(cnpjActivityClient.classify(eq("u"))).thenReturn(MerchantSegment.UNKNOWN);
-        when(productRepository.findOtherCategoryProductsByMerchant(eq("p"))).thenReturn(List.of());
+        when(cnpjActivityClient.classify("p")).thenReturn(MerchantSegment.PHARMACY);
+        when(cnpjActivityClient.classify("s")).thenReturn(MerchantSegment.SUPERMARKET);
+        when(cnpjActivityClient.classify("o")).thenReturn(MerchantSegment.OTHER);
+        when(cnpjActivityClient.classify("u")).thenReturn(MerchantSegment.UNKNOWN);
+        when(productRepository.findOtherCategoryProductsByMerchant("p")).thenReturn(List.of());
 
         var summary = service.classifyPendingSegments();
 
@@ -241,7 +241,7 @@ class MarketLocationServiceTest {
     void classifySegmentOne_setsSegmentWhenResolved() {
         var market = MarketLocation.builder().cnpj("c").cnpjRoot("cccccccc")
                 .segment(MerchantSegment.UNKNOWN).segmentAttempts(0).build();
-        when(cnpjActivityClient.classify(eq("c"))).thenReturn(MerchantSegment.SUPERMARKET);
+        when(cnpjActivityClient.classify("c")).thenReturn(MerchantSegment.SUPERMARKET);
 
         service.classifySegmentOne(market);
 
@@ -256,7 +256,7 @@ class MarketLocationServiceTest {
     void classifySegmentOne_leavesUnknownWhenUnresolved() {
         var market = MarketLocation.builder().cnpj("c").cnpjRoot("cccccccc")
                 .segment(MerchantSegment.UNKNOWN).segmentAttempts(2).build();
-        when(cnpjActivityClient.classify(eq("c"))).thenReturn(MerchantSegment.UNKNOWN);
+        when(cnpjActivityClient.classify("c")).thenReturn(MerchantSegment.UNKNOWN);
 
         service.classifySegmentOne(market);
 
@@ -274,8 +274,8 @@ class MarketLocationServiceTest {
                 .category(ProductCategory.OTHER).categorizationSource(CategorizationSource.NONE).build();
         var productTwo = Product.builder().normalizedName("paracetamol")
                 .category(ProductCategory.OTHER).categorizationSource(CategorizationSource.NONE).build();
-        when(cnpjActivityClient.classify(eq("ph"))).thenReturn(MerchantSegment.PHARMACY);
-        when(productRepository.findOtherCategoryProductsByMerchant(eq("ph")))
+        when(cnpjActivityClient.classify("ph")).thenReturn(MerchantSegment.PHARMACY);
+        when(productRepository.findOtherCategoryProductsByMerchant("ph"))
                 .thenReturn(List.of(productOne, productTwo));
 
         service.classifySegmentOne(market);
@@ -290,8 +290,8 @@ class MarketLocationServiceTest {
     void classifySegmentOne_pharmacyWithNoProducts_doesNotSaveAll() {
         var market = MarketLocation.builder().cnpj("ph").cnpjRoot("pppppppp")
                 .segment(MerchantSegment.UNKNOWN).segmentAttempts(0).build();
-        when(cnpjActivityClient.classify(eq("ph"))).thenReturn(MerchantSegment.PHARMACY);
-        when(productRepository.findOtherCategoryProductsByMerchant(eq("ph"))).thenReturn(List.of());
+        when(cnpjActivityClient.classify("ph")).thenReturn(MerchantSegment.PHARMACY);
+        when(productRepository.findOtherCategoryProductsByMerchant("ph")).thenReturn(List.of());
 
         service.classifySegmentOne(market);
 
@@ -316,7 +316,7 @@ class MarketLocationServiceTest {
     void findByCnpjs_indexesByCnpj() {
         var marketOne = MarketLocation.builder().cnpj("11111111000111").cnpjRoot("11111111").build();
         var marketTwo = MarketLocation.builder().cnpj("22222222000111").cnpjRoot("22222222").build();
-        when(repository.findAllByCnpjIn(eq(List.of("11111111000111", "22222222000111"))))
+        when(repository.findAllByCnpjIn(List.of("11111111000111", "22222222000111")))
                 .thenReturn(List.of(marketOne, marketTwo));
 
         var byCnpj = service.findByCnpjs(List.of("11111111000111", "22222222000111"));

@@ -28,7 +28,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -63,7 +62,7 @@ class WatchedMarketServiceTest {
 
     @Test
     void watch_throwsWhenMarketUnknown() {
-        when(marketRepository.findByCnpj(eq("99999999000111"))).thenReturn(Optional.empty());
+        when(marketRepository.findByCnpj("99999999000111")).thenReturn(Optional.empty());
 
         assertThrows(MarketNotFoundException.class,
                 () -> service.watch(user, "99999999000111"));
@@ -73,10 +72,10 @@ class WatchedMarketServiceTest {
     @Test
     void watch_isIdempotent() {
         var loc = market("11111111000111", "Mercado A");
-        when(marketRepository.findByCnpj(eq("11111111000111"))).thenReturn(Optional.of(loc));
-        when(watchedRepository.findByUserIdAndMarketCnpj(eq(user.getId()), eq("11111111000111")))
+        when(marketRepository.findByCnpj("11111111000111")).thenReturn(Optional.of(loc));
+        when(watchedRepository.findByUserIdAndMarketCnpj(user.getId(), "11111111000111"))
                 .thenReturn(Optional.of(UserWatchedMarket.builder().user(user).marketCnpj("11111111000111").build()));
-        when(receiptRepository.findDistinctCnpjsByHousehold(eq(user.getHousehold().getId())))
+        when(receiptRepository.findDistinctCnpjsByHousehold(user.getHousehold().getId()))
                 .thenReturn(List.of());
 
         var response = service.watch(user, "11111111000111");
@@ -107,10 +106,10 @@ class WatchedMarketServiceTest {
     @Test
     void watch_normalizesFormattedCnpjBeforeLookup() {
         var location = market("11111111000111", "Mercado A");
-        when(marketRepository.findByCnpj(eq("11111111000111"))).thenReturn(Optional.of(location));
-        when(watchedRepository.findByUserIdAndMarketCnpj(eq(user.getId()), eq("11111111000111")))
+        when(marketRepository.findByCnpj("11111111000111")).thenReturn(Optional.of(location));
+        when(watchedRepository.findByUserIdAndMarketCnpj(user.getId(), "11111111000111"))
                 .thenReturn(Optional.empty());
-        when(receiptRepository.findDistinctCnpjsByHousehold(eq(user.getHousehold().getId())))
+        when(receiptRepository.findDistinctCnpjsByHousehold(user.getHousehold().getId()))
                 .thenReturn(List.of());
 
         var response = service.watch(user, "11.111.111/0001-11");
@@ -121,7 +120,7 @@ class WatchedMarketServiceTest {
 
     @Test
     void watchedCnpjs_returnsSet() {
-        when(watchedRepository.findAllByUserId(eq(user.getId()))).thenReturn(List.of(
+        when(watchedRepository.findAllByUserId(user.getId())).thenReturn(List.of(
                 UserWatchedMarket.builder().marketCnpj("11111111000111").build(),
                 UserWatchedMarket.builder().marketCnpj("22222222000111").build()
         ));
@@ -138,12 +137,12 @@ class WatchedMarketServiceTest {
                 UserWatchedMarket.builder().marketCnpj("11111111000111").build(),
                 UserWatchedMarket.builder().marketCnpj("22222222000111").build()
         );
-        when(watchedRepository.findAllByUserId(eq(user.getId()))).thenReturn(pinned);
+        when(watchedRepository.findAllByUserId(user.getId())).thenReturn(pinned);
         when(marketRepository.findAllByCnpjIn(any())).thenReturn(List.of(
                 market("11111111000111", "Mercado A"),
                 market("22222222000111", "Mercado B")
         ));
-        when(receiptRepository.findDistinctCnpjsByHousehold(eq(user.getHousehold().getId())))
+        when(receiptRepository.findDistinctCnpjsByHousehold(user.getHousehold().getId()))
                 .thenReturn(List.of("11111111000111"));
 
         var rows = service.listWatched(user);
@@ -159,9 +158,9 @@ class WatchedMarketServiceTest {
 
     @Test
     void listForPicker_putsWatchedFirstThenVisited() {
-        when(receiptRepository.findDistinctCnpjsByHousehold(eq(user.getHousehold().getId())))
+        when(receiptRepository.findDistinctCnpjsByHousehold(user.getHousehold().getId()))
                 .thenReturn(List.of("33333333000111"));
-        when(watchedRepository.findAllByUserId(eq(user.getId()))).thenReturn(List.of(
+        when(watchedRepository.findAllByUserId(user.getId())).thenReturn(List.of(
                 UserWatchedMarket.builder().marketCnpj("11111111000111").build()
         ));
         when(marketRepository.findAllByCnpjIn(any())).thenReturn(List.of(
@@ -179,10 +178,10 @@ class WatchedMarketServiceTest {
     @Test
     void watch_savesWhenNotYetPinned() {
         var location = market("11111111000111", "Mercado A");
-        when(marketRepository.findByCnpj(eq("11111111000111"))).thenReturn(Optional.of(location));
-        when(watchedRepository.findByUserIdAndMarketCnpj(eq(user.getId()), eq("11111111000111")))
+        when(marketRepository.findByCnpj("11111111000111")).thenReturn(Optional.of(location));
+        when(watchedRepository.findByUserIdAndMarketCnpj(user.getId(), "11111111000111"))
                 .thenReturn(Optional.empty());
-        when(receiptRepository.findDistinctCnpjsByHousehold(eq(user.getHousehold().getId())))
+        when(receiptRepository.findDistinctCnpjsByHousehold(user.getHousehold().getId()))
                 .thenReturn(List.of("11111111000111"));
 
         var response = service.watch(user, "11111111000111");
@@ -194,18 +193,18 @@ class WatchedMarketServiceTest {
 
     @Test
     void listWatched_emptyWatchlistReturnsEmptyList() {
-        when(watchedRepository.findAllByUserId(eq(user.getId()))).thenReturn(List.of());
+        when(watchedRepository.findAllByUserId(user.getId())).thenReturn(List.of());
 
         assertTrue(service.listWatched(user).isEmpty());
     }
 
     @Test
     void listWatched_unhydratedEntryWhenLocationMissing() {
-        when(watchedRepository.findAllByUserId(eq(user.getId()))).thenReturn(List.of(
+        when(watchedRepository.findAllByUserId(user.getId())).thenReturn(List.of(
                 UserWatchedMarket.builder().marketCnpj("99999999000111").build()
         ));
         when(marketRepository.findAllByCnpjIn(any())).thenReturn(List.of());
-        when(receiptRepository.findDistinctCnpjsByHousehold(eq(user.getHousehold().getId())))
+        when(receiptRepository.findDistinctCnpjsByHousehold(user.getHousehold().getId()))
                 .thenReturn(List.of());
 
         var rows = service.listWatched(user);
@@ -223,12 +222,12 @@ class WatchedMarketServiceTest {
     void listWatched_computesDistanceWhenHomeSet() {
         user.setHomeLatitude(new BigDecimal("-30.0300000"));
         user.setHomeLongitude(new BigDecimal("-51.2300000"));
-        when(watchedRepository.findAllByUserId(eq(user.getId()))).thenReturn(List.of(
+        when(watchedRepository.findAllByUserId(user.getId())).thenReturn(List.of(
                 UserWatchedMarket.builder().marketCnpj("11111111000111").build()
         ));
         when(marketRepository.findAllByCnpjIn(any()))
                 .thenReturn(List.of(market("11111111000111", "Mercado A")));
-        when(receiptRepository.findDistinctCnpjsByHousehold(eq(user.getHousehold().getId())))
+        when(receiptRepository.findDistinctCnpjsByHousehold(user.getHousehold().getId()))
                 .thenReturn(List.of());
 
         var rows = service.listWatched(user);
@@ -241,9 +240,9 @@ class WatchedMarketServiceTest {
     void listForPicker_includesNearbyGeocodedMarketsWithinRadius() {
         user.setHomeLatitude(new BigDecimal("-30.0500000"));
         user.setHomeLongitude(new BigDecimal("-51.2200000"));
-        when(receiptRepository.findDistinctCnpjsByHousehold(eq(user.getHousehold().getId())))
+        when(receiptRepository.findDistinctCnpjsByHousehold(user.getHousehold().getId()))
                 .thenReturn(List.of());
-        when(watchedRepository.findAllByUserId(eq(user.getId()))).thenReturn(List.of());
+        when(watchedRepository.findAllByUserId(user.getId())).thenReturn(List.of());
         lenient().when(marketRepository.findAllByCnpjIn(any())).thenReturn(List.of());
         var nearMarket = market("44444444000111", "Near");
         var farMarket = MarketLocation.builder()
@@ -260,9 +259,9 @@ class WatchedMarketServiceTest {
 
     @Test
     void listForPicker_noRadiusSkipsNearbyLookup() {
-        when(receiptRepository.findDistinctCnpjsByHousehold(eq(user.getHousehold().getId())))
+        when(receiptRepository.findDistinctCnpjsByHousehold(user.getHousehold().getId()))
                 .thenReturn(List.of());
-        when(watchedRepository.findAllByUserId(eq(user.getId()))).thenReturn(List.of());
+        when(watchedRepository.findAllByUserId(user.getId())).thenReturn(List.of());
 
         var rows = service.listForPicker(user, null);
 
@@ -273,11 +272,11 @@ class WatchedMarketServiceTest {
     @Test
     void watch_throwsPaywallWhenFreeUserAtLimit() {
         var location = market("11111111000111", "Mercado A");
-        when(marketRepository.findByCnpj(eq("11111111000111"))).thenReturn(Optional.of(location));
-        when(watchedRepository.findByUserIdAndMarketCnpj(eq(user.getId()), eq("11111111000111")))
+        when(marketRepository.findByCnpj("11111111000111")).thenReturn(Optional.of(location));
+        when(watchedRepository.findByUserIdAndMarketCnpj(user.getId(), "11111111000111"))
                 .thenReturn(Optional.empty());
         when(subscriptionGate.watchedMarketLimit(any())).thenReturn(3);
-        when(watchedRepository.findAllByUserId(eq(user.getId()))).thenReturn(List.of(
+        when(watchedRepository.findAllByUserId(user.getId())).thenReturn(List.of(
                 UserWatchedMarket.builder().marketCnpj("aaaaaaaa000111").build(),
                 UserWatchedMarket.builder().marketCnpj("bbbbbbbb000111").build(),
                 UserWatchedMarket.builder().marketCnpj("cccccccc000111").build()
@@ -290,10 +289,10 @@ class WatchedMarketServiceTest {
     @Test
     void watch_allowsRepinOfExistingEvenAtLimit() {
         var location = market("11111111000111", "Mercado A");
-        when(marketRepository.findByCnpj(eq("11111111000111"))).thenReturn(Optional.of(location));
-        when(watchedRepository.findByUserIdAndMarketCnpj(eq(user.getId()), eq("11111111000111")))
+        when(marketRepository.findByCnpj("11111111000111")).thenReturn(Optional.of(location));
+        when(watchedRepository.findByUserIdAndMarketCnpj(user.getId(), "11111111000111"))
                 .thenReturn(Optional.of(UserWatchedMarket.builder().user(user).marketCnpj("11111111000111").build()));
-        when(receiptRepository.findDistinctCnpjsByHousehold(eq(user.getHousehold().getId())))
+        when(receiptRepository.findDistinctCnpjsByHousehold(user.getHousehold().getId()))
                 .thenReturn(List.of());
 
         var response = service.watch(user, "11111111000111");
