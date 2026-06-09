@@ -92,7 +92,7 @@ public class ItemQueryService {
             var overrides = categoryOverrideService.overridesByProduct(filters.householdId(), productIds);
             var marketCnpjs = items.stream()
                     .map(item -> item.getReceipt().getCnpjEmitente())
-                    .filter(cnpj -> cnpj != null)
+                    .filter(Objects::nonNull)
                     .distinct()
                     .toList();
             var marketOverrides = marketNameService.resolveNames(filters.householdId(), marketCnpjs);

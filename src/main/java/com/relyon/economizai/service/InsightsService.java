@@ -24,6 +24,7 @@ import java.time.Month;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 @Slf4j
@@ -76,7 +77,7 @@ public class InsightsService {
                 .toList();
         var marketOverrides = marketNameService.resolveNames(householdId, marketBuckets.stream()
                 .map(bucket -> bucket.cnpj())
-                .filter(cnpj -> cnpj != null)
+                .filter(Objects::nonNull)
                 .distinct()
                 .toList());
         var byMarket = marketBuckets.stream()
@@ -129,7 +130,7 @@ public class InsightsService {
         var rows = insightsRepository.spendByProduct(householdId, fromBound, toBound);
         var productIds = rows.stream()
                 .map(row -> (UUID) row[0])
-                .filter(id -> id != null)
+                .filter(Objects::nonNull)
                 .distinct()
                 .toList();
         var overrides = categoryOverrideService.overrideKeysByProduct(householdId, productIds);
@@ -211,7 +212,7 @@ public class InsightsService {
                 .toList();
         var overrides = marketNameService.resolveNames(householdId, rawPoints.stream()
                 .map(point -> point.marketCnpj())
-                .filter(cnpj -> cnpj != null)
+                .filter(Objects::nonNull)
                 .distinct()
                 .toList());
         var points = rawPoints.stream()

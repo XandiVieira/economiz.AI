@@ -168,7 +168,7 @@ public class InsightsQueryService {
 
         var productIds = rows.stream()
                 .map(row -> (UUID) row[0])
-                .filter(id -> id != null)
+                .filter(Objects::nonNull)
                 .distinct()
                 .toList();
         var overrides = categoryOverrideService.overrideKeysByProduct(f.householdId(), productIds);

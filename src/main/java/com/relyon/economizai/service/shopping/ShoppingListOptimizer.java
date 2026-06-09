@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -95,7 +96,7 @@ public class ShoppingListOptimizer {
                 .toList();
         var overrides = marketNameService.resolveNames(householdId, builtPlans.stream()
                 .map(MarketPlan::marketCnpj)
-                .filter(cnpj -> cnpj != null)
+                .filter(Objects::nonNull)
                 .distinct()
                 .toList());
         var plans = builtPlans.stream()

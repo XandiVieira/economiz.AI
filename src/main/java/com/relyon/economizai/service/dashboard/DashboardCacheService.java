@@ -1,5 +1,7 @@
 package com.relyon.economizai.service.dashboard;
 
+import java.util.Objects;
+
 import com.relyon.economizai.config.CachingConfig;
 import com.relyon.economizai.dto.response.DashboardResponse;
 import com.relyon.economizai.dto.response.DashboardResponse.SpendSnapshot;
@@ -80,7 +82,7 @@ public class DashboardCacheService {
                 .getContent();
         var recentCnpjs = recentReceipts.stream()
                 .map(Receipt::getCnpjEmitente)
-                .filter(cnpj -> cnpj != null)
+                .filter(Objects::nonNull)
                 .distinct()
                 .toList();
         var recentOverrides = marketNameService.resolveNames(householdId, recentCnpjs);
@@ -102,7 +104,7 @@ public class DashboardCacheService {
                 .toList();
         var promoOverrides = marketNameService.resolveNames(householdId, detectedPromos.stream()
                 .map(promo -> promo.marketCnpj())
-                .filter(cnpj -> cnpj != null)
+                .filter(Objects::nonNull)
                 .distinct()
                 .toList());
         var promos = detectedPromos.stream()
