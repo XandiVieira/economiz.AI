@@ -4,12 +4,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.relyon.economizai.config.SecurityConfig;
 import com.relyon.economizai.dto.request.ChangePasswordRequest;
 import com.relyon.economizai.dto.request.UpdateContributionRequest;
+import com.relyon.economizai.dto.request.UpdateDigestPreferencesRequest;
 import com.relyon.economizai.dto.request.UpdateUserRequest;
+import com.relyon.economizai.dto.response.DigestPreferencesResponse;
 import com.relyon.economizai.dto.response.HouseholdResponse;
 import com.relyon.economizai.dto.response.UserDataExportResponse;
 import com.relyon.economizai.dto.response.UserResponse;
 import com.relyon.economizai.exception.InvalidCurrentPasswordException;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.DigestFrequency;
 import com.relyon.economizai.model.enums.Role;
 import com.relyon.economizai.model.enums.SubscriptionTier;
 import com.relyon.economizai.security.JwtService;
@@ -303,5 +306,88 @@ class UserControllerTest {
                         .with(SecurityMockMvcRequestPostProcessors.user(user)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Conta excluida."));
+    }
+
+    @Test
+    void getDigestPreferences_returns200() throws Exception {
+        var user = buildUser();
+        when(notificationPreferenceService.getDigestPreferences(any(User.class)))
+                .thenReturn(new DigestPreferencesResponse(DigestFrequency.DAILY, 17));
+
+        mockMvc.perform(get("/api/v1/users/me/digest-preferences")
+                        .with(SecurityMockMvcRequestPostProcessors.user(user)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.frequency").value("DAILY"))
+                .andExpect(jsonPath("$.sendHour").value(17));
+    }
+
+    @Test
+    void getDigestPreferences_returns401WhenUnauthenticated() throws Exception {
+        mockMvc.perform(get("/api/v1/users/me/digest-preferences"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void updateDigestPreferences_returns200() throws Exception {
+        var user = buildUser();
+        var request = new UpdateDigestPreferencesRequest(DigestFrequency.WEEKLY, 8);
+        when(notificationPreferenceService.updateDigestPreferences(any(User.class), any()))
+                .thenReturn(new DigestPreferencesResponse(DigestFrequency.WEEKLY, 8));
+
+        mockMvc.perform(put("/api/v1/users/me/digest-preferences")
+                        .with(SecurityMockMvcRequestPostProcessors.user(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.frequency").value("WEEKLY"))
+                .andExpect(jsonPath("$.sendHour").value(8));
+    }
+
+    @Test
+    void updateDigestPreferences_acceptsNullSendHour() throws Exception {
+        var user = buildUser();
+        var request = new UpdateDigestPreferencesRequest(DigestFrequency.DAILY, null);
+        when(notificationPreferenceService.updateDigestPreferences(any(User.class), any()))
+                .thenReturn(new DigestPreferencesResponse(DigestFrequency.DAILY, null));
+
+        mockMvc.perform(put("/api/v1/users/me/digest-preferences")
+                        .with(SecurityMockMvcRequestPostProcessors.user(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.frequency").value("DAILY"));
+    }
+
+    @Test
+    void updateDigestPreferences_returns400WhenHourOutOfRange() throws Exception {
+        var user = buildUser();
+        var request = new UpdateDigestPreferencesRequest(DigestFrequency.DAILY, 24);
+
+        mockMvc.perform(put("/api/v1/users/me/digest-preferences")
+                        .with(SecurityMockMvcRequestPostProcessors.user(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void updateDigestPreferences_returns400WhenFrequencyMissing() throws Exception {
+        var user = buildUser();
+
+        mockMvc.perform(put("/api/v1/users/me/digest-preferences")
+                        .with(SecurityMockMvcRequestPostProcessors.user(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"sendHour\":10}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void updateDigestPreferences_returns401WhenUnauthenticated() throws Exception {
+        var request = new UpdateDigestPreferencesRequest(DigestFrequency.DAILY, 10);
+
+        mockMvc.perform(put("/api/v1/users/me/digest-preferences")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized());
     }
 }

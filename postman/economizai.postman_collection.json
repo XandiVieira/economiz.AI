@@ -792,6 +792,66 @@
           "response": []
         },
         {
+          "name": "Get digest preferences",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/me/digest-preferences",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "me",
+                "digest-preferences"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update digest preferences",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/me/digest-preferences",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "me",
+                "digest-preferences"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"frequency\": \"DAILY\",\n  \"sendHour\": 17\n}"
+            }
+          },
+          "response": []
+        },
+        {
           "name": "Update collaborative contribution (LGPD opt-in/out)",
           "request": {
             "method": "PATCH",
@@ -5458,6 +5518,53 @@
                 "exec": [
                   "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
                   "pm.test('Returns an array', function () { pm.expect(pm.response.json()).to.be.an('array'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "27c. Set daily deals-digest preferences",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/me/digest-preferences",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "me",
+                "digest-preferences"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"frequency\": \"DAILY\",\n  \"sendHour\": 17\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Echoes frequency', function () { pm.expect(pm.response.json().frequency).to.eql('DAILY'); });",
+                  "pm.test('Echoes sendHour', function () { pm.expect(pm.response.json().sendHour).to.eql(17); });"
                 ]
               }
             }

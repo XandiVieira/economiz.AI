@@ -1,7 +1,9 @@
 package com.relyon.economizai.service.notifications;
 
+import com.relyon.economizai.dto.request.UpdateDigestPreferencesRequest;
 import com.relyon.economizai.dto.request.UpdateNotificationPreferencesRequest;
 import com.relyon.economizai.dto.request.UpdatePushTokenRequest;
+import com.relyon.economizai.dto.response.DigestPreferencesResponse;
 import com.relyon.economizai.dto.response.NotificationPreferenceResponse;
 import com.relyon.economizai.model.NotificationPreference;
 import com.relyon.economizai.model.User;
@@ -42,6 +44,21 @@ public class NotificationPreferenceService {
         }
         log.info("notification.preferences.updated user={} count={}", LogMasker.email(user.getEmail()), request.preferences().size());
         return list(user);
+    }
+
+    @Transactional(readOnly = true)
+    public DigestPreferencesResponse getDigestPreferences(User user) {
+        return new DigestPreferencesResponse(user.getDigestFrequency(), user.getDigestSendHour());
+    }
+
+    @Transactional
+    public DigestPreferencesResponse updateDigestPreferences(User user, UpdateDigestPreferencesRequest request) {
+        user.setDigestFrequency(request.frequency());
+        user.setDigestSendHour(request.sendHour());
+        userRepository.save(user);
+        log.info("digest.preferences.updated user={} frequency={} sendHour={}",
+                LogMasker.email(user.getEmail()), request.frequency(), request.sendHour());
+        return new DigestPreferencesResponse(user.getDigestFrequency(), user.getDigestSendHour());
     }
 
     @Transactional

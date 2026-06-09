@@ -32,6 +32,14 @@ public enum NotificationType {
     /** Notify when household spend in the current month reaches {@code thresholdPrice} (R$). */
     BUDGET(Scope.USER, false, true),
 
+    // --- Server-emitted, no user rule (governed by their own preference) ---
+    /**
+     * Daily rollup pointing to the deals screen (Phase C). Server-emitted by the
+     * digest scheduler; governed by {@code User.digestFrequency}, NOT a rule row —
+     * so it's a SYSTEM-scope type (no auto-seeded toggle).
+     */
+    DEALS_DIGEST(Scope.SYSTEM, false, false),
+
     // --- Transactional / one-off ---
     SYSTEM(Scope.SYSTEM, false, false);
 

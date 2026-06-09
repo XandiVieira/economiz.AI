@@ -1,9 +1,11 @@
 package com.relyon.economizai.service.notifications;
 
+import com.relyon.economizai.dto.request.UpdateDigestPreferencesRequest;
 import com.relyon.economizai.dto.request.UpdateNotificationPreferencesRequest;
 import com.relyon.economizai.dto.request.UpdatePushTokenRequest;
 import com.relyon.economizai.model.NotificationPreference;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.DigestFrequency;
 import com.relyon.economizai.model.enums.NotificationChannel;
 import com.relyon.economizai.model.enums.NotificationType;
 import com.relyon.economizai.repository.NotificationPreferenceRepository;
@@ -147,6 +149,46 @@ class NotificationPreferenceServiceTest {
         assertNull(user.getPushDeviceToken());
         assertNotNull(user.getPushTokenUpdatedAt());
         verify(userRepository).save(user);
+    }
+
+    @Test
+    void updateDigestPreferencesPersistsFrequencyAndSendHour() {
+        var user = user();
+        var request = new UpdateDigestPreferencesRequest(DigestFrequency.WEEKLY, 8);
+
+        var result = preferenceService.updateDigestPreferences(user, request);
+
+        assertEquals(DigestFrequency.WEEKLY, user.getDigestFrequency());
+        assertEquals(8, user.getDigestSendHour());
+        assertEquals(DigestFrequency.WEEKLY, result.frequency());
+        assertEquals(8, result.sendHour());
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void updateDigestPreferencesClearsSendHourOverrideWhenNull() {
+        var user = user();
+        user.setDigestSendHour(9);
+        var request = new UpdateDigestPreferencesRequest(DigestFrequency.DAILY, null);
+
+        var result = preferenceService.updateDigestPreferences(user, request);
+
+        assertNull(user.getDigestSendHour());
+        assertNull(result.sendHour());
+        assertEquals(DigestFrequency.DAILY, result.frequency());
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void getDigestPreferencesReturnsCurrentValues() {
+        var user = user();
+        user.setDigestFrequency(DigestFrequency.OFF);
+        user.setDigestSendHour(20);
+
+        var result = preferenceService.getDigestPreferences(user);
+
+        assertEquals(DigestFrequency.OFF, result.frequency());
+        assertEquals(20, result.sendHour());
     }
 
     @Test

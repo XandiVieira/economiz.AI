@@ -2,12 +2,14 @@ package com.relyon.economizai.controller;
 
 import com.relyon.economizai.dto.request.ChangePasswordRequest;
 import com.relyon.economizai.dto.request.UpdateContributionRequest;
+import com.relyon.economizai.dto.request.UpdateDigestPreferencesRequest;
 import com.relyon.economizai.dto.request.UpdateHomeLocationRequest;
 import com.relyon.economizai.dto.request.UpdateNotificationPreferencesRequest;
 import com.relyon.economizai.dto.request.UpdatePhoneRequest;
 import com.relyon.economizai.dto.request.UpdatePushTokenRequest;
 import com.relyon.economizai.dto.request.UpdateUserRequest;
 import com.relyon.economizai.dto.request.VerifyPhoneRequest;
+import com.relyon.economizai.dto.response.DigestPreferencesResponse;
 import com.relyon.economizai.dto.response.NotificationPreferenceResponse;
 import com.relyon.economizai.dto.response.UserDataExportResponse;
 import com.relyon.economizai.dto.response.UserResponse;
@@ -99,6 +101,18 @@ public class UserController {
             @AuthenticationPrincipal User user,
             @Valid @RequestBody UpdateNotificationPreferencesRequest request) {
         return ResponseEntity.ok(notificationPreferenceService.update(user, request));
+    }
+
+    @GetMapping("/me/digest-preferences")
+    public ResponseEntity<DigestPreferencesResponse> digestPreferences(@AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(notificationPreferenceService.getDigestPreferences(user));
+    }
+
+    @PutMapping("/me/digest-preferences")
+    public ResponseEntity<DigestPreferencesResponse> updateDigestPreferences(
+            @AuthenticationPrincipal User user,
+            @Valid @RequestBody UpdateDigestPreferencesRequest request) {
+        return ResponseEntity.ok(notificationPreferenceService.updateDigestPreferences(user, request));
     }
 
     @GetMapping("/me/export")

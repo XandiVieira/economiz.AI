@@ -43,6 +43,29 @@ public interface ReceiptRepository extends JpaRepository<Receipt, UUID>, JpaSpec
     """)
     BigDecimal sumConfirmedTotalSince(@Param("householdId") UUID householdId, @Param("since") LocalDateTime since);
 
+    /**
+     * Hour-of-day histogram of the household's confirmed receipts with a non-null
+     * issued_at: each row is (hour 0-23, count). Native (the EXTRACT-then-GROUP BY
+     * is awkward in JPQL); H2 with {@code MODE=PostgreSQL} supports EXTRACT(HOUR ...),
+     * so the @DataJpaTest exercises it. The caller picks the modal hour to infer a
+     * household's typical shopping time.
+     */
+    @Query(value = """
+        SELECT CAST(EXTRACT(HOUR FROM r.issued_at) AS INTEGER) AS hourOfDay, COUNT(*) AS receiptCount
+        FROM receipts r
+        WHERE r.household_id = :householdId
+          AND r.status = 'CONFIRMED'
+          AND r.issued_at IS NOT NULL
+        GROUP BY EXTRACT(HOUR FROM r.issued_at)
+    """, nativeQuery = true)
+    List<HourCount> findConfirmedIssuedHourHistogram(@Param("householdId") UUID householdId);
+
+    /** Projection for {@link #findConfirmedIssuedHourHistogram}: hour-of-day (0-23) and how many receipts fell in it. */
+    interface HourCount {
+        int getHourOfDay();
+        long getReceiptCount();
+    }
+
     /** Distinct CNPJs the household has ever submitted a confirmed receipt from. */
     @Query("""
         SELECT DISTINCT r.cnpjEmitente FROM Receipt r

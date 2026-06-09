@@ -1,6 +1,7 @@
 package com.relyon.economizai.model;
 
 import com.relyon.economizai.model.enums.AuthProvider;
+import com.relyon.economizai.model.enums.DigestFrequency;
 import com.relyon.economizai.model.enums.Role;
 import com.relyon.economizai.model.enums.SubscriptionTier;
 import jakarta.persistence.Column;
@@ -23,6 +24,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
 
@@ -103,6 +105,19 @@ public class User extends BaseEntity implements UserDetails {
 
     @Column(name = "push_token_updated_at")
     private LocalDateTime pushTokenUpdatedAt;
+
+    // Daily deals digest (Phase C): how often, an optional send-hour override
+    // (0-23, wall-clock America/Sao_Paulo), and the 1/day cap marker.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "digest_frequency", nullable = false, length = 10)
+    @Builder.Default
+    private DigestFrequency digestFrequency = DigestFrequency.DAILY;
+
+    @Column(name = "digest_send_hour")
+    private Integer digestSendHour;
+
+    @Column(name = "last_digest_sent_at")
+    private OffsetDateTime lastDigestSentAt;
 
     @Column(name = "profile_picture_key", length = 255)
     private String profilePictureKey;

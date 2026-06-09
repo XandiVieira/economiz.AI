@@ -119,6 +119,12 @@ GET    /api/v1/users/me/notification-preferences
 PUT    /api/v1/users/me/notification-preferences
        { "preferences": [ { "type": "PROMO_PERSONAL", "channel": "PUSH" }, ... ] }
 
+GET    /api/v1/users/me/digest-preferences   → { "frequency": "DAILY", "sendHour": 17 }
+PUT    /api/v1/users/me/digest-preferences
+       { "frequency": "DAILY|WEEKLY|OFF", "sendHour": 0-23 | null }
+       ← frequency required; sendHour optional override (null = infer it).
+         sendHour out of 0-23 → 400. frequency=OFF disables the digest entirely.
+
 POST   /api/v1/users/me/profile-picture   ← multipart form, field name "file"
                                             JPG/PNG/WEBP, max 5MB
 GET    /api/v1/users/me/profile-picture   ← returns the bytes (Content-Type matches the upload)
@@ -626,6 +632,30 @@ R$200 one — so trivial drops don't surface. K-anonymity protected: the communi
 price is disclosed only when ≥ 3 distinct households contributed; below that the
 market is dropped. Returns `[]` when the collaborative index is off or nothing
 qualifies.
+
+### How the daily deals digest works (push)
+
+The deals screen above is always-on and read-only. The **digest** is the push
+that nudges the user back to it. A scheduler runs hourly and, for each user who
+is *due that hour* and hasn't already received a digest *today* (1/day hard cap),
+recomputes their deals and sends **one** `DEALS_DIGEST` push — but only when at
+least one deal is **newsworthy** (brand-new, discount improved by ≥ 5 p.p. /
+crossed a stricter relevance step, or it lapsed past the collaborative lookback
+window). Standing, unchanged deals never re-notify.
+
+- **Preferences**: `GET`/`PUT /api/v1/users/me/digest-preferences` (above).
+  `frequency` `OFF` = never; `WEEKLY` = once a week (currently Thursdays);
+  `DAILY` = at most once a day. `sendHour` (0-23) overrides the send time;
+  leave it `null` and the backend infers it from the household's typical
+  shopping hour, falling back to ~16:00. Timezone is America/Sao_Paulo (v1).
+- **The push** lands in the inbox as a `DEALS_DIGEST` `Notification` (see §
+  Notifications). Body: e.g. `"Café 22% mais barato — e mais 3 ofertas pra
+  você"`. Its `payload` carries `deeplink: "economizai://deals"`, `screen:
+  "deals"`, `newsworthyCount`, and `bestProductId` / `bestMarketCnpj` /
+  `bestDiscountFraction`.
+- **FE on tap**: open the deals screen and fire `PUSH_OPENED` via
+  `POST /api/v1/notifications/events` (with the notification id), then proceed
+  with the normal `SCREEN_OPENED` / `DEAL_VIEWED` / `DEAL_TAPPED` flow.
 
 This endpoint emits **no** telemetry. The app reports `SCREEN_OPENED` on open and
 `DEAL_VIEWED` / `DEAL_TAPPED` on interaction itself, via

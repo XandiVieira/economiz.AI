@@ -171,6 +171,9 @@ economizai:
     digest:
       cron: ${NOTIFICATIONS_DIGEST_CRON:0 0 8 * * MON}                   # weekly Monday 08:00
       zone: ${NOTIFICATIONS_DIGEST_ZONE:America/Sao_Paulo}
+    deals-digest:
+      cron: ${NOTIFICATIONS_DEALS_DIGEST_CRON:0 0 * * * *}               # top of every hour: due-user deals rollup
+      zone: ${NOTIFICATIONS_DEALS_DIGEST_ZONE:America/Sao_Paulo}
   profile-picture:
     local-dir: ${PROFILE_PICTURE_DIR:/tmp/economizai/profile-pics}   # dev: local disk. prod: see DEV_NOTES.md
     max-size-mb: 5

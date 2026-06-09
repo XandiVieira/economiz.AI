@@ -16,6 +16,17 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-09 — Daily deals digest (Phase C): preferences + `DEALS_DIGEST` push
+
+New: a scheduled daily rollup push that points to the deals screen, sent at most **once per day**, and only when there's something **new** worth telling the user (a brand-new deal, a meaningfully bigger discount, or a deal that lapsed past the lookback window). Standing, unchanged deals never re-notify.
+
+- **Digest preferences** (JWT, scoped to you):
+  - `GET /api/v1/users/me/digest-preferences` → `{ "frequency": "DAILY|WEEKLY|OFF", "sendHour": 0-23 | null }`.
+  - `PUT /api/v1/users/me/digest-preferences` with the same shape. `frequency` is required; `sendHour` is optional (an override — `null` lets the backend infer your typical shopping hour). `sendHour` outside `0-23` → **400**. `frequency=OFF` is the master switch (no digest ever).
+- **New inbox notification type `DEALS_DIGEST`.** It shows up in `GET /api/v1/notifications` like any other. Body reads e.g. `"Café 22% mais barato — e mais 3 ofertas pra você"` (singular/plural handled; no "e mais" when there's only one). Its `payload` carries a deep-link hint (`deeplink: "economizai://deals"`, `screen: "deals"`), `newsworthyCount`, and the best deal's `bestProductId` / `bestMarketCnpj` / `bestDiscountFraction`.
+- **FE action:** tapping the digest should open the **deals screen** and fire `PUSH_OPENED` via `POST /api/v1/notifications/events` (key it with the notification id). Then it's the normal deals flow (`SCREEN_OPENED`, `DEAL_VIEWED`, `DEAL_TAPPED`).
+- Send time defaults to ~16:00 (BR after-work) when we don't yet know your habits; otherwise it's inferred from your household's confirmed-receipt shopping hour. Timezone is **America/Sao_Paulo** for v1. WEEKLY currently goes out Thursdays.
+
 ## 2026-06-09 — "Ofertas pra você": new `GET /api/v1/deals` screen endpoint
 
 New endpoint: `GET /api/v1/deals` (JWT, scoped to your household). The active, ranked list of discounts relevant to you right now — for each product your household buys, the best **currently-observed** community price at a relevant market that beats what you last paid by a meaningful margin.

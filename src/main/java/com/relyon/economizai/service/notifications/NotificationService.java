@@ -48,13 +48,18 @@ public class NotificationService {
         log.info("Notification dispatchers active: {}", this.dispatchersByChannel.keySet());
     }
 
+    /**
+     * Persist + dispatch one notification. Returns the saved {@link Notification}
+     * (with id) so callers can attach telemetry to it, or {@code null} when the
+     * user has opted out of this type (NONE channel) and nothing was created.
+     */
     @Transactional
-    public void notify(NotificationPayload payload) {
+    public Notification notify(NotificationPayload payload) {
         var channel = resolveChannel(payload.user(), payload.type());
         if (channel == NotificationChannel.NONE) {
             log.debug("notification.skipped user={} type={} reason=opted_out",
                     payload.user().getEmail(), payload.type());
-            return;
+            return null;
         }
         var notification = Notification.builder()
                 .user(payload.user())
@@ -70,25 +75,23 @@ public class NotificationService {
         // The inbox itself is never gated; only outbound delivery is PRO.
         if (!subscriptionGate.allows(payload.user(), Feature.PUSH_AND_EMAIL_DELIVERY)) {
             notification.setFailureReason("free_tier_inbox_only");
-            notificationRepository.save(notification);
             log.info("notification.inbox_only user={} type={} channel={} reason=free_tier",
                     payload.user().getEmail(), payload.type(), channel);
-            return;
+            return notificationRepository.save(notification);
         }
 
         var dispatcher = dispatchersByChannel.get(channel);
         if (dispatcher == null) {
             notification.setFailureReason("no dispatcher registered for channel " + channel);
-            notificationRepository.save(notification);
             log.warn("notification.no_dispatcher user={} type={} channel={}",
                     payload.user().getEmail(), payload.type(), channel);
-            return;
+            return notificationRepository.save(notification);
         }
         var result = dispatcher.dispatch(payload);
         notification.setDelivered(result.delivered());
         notification.setDeliveredAt(result.delivered() ? LocalDateTime.now() : null);
         notification.setFailureReason(result.failureReason());
-        notificationRepository.save(notification);
+        return notificationRepository.save(notification);
     }
 
     private NotificationChannel resolveChannel(User user, NotificationType type) {
