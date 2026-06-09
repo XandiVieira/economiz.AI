@@ -9,7 +9,9 @@ import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.service.canonicalization.DescriptionNormalizer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,6 +50,12 @@ public class ConsensusPromotionService {
     private final LearnedDictionaryRepository learnedRepository;
     private final DictionaryClassifier dictionaryClassifier;
 
+    // Self-reference so the scheduled trigger's call to @Transactional promote()
+    // goes through the Spring proxy. Defaults to `this` for plain unit tests.
+    @Lazy
+    @Autowired
+    private ConsensusPromotionService self = this;
+
     @Value("${economizai.categorizer.consensus.min-households:2}")
     private int minHouseholds;
 
@@ -58,7 +66,7 @@ public class ConsensusPromotionService {
                initialDelayString = "${economizai.categorizer.consensus.interval-ms:86400000}")
     public void scheduledPromote() {
         log.info("consensus_promote.scheduled trigger");
-        promote();
+        self.promote();
     }
 
     @Transactional

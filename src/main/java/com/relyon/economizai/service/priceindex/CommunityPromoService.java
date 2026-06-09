@@ -9,6 +9,8 @@ import com.relyon.economizai.service.geo.DistanceCalculator;
 import com.relyon.economizai.service.geo.MarketLocationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,9 +52,15 @@ public class CommunityPromoService {
     private final CollaborativeProperties properties;
     private final MarketLocationService marketLocationService;
 
+    // Self-reference so the no-arg overload's call to the @Transactional
+    // detectAll(...) goes through the Spring proxy. Defaults to `this` for tests.
+    @Lazy
+    @Autowired
+    private CommunityPromoService self = this;
+
     /** Backwards-compat overload used by tests + scheduled jobs (no distance filter). */
     public List<CommunityPromo> detectAll() {
-        return detectAll(null, null, null, Set.of());
+        return self.detectAll(null, null, null, Set.of());
     }
 
     @Transactional(readOnly = true)

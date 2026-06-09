@@ -7,7 +7,9 @@ import com.relyon.economizai.repository.ProductRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,6 +43,12 @@ public class MlClassifierService {
 
     private final ProductRepository productRepository;
 
+    // Self-reference so the scheduled trigger's call to @Transactional retrain()
+    // goes through the Spring proxy. Defaults to `this` for plain unit tests.
+    @Lazy
+    @Autowired
+    private MlClassifierService self = this;
+
     @Value("${economizai.ml.confidence-threshold:0.75}")
     private double confidenceThreshold;
 
@@ -67,7 +75,7 @@ public class MlClassifierService {
                initialDelayString = "${economizai.ml.retrain-interval-ms:604800000}")
     public void scheduledRetrain() {
         log.info("ml.retrain.scheduled trigger");
-        retrain();
+        self.retrain();
     }
 
     @Transactional(readOnly = true)

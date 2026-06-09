@@ -10,7 +10,9 @@ import com.relyon.economizai.service.canonicalization.DescriptionNormalizer;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -56,6 +58,12 @@ public class AutoPromotionService {
     private final LearnedDictionaryRepository learnedRepository;
     private final DictionaryClassifier dictionaryClassifier;
 
+    // Self-reference so the scheduled trigger's call to @Transactional promote()
+    // goes through the Spring proxy. Defaults to `this` for plain unit tests.
+    @Lazy
+    @Autowired
+    private AutoPromotionService self = this;
+
     @Value("${economizai.ml.auto-promote.min-samples:30}")
     private int minSamples;
 
@@ -71,7 +79,7 @@ public class AutoPromotionService {
                initialDelayString = "${economizai.ml.auto-promote-interval-ms:86400000}")
     public void scheduledPromote() {
         log.info("auto_promote.scheduled trigger");
-        promote();
+        self.promote();
     }
 
     @Transactional
