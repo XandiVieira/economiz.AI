@@ -68,6 +68,16 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-06-09 13:01:43] [NEEDS-HUMAN] CLAUDE-TIMEOUT (attempt 1x) - ERROR [req=    o.s.boot.SpringApplication - Application run 
+- **Error snippet:**
+```r
+2026-06-09 15:49:53.841 ERROR [req= user= rcpt= item=] o.s.boot.SpringApplication - Application run failed
+at com.relyon.economizai.EconomizaiApplication.main(EconomizaiApplication.java:12)
+Caused by: org.springframework.beans.factory.BeanCreationException: Error creating bean with name 'notificationRuleRepository' defined in com.relyon.economizai.repository.NotificationRuleRepository defined in @EnableJpaRepositories declared on DataJpaRepositoriesRegistrar.EnableJpaRepositoriesConfiguration: Query validation failed for 'SELECT r FROM NotificationRule r JOIN FETCH r.user u WHERE r.type = :type AND r.active = true AND r.isDefault = true AND u.household.id IN (SELECT ri.receipt.household.id FROM ReceiptItem ri WHERE ri.product.id = :productId AND ri.receipt.status = 'CONFIRMED' AND ri.excluded = false)'
+```
+- **Outcome:** the fixer call exceeded 300s and was killed; partial edits discarded.
+- **Note for human:** bug still live; autonomous diagnosis timed out - needs eyes.
+
 ### [2026-06-09 12:56:27] [NEEDS-HUMAN] BUILD-FAIL (attempt 1x) - Error starting ApplicationContext. To display the condition 
 - **Error snippet:**
 ```r
@@ -349,6 +359,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
