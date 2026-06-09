@@ -107,10 +107,7 @@ public class NotificationRuleEngine {
             if (candidates == null) continue;
             for (var rule : candidates) {
                 if (firedIds.contains(rule.getId())) continue;
-                if (sameHousehold(rule, contributingHouseholdId)) continue;
-                if (!thresholdMet(rule, observation.getUnitPrice())) continue;
-                if (inCooldown(rule, now)) continue;
-                if (!withinRadius(rule.getRadiusKm(), rule.getUser(), observation, locations)) continue;
+                if (!priceRuleShouldFire(rule, observation, contributingHouseholdId, locations, now)) continue;
 
                 notifyPriceRule(rule, observation);
                 rule.setLastFiredAt(now);
@@ -119,6 +116,16 @@ public class NotificationRuleEngine {
             }
         }
         return fired;
+    }
+
+    /** All the gates a price rule must clear before firing for this observation. */
+    private boolean priceRuleShouldFire(NotificationRule rule, PriceObservation observation,
+                                        UUID contributingHouseholdId,
+                                        Map<String, MarketLocation> locations, LocalDateTime now) {
+        if (sameHousehold(rule, contributingHouseholdId)) return false;
+        if (!thresholdMet(rule, observation.getUnitPrice())) return false;
+        if (inCooldown(rule, now)) return false;
+        return withinRadius(rule.getRadiusKm(), rule.getUser(), observation, locations);
     }
 
     private boolean thresholdMet(NotificationRule rule, BigDecimal unitPrice) {
