@@ -5,7 +5,6 @@ import com.relyon.economizai.model.MarketLocation;
 import com.relyon.economizai.model.NotificationRule;
 import com.relyon.economizai.model.PriceObservation;
 import com.relyon.economizai.model.Product;
-import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.NotificationType;
 import com.relyon.economizai.repository.NotificationRuleRepository;

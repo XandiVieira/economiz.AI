@@ -1,6 +1,4 @@
 package com.relyon.economizai.integration;
-
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
 import com.relyon.economizai.repository.PriceObservationAuditRepository;

@@ -1,6 +1,4 @@
 package com.relyon.economizai.service;
-
-import com.relyon.economizai.dto.response.InsightsQueryResponse;
 import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.CategoryView;
@@ -9,7 +7,6 @@ import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.service.InsightsQueryService.QueryFilters;
 import com.relyon.economizai.service.subscription.SubscriptionGateService;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.Query;
 import jakarta.persistence.TypedQuery;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
