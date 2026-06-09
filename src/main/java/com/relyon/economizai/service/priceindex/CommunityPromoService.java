@@ -92,84 +92,96 @@ public class CommunityPromoService {
         for (var productEntry : byProductMarket.entrySet()) {
             var productId = productEntry.getKey();
             for (var marketEntry : productEntry.getValue().entrySet()) {
-                var marketCnpj = marketEntry.getKey();
-                var rows = marketEntry.getValue();
-                if (rows.size() < properties.getCollaborative().getMinObservationsForCommunityPromo()) continue;
-
-                var distinctHouseholds = auditRepository.countDistinctHouseholdsForProductMarket(productId, marketCnpj, since);
-                if (distinctHouseholds < properties.getCollaborative().getMinHouseholdsForPublic()) continue;
-
-                Double distanceKm = null;
-                var isWatched = watched.contains(marketCnpj);
-                if (userLatitude != null && userLongitude != null) {
-                    var location = locations.get(marketCnpj);
-                    if (location == null || !location.hasCoordinates()) {
-                        if (radiusKm != null && !isWatched) continue; // user wants radius filter but no coords
-                    } else {
-                        distanceKm = DistanceCalculator.kmBetween(
-                                userLatitude, userLongitude, location.getLatitude(), location.getLongitude());
-                        if (radiusKm != null && distanceKm > radiusKm && !isWatched) continue;
-                    }
-                }
-
-                // Use normalized R$/base-unit when ALL rows in the group carry it
-                // (same product across time can shift pack sizes — a market that
-                // moves milk from 1L to 2L bottles would otherwise look like a
-                // huge price hike instead of a per-litre drop). Mixed → fall back
-                // to raw unit price.
-                var allNormalized = rows.stream().allMatch(po -> po.getNormalizedUnitPrice() != null);
-                var priceFn = allNormalized
-                        ? (Function<PriceObservation, BigDecimal>) PriceObservation::getNormalizedUnitPrice
-                        : (Function<PriceObservation, BigDecimal>) PriceObservation::getUnitPrice;
-
-                var recentPrices = rows.stream()
-                        .filter(po -> po.getObservedAt().isAfter(recentCutoff))
-                        .map(priceFn)
-                        .toList();
-                // Baseline excludes prior promo-flagged rows: comparing a current
-                // promo to an old promo would silence the signal we're trying
-                // to detect. Promo rows still count toward 'recent'.
-                var baselinePrices = rows.stream()
-                        .filter(po -> !po.getObservedAt().isAfter(recentCutoff))
-                        .filter(po -> !po.isPromoFlag())
-                        .map(priceFn)
-                        .toList();
-                if (recentPrices.isEmpty() || baselinePrices.size() < 3) continue;
-
-                var recentMedian = PriceIndexService.median(recentPrices);
-                var baselineMedian = PriceIndexService.median(baselinePrices);
-                var threshold = baselineMedian
-                        .multiply(BigDecimal.valueOf(100L - properties.getCollaborative().getCommunityPromoThresholdPct()))
-                        .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
-
-                if (recentMedian.compareTo(threshold) < 0) {
-                    var dropPct = baselineMedian.subtract(recentMedian)
-                            .multiply(BigDecimal.valueOf(100))
-                            .divide(baselineMedian, 2, RoundingMode.HALF_UP);
-                    var firstRow = rows.get(0);
-                    var promo = new CommunityPromo(
-                            productId,
-                            firstRow.getProduct().getNormalizedName(),
-                            marketCnpj,
-                            PriceIndexService.cnpjRoot(marketCnpj),
-                            firstRow.getMarketName(),
-                            firstRow.getMarketName(),
-                            recentMedian,
-                            baselineMedian,
-                            dropPct,
-                            recentPrices.size(),
-                            distinctHouseholds,
-                            distanceKm,
-                            isWatched
-                    );
-                    promos.add(promo);
-                    log.info("community_promo.detected product={} market={} recent={} baseline={} dropPct={} samples={} households={}",
-                            productId, marketCnpj, recentMedian, baselineMedian, dropPct, recentPrices.size(), distinctHouseholds);
-                }
+                var promo = detectPromoForMarket(productId, marketEntry.getKey(), marketEntry.getValue(),
+                        since, recentCutoff, locations, watched, userLatitude, userLongitude, radiusKm);
+                if (promo != null) promos.add(promo);
             }
         }
         promos.sort((a, b) -> b.dropPct().compareTo(a.dropPct()));
         return promos;
+    }
+
+    /**
+     * Detect a community promo for one (product, market) group, or null if it
+     * doesn't qualify (too few observations, fails k-anonymity, out of radius, or
+     * the recent median isn't below the baseline threshold). Extracted from
+     * detectAll to keep that method's cognitive complexity within bounds (S3776).
+     */
+    private CommunityPromo detectPromoForMarket(UUID productId, String marketCnpj, List<PriceObservation> rows,
+                                                LocalDateTime since, LocalDateTime recentCutoff,
+                                                Map<String, MarketLocation> locations, Set<String> watched,
+                                                BigDecimal userLatitude, BigDecimal userLongitude, Double radiusKm) {
+        if (rows.size() < properties.getCollaborative().getMinObservationsForCommunityPromo()) return null;
+
+        var distinctHouseholds = auditRepository.countDistinctHouseholdsForProductMarket(productId, marketCnpj, since);
+        if (distinctHouseholds < properties.getCollaborative().getMinHouseholdsForPublic()) return null;
+
+        Double distanceKm = null;
+        var isWatched = watched.contains(marketCnpj);
+        if (userLatitude != null && userLongitude != null) {
+            var location = locations.get(marketCnpj);
+            if (location == null || !location.hasCoordinates()) {
+                if (radiusKm != null && !isWatched) return null; // user wants radius filter but no coords
+            } else {
+                distanceKm = DistanceCalculator.kmBetween(
+                        userLatitude, userLongitude, location.getLatitude(), location.getLongitude());
+                if (radiusKm != null && distanceKm > radiusKm && !isWatched) return null;
+            }
+        }
+
+        // Use normalized R$/base-unit when ALL rows in the group carry it
+        // (same product across time can shift pack sizes — a market that
+        // moves milk from 1L to 2L bottles would otherwise look like a
+        // huge price hike instead of a per-litre drop). Mixed → fall back
+        // to raw unit price.
+        var allNormalized = rows.stream().allMatch(po -> po.getNormalizedUnitPrice() != null);
+        var priceFn = allNormalized
+                ? (Function<PriceObservation, BigDecimal>) PriceObservation::getNormalizedUnitPrice
+                : (Function<PriceObservation, BigDecimal>) PriceObservation::getUnitPrice;
+
+        var recentPrices = rows.stream()
+                .filter(po -> po.getObservedAt().isAfter(recentCutoff))
+                .map(priceFn)
+                .toList();
+        // Baseline excludes prior promo-flagged rows: comparing a current
+        // promo to an old promo would silence the signal we're trying
+        // to detect. Promo rows still count toward 'recent'.
+        var baselinePrices = rows.stream()
+                .filter(po -> !po.getObservedAt().isAfter(recentCutoff))
+                .filter(po -> !po.isPromoFlag())
+                .map(priceFn)
+                .toList();
+        if (recentPrices.isEmpty() || baselinePrices.size() < 3) return null;
+
+        var recentMedian = PriceIndexService.median(recentPrices);
+        var baselineMedian = PriceIndexService.median(baselinePrices);
+        var threshold = baselineMedian
+                .multiply(BigDecimal.valueOf(100L - properties.getCollaborative().getCommunityPromoThresholdPct()))
+                .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
+
+        if (recentMedian.compareTo(threshold) >= 0) return null;
+
+        var dropPct = baselineMedian.subtract(recentMedian)
+                .multiply(BigDecimal.valueOf(100))
+                .divide(baselineMedian, 2, RoundingMode.HALF_UP);
+        var firstRow = rows.get(0);
+        log.info("community_promo.detected product={} market={} recent={} baseline={} dropPct={} samples={} households={}",
+                productId, marketCnpj, recentMedian, baselineMedian, dropPct, recentPrices.size(), distinctHouseholds);
+        return new CommunityPromo(
+                productId,
+                firstRow.getProduct().getNormalizedName(),
+                marketCnpj,
+                PriceIndexService.cnpjRoot(marketCnpj),
+                firstRow.getMarketName(),
+                firstRow.getMarketName(),
+                recentMedian,
+                baselineMedian,
+                dropPct,
+                recentPrices.size(),
+                distinctHouseholds,
+                distanceKm,
+                isWatched
+        );
     }
 
     public record CommunityPromo(
