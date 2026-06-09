@@ -29,7 +29,7 @@ public class LocalDiskProfilePictureStorage implements ProfilePictureStorage {
 
     public LocalDiskProfilePictureStorage(
             @Value("${economizai.profile-picture.local-dir:/tmp/economizai/profile-pics}") String dir) {
-        this.baseDir = Paths.get(dir);
+        this.baseDir = Paths.get(dir).toAbsolutePath().normalize();
     }
 
     @PostConstruct
@@ -49,7 +49,7 @@ public class LocalDiskProfilePictureStorage implements ProfilePictureStorage {
 
     @Override
     public byte[] read(String key) throws IOException {
-        var path = baseDir.resolve(key);
+        var path = resolveWithinBase(key);
         if (!Files.exists(path)) return null;
         return Files.readAllBytes(path);
     }
@@ -57,7 +57,20 @@ public class LocalDiskProfilePictureStorage implements ProfilePictureStorage {
     @Override
     public void delete(String key) throws IOException {
         if (key == null) return;
-        Files.deleteIfExists(baseDir.resolve(key));
+        Files.deleteIfExists(resolveWithinBase(key));
+    }
+
+    /**
+     * Resolves {@code key} against the storage dir, rejecting any value that
+     * would escape it (e.g. {@code ../../etc/passwd}). Keys are server-generated
+     * UUIDs, so a traversal sequence here is an attack, not a legitimate read.
+     */
+    private Path resolveWithinBase(String key) throws IOException {
+        var resolved = baseDir.resolve(key).normalize();
+        if (!resolved.startsWith(baseDir)) {
+            throw new IOException("Profile picture key escapes storage directory");
+        }
+        return resolved;
     }
 
     private String extensionFor(String contentType) {

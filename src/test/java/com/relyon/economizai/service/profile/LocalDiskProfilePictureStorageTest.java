@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class LocalDiskProfilePictureStorageTest {
 
@@ -101,6 +102,25 @@ class LocalDiskProfilePictureStorageTest {
     @Test
     void delete_nullKey_isSilent() {
         assertDoesNotThrow(() -> storage.delete(null));
+    }
+
+    @Test
+    void read_traversalKey_throwsAndDoesNotEscapeBaseDir() {
+        assertThrows(IOException.class, () -> storage.read("../../etc/passwd"));
+        assertThrows(IOException.class, () -> storage.read("../outside.png"));
+    }
+
+    @Test
+    void delete_traversalKey_throwsAndDoesNotEscapeBaseDir() {
+        assertThrows(IOException.class, () -> storage.delete("../../tmp/anything"));
+    }
+
+    @Test
+    void read_keyWithHarmlessDotSegments_staysWithinBaseDir() throws IOException {
+        var payload = new byte[]{1, 2, 3};
+        var key = storage.store(new ByteArrayInputStream(payload), "image/png", payload.length);
+        // "sub/../<key>" normalizes back to <key>, which is still inside baseDir
+        assertArrayEquals(payload, storage.read("sub/../" + key));
     }
 
     @Test
