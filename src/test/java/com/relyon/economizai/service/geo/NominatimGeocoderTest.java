@@ -12,7 +12,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -160,13 +159,13 @@ class NominatimGeocoderTest {
      */
     private NominatimGeocoder geocoderReturning(String body) {
         var responseSpec = mock(RestClient.ResponseSpec.class);
-        when(responseSpec.body(eq(String.class))).thenReturn(body);
+        when(responseSpec.body(String.class)).thenReturn(body);
         return geocoderWith(responseSpec);
     }
 
     private NominatimGeocoder geocoderThrowing(RuntimeException failure) {
         var responseSpec = mock(RestClient.ResponseSpec.class);
-        when(responseSpec.body(eq(String.class))).thenThrow(failure);
+        when(responseSpec.body(String.class)).thenThrow(failure);
         return geocoderWith(responseSpec);
     }
 

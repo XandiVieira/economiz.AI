@@ -29,7 +29,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -103,7 +102,7 @@ class AdminReceiptServiceTest {
     @Test
     void get_returnsReceiptResponse() {
         var receipt = receipt(ReceiptStatus.PENDING_CONFIRMATION);
-        when(receiptRepository.findById(eq(receipt.getId()))).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
 
         var response = service.get(receipt.getId());
 

@@ -8,7 +8,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,7 +21,7 @@ class NotificationDefaultsBackfillTest {
     @Test
     void run_callsInsertOncePerDefaultType() {
         for (var type : NotificationType.defaults()) {
-            when(ruleRepository.insertMissingDefaultRules(eq(type.name()))).thenReturn(1);
+            when(ruleRepository.insertMissingDefaultRules(type.name())).thenReturn(1);
         }
 
         backfill.run(null);

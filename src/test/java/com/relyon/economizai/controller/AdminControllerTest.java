@@ -129,7 +129,7 @@ class AdminControllerTest {
     @Test
     void reparseReceipt_returnsReparsedReceipt() throws Exception {
         var id = UUID.randomUUID();
-        when(receiptService.reparse(eq(id))).thenReturn(sampleReceipt(ReceiptStatus.CONFIRMED));
+        when(receiptService.reparse(id)).thenReturn(sampleReceipt(ReceiptStatus.CONFIRMED));
 
         mockMvc.perform(post("/api/v1/admin/receipts/" + id + "/reparse")
                         .with(SecurityMockMvcRequestPostProcessors.user(adminUser())))
@@ -178,7 +178,7 @@ class AdminControllerTest {
         var detail = new AdminUserDetailResponse(id, "John", "john@test.com",
                 Role.USER, SubscriptionTier.FREE, true, true, true, UUID.randomUUID(),
                 3L, new ReceiptCounts(1L, 5L, 0L, 2L), new BigDecimal("99.90"), LocalDateTime.now());
-        when(adminUserService.get(eq(id))).thenReturn(detail);
+        when(adminUserService.get(id)).thenReturn(detail);
 
         mockMvc.perform(get("/api/v1/admin/users/" + id)
                         .with(SecurityMockMvcRequestPostProcessors.user(adminUser())))
@@ -191,7 +191,7 @@ class AdminControllerTest {
     @Test
     void getUser_returns404WhenMissing() throws Exception {
         var id = UUID.randomUUID();
-        when(adminUserService.get(eq(id))).thenThrow(new UserNotFoundException(id.toString()));
+        when(adminUserService.get(id)).thenThrow(new UserNotFoundException(id.toString()));
 
         mockMvc.perform(get("/api/v1/admin/users/" + id)
                         .with(SecurityMockMvcRequestPostProcessors.user(adminUser())))
@@ -263,7 +263,7 @@ class AdminControllerTest {
     @Test
     void getReceipt_returnsReceipt() throws Exception {
         var id = UUID.randomUUID();
-        when(adminReceiptService.get(eq(id))).thenReturn(sampleReceipt(ReceiptStatus.PENDING_CONFIRMATION));
+        when(adminReceiptService.get(id)).thenReturn(sampleReceipt(ReceiptStatus.PENDING_CONFIRMATION));
 
         mockMvc.perform(get("/api/v1/admin/receipts/" + id)
                         .with(SecurityMockMvcRequestPostProcessors.user(adminUser())))
@@ -274,7 +274,7 @@ class AdminControllerTest {
     @Test
     void getReceipt_returns404WhenMissing() throws Exception {
         var id = UUID.randomUUID();
-        when(adminReceiptService.get(eq(id))).thenThrow(new ReceiptNotFoundException());
+        when(adminReceiptService.get(id)).thenThrow(new ReceiptNotFoundException());
 
         mockMvc.perform(get("/api/v1/admin/receipts/" + id)
                         .with(SecurityMockMvcRequestPostProcessors.user(adminUser())))
@@ -546,7 +546,7 @@ class AdminControllerTest {
 
     @Test
     void recategorizeApply_default_appliesAndRecordsQualitySnapshot() throws Exception {
-        when(adminProductService.recategorizeApply(eq(false)))
+        when(adminProductService.recategorizeApply(false))
                 .thenReturn(new RecategorizeResultResponse(100L, 5, 1, 2, 92));
 
         mockMvc.perform(post("/api/v1/admin/products/recategorize")
@@ -561,7 +561,7 @@ class AdminControllerTest {
 
     @Test
     void recategorizeApply_includeMl_passesFlag() throws Exception {
-        when(adminProductService.recategorizeApply(eq(true)))
+        when(adminProductService.recategorizeApply(true))
                 .thenReturn(new RecategorizeResultResponse(100L, 8, 1, 0, 91));
 
         mockMvc.perform(post("/api/v1/admin/products/recategorize")
