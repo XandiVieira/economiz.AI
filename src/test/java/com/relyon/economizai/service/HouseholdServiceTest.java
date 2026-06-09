@@ -126,9 +126,10 @@ class HouseholdServiceTest {
         var household = buildHousehold("ABC123");
         var user = buildUser(household);
         when(householdRepository.findByInviteCode("XYZ999")).thenReturn(Optional.empty());
+        var request = new JoinHouseholdRequest("XYZ999");
 
         assertThrows(InvalidInviteCodeException.class,
-                () -> householdService.join(user, new JoinHouseholdRequest("XYZ999")));
+                () -> householdService.join(user, request));
     }
 
     @Test
@@ -136,9 +137,10 @@ class HouseholdServiceTest {
         var household = buildHousehold("ABC123");
         var user = buildUser(household);
         when(householdRepository.findByInviteCode("ABC123")).thenReturn(Optional.of(household));
+        var request = new JoinHouseholdRequest("ABC123");
 
         assertThrows(AlreadyInHouseholdException.class,
-                () -> householdService.join(user, new JoinHouseholdRequest("ABC123")));
+                () -> householdService.join(user, request));
     }
 
     @Test
