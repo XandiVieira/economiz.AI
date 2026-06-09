@@ -82,6 +82,17 @@ Quality Gate on *new* code flags them.
 
 ---
 
+## Wave 2 — issues the *compiled* CI analysis surfaced (invisible to the old auto-scan)
+
+Switching to CI-based (compiled) analysis exposed real bugs the uncompiled
+automatic scan could not see (no bytecode → no taint/transaction analysis):
+
+| Issue | Where | Fix |
+|------|-------|-----|
+| **S2083/S6549** path traversal (2 vulns) | `LocalDiskProfilePictureStorage.read()/delete()` | `key` was resolved against the storage dir unchecked (`../../etc/passwd` escapes). Added `resolveWithinBase()` — normalize + reject anything outside `baseDir`. + traversal tests. |
+| **S2229** @Transactional self-invocation (6 BLOCKER bugs) | `MarketLocationService` (geocodeOne, classifySegmentOne), `AutoPromotionService`, `ConsensusPromotionService`, `MlClassifierService`, `CommunityPromoService` | Methods called their `@Transactional` siblings via `this`, bypassing the Spring proxy so the annotation never applied. Fixed via **self-injection** (`@Lazy @Autowired Self self = this`) and calling through `self.` — defaults to `this` so unit tests run unchanged. |
+| **5 security hotspots** | SecurityConfig CSRF, 3× dynamic JPQL in InsightsQueryService, 1× regex | Reviewed + marked **Safe** with justifications: CSRF-off is correct for a stateless JWT API; the JPQL interpolates only fixed skeletons + closed `Dimension` enum constants (all user values bound as named params — verified in `buildClauses`); regex is possessive-hardened on short input. |
+
 ## Target end state
 Security **A** · Reliability **A** · Maintainability **A** · Hotspots **A (100% reviewed)** ·
 Quality Gate **Passed** on new code. "Clean as You Code": don't zero the historical backlog —
