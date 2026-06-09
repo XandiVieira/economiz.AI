@@ -7,6 +7,8 @@ import org.mockito.Mockito;
 
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 class ZaffariExtractionDemo {
 
     private static final List<String> ITEMS = List.of(
@@ -60,5 +62,13 @@ class ZaffariExtractionDemo {
         }
         System.out.printf("%n=== Coverage: %d/%d items got a category (%.0f%%) ===%n",
                 matched, ITEMS.size(), 100.0 * matched / ITEMS.size());
+
+        // Beyond the printed demo, assert the extractor actually categorizes most
+        // of this real Zaffari receipt - otherwise a regression in extraction would
+        // pass silently. The dictionary alone (ML mocked off) should cover the
+        // majority of these common grocery items.
+        assertThat(matched)
+                .as("dictionary-only category coverage on a real Zaffari receipt")
+                .isGreaterThanOrEqualTo(ITEMS.size() / 2);
     }
 }
