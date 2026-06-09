@@ -76,9 +76,9 @@ class NotificationRuleServiceTest {
     void create_rejectsDefaultScopeType() {
         var owner = user();
 
-        assertThrows(InvalidNotificationRuleException.class, () -> service.create(owner,
-                new CreateNotificationRuleRequest(
-                        NotificationType.DIGEST, null, null, null, null, null, null)));
+        var request = new CreateNotificationRuleRequest(
+                NotificationType.DIGEST, null, null, null, null, null, null);
+        assertThrows(InvalidNotificationRuleException.class, () -> service.create(owner, request));
         verify(ruleRepository, never()).save(any());
     }
 
@@ -86,18 +86,18 @@ class NotificationRuleServiceTest {
     void create_rejectsMissingThresholdForPriceDrop() {
         var owner = user();
 
-        assertThrows(InvalidNotificationRuleException.class, () -> service.create(owner,
-                new CreateNotificationRuleRequest(
-                        NotificationType.PRICE_DROP, PRODUCT_ID, null, null, null, null, null)));
+        var request = new CreateNotificationRuleRequest(
+                NotificationType.PRICE_DROP, PRODUCT_ID, null, null, null, null, null);
+        assertThrows(InvalidNotificationRuleException.class, () -> service.create(owner, request));
     }
 
     @Test
     void create_rejectsMissingProductForStockout() {
         var owner = user();
 
-        assertThrows(InvalidNotificationRuleException.class, () -> service.create(owner,
-                new CreateNotificationRuleRequest(
-                        NotificationType.STOCKOUT, null, null, null, null, null, null)));
+        var request = new CreateNotificationRuleRequest(
+                NotificationType.STOCKOUT, null, null, null, null, null, null);
+        assertThrows(InvalidNotificationRuleException.class, () -> service.create(owner, request));
     }
 
     @Test
@@ -105,9 +105,9 @@ class NotificationRuleServiceTest {
         var owner = user();
         when(productRepository.findById(PRODUCT_ID)).thenReturn(Optional.empty());
 
-        assertThrows(ProductNotFoundException.class, () -> service.create(owner,
-                new CreateNotificationRuleRequest(
-                        NotificationType.PRICE_DROP, PRODUCT_ID, new BigDecimal("6.00"), null, null, null, null)));
+        var request = new CreateNotificationRuleRequest(
+                NotificationType.PRICE_DROP, PRODUCT_ID, new BigDecimal("6.00"), null, null, null, null);
+        assertThrows(ProductNotFoundException.class, () -> service.create(owner, request));
     }
 
     // ---- update ----
@@ -134,9 +134,9 @@ class NotificationRuleServiceTest {
         var owner = user();
         var ruleId = UUID.randomUUID();
         when(ruleRepository.findByIdAndUserId(ruleId, owner.getId())).thenReturn(Optional.empty());
+        var request = new UpdateNotificationRuleRequest(false, null, null, null, null);
 
-        assertThrows(NotificationRuleNotFoundException.class, () -> service.update(owner, ruleId,
-                new UpdateNotificationRuleRequest(false, null, null, null, null)));
+        assertThrows(NotificationRuleNotFoundException.class, () -> service.update(owner, ruleId, request));
     }
 
     // ---- delete ----
