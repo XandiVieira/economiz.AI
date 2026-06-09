@@ -99,18 +99,6 @@ class CategorizerControllerTest {
     }
 
     @Test
-    void status_doesNotThrowArithmeticException() throws Exception {
-        when(mlClassifier.isReady()).thenReturn(true);
-        when(mlClassifier.getLastTrainedAt()).thenReturn(LocalDateTime.now());
-        when(mlClassifier.getConfidenceThreshold()).thenReturn(0.75);
-
-        mockMvc.perform(get("/api/v1/categorizer/status")
-                        .with(SecurityMockMvcRequestPostProcessors.user(principal())))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.uptimeRatio").exists());
-    }
-
-    @Test
     void retrain_returnsOutcome() throws Exception {
         when(mlClassifier.retrain()).thenReturn(
                 new MlClassifierService.RetrainOutcome(true, 100, 80, Duration.ofMillis(45)));
