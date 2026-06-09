@@ -22,10 +22,8 @@ mirror entries here.
 - **Why OK for dev**: no real right-of-access requests yet.
 - **Before prod**: extend `exportData` to include those entities for a complete, defensible LGPD export. ~half a day.
 
-## `bestMarkets` k-anon count is an N+1
-- **Now**: the distinct-household k-anonymity count is queried per market in `bestMarkets`.
-- **Why OK for dev**: small market counts, low traffic.
-- **Before prod / at scale**: batch the distinct-household counts into a single query. ~1-2 hr.
+## ~~`bestMarkets` k-anon count is an N+1~~ — RESOLVED (2026-06-09)
+- **Fixed**: `bestMarkets` now batches the distinct-household k-anon counts into one `GROUP BY` query (`countDistinctHouseholdsForProductByMarket` → `Map<cnpj,count>`) instead of one query per market. `referencePrice` still uses the single-market count (one product+market, no N+1).
 
 ---
 
@@ -39,10 +37,9 @@ mirror entries here.
 - **Why OK for dev**: graceful degradation — an unselected/stubbed channel just produces a failed audit row, never an exception. Push is the primary channel and works end-to-end.
 - **Before prod**: implement `deliver()` in each stub — Alexa Proactive Events (skill grant per user), SMS (Twilio/Zenvia + phone verification), WhatsApp Cloud API (Meta template messages + phone verification). Add the per-user contact fields (phone) + verification flow. Flip `EMAIL` on once Render has SMTP env vars. Config placeholders already in `application.yaml` under `economizai.notifications.{alexa,sms,whatsapp}`.
 
-## Community-default notifications need seeded rule rows; write-path eval is unbounded
-- **Now**: `CHEAPER_MARKET` / `PROMO_COMMUNITY` defaults fire only when the user has an active default rule row. New users get them seeded at registration (`NotificationRuleService.ensureDefaults`); pre-existing users get seeded lazily on first `GET /api/v1/notification-rules`. So those community notifications won't fire for an old user until they open notification settings once. `PERSONAL_PROMO` is unaffected (its trigger treats "no row" as enabled).
-- **Why OK for dev**: low user count; everyone opens settings early. No backfill needed.
-- **Before prod**: either run a one-off backfill that seeds defaults for all existing users, or move the seeding into a migration. Also `NotificationRuleEngine.evaluate` runs on the receipt-confirm write path and, for community defaults, issues a per-candidate `findHouseholdHistoryForProduct` query to compute last-paid — fine at current volume but should be batched/cached (or moved to an async queue) before high write throughput. The 24h cooldown is per default-rule (coarse, one community ping/type/day/user) — revisit if users want per-product granularity.
+## Community-default notifications: backfill + owners-query batched — MOSTLY RESOLVED (2026-06-09)
+- **Fixed**: a startup `NotificationDefaultsBackfill` (`ApplicationRunner`) now proactively materializes missing default rule rows for **all existing users** (idempotent bulk `INSERT...SELECT`, one query per default type), so community notifications no longer wait for the user to open settings. (Lazy seeding on `GET /notification-rules` + absent-as-enabled still apply as a fallback.) Also `NotificationRuleEngine` community defaults now run **2 queries per receipt** (one `IN` query per type over all products) instead of 2·P — the per-product `findActiveDefaultRuleOwnersWhoBought` N+1.
+- **Still open (smaller)**: the per-candidate `lastPaidPrice(productId, householdId)` lookup inside `fireCheaperMarket` is still one query per matching rule — fine at current volume, batch/cache before high write throughput. The 24h cooldown is per default-rule (coarse) — revisit if users want per-product granularity.
 
 ---
 
