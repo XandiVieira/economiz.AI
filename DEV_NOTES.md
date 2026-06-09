@@ -22,6 +22,12 @@ mirror entries here.
 - **Why OK for dev**: no real right-of-access requests yet.
 - **Before prod**: extend `exportData` to include those entities for a complete, defensible LGPD export. ~half a day.
 
+## Notification telemetry: foundation only — nothing consumes it yet (Phase A)
+- **Now**: `POST /api/v1/notifications/events` + `NotificationEventService` write a `notification_events` row per user-feedback signal (push opened, deal viewed/tapped, added-to-list, dismissed/muted; plus server-only SENT/DELIVERED/CONVERTED for later). The `deal_surface_state` table (dedup-by-state-change for a future digest) is created but **unread/unwritten**. This is the **telemetry foundation for a future ranking/learning engine** — events are logged now even though no code reads them yet.
+- **`metadata` is a JSON string in a TEXT column** (not jsonb) to stay H2-test-portable. If we ever need to query *inside* it (e.g. filter by `discountFraction`), migrate to `jsonb`.
+- **LGPD**: `notification_events` is per-user behavioral data on the user's own account. The DB FK is `ON DELETE CASCADE` (account delete reaps it), but it is **NOT yet in `UserService.exportData`** — fold it into the LGPD data-export when that's extended (see the entry above). Flagged.
+- **Before prod / before the learning phase**: build the digest/screen/attribution producers that emit SENT/DELIVERED/CONVERTED and the consumer that ranks on this data; revisit jsonb + export.
+
 ## ~~`bestMarkets` k-anon count is an N+1~~ — RESOLVED (2026-06-09)
 - **Fixed**: `bestMarkets` now batches the distinct-household k-anon counts into one `GROUP BY` query (`countDistinctHouseholdsForProductByMarket` → `Map<cnpj,count>`) instead of one query per market. `referencePrice` still uses the single-market count (one product+market, no N+1).
 

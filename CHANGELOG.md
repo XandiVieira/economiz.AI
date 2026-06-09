@@ -16,6 +16,23 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-09 — Notification telemetry: report client-side engagement events
+
+New endpoint: `POST /api/v1/notifications/events` (JWT, scoped to you) — body `{ "type": "...", "notificationId"?, "productId"?, "marketCnpj"? }`, returns `202`.
+
+The app should fire one of these whenever the user engages with a notification or a surfaced deal:
+- `PUSH_OPENED` — opened a push
+- `SCREEN_OPENED` — opened the deals/notifications screen
+- `DEAL_VIEWED` — a deal scrolled into view
+- `DEAL_TAPPED` — tapped a deal
+- `ADDED_TO_LIST` — added the deal's product to a shopping list
+- `DISMISSED` — dismissed/swiped a deal or notification
+- `MUTED` — muted a product/market/type
+
+This is **telemetry only** for now — nothing changes in what you receive. We're capturing the engagement signal so a future ranking engine can make notifications smarter and more relevant (surface the deals you act on, suppress the ones you ignore). The more accurately the app fires these, the better that ends up. Server-only types (`SENT`/`DELIVERED`/`CONVERTED`) and unknown types are rejected with `400`.
+
+---
+
 ## 2026-06-09 — Phone number + verification; SMS/WhatsApp notifications now deliver
 
 New endpoints to set and verify a user phone:

@@ -686,6 +686,30 @@ POST /api/v1/notifications/mark-all-read     → { "marked": N }
 
 Each `NotificationResponse` carries `payload` — the JSON we attached when we generated the notification (`receiptId`, `productId`, `savingsPct`, etc) so cards can deep-link. `type` is one of `PROMO_PERSONAL`, `PROMO_COMMUNITY`, `CHEAPER_MARKET`, `DIGEST`, `PRICE_DROP`, `PRICE_ABOVE`, `STOCKOUT`, `BUDGET`, `SYSTEM` — what triggers each and how to toggle it is in §10f.
 
+### Report a telemetry event (client → server)
+
+```
+POST /api/v1/notifications/events            → 202 Accepted
+```
+
+Body:
+```json
+{ "type": "DEAL_TAPPED", "notificationId": "uuid?", "productId": "uuid?", "marketCnpj": "..?" }
+```
+
+The app fires these to record how the user engages with notifications and deals — this behavioral signal is logged now and will power relevance-ranked / smarter notifications later. Only `type` is required; the rest are optional context.
+
+**Client-reportable `type` values** (anything else → `400`):
+- `PUSH_OPENED` — user opened a push notification
+- `SCREEN_OPENED` — user opened the deals/notifications screen (no originating push needed)
+- `DEAL_VIEWED` — a surfaced deal entered the viewport
+- `DEAL_TAPPED` — user tapped a deal
+- `ADDED_TO_LIST` — user added the deal's product to a shopping list
+- `DISMISSED` — user dismissed/swiped a deal or notification
+- `MUTED` — user muted this product/market/type
+
+Server-only lifecycle types (`SENT`, `DELIVERED`, `CONVERTED`) are rejected with `400` if posted by a client. Unknown types → `400`. Scoped to the authenticated user (JWT). Authenticated endpoint — no token → `401`.
+
 ---
 
 ## 10c. Persistent shopping lists
