@@ -10,7 +10,7 @@
 	</parent>
 	<groupId>com.relyon</groupId>
 	<artifactId>economizai</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>0.0.2-SNAPSHOT</version>
 	<name>economizai</name>
 	<description>Collaborative price intelligence from Brazilian NFC-e receipts</description>
 
