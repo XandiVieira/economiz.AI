@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -20,7 +21,11 @@ import java.util.UUID;
 @NoArgsConstructor
 @SuperBuilder
 @MappedSuperclass
-public abstract class BaseEntity {
+// Serializable so entities can be safely held in a Serializable context (e.g.
+// User as the Spring Security principal via UserDetails) without tripping
+// Sonar S1948 / NotSerializableException. All fields (UUID, LocalDateTime) are
+// themselves Serializable.
+public abstract class BaseEntity implements Serializable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

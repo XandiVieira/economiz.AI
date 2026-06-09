@@ -72,15 +72,13 @@ public class User extends BaseEntity implements UserDetails {
     @Builder.Default
     private boolean active = true;
 
-    // Java `transient` (NOT JPA @Transient — the column stays mapped): User is
-    // Serializable via UserDetails, but Household is not, so a serialization of
-    // the principal would throw NotSerializableException (Sonar S1948). Sessions
-    // are STATELESS (JWT) so the principal is never serialized today; marking it
-    // transient keeps that safe and future-proof (a lazy @ManyToOne reloads from
-    // the DB anyway if it ever were deserialized).
+    // S1948 is resolved by making BaseEntity (and thus Household) Serializable,
+    // NOT by Java `transient`: in a JPA entity, the `transient` keyword is read as
+    // @Transient (non-persistent), which drops the household_id mapping and breaks
+    // every JPQL path through u.household (UnknownPathException at startup).
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "household_id", nullable = false)
-    private transient Household household;
+    private Household household;
 
     @Column(name = "accepted_terms_version", nullable = false, length = 20)
     private String acceptedTermsVersion;
