@@ -68,6 +68,19 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-06-09 17:41:54] [NEEDS-HUMAN] NO-REPRO (attempt 1x) - ERROR [    c.r.e.e.GlobalExceptionHandler - Unexpected error
+- **Status code:** 542
+- **Error snippet:**
+```r
+2026-06-09 20:37:50.542 ERROR [req=0dee74b8 user=e2e-1781037466409@test.com rcpt= item=] c.r.e.e.GlobalExceptionHandler - Unexpected error: org.springframework.dao.InvalidDataAccessResourceUsageException: JDBC exception executing SQL [ERROR: could not determine data type of parameter $2] [select coalesce(sum(ne1_0.savings_amount),0),count(ne1_0.id) from notification_events ne1_0 where ne1_0.user_id in (?) and ne1_0.event_type='CONVERTED' and (? is null or ne1_0.occurred_at>=?)]; SQL [select coalesce(sum(ne1_0.savings_amount),0),count(ne1_0.id) from notification_events ne1_0 where ne1_0.user_id in (?) and ne1_0.event_type='CONVERTED' and (? is null or ne1_0.occurred_at>=?)]
+at com.relyon.economizai.service.notifications.SavingsService.summarize(SavingsService.java:38)
+```
+- **Outcome:** could NOT reproduce the bug with a failing test; no code changed.
+- **Detail:** Files are back to their original state. 
+
+REPRO_FAIL Bug is PostgreSQL-specific (untyped null bind in `(:since IS NULL OR ...)` ÔåÆ "could not determine data type of parameter $2"); the test profile runs H2, which accepts the query and passes, and the project has no Postgres/Testcontainers test wiring to reproduce it.
+- **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 ### [2026-06-09 13:12:31] [NEEDS-HUMAN] CLAUDE-TIMEOUT (attempt 1x) - org.springframework.beans.factory.UnsatisfiedDependencyExcep
 - **Error snippet:**
 ```r
@@ -379,6 +392,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
