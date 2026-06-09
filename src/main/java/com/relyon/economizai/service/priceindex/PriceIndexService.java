@@ -5,6 +5,7 @@ import com.relyon.economizai.model.PriceObservation;
 import com.relyon.economizai.model.PriceObservationAudit;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.repository.PriceObservationAuditRepository;
+import com.relyon.economizai.repository.PriceObservationAuditRepository.MarketHouseholdCount;
 import com.relyon.economizai.repository.PriceObservationRepository;
 import com.relyon.economizai.service.geo.DistanceCalculator;
 import com.relyon.economizai.service.geo.MarketLocationService;
@@ -166,13 +167,15 @@ public class PriceIndexService {
         var byMarket = observations.stream()
                 .collect(Collectors.groupingBy(PriceObservation::getMarketCnpj));
         var locations = marketLocationService.findByCnpjs(new ArrayList<>(byMarket.keySet()));
+        var householdCounts = auditRepository.countDistinctHouseholdsForProductByMarket(productId, since).stream()
+                .collect(Collectors.toMap(MarketHouseholdCount::getCnpj, MarketHouseholdCount::getHouseholds));
 
         return byMarket.entrySet().stream()
                 .map(entry -> {
                     var cnpj = entry.getKey();
                     var rows = entry.getValue();
                     if (rows.size() < properties.getCollaborative().getMinObservationsPerProductMarket()) return null;
-                    var distinct = auditRepository.countDistinctHouseholdsForProductMarket(productId, cnpj, since);
+                    var distinct = householdCounts.getOrDefault(cnpj, 0L);
                     if (distinct < properties.getCollaborative().getMinHouseholdsForPublic()) return null;
                     var location = locations.get(cnpj);
                     var isWatched = watched.contains(cnpj);

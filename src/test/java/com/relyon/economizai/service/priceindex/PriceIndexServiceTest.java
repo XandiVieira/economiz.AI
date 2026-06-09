@@ -10,6 +10,7 @@ import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.repository.PriceObservationAuditRepository;
+import com.relyon.economizai.repository.PriceObservationAuditRepository.MarketHouseholdCount;
 import com.relyon.economizai.repository.PriceObservationRepository;
 import com.relyon.economizai.service.geo.MarketLocationService;
 import com.relyon.economizai.service.notifications.NotificationRuleEngine;
@@ -228,8 +229,8 @@ class PriceIndexServiceTest {
         for (var i = 0; i < 5; i++) observations.add(obsAt(productId, "BBBBBBBB000111", "B", new BigDecimal("8")));
 
         when(observationRepository.findRecentByProduct(eq(productId), any())).thenReturn(observations);
-        when(auditRepository.countDistinctHouseholdsForProductMarket(eq(productId), eq("AAAAAAAA000111"), any())).thenReturn(3L);
-        when(auditRepository.countDistinctHouseholdsForProductMarket(eq(productId), eq("BBBBBBBB000111"), any())).thenReturn(1L);
+        when(auditRepository.countDistinctHouseholdsForProductByMarket(eq(productId), any()))
+                .thenReturn(List.of(hhCount("AAAAAAAA000111", 3L), hhCount("BBBBBBBB000111", 1L)));
         when(marketLocationService.findByCnpjs(any())).thenReturn(Map.of());
 
         var rows = service.bestMarkets(productId, 10, null, null, null, Set.of());
@@ -246,8 +247,8 @@ class PriceIndexServiceTest {
         for (var i = 0; i < 5; i++) observations.add(obsAt(productId, "DDDDDDDD000111", "Distante", new BigDecimal("9")));
 
         when(observationRepository.findRecentByProduct(eq(productId), any())).thenReturn(observations);
-        when(auditRepository.countDistinctHouseholdsForProductMarket(eq(productId), eq("DDDDDDDD000111"), any()))
-                .thenReturn(3L);
+        when(auditRepository.countDistinctHouseholdsForProductByMarket(eq(productId), any()))
+                .thenReturn(List.of(hhCount("DDDDDDDD000111", 3L)));
         var loc = MarketLocation.builder()
                 .cnpj("DDDDDDDD000111").cnpjRoot("DDDDDDDD")
                 .latitude(new BigDecimal("-30.0500000")).longitude(new BigDecimal("-51.2200000")) // ~10km away
@@ -270,7 +271,8 @@ class PriceIndexServiceTest {
         for (var i = 0; i < 5; i++) observations.add(obsAt(productId, "AAAAAAAA000111", "A", new BigDecimal("10")));
 
         when(observationRepository.findRecentByProduct(eq(productId), any())).thenReturn(observations);
-        when(auditRepository.countDistinctHouseholdsForProductMarket(eq(productId), eq("AAAAAAAA000111"), any())).thenReturn(3L);
+        when(auditRepository.countDistinctHouseholdsForProductByMarket(eq(productId), any()))
+                .thenReturn(List.of(hhCount("AAAAAAAA000111", 3L)));
         when(marketLocationService.findByCnpjs(any())).thenReturn(Map.of());
 
         // limit=-1 (e.g. ?limit=-1 on the endpoint) must not reach Stream.limit(-1),
@@ -278,6 +280,13 @@ class PriceIndexServiceTest {
         var rows = service.bestMarkets(productId, -1, null, null, null, Set.of());
 
         assertTrue(rows.isEmpty(), "non-positive limit must return no rows, not throw");
+    }
+
+    private MarketHouseholdCount hhCount(String cnpj, long households) {
+        return new MarketHouseholdCount() {
+            public String getCnpj() { return cnpj; }
+            public long getHouseholds() { return households; }
+        };
     }
 
     private PriceObservation obs(UUID productId, BigDecimal price) {

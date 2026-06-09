@@ -9,6 +9,7 @@ import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.repository.PriceObservationAuditRepository;
+import com.relyon.economizai.repository.PriceObservationAuditRepository.MarketHouseholdCount;
 import com.relyon.economizai.repository.PriceObservationRepository;
 import com.relyon.economizai.service.geo.MarketLocationService;
 import com.relyon.economizai.service.notifications.NotificationRuleEngine;
@@ -283,6 +284,13 @@ class PriceIndexServiceCoverageTest {
         assertTrue(rows.isEmpty());
     }
 
+    private MarketHouseholdCount hhCount(String cnpj, long households) {
+        return new MarketHouseholdCount() {
+            public String getCnpj() { return cnpj; }
+            public long getHouseholds() { return households; }
+        };
+    }
+
     @Test
     void bestMarkets_radiusExcludesDistantUnwatchedMarket() {
         var productId = UUID.randomUUID();
@@ -291,8 +299,8 @@ class PriceIndexServiceCoverageTest {
             observations.add(obsAt(productId, "DDDDDDDD000111", "Distante", new BigDecimal("9")));
         }
         when(observationRepository.findRecentByProduct(eq(productId), any())).thenReturn(observations);
-        when(auditRepository.countDistinctHouseholdsForProductMarket(eq(productId), eq("DDDDDDDD000111"), any()))
-                .thenReturn(3L);
+        when(auditRepository.countDistinctHouseholdsForProductByMarket(eq(productId), any()))
+                .thenReturn(List.of(hhCount("DDDDDDDD000111", 3L)));
         var location = MarketLocation.builder()
                 .cnpj("DDDDDDDD000111").cnpjRoot("DDDDDDDD")
                 .latitude(new BigDecimal("-30.0500000")).longitude(new BigDecimal("-51.2200000"))
@@ -314,8 +322,8 @@ class PriceIndexServiceCoverageTest {
             observations.add(obsAt(productId, "EEEEEEEE000111", "Perto", new BigDecimal("7")));
         }
         when(observationRepository.findRecentByProduct(eq(productId), any())).thenReturn(observations);
-        when(auditRepository.countDistinctHouseholdsForProductMarket(eq(productId), eq("EEEEEEEE000111"), any()))
-                .thenReturn(3L);
+        when(auditRepository.countDistinctHouseholdsForProductByMarket(eq(productId), any()))
+                .thenReturn(List.of(hhCount("EEEEEEEE000111", 3L)));
         var location = MarketLocation.builder()
                 .cnpj("EEEEEEEE000111").cnpjRoot("EEEEEEEE")
                 .latitude(new BigDecimal("-30.0001000")).longitude(new BigDecimal("-51.2000100"))
@@ -339,8 +347,8 @@ class PriceIndexServiceCoverageTest {
             observations.add(obsAt(productId, "FFFFFFFF000111", "SemCoord", new BigDecimal("6")));
         }
         when(observationRepository.findRecentByProduct(eq(productId), any())).thenReturn(observations);
-        when(auditRepository.countDistinctHouseholdsForProductMarket(eq(productId), eq("FFFFFFFF000111"), any()))
-                .thenReturn(3L);
+        when(auditRepository.countDistinctHouseholdsForProductByMarket(eq(productId), any()))
+                .thenReturn(List.of(hhCount("FFFFFFFF000111", 3L)));
         // No location entry → location is null → second else-branch excludes when radius set.
         when(marketLocationService.findByCnpjs(anyList())).thenReturn(Map.of());
 
@@ -359,8 +367,8 @@ class PriceIndexServiceCoverageTest {
             observations.add(obsAt(productId, "GGGGGGGG000111", "Loja", new BigDecimal("4")));
         }
         when(observationRepository.findRecentByProduct(eq(productId), any())).thenReturn(observations);
-        when(auditRepository.countDistinctHouseholdsForProductMarket(eq(productId), eq("GGGGGGGG000111"), any()))
-                .thenReturn(3L);
+        when(auditRepository.countDistinctHouseholdsForProductByMarket(eq(productId), any()))
+                .thenReturn(List.of(hhCount("GGGGGGGG000111", 3L)));
         when(marketLocationService.findByCnpjs(anyList())).thenReturn(Map.of());
 
         var rows = service.bestMarkets(productId, 10, null, null, null, null);

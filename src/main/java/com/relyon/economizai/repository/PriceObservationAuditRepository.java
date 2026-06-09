@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 public interface PriceObservationAuditRepository extends JpaRepository<PriceObservationAudit, UUID> {
@@ -33,6 +34,25 @@ public interface PriceObservationAuditRepository extends JpaRepository<PriceObse
     """)
     long countDistinctHouseholdsForProduct(@Param("productId") UUID productId,
                                            @Param("since") LocalDateTime since);
+
+    /** Batched k-anonymity helper: distinct contributing households per market for a
+     * product, in one query (avoids an N+1 over markets in {@code bestMarkets}). */
+    @Query("""
+        SELECT a.observation.marketCnpj AS cnpj, COUNT(DISTINCT a.householdId) AS households
+        FROM PriceObservationAudit a
+        WHERE a.observation.product.id = :productId
+          AND a.observation.outlier = false
+          AND a.observation.observedAt >= :since
+        GROUP BY a.observation.marketCnpj
+    """)
+    List<MarketHouseholdCount> countDistinctHouseholdsForProductByMarket(@Param("productId") UUID productId,
+                                                                         @Param("since") LocalDateTime since);
+
+    /** Projection for {@link #countDistinctHouseholdsForProductByMarket}. */
+    interface MarketHouseholdCount {
+        String getCnpj();
+        long getHouseholds();
+    }
 
     /**
      * True when another household has already contributed observations for
