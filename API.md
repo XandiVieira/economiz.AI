@@ -791,7 +791,19 @@ POST /api/v1/notifications/{id}/read         → mark single as read
 POST /api/v1/notifications/mark-all-read     → { "marked": N }
 ```
 
-Each `NotificationResponse` carries `payload` — the JSON we attached when we generated the notification (`receiptId`, `productId`, `savingsPct`, etc) so cards can deep-link. `type` is one of `PROMO_PERSONAL`, `PROMO_COMMUNITY`, `CHEAPER_MARKET`, `DIGEST`, `PRICE_DROP`, `STOCKOUT`, `BUDGET`, `SYSTEM` — what triggers each and how to toggle it is in §10f.
+Each `NotificationResponse` carries `payload` — the JSON we attached when we generated the notification (`receiptId`, `productId`, `savingsPct`, etc) so cards can deep-link. `type` is one of `PROMO_PERSONAL`, `PROMO_COMMUNITY`, `CHEAPER_MARKET`, `DEALS_DIGEST`, `DIGEST`, `PRICE_DROP`, `STOCKOUT`, `BUDGET`, `SYSTEM` — what triggers each and how to toggle it is in §10f.
+
+Each response also carries `destination` — a routing hint derived from `type` so the FE knows which screen to open when the card is tapped (the concrete id it needs is already in `payload`). Values:
+
+| `destination`   | screen                 | types that map to it                                          |
+|-----------------|------------------------|--------------------------------------------------------------|
+| `DEALS`         | deals / offers screen  | `PROMO_PERSONAL`, `PROMO_COMMUNITY`, `CHEAPER_MARKET`, `DEALS_DIGEST`, `DIGEST` |
+| `REPLENISHMENT` | replenishment / stock  | `STOCKOUT`                                                    |
+| `PRODUCT`       | product detail         | `PRICE_DROP` (use `payload.productId`)                        |
+| `BUDGET`        | budget screen          | `BUDGET`                                                      |
+| `INBOX`         | generic inbox          | `SYSTEM` (and any future/unmapped type)                      |
+
+> **Real-time vs digest:** the only notifications pushed in **real time** (on receipt confirm) are the user's explicit alerts — `PRICE_DROP` and `BUDGET`. The **discovery** notifications (`PROMO_PERSONAL` / `PROMO_COMMUNITY` / `CHEAPER_MARKET`) are now delivered **only via the daily deals digest** (§ "How the daily deals digest works"), not in real time.
 
 ### Report a telemetry event (client → server)
 

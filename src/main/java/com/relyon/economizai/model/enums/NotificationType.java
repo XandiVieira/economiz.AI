@@ -77,4 +77,15 @@ public enum NotificationType {
     public static List<NotificationType> defaults() {
         return Arrays.stream(values()).filter(NotificationType::isDefault).toList();
     }
+
+    /** Which FE screen a notification of this type should deep-link to. */
+    public NotificationDestination destination() {
+        return switch (this) {
+            case PROMO_PERSONAL, PROMO_COMMUNITY, CHEAPER_MARKET, DEALS_DIGEST, DIGEST -> NotificationDestination.DEALS;
+            case STOCKOUT -> NotificationDestination.REPLENISHMENT;
+            case PRICE_DROP -> NotificationDestination.PRODUCT;
+            case BUDGET -> NotificationDestination.BUDGET;
+            case SYSTEM -> NotificationDestination.INBOX;
+        };
+    }
 }

@@ -16,6 +16,14 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-09 — notifications: `destination` for deep-linking + discovery moved to the digest
+
+**New field:** every `NotificationResponse` now carries `destination` — a routing hint derived from `type` so the FE knows which screen to open on tap (the id it needs is already in `payload`). Values: `DEALS` (`PROMO_PERSONAL`/`PROMO_COMMUNITY`/`CHEAPER_MARKET`/`DEALS_DIGEST`/`DIGEST`), `REPLENISHMENT` (`STOCKOUT`), `PRODUCT` (`PRICE_DROP`), `BUDGET` (`BUDGET`), `INBOX` (`SYSTEM` + fallback). See API.md §10b for the table.
+
+**Behavior change:** discovery notifications (`PROMO_*` / `CHEAPER_MARKET`) are no longer pushed in real time on receipt confirm — they're now delivered **only via the daily deals digest**. Real-time pushes are now just the user's explicit alerts (`PRICE_DROP`, `BUDGET`). No FE action required, but expect discovery to arrive batched once/day rather than instantly.
+
+---
+
 ## 2026-06-09 — notifications: `PRICE_ABOVE` rule type removed
 
 We dropped the `PRICE_ABOVE` (price-ceiling) rule type. **FE: stop offering it** in the rule-creation UI — posting `type: "PRICE_ABOVE"` now fails validation (400) like any unknown type. Any existing `PRICE_ABOVE` rows are deleted server-side. The cheaper-market / deals features already cover the "don't overpay" use case. `PRICE_DROP`, `STOCKOUT`, `BUDGET` and the system defaults are unchanged.

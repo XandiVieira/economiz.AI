@@ -2,6 +2,7 @@ package com.relyon.economizai.dto.response;
 
 import com.relyon.economizai.model.Notification;
 import com.relyon.economizai.model.enums.NotificationChannel;
+import com.relyon.economizai.model.enums.NotificationDestination;
 import com.relyon.economizai.model.enums.NotificationType;
 
 import java.time.LocalDateTime;
@@ -11,11 +12,13 @@ import java.util.UUID;
  * One notification as the user sees it. {@code payload} is the same JSON
  * blob that was put on the wire when the notification was generated —
  * carries extras like {@code receiptId}, {@code productId}, {@code savingsPct}
- * so the FE can deep-link from the notification card.
+ * so the FE can deep-link from the notification card. {@code destination}
+ * is derived from the type and tells the FE which screen to route to.
  */
 public record NotificationResponse(
         UUID id,
         NotificationType type,
+        NotificationDestination destination,
         NotificationChannel channel,
         String title,
         String body,
@@ -29,6 +32,7 @@ public record NotificationResponse(
         return new NotificationResponse(
                 n.getId(),
                 n.getType(),
+                n.getType().destination(),
                 n.getChannel(),
                 n.getTitle(),
                 n.getBody(),

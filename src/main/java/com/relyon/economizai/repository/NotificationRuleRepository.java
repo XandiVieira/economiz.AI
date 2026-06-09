@@ -49,50 +49,6 @@ public interface NotificationRuleRepository extends JpaRepository<NotificationRu
     """)
     List<NotificationRule> findActiveByTypeFetchUserAndProduct(@Param("type") NotificationType type);
 
-    /**
-     * Active default rules of the given type owned by users whose household has
-     * a confirmed, non-excluded purchase of the product — community-default
-     * targeting (CHEAPER_MARKET / PROMO_COMMUNITY) on the write path.
-     */
-    @Query("""
-        SELECT r FROM NotificationRule r
-        JOIN FETCH r.user u
-        WHERE r.type = :type AND r.active = true AND r.isDefault = true
-          AND u.household.id IN (
-              SELECT ri.receipt.household.id FROM ReceiptItem ri
-              WHERE ri.product.id = :productId
-                AND ri.receipt.status = 'CONFIRMED'
-                AND ri.excluded = false
-          )
-    """)
-    List<NotificationRule> findActiveDefaultRuleOwnersWhoBought(@Param("type") NotificationType type,
-                                                                @Param("productId") UUID productId);
-
-    /**
-     * Batched variant of {@link #findActiveDefaultRuleOwnersWhoBought(NotificationType, UUID)}:
-     * for every product in {@code productIds}, the active default rules of the given type owned
-     * by users whose household bought that product (confirmed, non-excluded). Returns one row per
-     * distinct (productId, rule) pair so the write path can group owners by product in a single query.
-     */
-    @Query("""
-        SELECT DISTINCT ri.product.id AS productId, r AS rule
-        FROM NotificationRule r, ReceiptItem ri
-        JOIN r.user u
-        WHERE r.type = :type AND r.active = true AND r.isDefault = true
-          AND ri.product.id IN :productIds
-          AND ri.receipt.status = 'CONFIRMED'
-          AND ri.excluded = false
-          AND ri.receipt.household.id = u.household.id
-    """)
-    List<ProductRuleOwner> findActiveDefaultRuleOwnersWhoBought(@Param("type") NotificationType type,
-                                                                @Param("productIds") Collection<UUID> productIds);
-
-    /** Projection for {@link #findActiveDefaultRuleOwnersWhoBought(NotificationType, Collection)}. */
-    interface ProductRuleOwner {
-        UUID getProductId();
-        NotificationRule getRule();
-    }
-
     @Modifying
     @Query(nativeQuery = true, value = """
         INSERT INTO notification_rules (id, user_id, type, is_default, active, created_at, updated_at)

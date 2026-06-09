@@ -5,6 +5,7 @@ import com.relyon.economizai.exception.NotificationNotFoundException;
 import com.relyon.economizai.model.Notification;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.NotificationChannel;
+import com.relyon.economizai.model.enums.NotificationDestination;
 import com.relyon.economizai.model.enums.NotificationType;
 import com.relyon.economizai.repository.NotificationRepository;
 import org.junit.jupiter.api.Test;
@@ -69,6 +70,7 @@ class NotificationInboxServiceTest {
         assertEquals(notification.getId(), response.id());
         assertEquals(notification.getTitle(), response.title());
         assertEquals(NotificationType.PRICE_DROP, response.type());
+        assertEquals(NotificationDestination.PRODUCT, response.destination());
     }
 
     @Test

@@ -6,8 +6,6 @@ import com.relyon.economizai.model.PriceObservation;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.NotificationType;
 import com.relyon.economizai.repository.NotificationRuleRepository;
-import com.relyon.economizai.repository.ReceiptItemRepository;
-import com.relyon.economizai.repository.UserWatchedMarketRepository;
 import com.relyon.economizai.service.geo.DistanceCalculator;
 import com.relyon.economizai.service.geo.MarketLocationService;
 import com.relyon.economizai.service.geo.MarketNameService;
@@ -17,11 +15,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -31,18 +27,18 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Evaluates freshly-written {@link PriceObservation}s against the rules that
- * react to community prices — runs on the collaborative-index write path so one
- * household's confirmed receipt can fire another household's notification.
+ * Evaluates freshly-written {@link PriceObservation}s against the user's explicit
+ * product alerts — runs on the collaborative-index write path so one household's
+ * confirmed receipt can fire another household's notification.
  *
- * <p>Handles:
+ * <p>Handles only the explicit user alert:
  * <ul>
  *   <li><b>PRICE_DROP</b> — user rule, fire when observed price ≤ threshold.</li>
- *   <li><b>CHEAPER_MARKET</b> — default, a product you've bought is observed at one of
- *       your <em>watched markets</em> (and, if you opt in via the rule's radius, at any
- *       market near home) at least {@link #DROP_FRACTION} below your last paid price.</li>
- *   <li><b>PROMO_COMMUNITY</b> — default, a product you've bought is flagged as a promo anywhere.</li>
  * </ul>
+ *
+ * <p>Discovery notifications (PROMO_COMMUNITY / PROMO_PERSONAL / CHEAPER_MARKET) are
+ * no longer fired in real time — they are delivered through the daily digest
+ * ({@code DealsService} / {@code DealsDigestScheduler}).
  */
 @Slf4j
 @Service
@@ -53,8 +49,6 @@ public class NotificationRuleEngine {
     private static final Duration COOLDOWN = Duration.ofHours(24);
 
     private final NotificationRuleRepository ruleRepository;
-    private final ReceiptItemRepository receiptItemRepository;
-    private final UserWatchedMarketRepository watchedMarketRepository;
     private final MarketLocationService marketLocationService;
     private final MarketNameService marketNameService;
     private final NotificationService notificationService;
@@ -63,14 +57,12 @@ public class NotificationRuleEngine {
     public void evaluate(List<PriceObservation> observations, UUID contributingHouseholdId) {
         if (observations == null || observations.isEmpty()) return;
 
-        var productIds = observations.stream().map(o -> o.getProduct().getId()).collect(Collectors.toSet());
+        var productIds = observations.stream().map(observation -> observation.getProduct().getId()).collect(Collectors.toSet());
         var cnpjs = observations.stream().map(PriceObservation::getMarketCnpj).distinct().toList();
         var locations = marketLocationService.findByCnpjs(cnpjs);
         var now = LocalDateTime.now();
 
-        var fired = new ArrayList<NotificationRule>();
-        fired.addAll(evaluateUserPriceRules(observations, productIds, locations, contributingHouseholdId, now));
-        fired.addAll(evaluateCommunityDefaults(observations, locations, contributingHouseholdId, now));
+        var fired = evaluateUserPriceRules(observations, productIds, locations, contributingHouseholdId, now);
 
         if (!fired.isEmpty()) {
             ruleRepository.saveAll(fired);
@@ -133,150 +125,6 @@ public class NotificationRuleEngine {
                 productName, observation.getUnitPrice(), marketName, rule.getThresholdPrice());
         notificationService.notify(new NotificationPayload(
                 rule.getUser(), rule.getType(), title, body, baseExtras(rule, observation)));
-    }
-
-    // ---- community defaults: PROMO_COMMUNITY (on sale) and CHEAPER_MARKET (cheaper at your markets) ----
-
-    private List<NotificationRule> evaluateCommunityDefaults(List<PriceObservation> observations,
-                                                             Map<String, MarketLocation> locations,
-                                                             UUID contributingHouseholdId,
-                                                             LocalDateTime now) {
-        var byProduct = observations.stream().collect(Collectors.groupingBy(o -> o.getProduct().getId()));
-        // Two batched queries (one per community type) replace the per-product N+1: each
-        // resolves productId -> the default-rule owners who bought that product.
-        var promoOwnersByProduct = ownersByProduct(NotificationType.PROMO_COMMUNITY, byProduct.keySet());
-        var cheaperOwnersByProduct = ownersByProduct(NotificationType.CHEAPER_MARKET, byProduct.keySet());
-        // Shared across products: a user's single default rule must fire at most once
-        // even when they bought several products on the same receipt (the cooldown isn't
-        // persisted within this evaluation, so we dedup by rule id in-memory).
-        var firedRuleIds = new HashSet<UUID>();
-        var fired = new ArrayList<NotificationRule>();
-        for (var entry : byProduct.entrySet()) {
-            fired.addAll(firePromoCommunity(entry.getValue(),
-                    promoOwnersByProduct.getOrDefault(entry.getKey(), List.of()),
-                    contributingHouseholdId, now, firedRuleIds));
-            fired.addAll(fireCheaperMarket(entry.getKey(), entry.getValue(), locations,
-                    cheaperOwnersByProduct.getOrDefault(entry.getKey(), List.of()),
-                    contributingHouseholdId, now, firedRuleIds));
-        }
-        return fired;
-    }
-
-    private Map<UUID, List<NotificationRule>> ownersByProduct(NotificationType type, Set<UUID> productIds) {
-        if (productIds.isEmpty()) return Map.of();
-        return ruleRepository.findActiveDefaultRuleOwnersWhoBought(type, productIds).stream()
-                .collect(Collectors.groupingBy(
-                        NotificationRuleRepository.ProductRuleOwner::getProductId,
-                        Collectors.mapping(NotificationRuleRepository.ProductRuleOwner::getRule, Collectors.toList())));
-    }
-
-    private List<NotificationRule> firePromoCommunity(List<PriceObservation> observations, List<NotificationRule> owners,
-                                                      UUID contributingHouseholdId, LocalDateTime now,
-                                                      Set<UUID> firedRuleIds) {
-        var promo = observations.stream()
-                .filter(PriceObservation::isPromoFlag)
-                .min(Comparator.comparing(PriceObservation::getUnitPrice))
-                .orElse(null);
-        if (promo == null) return List.of();
-
-        var fired = new ArrayList<NotificationRule>();
-        for (var rule : owners) {
-            if (firedRuleIds.contains(rule.getId())) continue;
-            if (sameHousehold(rule, contributingHouseholdId) || inCooldown(rule, now)) continue;
-            var productName = promo.getProduct().getNormalizedName();
-            notificationService.notify(new NotificationPayload(
-                    rule.getUser(), NotificationType.PROMO_COMMUNITY,
-                    "Oferta na comunidade: " + productName,
-                    String.format("%s está em promoção por R$ %s no %s.",
-                            productName, promo.getUnitPrice(), friendlyMarketName(rule, promo)),
-                    baseExtras(rule, promo)));
-            rule.setLastFiredAt(now);
-            firedRuleIds.add(rule.getId());
-            fired.add(rule);
-        }
-        return fired;
-    }
-
-    /**
-     * "Someone bought a product I buy, at one of my markets, cheaper than I last paid."
-     * Markets in scope: the user's watched markets always; nearby markets too when the
-     * user has set a radius on their CHEAPER_MARKET rule (opt-in second toggle).
-     * Fires when the observed price is at least 10% below the household's last paid price.
-     */
-    private List<NotificationRule> fireCheaperMarket(UUID productId, List<PriceObservation> observations,
-                                                     Map<String, MarketLocation> locations, List<NotificationRule> owners,
-                                                     UUID contributingHouseholdId, LocalDateTime now,
-                                                     Set<UUID> firedRuleIds) {
-        if (owners.isEmpty()) return List.of();
-
-        var householdIds = owners.stream()
-                .map(rule -> rule.getUser().getHousehold().getId())
-                .collect(Collectors.toSet());
-        var lastPaidByHousehold = lastPaidByHousehold(productId, householdIds);
-
-        var fired = new ArrayList<NotificationRule>();
-        for (var rule : owners) {
-            if (firedRuleIds.contains(rule.getId())) continue;
-            if (sameHousehold(rule, contributingHouseholdId) || inCooldown(rule, now)) continue;
-            var householdId = rule.getUser().getHousehold().getId();
-            var lastPaid = lastPaidByHousehold.get(householdId);
-            if (lastPaid == null) continue;
-            var requiredDrop = RelevanceThreshold.requiredDropFraction(lastPaid);
-            var threshold = lastPaid.multiply(BigDecimal.valueOf(1.0 - requiredDrop));
-
-            var hit = observations.stream()
-                    .filter(observation -> isEligibleMarket(rule, observation, locations))
-                    .filter(observation -> observation.getUnitPrice().compareTo(threshold) <= 0)
-                    .min(Comparator.comparing(PriceObservation::getUnitPrice))
-                    .orElse(null);
-            if (hit == null) continue;
-
-            var productName = hit.getProduct().getNormalizedName();
-            var savingsPct = savingsPercent(lastPaid, hit.getUnitPrice());
-            var friendlyMarket = friendlyMarketName(rule, hit);
-            var extras = baseExtras(rule, hit);
-            extras.put("lastPaidPrice", lastPaid);
-            extras.put("savingsPct", savingsPct);
-            notificationService.notify(new NotificationPayload(
-                    rule.getUser(), NotificationType.CHEAPER_MARKET,
-                    "Mais barato em " + friendlyMarket + ": " + productName,
-                    String.format("%s saiu por R$ %s no %s — %s%% abaixo dos R$ %s que você pagou da última vez.",
-                            productName, hit.getUnitPrice(), friendlyMarket, savingsPct,
-                            lastPaid.setScale(2, RoundingMode.HALF_UP)),
-                    extras));
-            rule.setLastFiredAt(now);
-            firedRuleIds.add(rule.getId());
-            fired.add(rule);
-        }
-        return fired;
-    }
-
-    /** Watched markets are always in scope; nearby markets only if the rule opts in via radiusKm. */
-    private boolean isEligibleMarket(NotificationRule rule, PriceObservation observation,
-                                     Map<String, MarketLocation> locations) {
-        if (watchedMarketRepository.existsByUserIdAndMarketCnpj(rule.getUser().getId(), observation.getMarketCnpj())) {
-            return true;
-        }
-        return rule.getRadiusKm() != null
-                && withinRadius(rule.getRadiusKm(), rule.getUser(), observation, locations);
-    }
-
-    private BigDecimal savingsPercent(BigDecimal lastPaid, BigDecimal observed) {
-        return lastPaid.subtract(observed)
-                .divide(lastPaid, 4, RoundingMode.HALF_UP)
-                .multiply(BigDecimal.valueOf(100))
-                .setScale(0, RoundingMode.HALF_UP);
-    }
-
-    /** Latest non-null unit price each household last paid for the product, in one query
-     *  (batches the former per-rule lookup). Rows arrive oldest->newest per household, so
-     *  the last non-null put wins. */
-    private Map<UUID, BigDecimal> lastPaidByHousehold(UUID productId, Set<UUID> householdIds) {
-        var lastPaid = new HashMap<UUID, BigDecimal>();
-        for (var row : receiptItemRepository.findLastPaidHistoryForProductByHouseholds(productId, householdIds)) {
-            if (row.getUnitPrice() != null) lastPaid.put(row.getHouseholdId(), row.getUnitPrice());
-        }
-        return lastPaid;
     }
 
     // ---- shared helpers ----

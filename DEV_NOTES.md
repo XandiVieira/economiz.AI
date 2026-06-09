@@ -53,6 +53,11 @@ mirror entries here.
 - **Storage**: realized savings live in a dedicated `notification_events.savings_amount NUMERIC(12,2)` column (added so the north-star sums in plain SQL) **and** are echoed into the JSON `metadata` for completeness. Migration `V44__savings_attribution.sql` adds that column + `deal_surface_state.converted_at`.
 - **This completes the notifications-overhaul telemetry loop** (A→D). See the Phase A entry above — the producer side is done; the ranking/learning consumer is the remaining work.
 
+## Write-path is now explicit-alerts-only; PROMO_*/CHEAPER_MARKET toggles are vestigial (2026-06-09)
+- **Now**: `NotificationRuleEngine.evaluate` (on receipt confirm) fires **only** the user's explicit `PRICE_DROP` alerts. The discovery defaults (`PROMO_PERSONAL` / `PROMO_COMMUNITY` / `CHEAPER_MARKET`) that used to fire in real time were removed from the write path — that function now lives entirely in the daily deals digest (`DealsService` / `DealsDigestScheduler`). The dead repo methods (`findActiveDefaultRuleOwnersWhoBought` both overloads + `ProductRuleOwner`; `findLastPaidHistoryForProductByHouseholds` + `HouseholdProductPrice`) were deleted with them.
+- **Vestigial toggles**: the `PROMO_PERSONAL` / `PROMO_COMMUNITY` / `CHEAPER_MARKET` `NotificationType` values + their auto-seeded default `NotificationRule` toggles still exist (FE still shows them), but **nothing reads those per-type toggles anymore** — the digest computes discovery from `DealsService` and is governed by `digest_frequency`, not by these rules.
+- **Open refinement**: decide whether the digest should **respect** those per-type toggles (e.g. a user who disabled `CHEAPER_MARKET` shouldn't see cheaper-market deals in the digest), or whether to retire the toggles entirely. Until then they're inert UI.
+
 ## ~~`bestMarkets` k-anon count is an N+1~~ — RESOLVED (2026-06-09)
 - **Fixed**: `bestMarkets` now batches the distinct-household k-anon counts into one `GROUP BY` query (`countDistinctHouseholdsForProductByMarket` → `Map<cnpj,count>`) instead of one query per market. `referencePrice` still uses the single-market count (one product+market, no N+1).
 
