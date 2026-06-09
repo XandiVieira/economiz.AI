@@ -48,7 +48,7 @@ public class GoogleTokenVerifier {
         validateIssuer(claims);
         validateExpiry(claims);
         validateAudience(claims);
-        var emailVerified = Boolean.TRUE.equals(getBoolean(claims, "email_verified"));
+        var emailVerified = getBoolean(claims, "email_verified");
         return new GoogleClaims(claims.getSubject(), getString(claims, "email"), emailVerified, getString(claims, "name"));
     }
 
@@ -102,11 +102,15 @@ public class GoogleTokenVerifier {
         }
     }
 
-    private static Boolean getBoolean(JWTClaimsSet claims, String name) {
+    // Returns the primitive boolean (default false) rather than a nullable Boolean:
+    // a missing/unparseable claim means "not asserted", and false is the safe
+    // default for a security claim like email_verified. Avoids handing callers a
+    // null Boolean that would NPE on unboxing (Sonar S2447).
+    private static boolean getBoolean(JWTClaimsSet claims, String name) {
         try {
-            return claims.getBooleanClaim(name);
+            return Boolean.TRUE.equals(claims.getBooleanClaim(name));
         } catch (Exception ex) {
-            return null;
+            return false;
         }
     }
 }
