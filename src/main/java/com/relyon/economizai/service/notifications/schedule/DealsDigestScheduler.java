@@ -99,7 +99,7 @@ public class DealsDigestScheduler {
     }
 
     private boolean isDue(User user, ZonedDateTime now, int currentHour) {
-        if (user.getDigestFrequency() == DigestFrequency.WEEKLY && now.getDayOfWeek() != WEEKLY_DAY) {
+        if (user.getDigestFrequency() == DigestFrequency.WEEKLY && !WEEKLY_DAY.equals(now.getDayOfWeek())) {
             return false;
         }
         if (alreadySentToday(user, now)) return false;
