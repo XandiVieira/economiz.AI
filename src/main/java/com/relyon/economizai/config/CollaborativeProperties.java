@@ -12,12 +12,27 @@ public class CollaborativeProperties {
     private final Consumption consumption = new Consumption();
     private final Preferences preferences = new Preferences();
     private final Subscription subscription = new Subscription();
+    private final Attribution attribution = new Attribution();
 
     public Collaborative getCollaborative() { return collaborative; }
     public PersonalPromo getPersonalPromo() { return personalPromo; }
     public Consumption getConsumption() { return consumption; }
     public Preferences getPreferences() { return preferences; }
     public Subscription getSubscription() { return subscription; }
+    public Attribution getAttribution() { return attribution; }
+
+    /**
+     * Phase D — savings attribution. When a confirmed receipt buys a product at a
+     * market we surfaced as a deal within {@code windowDays} before the purchase,
+     * we record a CONVERTED event + the realized R$ savings (the north-star metric).
+     */
+    public static class Attribution {
+        /** How recently before a purchase a deal must have been surfaced to attribute it. */
+        private int windowDays = 14;
+
+        public int getWindowDays() { return windowDays; }
+        public void setWindowDays(int v) { this.windowDays = v; }
+    }
 
     /**
      * FREE-tier limits, tunable so paywall thresholds can move without code

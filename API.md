@@ -661,6 +661,37 @@ This endpoint emits **no** telemetry. The app reports `SCREEN_OPENED` on open an
 `DEAL_VIEWED` / `DEAL_TAPPED` on interaction itself, via
 `POST /api/v1/notifications/events` (§10b), keyed by `productId` + `marketCnpj`.
 
+### Savings — "você economizou com as dicas"
+
+```
+GET /api/v1/users/me/savings
+```
+
+Returns the household's realized R$ savings attributable to deals we surfaced
+(the product's north-star). Use it for a "você economizou R$ X com nossas dicas"
+card.
+
+```json
+{ "totalSavings": 42.50, "conversions": 7, "last30DaysSavings": 15.00 }
+```
+
+- `totalSavings` — lifetime R$ saved across all attributed purchases.
+- `conversions` — lifetime count of attributed purchases.
+- `last30DaysSavings` — same as `totalSavings`, restricted to the trailing 30 days.
+- Scoped to the household (sums every household member's attributed savings).
+  Empty history → all zeros. 401 if unauthenticated.
+
+**How attribution works (server-side, automatic):** when a user confirms a
+receipt, the backend checks each purchased line against the deals we recently
+surfaced to that household. If a product was surfaced as a deal at that market
+within the **attribution window (14 days)** and hasn't already been attributed,
+it counts as a **conversion**: we record a server-side `CONVERTED` telemetry
+event carrying the realized savings `(previousLastPaid − paidUnitPrice) ×
+quantity` (counted only when positive; `previousLastPaid` is the household's last
+paid unit price *before* this receipt, falling back to the surfaced deal's
+baseline when there's no prior purchase). Attribution is best-effort and
+correlational, never causal — and it never blocks or delays a confirm.
+
 ---
 
 ## 8. Consumption intelligence

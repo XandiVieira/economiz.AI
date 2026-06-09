@@ -8,6 +8,7 @@ import com.relyon.economizai.dto.request.UpdateDigestPreferencesRequest;
 import com.relyon.economizai.dto.request.UpdateUserRequest;
 import com.relyon.economizai.dto.response.DigestPreferencesResponse;
 import com.relyon.economizai.dto.response.HouseholdResponse;
+import com.relyon.economizai.dto.response.SavingsSummaryResponse;
 import com.relyon.economizai.dto.response.UserDataExportResponse;
 import com.relyon.economizai.dto.response.UserResponse;
 import com.relyon.economizai.exception.InvalidCurrentPasswordException;
@@ -23,6 +24,7 @@ import com.relyon.economizai.dto.request.VerifyPhoneRequest;
 import com.relyon.economizai.exception.InvalidPhoneNumberException;
 import com.relyon.economizai.exception.InvalidPhoneVerificationException;
 import com.relyon.economizai.service.notifications.NotificationPreferenceService;
+import com.relyon.economizai.service.notifications.SavingsService;
 import com.relyon.economizai.service.auth.EmailVerificationService;
 import com.relyon.economizai.service.auth.PhoneVerificationService;
 import com.relyon.economizai.service.profile.ProfilePictureService;
@@ -38,6 +40,7 @@ import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequ
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -86,6 +89,9 @@ class UserControllerTest {
 
     @MockitoBean
     private PhoneVerificationService phoneVerificationService;
+
+    @MockitoBean
+    private SavingsService savingsService;
 
     private User buildUser() {
         var user = User.builder()
@@ -230,6 +236,40 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.user.email").value(user.getEmail()))
                 .andExpect(jsonPath("$.household.inviteCode").value("ABC123"))
                 .andExpect(jsonPath("$.receipts").isArray());
+    }
+
+    @Test
+    void savings_returns200WithHouseholdTotals() throws Exception {
+        var user = buildUser();
+        when(savingsService.summarize(any(User.class)))
+                .thenReturn(new SavingsSummaryResponse(
+                        new BigDecimal("42.50"), 7, new BigDecimal("15.00")));
+
+        mockMvc.perform(get("/api/v1/users/me/savings")
+                        .with(SecurityMockMvcRequestPostProcessors.user(user)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalSavings").value(42.50))
+                .andExpect(jsonPath("$.conversions").value(7))
+                .andExpect(jsonPath("$.last30DaysSavings").value(15.00));
+    }
+
+    @Test
+    void savings_returns200WithZeroWhenNoConversions() throws Exception {
+        var user = buildUser();
+        when(savingsService.summarize(any(User.class)))
+                .thenReturn(new SavingsSummaryResponse(
+                        BigDecimal.ZERO, 0, BigDecimal.ZERO));
+
+        mockMvc.perform(get("/api/v1/users/me/savings")
+                        .with(SecurityMockMvcRequestPostProcessors.user(user)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.conversions").value(0));
+    }
+
+    @Test
+    void savings_returns401WhenUnauthenticated() throws Exception {
+        mockMvc.perform(get("/api/v1/users/me/savings"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

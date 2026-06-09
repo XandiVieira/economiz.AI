@@ -22,6 +22,7 @@ import com.relyon.economizai.service.cache.HouseholdCacheGen;
 import com.relyon.economizai.service.canonicalization.CanonicalizationService;
 import com.relyon.economizai.service.geo.MarketLocationService;
 import com.relyon.economizai.service.geo.MarketNameService;
+import com.relyon.economizai.service.notifications.SavingsAttributionService;
 import com.relyon.economizai.service.priceindex.PriceIndexService;
 import com.relyon.economizai.service.priceindex.PromoDetector;
 import com.relyon.economizai.service.sefaz.ParsedReceipt;
@@ -49,6 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -71,6 +73,7 @@ class ReceiptServiceTest {
     @Mock private HouseholdCacheGen householdCacheGen;
     @Mock private MarketNameService marketNameService;
     @Mock private SubscriptionGateService subscriptionGate;
+    @Mock private SavingsAttributionService savingsAttributionService;
 
     @InjectMocks private ReceiptService receiptService;
 
@@ -326,6 +329,22 @@ class ReceiptServiceTest {
         assertEquals(ReceiptStatus.CONFIRMED, response.receipt().status());
         assertNotNull(response.receipt().confirmedAt());
         assertEquals(0, response.personalPromos().size());
+    }
+
+    @Test
+    void confirm_succeedsEvenWhenSavingsAttributionThrows() {
+        var user = buildUser();
+        var receipt = persistedReceipt(user, ReceiptStatus.PENDING_CONFIRMATION);
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
+        when(receiptRepository.save(receipt)).thenReturn(receipt);
+        when(promoDetector.detectPersonalPromos(receipt)).thenReturn(List.of());
+        doThrow(new RuntimeException("boom")).when(savingsAttributionService).attribute(receipt);
+
+        var response = receiptService.confirm(user, receipt.getId(), null);
+
+        // Attribution is best-effort analytics — its failure must never break confirm.
+        assertEquals(ReceiptStatus.CONFIRMED, response.receipt().status());
+        verify(savingsAttributionService).attribute(receipt);
     }
 
     @Test

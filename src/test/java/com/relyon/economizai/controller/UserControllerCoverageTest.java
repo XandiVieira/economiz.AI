@@ -19,6 +19,7 @@ import com.relyon.economizai.service.UserService;
 import com.relyon.economizai.service.auth.EmailVerificationService;
 import com.relyon.economizai.service.auth.PhoneVerificationService;
 import com.relyon.economizai.service.notifications.NotificationPreferenceService;
+import com.relyon.economizai.service.notifications.SavingsService;
 import com.relyon.economizai.service.profile.ProfilePictureService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -65,6 +66,7 @@ class UserControllerCoverageTest {
     @MockitoBean private PhoneVerificationService phoneVerificationService;
     @MockitoBean private JwtService jwtService;
     @MockitoBean private UserDetailsService userDetailsService;
+    @MockitoBean private SavingsService savingsService;
 
     private User principal() {
         var household = Household.builder().id(UUID.randomUUID()).inviteCode("ABC123").build();

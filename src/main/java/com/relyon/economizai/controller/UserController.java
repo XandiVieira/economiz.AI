@@ -11,6 +11,7 @@ import com.relyon.economizai.dto.request.UpdateUserRequest;
 import com.relyon.economizai.dto.request.VerifyPhoneRequest;
 import com.relyon.economizai.dto.response.DigestPreferencesResponse;
 import com.relyon.economizai.dto.response.NotificationPreferenceResponse;
+import com.relyon.economizai.dto.response.SavingsSummaryResponse;
 import com.relyon.economizai.dto.response.UserDataExportResponse;
 import com.relyon.economizai.dto.response.UserResponse;
 import com.relyon.economizai.model.User;
@@ -19,6 +20,7 @@ import com.relyon.economizai.service.UserService;
 import com.relyon.economizai.service.auth.EmailVerificationService;
 import com.relyon.economizai.service.auth.PhoneVerificationService;
 import com.relyon.economizai.service.notifications.NotificationPreferenceService;
+import com.relyon.economizai.service.notifications.SavingsService;
 import com.relyon.economizai.service.profile.ProfilePictureService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -52,6 +54,7 @@ public class UserController {
     private final ProfilePictureService profilePictureService;
     private final EmailVerificationService emailVerificationService;
     private final PhoneVerificationService phoneVerificationService;
+    private final SavingsService savingsService;
 
     @GetMapping("/me")
     public ResponseEntity<UserResponse> getProfile(@AuthenticationPrincipal User user) {
@@ -113,6 +116,11 @@ public class UserController {
             @AuthenticationPrincipal User user,
             @Valid @RequestBody UpdateDigestPreferencesRequest request) {
         return ResponseEntity.ok(notificationPreferenceService.updateDigestPreferences(user, request));
+    }
+
+    @GetMapping("/me/savings")
+    public ResponseEntity<SavingsSummaryResponse> savings(@AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(savingsService.summarize(user));
     }
 
     @GetMapping("/me/export")

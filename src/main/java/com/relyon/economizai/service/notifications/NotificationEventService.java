@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.Map;
 import java.util.UUID;
 
@@ -44,7 +45,8 @@ public class NotificationEventService {
             UUID productId,
             String marketCnpj,
             String channel,
-            Map<String, Object> metadata
+            Map<String, Object> metadata,
+            BigDecimal savingsAmount
     ) {
         public static RecordContext empty() {
             return RecordContext.builder().build();
@@ -62,6 +64,7 @@ public class NotificationEventService {
                 .marketCnpj(safeContext.marketCnpj())
                 .channel(safeContext.channel())
                 .metadata(serialize(safeContext.metadata()))
+                .savingsAmount(safeContext.savingsAmount())
                 .build();
         var saved = repository.save(event);
         log.info("notif.event type={} user={}", type, LogMasker.email(user.getEmail()));

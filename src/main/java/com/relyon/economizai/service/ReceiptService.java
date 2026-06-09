@@ -29,6 +29,7 @@ import com.relyon.economizai.service.geo.MarketNameService;
 import com.relyon.economizai.service.notifications.NotificationPayload;
 import com.relyon.economizai.service.notifications.NotificationRuleService;
 import com.relyon.economizai.service.notifications.NotificationService;
+import com.relyon.economizai.service.notifications.SavingsAttributionService;
 import com.relyon.economizai.service.priceindex.PriceIndexService;
 import com.relyon.economizai.service.privacy.LogMasker;
 import com.relyon.economizai.service.priceindex.PromoDetector;
@@ -76,6 +77,7 @@ public class ReceiptService {
     private final HouseholdCacheGen householdCacheGen;
     private final MarketNameService marketNameService;
     private final SubscriptionGateService subscriptionGate;
+    private final SavingsAttributionService savingsAttributionService;
 
     @Transactional
     public ReceiptResponse submit(User user, SubmitReceiptRequest request) {
@@ -235,10 +237,24 @@ public class ReceiptService {
         marketLocationService.registerMarketFromReceipt(receipt);
         notifyPersonalPromos(user, receipt, personalPromos);
         var saved = receiptRepository.save(receipt);
+        attributeSavings(saved);
         householdCacheGen.bump(receipt.getHousehold().getId());
         log.info("confirm ok status=CONFIRMED personalPromos={}", personalPromos.size());
         return new ConfirmReceiptResponse(
                 withFriendlyName(user.getHousehold().getId(), saved, ReceiptResponse.from(saved)), personalPromos);
+    }
+
+    /**
+     * Best-effort Phase D savings attribution — runs AFTER confirmation +
+     * observations are committed and is fully isolated: any failure here is
+     * caught and logged so analytics can NEVER break a confirm.
+     */
+    private void attributeSavings(Receipt receipt) {
+        try {
+            savingsAttributionService.attribute(receipt);
+        } catch (RuntimeException ex) {
+            log.warn("attribution.failed receipt={} reason={}", abbrev(receipt.getId()), ex.getMessage());
+        }
     }
 
     private void notifyPersonalPromos(User user, Receipt receipt, List<PromoDetector.PersonalPromo> promos) {

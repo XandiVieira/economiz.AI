@@ -56,6 +56,14 @@ public class DealSurfaceState {
     @Column(name = "last_surfaced_at", nullable = false)
     private OffsetDateTime lastSurfacedAt;
 
+    /**
+     * When this surfacing was attributed to a realized purchase (Phase D). Null
+     * until a confirmed receipt converts it; a fresh re-surface clears it back to
+     * null so the same (user, product, market) deal can be attributed again later.
+     */
+    @Column(name = "converted_at")
+    private OffsetDateTime convertedAt;
+
     @PrePersist
     void onCreate() {
         if (lastSurfacedAt == null) {

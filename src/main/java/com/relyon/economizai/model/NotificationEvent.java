@@ -19,6 +19,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
@@ -67,6 +68,13 @@ public class NotificationEvent {
     /** Small JSON payload serialized as a string (e.g. {"discountFraction":0.22}). */
     @Column(columnDefinition = "TEXT")
     private String metadata;
+
+    /**
+     * Realized R$ savings carried on a {@code CONVERTED} event so the north-star
+     * metric sums in SQL without parsing {@link #metadata}. Null for other types.
+     */
+    @Column(name = "savings_amount", precision = 12, scale = 2)
+    private BigDecimal savingsAmount;
 
     @Column(name = "occurred_at", nullable = false, updatable = false)
     private OffsetDateTime occurredAt;

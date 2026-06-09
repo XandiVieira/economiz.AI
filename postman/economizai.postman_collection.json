@@ -886,6 +886,32 @@
           "response": []
         },
         {
+          "name": "My savings (R$ saved via deals)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/me/savings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "me",
+                "savings"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
           "name": "Export my data (LGPD Art. 18 V)",
           "request": {
             "method": "GET",
@@ -5655,6 +5681,49 @@
                   "    pm.expect(d).to.have.property('user');",
                   "    pm.expect(d).to.have.property('household');",
                   "    pm.expect(d.receipts).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "29b. My savings (R$ saved via deals)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/me/savings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "me",
+                "savings"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+                  "var s = pm.response.json();",
+                  "pm.test('Has savings summary shape', function () {",
+                  "    pm.expect(s).to.have.property('totalSavings');",
+                  "    pm.expect(s).to.have.property('conversions');",
+                  "    pm.expect(s).to.have.property('last30DaysSavings');",
                   "});"
                 ]
               }

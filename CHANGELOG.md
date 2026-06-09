@@ -16,6 +16,14 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-09 — Savings attribution (Phase D): "você economizou R$ X com as dicas"
+
+New: the backend now closes the deals loop by attributing **realized R$ savings** to the deals we surface — the product's north-star metric.
+
+- **New endpoint** `GET /api/v1/users/me/savings` (JWT, scoped to your household) → `{ "totalSavings": 42.50, "conversions": 7, "last30DaysSavings": 15.00 }`. Empty history → all zeros, 401 if unauthenticated. Use it for a "você economizou R$ X com nossas dicas" card.
+- **`CONVERTED` is now tracked server-side, automatically.** When you confirm a receipt, the backend checks each purchased item against deals we surfaced to your household in the last **14 days**; a match becomes a conversion and records the realized savings `(previousLastPaid − paidUnitPrice) × quantity` (only when positive). No client action is required — the FE never posts `CONVERTED` (it's a server-only event type, as before).
+- Attribution is **best-effort + correlational** (a recently-surfaced deal that the user then bought), never causal, and it never blocks or slows down a confirm.
+
 ## 2026-06-09 — Daily deals digest (Phase C): preferences + `DEALS_DIGEST` push
 
 New: a scheduled daily rollup push that points to the deals screen, sent at most **once per day**, and only when there's something **new** worth telling the user (a brand-new deal, a meaningfully bigger discount, or a deal that lapsed past the lookback window). Standing, unchanged deals never re-notify.

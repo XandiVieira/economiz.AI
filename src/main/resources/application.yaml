@@ -112,6 +112,8 @@ economizai:
   personal-promo:
     threshold-pct: 10                          # personal promo if price < (user's own median - X%)
     min-purchases-for-baseline: 3              # need this many prior purchases to detect personal promos
+  attribution:
+    window-days: 14                            # a surfaced deal is attributable if surfaced within this many days before the purchase
   consumption:
     enabled: true                              # master switch for Phase 3 consumption-intelligence endpoints
     min-purchases-for-prediction: 2            # below this, a product is silently skipped from /predictions
