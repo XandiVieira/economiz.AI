@@ -56,7 +56,7 @@ public class NotificationRule extends BaseEntity {
     @JoinColumn(name = "product_id")
     private Product product;
 
-    /** Price/spend threshold (R$). Used by PRICE_DROP, PRICE_ABOVE, BUDGET. */
+    /** Price/spend threshold (R$). Used by PRICE_DROP, BUDGET. */
     @Column(name = "threshold_price", precision = 12, scale = 2)
     private BigDecimal thresholdPrice;
 

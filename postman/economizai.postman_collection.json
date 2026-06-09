@@ -3037,7 +3037,7 @@
     },
     {
       "name": "Notification Rules",
-      "description": "Unified notification rules — create user rules (PRICE_ABOVE, PRICE_DROP, STOCKOUT/replenishment, BUDGET) and enable/disable any rule including the auto-seeded system defaults (PROMO_PERSONAL, PROMO_COMMUNITY, CHEAPER_MARKET, DIGEST). GET returns user rules + defaults as toggles. PATCH toggles 'active' (and for CHEAPER_MARKET, set radiusKm to also include markets near home in addition to your watched markets). The legacy /api/v1/alerts folder is a thin alias over PRICE_DROP rules.",
+      "description": "Unified notification rules — create user rules (PRICE_DROP, STOCKOUT/replenishment, BUDGET) and enable/disable any rule including the auto-seeded system defaults (PROMO_PERSONAL, PROMO_COMMUNITY, CHEAPER_MARKET, DIGEST). GET returns user rules + defaults as toggles. PATCH toggles 'active' (and for CHEAPER_MARKET, set radiusKm to also include markets near home in addition to your watched markets). The legacy /api/v1/alerts folder is a thin alias over PRICE_DROP rules.",
       "item": [
         {
           "name": "List notification rules (user + defaults)",
@@ -3059,38 +3059,6 @@
                 "v1",
                 "notification-rules"
               ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Create price-ceiling rule (PRICE_ABOVE)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept-Language",
-                "value": "pt"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/notification-rules",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "notification-rules"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"type\": \"PRICE_ABOVE\",\n  \"productId\": \"{{productId}}\",\n  \"thresholdPrice\": 12.90\n}"
             }
           },
           "response": []
@@ -6531,7 +6499,7 @@
           ]
         },
         {
-          "name": "42a. Create notification rule (PRICE_ABOVE)",
+          "name": "42a. Create notification rule (PRICE_DROP)",
           "request": {
             "method": "POST",
             "header": [
@@ -6557,7 +6525,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"type\": \"PRICE_ABOVE\",\n  \"productId\": \"{{e2eProductId}}\",\n  \"thresholdPrice\": 12.90\n}"
+              "raw": "{\n  \"type\": \"PRICE_DROP\",\n  \"productId\": \"{{e2eProductId}}\",\n  \"thresholdPrice\": 12.90\n}"
             }
           },
           "response": [],
@@ -6572,7 +6540,7 @@
                   "var d = pm.response.json();",
                   "pm.collectionVariables.set('e2eRuleId', d.id);",
                   "pm.test('Echoes type + product', function () {",
-                  "    pm.expect(d.type).to.eql('PRICE_ABOVE');",
+                  "    pm.expect(d.type).to.eql('PRICE_DROP');",
                   "    pm.expect(d.productId).to.eql(pm.collectionVariables.get('e2eProductId'));",
                   "});"
                 ]

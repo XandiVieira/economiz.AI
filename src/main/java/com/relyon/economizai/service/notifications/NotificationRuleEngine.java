@@ -38,7 +38,6 @@ import java.util.stream.Collectors;
  * <p>Handles:
  * <ul>
  *   <li><b>PRICE_DROP</b> — user rule, fire when observed price ≤ threshold.</li>
- *   <li><b>PRICE_ABOVE</b> — user rule, fire when observed price ≥ threshold.</li>
  *   <li><b>CHEAPER_MARKET</b> — default, a product you've bought is observed at one of
  *       your <em>watched markets</em> (and, if you opt in via the rule's radius, at any
  *       market near home) at least {@link #DROP_FRACTION} below your last paid price.</li>
@@ -79,7 +78,7 @@ public class NotificationRuleEngine {
         }
     }
 
-    // ---- user price rules: PRICE_DROP (<=) and PRICE_ABOVE (>=) ----
+    // ---- user price rules: PRICE_DROP (<=) ----
 
     private List<NotificationRule> evaluateUserPriceRules(List<PriceObservation> observations,
                                                           Set<UUID> productIds,
@@ -87,7 +86,7 @@ public class NotificationRuleEngine {
                                                           UUID contributingHouseholdId,
                                                           LocalDateTime now) {
         var rules = ruleRepository.findActiveProductRules(
-                List.of(NotificationType.PRICE_DROP, NotificationType.PRICE_ABOVE), productIds);
+                List.of(NotificationType.PRICE_DROP), productIds);
         if (rules.isEmpty()) return List.of();
 
         var rulesByProduct = rules.stream().collect(Collectors.groupingBy(rule -> rule.getProduct().getId()));
@@ -123,25 +122,15 @@ public class NotificationRuleEngine {
     private boolean thresholdMet(NotificationRule rule, BigDecimal unitPrice) {
         var threshold = rule.getThresholdPrice();
         if (threshold == null) return false;
-        return rule.getType() == NotificationType.PRICE_ABOVE
-                ? unitPrice.compareTo(threshold) >= 0
-                : unitPrice.compareTo(threshold) <= 0;
+        return unitPrice.compareTo(threshold) <= 0;
     }
 
     private void notifyPriceRule(NotificationRule rule, PriceObservation observation) {
         var productName = observation.getProduct().getNormalizedName();
         var marketName = friendlyMarketName(rule, observation);
-        String title;
-        String body;
-        if (rule.getType() == NotificationType.PRICE_ABOVE) {
-            title = "Preço subiu: " + productName;
-            body = String.format("%s está R$ %s no %s — acima do teto de R$ %s que você definiu.",
-                    productName, observation.getUnitPrice(), marketName, rule.getThresholdPrice());
-        } else {
-            title = "Preço baixou: " + productName;
-            body = String.format("%s saiu por R$ %s no %s. Você pediu para avisar abaixo de R$ %s.",
-                    productName, observation.getUnitPrice(), marketName, rule.getThresholdPrice());
-        }
+        var title = "Preço baixou: " + productName;
+        var body = String.format("%s saiu por R$ %s no %s. Você pediu para avisar abaixo de R$ %s.",
+                productName, observation.getUnitPrice(), marketName, rule.getThresholdPrice());
         notificationService.notify(new NotificationPayload(
                 rule.getUser(), rule.getType(), title, body, baseExtras(rule, observation)));
     }

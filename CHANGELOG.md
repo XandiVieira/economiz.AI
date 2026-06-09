@@ -16,6 +16,12 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-09 — notifications: `PRICE_ABOVE` rule type removed
+
+We dropped the `PRICE_ABOVE` (price-ceiling) rule type. **FE: stop offering it** in the rule-creation UI — posting `type: "PRICE_ABOVE"` now fails validation (400) like any unknown type. Any existing `PRICE_ABOVE` rows are deleted server-side. The cheaper-market / deals features already cover the "don't overpay" use case. `PRICE_DROP`, `STOCKOUT`, `BUDGET` and the system defaults are unchanged.
+
+---
+
 ## 2026-06-09 — Savings attribution (Phase D): "você economizou R$ X com as dicas"
 
 New: the backend now closes the deals loop by attributing **realized R$ savings** to the deals we surface — the product's north-star metric.
@@ -186,7 +192,7 @@ on the server, so an uploaded picture survives deploys. No API/payload changes �
 
 Big notification upgrade. There's now **one place to create and toggle every notification**: `GET/POST/PATCH/DELETE /api/v1/notification-rules` (full contract in [API.md §10f](./API.md)). `GET` returns the user's rules **and** the system defaults as toggleable entries (`isDefault: true`, `active`), so a single settings screen can drive everything.
 
-New **user-creatable** rule types: `PRICE_ABOVE` (product over a ceiling), `STOCKOUT` (replenishment — we predict a regularly-bought product is about to run out from your buying cadence and warn you N days ahead), `BUDGET` (monthly household spend cap). `PRICE_DROP` ("avise-me quando") is unchanged. New **defaults** you can turn on/off: `CHEAPER_MARKET`, `PROMO_COMMUNITY`, `DIGEST` (weekly summary), plus the existing `PROMO_PERSONAL`.
+New **user-creatable** rule types: `STOCKOUT` (replenishment — we predict a regularly-bought product is about to run out from your buying cadence and warn you N days ahead), `BUDGET` (monthly household spend cap). `PRICE_DROP` ("avise-me quando") is unchanged. New **defaults** you can turn on/off: `CHEAPER_MARKET`, `PROMO_COMMUNITY`, `DIGEST` (weekly summary), plus the existing `PROMO_PERSONAL`.
 
 `CHEAPER_MARKET` = "someone bought a product I buy, at one of **my watched markets**, cheaper than I last paid." By default it only watches your favourite markets; set `radiusKm` on the rule to also include markets near home. The required drop scales with price (≈20% on a ~R$1 item → ≈5% on a ~R$200 item).
 

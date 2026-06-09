@@ -42,7 +42,7 @@ class NotificationRuleControllerTest {
     void create_withUnknownChannelEnum_returns400() throws Exception {
         when(localizedMessageService.translate("validation.failed")).thenReturn("The submitted data is invalid.");
 
-        var body = "{\"type\":\"PRICE_ABOVE\",\"channel\":\"GARBAGE\"}";
+        var body = "{\"type\":\"PRICE_DROP\",\"channel\":\"GARBAGE\"}";
 
         mockMvc.perform(post("/api/v1/notification-rules")
                         .with(SecurityMockMvcRequestPostProcessors.user(principal()))

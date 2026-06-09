@@ -125,7 +125,7 @@ class NotificationRuleEngineTest {
         };
     }
 
-    // ---- PRICE_DROP / PRICE_ABOVE ----
+    // ---- PRICE_DROP ----
 
     @Test
     void priceDrop_firesWhenObservedAtOrBelowThreshold() {
@@ -143,17 +143,15 @@ class NotificationRuleEngineTest {
     }
 
     @Test
-    void priceAbove_firesWhenObservedAtOrAboveThreshold() {
-        var rule = priceRule(NotificationType.PRICE_ABOVE, new BigDecimal("6.00"), null, null, owner(null, null));
+    void priceDrop_doesNotFireAboveThreshold() {
+        var rule = priceRule(NotificationType.PRICE_DROP, new BigDecimal("6.00"), null, null, owner(null, null));
         when(ruleRepository.findActiveProductRules(any(), any())).thenReturn(List.of(rule));
         lenient().when(marketLocationService.findByCnpjs(any())).thenReturn(Map.of());
         when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(any(), anyCollection())).thenReturn(List.of());
 
         engine.evaluate(List.of(observation(new BigDecimal("6.50"))), CONTRIBUTOR_HOUSEHOLD);
 
-        var captor = ArgumentCaptor.forClass(NotificationPayload.class);
-        verify(notificationService).notify(captor.capture());
-        assertEquals(NotificationType.PRICE_ABOVE, captor.getValue().type());
+        verify(notificationService, never()).notify(any());
     }
 
     @Test

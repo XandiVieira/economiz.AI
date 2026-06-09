@@ -791,7 +791,7 @@ POST /api/v1/notifications/{id}/read         → mark single as read
 POST /api/v1/notifications/mark-all-read     → { "marked": N }
 ```
 
-Each `NotificationResponse` carries `payload` — the JSON we attached when we generated the notification (`receiptId`, `productId`, `savingsPct`, etc) so cards can deep-link. `type` is one of `PROMO_PERSONAL`, `PROMO_COMMUNITY`, `CHEAPER_MARKET`, `DIGEST`, `PRICE_DROP`, `PRICE_ABOVE`, `STOCKOUT`, `BUDGET`, `SYSTEM` — what triggers each and how to toggle it is in §10f.
+Each `NotificationResponse` carries `payload` — the JSON we attached when we generated the notification (`receiptId`, `productId`, `savingsPct`, etc) so cards can deep-link. `type` is one of `PROMO_PERSONAL`, `PROMO_COMMUNITY`, `CHEAPER_MARKET`, `DIGEST`, `PRICE_DROP`, `STOCKOUT`, `BUDGET`, `SYSTEM` — what triggers each and how to toggle it is in §10f.
 
 ### Report a telemetry event (client → server)
 
@@ -925,7 +925,6 @@ DELETE /api/v1/notification-rules/{id}       → 204 (defaults can't be deleted 
 | type | needs | fires when |
 |------|-------|-----------|
 | `PRICE_DROP` | productId + thresholdPrice (+radiusKm?) | the product is seen at/below your price anywhere in the network (= "avise-me quando", §10e) |
-| `PRICE_ABOVE` | productId + thresholdPrice (+radiusKm?) | the product is seen at/above your ceiling |
 | `STOCKOUT` | productId (+leadTimeDays, default 3) | replenishment — we predict your usual product is about to run out (from your buying cadence) and warn you `leadTimeDays` ahead |
 | `BUDGET` | thresholdPrice | your household's confirmed spend this calendar month reaches the threshold |
 

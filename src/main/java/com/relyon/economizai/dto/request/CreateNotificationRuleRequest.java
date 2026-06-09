@@ -14,17 +14,17 @@ import java.util.UUID;
  * Create (or upsert) a notification rule. Re-posting the same
  * {@code (type, productId)} updates the existing rule. Which fields are
  * required depends on the type and is validated server-side:
- * PRICE_DROP/PRICE_ABOVE need productId + thresholdPrice; STOCKOUT needs
+ * PRICE_DROP needs productId + thresholdPrice; STOCKOUT needs
  * productId; BUDGET needs thresholdPrice.
  */
 public record CreateNotificationRuleRequest(
-        @Schema(description = "Rule type.", requiredMode = Schema.RequiredMode.REQUIRED, example = "PRICE_ABOVE")
+        @Schema(description = "Rule type.", requiredMode = Schema.RequiredMode.REQUIRED, example = "PRICE_DROP")
         @NotNull NotificationType type,
 
         @Schema(description = "Canonical product UUID (required for product-scoped rules).")
         UUID productId,
 
-        @Schema(description = "Price/spend threshold in R$ (required for PRICE_DROP, PRICE_ABOVE, BUDGET).", example = "12.90")
+        @Schema(description = "Price/spend threshold in R$ (required for PRICE_DROP, BUDGET).", example = "12.90")
         @DecimalMin(value = "0.01") BigDecimal thresholdPrice,
 
         @Schema(description = "Optional radius (km) from the user's home; null = anywhere.", example = "5")

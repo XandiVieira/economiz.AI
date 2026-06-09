@@ -25,8 +25,6 @@ public enum NotificationType {
     // --- User-created rules: the user supplies the parameters ---
     /** Notify when {@code product} is observed at or below {@code thresholdPrice}. */
     PRICE_DROP(Scope.USER, true, true),
-    /** Notify when {@code product} is observed at or above {@code thresholdPrice}. */
-    PRICE_ABOVE(Scope.USER, true, true),
     /** Replenishment: notify before a regularly-bought {@code product} is predicted to run out. */
     STOCKOUT(Scope.USER, true, false),
     /** Notify when household spend in the current month reaches {@code thresholdPrice} (R$). */
