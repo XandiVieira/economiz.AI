@@ -93,9 +93,10 @@ class SefazIngestionServiceTest {
     void constructor_throwsWhenTwoAdaptersClaimSameUf() {
         var first = new FakeAdapter(Set.of(UnidadeFederativa.RS));
         var second = new FakeAdapter(Set.of(UnidadeFederativa.RS, UnidadeFederativa.SC));
+        List<SefazAdapter> adapters = List.of(first, second);
 
         var error = assertThrows(IllegalStateException.class,
-                () -> new SefazIngestionService(List.of(first, second)));
+                () -> new SefazIngestionService(adapters));
         assertTrue(error.getMessage().contains("RS"));
     }
 

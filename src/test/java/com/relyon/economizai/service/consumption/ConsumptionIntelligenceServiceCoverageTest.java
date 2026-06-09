@@ -290,9 +290,10 @@ class ConsumptionIntelligenceServiceCoverageTest {
     void snooze_throwsWhenProductMissing() {
         var missingId = UUID.randomUUID();
         when(productRepository.findById(missingId)).thenReturn(Optional.empty());
+        var request = new SnoozeProductRequest(7);
 
         assertThrows(ProductNotFoundException.class,
-                () -> service.snooze(user, missingId, new SnoozeProductRequest(7)));
+                () -> service.snooze(user, missingId, request));
         verify(snoozeRepository, never()).save(any());
     }
 
@@ -341,10 +342,10 @@ class ConsumptionIntelligenceServiceCoverageTest {
     void logManualPurchase_throwsWhenProductMissing() {
         var missingId = UUID.randomUUID();
         when(productRepository.findById(missingId)).thenReturn(Optional.empty());
+        var request = new LogManualPurchaseRequest(missingId, BigDecimal.ONE, null);
 
         assertThrows(ProductNotFoundException.class,
-                () -> service.logManualPurchase(user,
-                        new LogManualPurchaseRequest(missingId, BigDecimal.ONE, null)));
+                () -> service.logManualPurchase(user, request));
         verify(manualPurchaseRepository, never()).save(any());
     }
 

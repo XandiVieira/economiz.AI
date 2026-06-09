@@ -203,8 +203,9 @@ class AdminProductServiceTest {
     void setBrandThrowsForUnknownProduct() {
         var unknownId = UUID.randomUUID();
         when(productRepository.findById(unknownId)).thenReturn(Optional.empty());
+        var request = new SetProductBrandRequest("X");
         assertThrows(ProductNotFoundException.class,
-                () -> service.setBrand(unknownId, new SetProductBrandRequest("X")));
+                () -> service.setBrand(unknownId, request));
     }
 
     @Test
@@ -229,8 +230,9 @@ class AdminProductServiceTest {
     @Test
     void mergeRejectsSelfMerge() {
         var id = UUID.randomUUID();
+        var request = new MergeProductRequest(id, false);
         assertThrows(InvalidProductMergeException.class,
-                () -> service.merge(id, new MergeProductRequest(id, false)));
+                () -> service.merge(id, request));
     }
 
     @Test
@@ -311,8 +313,9 @@ class AdminProductServiceTest {
         var target = product("Real Product", ProductCategory.GROCERIES, CategorizationSource.DICTIONARY);
         when(productRepository.findById(target.getId())).thenReturn(Optional.of(target));
         when(receiptItemRepository.countByProduct(target)).thenReturn(4L);
+        var targetId = target.getId();
 
-        assertThrows(InvalidProductDeletionException.class, () -> service.delete(target.getId(), false));
+        assertThrows(InvalidProductDeletionException.class, () -> service.delete(targetId, false));
         verify(productRepository, never()).delete(any());
     }
 

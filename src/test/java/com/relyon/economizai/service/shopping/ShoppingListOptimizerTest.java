@@ -102,8 +102,9 @@ class ShoppingListOptimizerTest {
         org.mockito.Mockito.doThrow(new PaywallException(Feature.BASKET_OPTIMIZATION.name()))
                 .when(subscriptionGate).require(eq(user), eq(Feature.BASKET_OPTIMIZATION));
 
+        var request = request(UUID.randomUUID(), BigDecimal.ONE);
         assertThrows(PaywallException.class,
-                () -> optimizer.optimize(user, request(UUID.randomUUID(), BigDecimal.ONE)));
+                () -> optimizer.optimize(user, request));
         verify(productRepository, never()).findById(any());
     }
 
@@ -282,9 +283,10 @@ class ShoppingListOptimizerTest {
     void optimize_throwsWhenProductMissing() {
         var missingId = UUID.randomUUID();
         when(productRepository.findById(missingId)).thenReturn(Optional.empty());
+        var request = request(missingId, BigDecimal.ONE);
 
         assertThrows(ProductNotFoundException.class,
-                () -> optimizer.optimize(user, request(missingId, BigDecimal.ONE)));
+                () -> optimizer.optimize(user, request));
     }
 
     private OptimizeShoppingListRequest request(UUID productId, BigDecimal quantity) {

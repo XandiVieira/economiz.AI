@@ -68,8 +68,9 @@ class SubscriptionGateServiceTest {
 
     @Test
     void require_throwsForFreeAndPassesForPro() {
+        var freeUser = user(SubscriptionTier.FREE);
         assertThrows(PaywallException.class,
-                () -> gate.require(user(SubscriptionTier.FREE), Feature.BASKET_OPTIMIZATION));
+                () -> gate.require(freeUser, Feature.BASKET_OPTIMIZATION));
         // PRO: no exception
         gate.require(user(SubscriptionTier.PRO), Feature.BASKET_OPTIMIZATION);
     }

@@ -95,8 +95,9 @@ class PhoneVerificationServiceTest {
 
     @Test
     void setPhone_rejectsNull() {
+        var user = user();
         assertThrows(InvalidPhoneNumberException.class,
-                () -> service.setPhoneAndSendOtp(user(), null));
+                () -> service.setPhoneAndSendOtp(user, null));
     }
 
     @Test

@@ -122,9 +122,10 @@ class NotificationInboxServiceTest {
         var otherUser = userWithId(UUID.randomUUID());
         var notification = notificationFor(owner);
         when(repository.findById(notification.getId())).thenReturn(Optional.of(notification));
+        var notificationId = notification.getId();
 
         assertThrows(NotificationNotFoundException.class,
-                () -> notificationInboxService.markRead(otherUser, notification.getId()));
+                () -> notificationInboxService.markRead(otherUser, notificationId));
 
         assertNull(notification.getReadAt());
         verify(repository, never()).save(any());

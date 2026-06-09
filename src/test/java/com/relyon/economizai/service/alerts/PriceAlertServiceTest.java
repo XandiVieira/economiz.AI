@@ -91,9 +91,9 @@ class PriceAlertServiceTest {
     void create_unknownProductThrows() {
         var owner = user();
         when(productRepository.findById(PRODUCT_ID)).thenReturn(Optional.empty());
+        var request = new CreatePriceAlertRequest(PRODUCT_ID, new BigDecimal("6.00"), null, null);
 
-        assertThrows(ProductNotFoundException.class, () -> service.create(owner,
-                new CreatePriceAlertRequest(PRODUCT_ID, new BigDecimal("6.00"), null, null)));
+        assertThrows(ProductNotFoundException.class, () -> service.create(owner, request));
     }
 
     // ---- list ----
