@@ -91,9 +91,11 @@ class ReceiptServiceTest {
         var receipt = persistedReceipt(user, ReceiptStatus.CONFIRMED); // item has no product
         var item = receipt.getItems().get(0);
         when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
+        var receiptId = receipt.getId();
+        var itemId = item.getId();
 
         assertThrows(ReceiptNotEditableException.class,
-                () -> receiptService.updateItemCategory(user, receipt.getId(), item.getId(), ProductCategory.GROCERIES));
+                () -> receiptService.updateItemCategory(user, receiptId, itemId, ProductCategory.GROCERIES));
         verify(categoryOverrideService, never()).setOverride(any(), any(), any());
     }
 
@@ -203,8 +205,9 @@ class ReceiptServiceTest {
         when(receiptRepository.countByUserIdAndCreatedAtGreaterThanEqual(eq(user.getId()), any()))
                 .thenReturn(5L);
 
+        var request = new SubmitReceiptRequest(CHAVE_RS);
         assertThrows(PaywallException.class,
-                () -> receiptService.submit(user, new SubmitReceiptRequest(CHAVE_RS)));
+                () -> receiptService.submit(user, request));
 
         verify(sefazIngestionService, never()).fetch(any());
         verify(receiptRepository, never()).save(any());
@@ -239,8 +242,9 @@ class ReceiptServiceTest {
         when(receiptRepository.findByHouseholdIdAndChaveAcesso(any(), eq(CHAVE_RS)))
                 .thenReturn(Optional.of(existingConfirmed));
 
+        var request = new SubmitReceiptRequest(CHAVE_RS);
         assertThrows(ReceiptAlreadyIngestedException.class,
-                () -> receiptService.submit(user, new SubmitReceiptRequest(CHAVE_RS)));
+                () -> receiptService.submit(user, request));
 
         verify(receiptRepository, never()).save(any());
         verify(receiptRepository, never()).delete(any(Receipt.class));
@@ -293,8 +297,9 @@ class ReceiptServiceTest {
         var stranger = buildUser();
         var receipt = persistedReceipt(stranger, ReceiptStatus.CONFIRMED);
         when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
+        var receiptId = receipt.getId();
 
-        assertThrows(ReceiptNotFoundException.class, () -> receiptService.delete(user, receipt.getId()));
+        assertThrows(ReceiptNotFoundException.class, () -> receiptService.delete(user, receiptId));
         verify(receiptRepository, never()).delete(any(Receipt.class));
     }
 
@@ -329,9 +334,10 @@ class ReceiptServiceTest {
         var stranger = buildUser();
         var receipt = persistedReceipt(stranger, ReceiptStatus.PENDING_CONFIRMATION);
         when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
+        var receiptId = receipt.getId();
 
         assertThrows(ReceiptNotFoundException.class,
-                () -> receiptService.confirm(user, receipt.getId(), null));
+                () -> receiptService.confirm(user, receiptId, null));
     }
 
     @Test
@@ -339,9 +345,10 @@ class ReceiptServiceTest {
         var user = buildUser();
         var receipt = persistedReceipt(user, ReceiptStatus.CONFIRMED);
         when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
+        var receiptId = receipt.getId();
 
         assertThrows(ReceiptNotEditableException.class,
-                () -> receiptService.confirm(user, receipt.getId(), null));
+                () -> receiptService.confirm(user, receiptId, null));
     }
 
     @Test
@@ -383,9 +390,11 @@ class ReceiptServiceTest {
 
         var request = new UpdateReceiptItemRequest("X", null,
                 new BigDecimal("1"), null, null, new BigDecimal("1"), null, null);
+        var receiptId = receipt.getId();
+        var missingItemId = UUID.randomUUID();
 
         assertThrows(ReceiptItemNotFoundException.class,
-                () -> receiptService.updateItem(user, receipt.getId(), UUID.randomUUID(), request));
+                () -> receiptService.updateItem(user, receiptId, missingItemId, request));
     }
 
     @Test
