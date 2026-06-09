@@ -3,6 +3,7 @@ package com.relyon.economizai.repository;
 import com.relyon.economizai.model.NotificationRule;
 import com.relyon.economizai.model.enums.NotificationType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -66,4 +67,41 @@ public interface NotificationRuleRepository extends JpaRepository<NotificationRu
     """)
     List<NotificationRule> findActiveDefaultRuleOwnersWhoBought(@Param("type") NotificationType type,
                                                                 @Param("productId") UUID productId);
+
+    /**
+     * Batched variant of {@link #findActiveDefaultRuleOwnersWhoBought(NotificationType, UUID)}:
+     * for every product in {@code productIds}, the active default rules of the given type owned
+     * by users whose household bought that product (confirmed, non-excluded). Returns one row per
+     * distinct (productId, rule) pair so the write path can group owners by product in a single query.
+     */
+    @Query("""
+        SELECT DISTINCT ri.product.id AS productId, r AS rule
+        FROM NotificationRule r, ReceiptItem ri
+        JOIN r.user u
+        WHERE r.type = :type AND r.active = true AND r.isDefault = true
+          AND ri.product.id IN :productIds
+          AND ri.receipt.status = 'CONFIRMED'
+          AND ri.excluded = false
+          AND ri.receipt.household.id = u.household.id
+    """)
+    List<ProductRuleOwner> findActiveDefaultRuleOwnersWhoBought(@Param("type") NotificationType type,
+                                                                @Param("productIds") Collection<UUID> productIds);
+
+    /** Projection for {@link #findActiveDefaultRuleOwnersWhoBought(NotificationType, Collection)}. */
+    interface ProductRuleOwner {
+        UUID getProductId();
+        NotificationRule getRule();
+    }
+
+    @Modifying
+    @Query(nativeQuery = true, value = """
+        INSERT INTO notification_rules (id, user_id, type, is_default, active, created_at, updated_at)
+        SELECT gen_random_uuid(), u.id, :type, true, true, now(), now()
+        FROM users u
+        WHERE NOT EXISTS (
+            SELECT 1 FROM notification_rules nr
+            WHERE nr.user_id = u.id AND nr.type = :type AND nr.product_id IS NULL
+        )
+    """)
+    int insertMissingDefaultRules(@Param("type") String type);
 }

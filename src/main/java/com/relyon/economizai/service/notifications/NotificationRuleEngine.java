@@ -154,21 +154,35 @@ public class NotificationRuleEngine {
                                                              UUID contributingHouseholdId,
                                                              LocalDateTime now) {
         var byProduct = observations.stream().collect(Collectors.groupingBy(o -> o.getProduct().getId()));
+        // Two batched queries (one per community type) replace the per-product N+1: each
+        // resolves productId -> the default-rule owners who bought that product.
+        var promoOwnersByProduct = ownersByProduct(NotificationType.PROMO_COMMUNITY, byProduct.keySet());
+        var cheaperOwnersByProduct = ownersByProduct(NotificationType.CHEAPER_MARKET, byProduct.keySet());
         // Shared across products: a user's single default rule must fire at most once
         // even when they bought several products on the same receipt (the cooldown isn't
         // persisted within this evaluation, so we dedup by rule id in-memory).
         var firedRuleIds = new HashSet<UUID>();
         var fired = new ArrayList<NotificationRule>();
         for (var entry : byProduct.entrySet()) {
-            fired.addAll(firePromoCommunity(entry.getKey(), entry.getValue(),
+            fired.addAll(firePromoCommunity(entry.getValue(),
+                    promoOwnersByProduct.getOrDefault(entry.getKey(), List.of()),
                     contributingHouseholdId, now, firedRuleIds));
             fired.addAll(fireCheaperMarket(entry.getKey(), entry.getValue(), locations,
+                    cheaperOwnersByProduct.getOrDefault(entry.getKey(), List.of()),
                     contributingHouseholdId, now, firedRuleIds));
         }
         return fired;
     }
 
-    private List<NotificationRule> firePromoCommunity(UUID productId, List<PriceObservation> observations,
+    private Map<UUID, List<NotificationRule>> ownersByProduct(NotificationType type, Set<UUID> productIds) {
+        if (productIds.isEmpty()) return Map.of();
+        return ruleRepository.findActiveDefaultRuleOwnersWhoBought(type, productIds).stream()
+                .collect(Collectors.groupingBy(
+                        NotificationRuleRepository.ProductRuleOwner::getProductId,
+                        Collectors.mapping(NotificationRuleRepository.ProductRuleOwner::getRule, Collectors.toList())));
+    }
+
+    private List<NotificationRule> firePromoCommunity(List<PriceObservation> observations, List<NotificationRule> owners,
                                                       UUID contributingHouseholdId, LocalDateTime now,
                                                       Set<UUID> firedRuleIds) {
         var promo = observations.stream()
@@ -177,7 +191,6 @@ public class NotificationRuleEngine {
                 .orElse(null);
         if (promo == null) return List.of();
 
-        var owners = ruleRepository.findActiveDefaultRuleOwnersWhoBought(NotificationType.PROMO_COMMUNITY, productId);
         var fired = new ArrayList<NotificationRule>();
         for (var rule : owners) {
             if (firedRuleIds.contains(rule.getId())) continue;
@@ -203,10 +216,9 @@ public class NotificationRuleEngine {
      * Fires when the observed price is at least 10% below the household's last paid price.
      */
     private List<NotificationRule> fireCheaperMarket(UUID productId, List<PriceObservation> observations,
-                                                     Map<String, MarketLocation> locations,
+                                                     Map<String, MarketLocation> locations, List<NotificationRule> owners,
                                                      UUID contributingHouseholdId, LocalDateTime now,
                                                      Set<UUID> firedRuleIds) {
-        var owners = ruleRepository.findActiveDefaultRuleOwnersWhoBought(NotificationType.CHEAPER_MARKET, productId);
         if (owners.isEmpty()) return List.of();
 
         var fired = new ArrayList<NotificationRule>();

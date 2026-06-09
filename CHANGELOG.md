@@ -16,6 +16,12 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-09 — Default notification rules backfilled for existing users
+
+Default notification rules (PROMO_COMMUNITY, CHEAPER_MARKET, DIGEST, PROMO_PERSONAL) are now materialized for **all existing users** on startup, not just new signups / first time the screen is opened. `GET /api/v1/notification-rules` already seeds them lazily, so the response shape is unchanged — but accounts that never opened the screen will now have the toggles present immediately. Idempotent; triggers were already firing regardless (an absent default counts as enabled).
+
+---
+
 ## 2026-06-08 — LGPD data export is now complete (response grew)
 
 `GET /api/v1/users/me/export` now returns **all** of the user's personal data, not just account + household + receipts. New sections on `UserDataExportResponse`: `accountExtras` (push token, emailVerified/At, contributionOptIn), `notificationRules`, `watchedMarketCnpjs`, `subscription`, `marketAliases`, `customCategories`, `categoryOverrides`, `manualPurchases`, `shoppingLists`, and `notifications` (inbox). Purely additive — existing fields unchanged. (Account **deletion** — `DELETE /users/me` — was already complete: cascades all personal data, deletes the household when its last member leaves, and leaves anonymized price data intact per LGPD.)

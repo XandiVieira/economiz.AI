@@ -9,6 +9,7 @@ import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.NotificationType;
 import com.relyon.economizai.repository.NotificationRuleRepository;
+import com.relyon.economizai.repository.NotificationRuleRepository.ProductRuleOwner;
 import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.repository.UserWatchedMarketRepository;
 import com.relyon.economizai.service.geo.MarketLocationService;
@@ -29,6 +30,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -102,6 +104,20 @@ class NotificationRuleEngineTest {
         return MarketLocation.builder().cnpj(CNPJ).latitude(latitude).longitude(longitude).build();
     }
 
+    private ProductRuleOwner ruleOwner(UUID productId, NotificationRule rule) {
+        return new ProductRuleOwner() {
+            @Override
+            public UUID getProductId() {
+                return productId;
+            }
+
+            @Override
+            public NotificationRule getRule() {
+                return rule;
+            }
+        };
+    }
+
     // ---- PRICE_DROP / PRICE_ABOVE ----
 
     @Test
@@ -109,7 +125,7 @@ class NotificationRuleEngineTest {
         var rule = priceRule(NotificationType.PRICE_DROP, new BigDecimal("6.00"), null, null, owner(null, null));
         when(ruleRepository.findActiveProductRules(any(), any())).thenReturn(List.of(rule));
         lenient().when(marketLocationService.findByCnpjs(any())).thenReturn(Map.of());
-        when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(any(), eq(PRODUCT_ID))).thenReturn(List.of());
+        when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(any(), anyCollection())).thenReturn(List.of());
 
         engine.evaluate(List.of(observation(new BigDecimal("5.49"))), CONTRIBUTOR_HOUSEHOLD);
 
@@ -124,7 +140,7 @@ class NotificationRuleEngineTest {
         var rule = priceRule(NotificationType.PRICE_ABOVE, new BigDecimal("6.00"), null, null, owner(null, null));
         when(ruleRepository.findActiveProductRules(any(), any())).thenReturn(List.of(rule));
         lenient().when(marketLocationService.findByCnpjs(any())).thenReturn(Map.of());
-        when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(any(), eq(PRODUCT_ID))).thenReturn(List.of());
+        when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(any(), anyCollection())).thenReturn(List.of());
 
         engine.evaluate(List.of(observation(new BigDecimal("6.50"))), CONTRIBUTOR_HOUSEHOLD);
 
@@ -139,7 +155,7 @@ class NotificationRuleEngineTest {
                 LocalDateTime.now().minusHours(1), owner(null, null));
         when(ruleRepository.findActiveProductRules(any(), any())).thenReturn(List.of(rule));
         lenient().when(marketLocationService.findByCnpjs(any())).thenReturn(Map.of());
-        when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(any(), eq(PRODUCT_ID))).thenReturn(List.of());
+        when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(any(), anyCollection())).thenReturn(List.of());
 
         engine.evaluate(List.of(observation(new BigDecimal("5.00"))), CONTRIBUTOR_HOUSEHOLD);
 
@@ -151,7 +167,7 @@ class NotificationRuleEngineTest {
         var rule = priceRule(NotificationType.PRICE_DROP, new BigDecimal("6.00"), null, null, owner(null, null));
         when(ruleRepository.findActiveProductRules(any(), any())).thenReturn(List.of(rule));
         lenient().when(marketLocationService.findByCnpjs(any())).thenReturn(Map.of());
-        when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(any(), eq(PRODUCT_ID))).thenReturn(List.of());
+        when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(any(), anyCollection())).thenReturn(List.of());
 
         engine.evaluate(List.of(observation(new BigDecimal("5.00"))), OWNER_HOUSEHOLD);
 
@@ -166,7 +182,7 @@ class NotificationRuleEngineTest {
         // São Paulo ~850 km from Porto Alegre
         when(marketLocationService.findByCnpjs(any()))
                 .thenReturn(Map.of(CNPJ, marketAt(new BigDecimal("-23.5505"), new BigDecimal("-46.6333"))));
-        when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(any(), eq(PRODUCT_ID))).thenReturn(List.of());
+        when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(any(), anyCollection())).thenReturn(List.of());
 
         engine.evaluate(List.of(observation(new BigDecimal("5.00"))), CONTRIBUTOR_HOUSEHOLD);
 
@@ -181,8 +197,10 @@ class NotificationRuleEngineTest {
         var rule = defaultRule(NotificationType.CHEAPER_MARKET, null, owner);
         when(ruleRepository.findActiveProductRules(any(), any())).thenReturn(List.of());
         lenient().when(marketLocationService.findByCnpjs(any())).thenReturn(Map.of());
-        when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(NotificationType.CHEAPER_MARKET, PRODUCT_ID))
-                .thenReturn(List.of(rule));
+        when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(eq(NotificationType.CHEAPER_MARKET), anyCollection()))
+                .thenReturn(List.of(ruleOwner(PRODUCT_ID, rule)));
+        lenient().when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(eq(NotificationType.PROMO_COMMUNITY), anyCollection()))
+                .thenReturn(List.of());
         when(receiptItemRepository.findHouseholdHistoryForProduct(PRODUCT_ID, OWNER_HOUSEHOLD))
                 .thenReturn(List.of(ReceiptItem.builder().unitPrice(new BigDecimal("10.00")).build()));
         when(watchedMarketRepository.existsByUserIdAndMarketCnpj(owner.getId(), CNPJ)).thenReturn(true);
@@ -200,8 +218,10 @@ class NotificationRuleEngineTest {
         var rule = defaultRule(NotificationType.CHEAPER_MARKET, null, owner);
         when(ruleRepository.findActiveProductRules(any(), any())).thenReturn(List.of());
         lenient().when(marketLocationService.findByCnpjs(any())).thenReturn(Map.of());
-        when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(NotificationType.CHEAPER_MARKET, PRODUCT_ID))
-                .thenReturn(List.of(rule));
+        when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(eq(NotificationType.CHEAPER_MARKET), anyCollection()))
+                .thenReturn(List.of(ruleOwner(PRODUCT_ID, rule)));
+        lenient().when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(eq(NotificationType.PROMO_COMMUNITY), anyCollection()))
+                .thenReturn(List.of());
         when(receiptItemRepository.findHouseholdHistoryForProduct(PRODUCT_ID, OWNER_HOUSEHOLD))
                 .thenReturn(List.of(ReceiptItem.builder().unitPrice(new BigDecimal("10.00")).build()));
         when(watchedMarketRepository.existsByUserIdAndMarketCnpj(owner.getId(), CNPJ)).thenReturn(false);
@@ -217,8 +237,10 @@ class NotificationRuleEngineTest {
         var rule = defaultRule(NotificationType.CHEAPER_MARKET, null, owner);
         when(ruleRepository.findActiveProductRules(any(), any())).thenReturn(List.of());
         lenient().when(marketLocationService.findByCnpjs(any())).thenReturn(Map.of());
-        when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(NotificationType.CHEAPER_MARKET, PRODUCT_ID))
-                .thenReturn(List.of(rule));
+        when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(eq(NotificationType.CHEAPER_MARKET), anyCollection()))
+                .thenReturn(List.of(ruleOwner(PRODUCT_ID, rule)));
+        lenient().when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(eq(NotificationType.PROMO_COMMUNITY), anyCollection()))
+                .thenReturn(List.of());
         when(receiptItemRepository.findHouseholdHistoryForProduct(PRODUCT_ID, OWNER_HOUSEHOLD))
                 .thenReturn(List.of(ReceiptItem.builder().unitPrice(new BigDecimal("10.00")).build()));
         lenient().when(watchedMarketRepository.existsByUserIdAndMarketCnpj(owner.getId(), CNPJ)).thenReturn(true);
@@ -239,10 +261,11 @@ class NotificationRuleEngineTest {
 
         when(ruleRepository.findActiveProductRules(any(), any())).thenReturn(List.of());
         lenient().when(marketLocationService.findByCnpjs(any())).thenReturn(Map.of());
-        // The SAME single rule is returned for both products (the user has one default rule).
-        when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(eq(NotificationType.PROMO_COMMUNITY), any()))
-                .thenReturn(List.of(rule));
-        when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(eq(NotificationType.CHEAPER_MARKET), any()))
+        // The SAME single rule owns both products (the user has one default rule) — the batched
+        // query returns one (productId, rule) row per product, both pointing at the same rule.
+        when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(eq(NotificationType.PROMO_COMMUNITY), anyCollection()))
+                .thenReturn(List.of(ruleOwner(PRODUCT_ID, rule), ruleOwner(secondProductId, rule)));
+        when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(eq(NotificationType.CHEAPER_MARKET), anyCollection()))
                 .thenReturn(List.of());
 
         var promoForFirst = promoObservation(new BigDecimal("3.99"));
@@ -255,6 +278,11 @@ class NotificationRuleEngineTest {
 
         // Despite two products matching the same rule, the rule fires exactly once.
         verify(notificationService, times(1)).notify(any());
+        // And the batched owners query ran exactly once per community type, not once per product.
+        verify(ruleRepository, times(1))
+                .findActiveDefaultRuleOwnersWhoBought(eq(NotificationType.PROMO_COMMUNITY), anyCollection());
+        verify(ruleRepository, times(1))
+                .findActiveDefaultRuleOwnersWhoBought(eq(NotificationType.CHEAPER_MARKET), anyCollection());
     }
 
     @Test
@@ -263,9 +291,9 @@ class NotificationRuleEngineTest {
         var rule = defaultRule(NotificationType.PROMO_COMMUNITY, null, owner);
         when(ruleRepository.findActiveProductRules(any(), any())).thenReturn(List.of());
         lenient().when(marketLocationService.findByCnpjs(any())).thenReturn(Map.of());
-        when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(NotificationType.PROMO_COMMUNITY, PRODUCT_ID))
-                .thenReturn(List.of(rule));
-        when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(NotificationType.CHEAPER_MARKET, PRODUCT_ID))
+        when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(eq(NotificationType.PROMO_COMMUNITY), anyCollection()))
+                .thenReturn(List.of(ruleOwner(PRODUCT_ID, rule)));
+        when(ruleRepository.findActiveDefaultRuleOwnersWhoBought(eq(NotificationType.CHEAPER_MARKET), anyCollection()))
                 .thenReturn(List.of());
 
         engine.evaluate(List.of(promoObservation(new BigDecimal("3.99"))), CONTRIBUTOR_HOUSEHOLD);
