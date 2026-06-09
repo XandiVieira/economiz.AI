@@ -22,6 +22,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -81,7 +82,7 @@ class ItemQueryServiceTest {
                 .id(UUID.randomUUID())
                 .cnpjEmitente("93015006005182")
                 .marketName("Mercado X")
-                .issuedAt(LocalDateTime.of(2026, 5, 1, 10, 0))
+                .issuedAt(LocalDateTime.of(2026, Month.MAY, 1, 10, 0))
                 .build();
         var item = ReceiptItem.builder()
                 .id(UUID.randomUUID())
@@ -183,8 +184,8 @@ class ItemQueryServiceTest {
         var item = linkedItem(product, new BigDecimal("3.00"));
         var productId = UUID.randomUUID();
         var fullFilters = ItemFilters.fromRequest(
-                LocalDateTime.of(2026, 1, 1, 0, 0),
-                LocalDateTime.of(2026, 12, 31, 23, 59),
+                LocalDateTime.of(2026, Month.JANUARY, 1, 0, 0),
+                LocalDateTime.of(2026, Month.DECEMBER, 31, 23, 59),
                 List.of("93015006005182"),
                 List.of("93015006"),
                 List.of(ProductCategory.GROCERIES),

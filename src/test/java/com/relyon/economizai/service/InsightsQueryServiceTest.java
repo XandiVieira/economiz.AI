@@ -22,6 +22,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -311,8 +312,8 @@ class InsightsQueryServiceTest {
         when(bucketQuery.getResultList()).thenReturn(List.<Object[]>of(
                 new Object[]{ProductCategory.GROCERIES, new BigDecimal("5.00"), 1L, 1L}));
 
-        var from = LocalDateTime.of(2026, 1, 1, 0, 0);
-        var to = LocalDateTime.of(2026, 6, 30, 23, 59);
+        var from = LocalDateTime.of(2026, Month.JANUARY, 1, 0, 0);
+        var to = LocalDateTime.of(2026, Month.JUNE, 30, 23, 59);
         var input = QueryFilters.fromRequest(
                 from, to,
                 List.of(" 12345678000190 ", "  "),
@@ -391,8 +392,8 @@ class InsightsQueryServiceTest {
                 .thenReturn(new Object[]{new BigDecimal("5.00"), 1L, 1L});
 
         var input = QueryFilters.fromRequest(
-                LocalDateTime.of(2026, 1, 1, 0, 0),
-                LocalDateTime.of(2026, 6, 1, 0, 0),
+                LocalDateTime.of(2026, Month.JANUARY, 1, 0, 0),
+                LocalDateTime.of(2026, Month.JUNE, 1, 0, 0),
                 List.of("12345678000190"),
                 List.of("12345678"),
                 List.of(ProductCategory.BEVERAGES),

@@ -14,6 +14,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.List;
 import java.util.UUID;
 
@@ -39,8 +40,8 @@ class InsightsSpendCacheTest {
     @MockitoBean private InsightsRepository insightsRepository;
 
     private User user;
-    private final LocalDateTime from = LocalDateTime.of(2026, 6, 1, 0, 0);
-    private final LocalDateTime to = LocalDateTime.of(2026, 6, 30, 23, 59, 59);
+    private final LocalDateTime from = LocalDateTime.of(2026, Month.JUNE, 1, 0, 0);
+    private final LocalDateTime to = LocalDateTime.of(2026, Month.JUNE, 30, 23, 59, 59);
 
     @BeforeEach
     void setUp() {

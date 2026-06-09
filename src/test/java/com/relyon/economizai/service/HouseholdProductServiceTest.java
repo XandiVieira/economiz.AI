@@ -26,6 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -80,9 +81,9 @@ class HouseholdProductServiceTest {
     void listHouseholdProducts_aggregatesCountAndMostRecentPurchase() {
         var product = product("Leite");
         var older = item(product, "5.00", CNPJ_ZAFFARI, "Zaffari",
-                LocalDateTime.of(2026, 1, 1, 10, 0));
+                LocalDateTime.of(2026, Month.JANUARY, 1, 10, 0));
         var newer = item(product, "4.50", CNPJ_NACIONAL, "Nacional",
-                LocalDateTime.of(2026, 2, 1, 10, 0));
+                LocalDateTime.of(2026, Month.FEBRUARY, 1, 10, 0));
         // Repository returns oldest -> newest; the last one seen wins as most-recent.
         when(receiptItemRepository.findConfirmedHistoryForHousehold(HOUSEHOLD_ID))
                 .thenReturn(List.of(older, newer));
@@ -102,7 +103,7 @@ class HouseholdProductServiceTest {
     void listHouseholdProducts_resolvesFriendlyNameFromOverride() {
         var product = product("Leite");
         var item = item(product, "5.00", CNPJ_ZAFFARI, "Zaffari",
-                LocalDateTime.of(2026, 1, 1, 10, 0));
+                LocalDateTime.of(2026, Month.JANUARY, 1, 10, 0));
         when(receiptItemRepository.findConfirmedHistoryForHousehold(HOUSEHOLD_ID))
                 .thenReturn(List.of(item));
         when(marketNameService.resolveNames(eq(HOUSEHOLD_ID), any()))
@@ -139,7 +140,7 @@ class HouseholdProductServiceTest {
         when(productRepository.findById(product.getId())).thenReturn(Optional.of(product));
         // Own last paid at Zaffari = 5.00
         var ownItem = item(product, "5.00", CNPJ_ZAFFARI, "Zaffari",
-                LocalDateTime.of(2026, 2, 1, 10, 0));
+                LocalDateTime.of(2026, Month.FEBRUARY, 1, 10, 0));
         when(receiptItemRepository.findHouseholdHistoryForProduct(product.getId(), HOUSEHOLD_ID))
                 .thenReturn(List.of(ownItem));
         when(marketLocationService.findByCnpjs(any())).thenReturn(Map.of(CNPJ_ZAFFARI, location(CNPJ_ZAFFARI, "Zaffari")));
@@ -189,7 +190,7 @@ class HouseholdProductServiceTest {
         var product = product("Leite");
         when(productRepository.findById(product.getId())).thenReturn(Optional.of(product));
         var ownItem = item(product, "5.00", CNPJ_ZAFFARI, "Zaffari",
-                LocalDateTime.of(2026, 2, 1, 10, 0));
+                LocalDateTime.of(2026, Month.FEBRUARY, 1, 10, 0));
         when(receiptItemRepository.findHouseholdHistoryForProduct(product.getId(), HOUSEHOLD_ID))
                 .thenReturn(List.of(ownItem));
         when(marketLocationService.findByCnpjs(any())).thenReturn(Map.of());

@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.List;
 import java.util.UUID;
 
@@ -81,13 +82,13 @@ class InsightsQueryServiceIntegrationTest {
         // Bistek April:  detergente 5, arroz 40. Total 45.
         // Zaffari May:   leite 12. Total 12.
         // Bistek May:    arroz 30, leite 8, detergente 6. Total 44.
-        receipt(household, "93015006005182", "Zaffari", LocalDateTime.of(2026, 4, 10, 10, 0),
+        receipt(household, "93015006005182", "Zaffari", LocalDateTime.of(2026, Month.APRIL, 10, 10, 0),
                 List.of(item(arroz, "50.00"), item(leite, "10.00")));
-        receipt(household, "93015006000111", "Bistek",  LocalDateTime.of(2026, 4, 20, 10, 0),
+        receipt(household, "93015006000111", "Bistek",  LocalDateTime.of(2026, Month.APRIL, 20, 10, 0),
                 List.of(item(detergente, "5.00"), item(arroz, "40.00")));
-        receipt(household, "93015006005182", "Zaffari", LocalDateTime.of(2026, 5,  3, 10, 0),
+        receipt(household, "93015006005182", "Zaffari", LocalDateTime.of(2026, Month.MAY,  3, 10, 0),
                 List.of(item(leite, "12.00")));
-        receipt(household, "93015006000111", "Bistek",  LocalDateTime.of(2026, 5, 15, 10, 0),
+        receipt(household, "93015006000111", "Bistek",  LocalDateTime.of(2026, Month.MAY, 15, 10, 0),
                 List.of(item(arroz, "30.00"), item(leite, "8.00"), item(detergente, "6.00")));
     }
 
@@ -243,8 +244,8 @@ class InsightsQueryServiceIntegrationTest {
     @Test
     void filter_byDateRange_isInclusive() {
         var result = service.query(user,
-                filters().from(LocalDateTime.of(2026, 4, 1, 0, 0))
-                        .to(LocalDateTime.of(2026, 4, 30, 23, 59, 59)).build());
+                filters().from(LocalDateTime.of(2026, Month.APRIL, 1, 0, 0))
+                        .to(LocalDateTime.of(2026, Month.APRIL, 30, 23, 59, 59)).build());
         assertEquals(0, new BigDecimal("105.00").compareTo(result.summary().total()),
                 "April only: 60 + 45 = 105");
     }

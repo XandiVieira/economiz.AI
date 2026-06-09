@@ -13,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.List;
 import java.util.UUID;
 
@@ -37,7 +38,7 @@ class DashboardServiceTest {
                 new SpendSnapshot(2026, 6, new BigDecimal("100.00"), 2, new BigDecimal("50.00")),
                 List.of(), List.of(), List.of(),
                 0L, // placeholder unread from the cached core
-                LocalDateTime.of(2026, 6, 6, 10, 0));
+                LocalDateTime.of(2026, Month.JUNE, 6, 10, 0));
     }
 
     @Test

@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.List;
 import java.util.UUID;
 
@@ -74,13 +75,13 @@ class ItemQueryServiceIntegrationTest {
         detergente = productRepository.save(Product.builder()
                 .normalizedName("detergente ype 500ml").category(ProductCategory.CLEANING).build());
 
-        receipt(household, "93015006005182", "Zaffari", LocalDateTime.of(2026, 4, 10, 10, 0),
+        receipt(household, "93015006005182", "Zaffari", LocalDateTime.of(2026, Month.APRIL, 10, 10, 0),
                 List.of(item(arroz, "50.00"), item(leite, "10.00")));
-        receipt(household, "93015006000111", "Bistek", LocalDateTime.of(2026, 4, 20, 10, 0),
+        receipt(household, "93015006000111", "Bistek", LocalDateTime.of(2026, Month.APRIL, 20, 10, 0),
                 List.of(item(detergente, "5.00"), item(arroz, "40.00")));
-        receipt(household, "93015006005182", "Zaffari", LocalDateTime.of(2026, 5, 3, 10, 0),
+        receipt(household, "93015006005182", "Zaffari", LocalDateTime.of(2026, Month.MAY, 3, 10, 0),
                 List.of(item(leite, "12.00")));
-        receipt(household, "93015006000111", "Bistek", LocalDateTime.of(2026, 5, 15, 10, 0),
+        receipt(household, "93015006000111", "Bistek", LocalDateTime.of(2026, Month.MAY, 15, 10, 0),
                 List.of(item(arroz, "30.00"), item(leite, "8.00"), item(detergente, "6.00")));
     }
 
@@ -90,7 +91,7 @@ class ItemQueryServiceIntegrationTest {
         assertEquals(8, page.getTotalElements());
         assertEquals(8, page.getContent().size());
         // newest receipt is 2026-05-15
-        assertEquals(LocalDateTime.of(2026, 5, 15, 10, 0), page.getContent().get(0).purchasedAt());
+        assertEquals(LocalDateTime.of(2026, Month.MAY, 15, 10, 0), page.getContent().get(0).purchasedAt());
     }
 
     @Test
@@ -188,8 +189,8 @@ class ItemQueryServiceIntegrationTest {
     @Test
     void filter_byDateRange_isInclusive() {
         var page = service.query(user,
-                ItemFilters.fromRequest(LocalDateTime.of(2026, 4, 1, 0, 0),
-                        LocalDateTime.of(2026, 4, 30, 23, 59, 59),
+                ItemFilters.fromRequest(LocalDateTime.of(2026, Month.APRIL, 1, 0, 0),
+                        LocalDateTime.of(2026, Month.APRIL, 30, 23, 59, 59),
                         null, null, null, null, null, null, null),
                 PageRequest.of(0, 20));
         assertEquals(4, page.getTotalElements()); // April: 2 + 2 items
@@ -223,9 +224,9 @@ class ItemQueryServiceIntegrationTest {
         var receipt = Receipt.builder()
                 .user(user).household(household).chaveAcesso(uniqueChave())
                 .uf(UnidadeFederativa.RS).cnpjEmitente("93015006005182").marketName("Zaffari")
-                .issuedAt(LocalDateTime.of(2026, 6, 1, 10, 0))
+                .issuedAt(LocalDateTime.of(2026, Month.JUNE, 1, 10, 0))
                 .totalAmount(new BigDecimal("9.00")).qrPayload("test")
-                .status(ReceiptStatus.CONFIRMED).confirmedAt(LocalDateTime.of(2026, 6, 1, 10, 0))
+                .status(ReceiptStatus.CONFIRMED).confirmedAt(LocalDateTime.of(2026, Month.JUNE, 1, 10, 0))
                 .build();
         var excluded = item(leite, "9.00");
         excluded.setExcluded(true);
@@ -246,9 +247,9 @@ class ItemQueryServiceIntegrationTest {
         var receipt = Receipt.builder()
                 .user(user).household(user.getHousehold()).chaveAcesso(uniqueChave())
                 .uf(UnidadeFederativa.RS).cnpjEmitente("93015006005182").marketName("Zaffari")
-                .issuedAt(LocalDateTime.of(2026, 6, 2, 10, 0))
+                .issuedAt(LocalDateTime.of(2026, Month.JUNE, 2, 10, 0))
                 .totalAmount(new BigDecimal("7.00")).qrPayload("test")
-                .status(ReceiptStatus.CONFIRMED).confirmedAt(LocalDateTime.of(2026, 6, 2, 10, 0))
+                .status(ReceiptStatus.CONFIRMED).confirmedAt(LocalDateTime.of(2026, Month.JUNE, 2, 10, 0))
                 .build();
         receipt.addItem(ReceiptItem.builder()
                 .product(null).lineNumber(1).rawDescription("PRODUTO DESCONHECIDO")

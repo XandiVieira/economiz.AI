@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.List;
 import java.util.UUID;
 
@@ -62,9 +63,9 @@ class ReceiptListCategoryFilterIntegrationTest {
         var leite = productRepository.save(Product.builder()
                 .normalizedName("leite 1l").category(ProductCategory.MEAT_DAIRY).build());
 
-        receipt(household, "93015006005182", LocalDateTime.of(2026, 4, 10, 10, 0), arroz);       // GROCERIES
-        receipt(household, "93015006000111", LocalDateTime.of(2026, 4, 11, 10, 0), detergente);   // CLEANING
-        receipt(household, "93015006005182", LocalDateTime.of(2026, 4, 12, 10, 0), leite);        // MEAT_DAIRY
+        receipt(household, "93015006005182", LocalDateTime.of(2026, Month.APRIL, 10, 10, 0), arroz);       // GROCERIES
+        receipt(household, "93015006000111", LocalDateTime.of(2026, Month.APRIL, 11, 10, 0), detergente);   // CLEANING
+        receipt(household, "93015006005182", LocalDateTime.of(2026, Month.APRIL, 12, 10, 0), leite);        // MEAT_DAIRY
     }
 
     @Test

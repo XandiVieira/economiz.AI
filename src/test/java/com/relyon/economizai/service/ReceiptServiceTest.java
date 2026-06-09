@@ -38,6 +38,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -135,7 +136,7 @@ class ReceiptServiceTest {
                 .cnpjEmitente("12345678000190")
                 .marketName("Mercado X")
                 .marketAddress("Rua Y, 123")
-                .issuedAt(LocalDateTime.of(2026, 4, 15, 18, 0))
+                .issuedAt(LocalDateTime.of(2026, Month.APRIL, 15, 18, 0))
                 .totalAmount(new BigDecimal("57.80"))
                 .sourceUrl(null)
                 .rawHtml("<html/>")

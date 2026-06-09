@@ -16,6 +16,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -47,7 +48,7 @@ class ReceiptItemRepositoryOrderingTest {
                 .name("Tester").email("ord@test.com").password("x")
                 .household(household)
                 .acceptedTermsVersion("1.0").acceptedPrivacyVersion("1.0")
-                .acceptedLegalAt(LocalDateTime.of(2026, 1, 1, 0, 0))
+                .acceptedLegalAt(LocalDateTime.of(2026, Month.JANUARY, 1, 0, 0))
                 .build());
         var product = productRepository.save(Product.builder()
                 .ean("999").normalizedName("Leite").category(ProductCategory.GROCERIES).build());
@@ -57,7 +58,7 @@ class ReceiptItemRepositoryOrderingTest {
         // default, wrongly making this the "most recent" (last-wins) purchase.
         receiptRepository.save(buildReceipt(user, null, new BigDecimal("99.99")));
         // Genuinely-dated receipt with the real most-recent price.
-        receiptRepository.save(buildReceipt(user, LocalDateTime.of(2026, 5, 1, 12, 0), new BigDecimal("4.50")));
+        receiptRepository.save(buildReceipt(user, LocalDateTime.of(2026, Month.MAY, 1, 12, 0), new BigDecimal("4.50")));
     }
 
     private Receipt buildReceipt(User user, LocalDateTime issuedAt, BigDecimal unitPrice) {

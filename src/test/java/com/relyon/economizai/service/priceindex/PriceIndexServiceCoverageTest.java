@@ -22,6 +22,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -71,7 +72,7 @@ class PriceIndexServiceCoverageTest {
         var receipt = Receipt.builder()
                 .id(UUID.randomUUID()).user(user).household(household)
                 .cnpjEmitente(cnpj).marketName("Mercado X")
-                .issuedAt(LocalDateTime.of(2026, 4, 1, 9, 0))
+                .issuedAt(LocalDateTime.of(2026, Month.APRIL, 1, 9, 0))
                 .build();
         for (var item : items) receipt.addItem(item);
         return receipt;

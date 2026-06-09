@@ -20,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -38,8 +39,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class InsightsServiceTest {
 
-    private static final LocalDateTime EPOCH_FLOOR = LocalDateTime.of(1900, 1, 1, 0, 0);
-    private static final LocalDateTime EPOCH_CEIL = LocalDateTime.of(2999, 12, 31, 23, 59, 59);
+    private static final LocalDateTime EPOCH_FLOOR = LocalDateTime.of(1900, Month.JANUARY, 1, 0, 0);
+    private static final LocalDateTime EPOCH_CEIL = LocalDateTime.of(2999, Month.DECEMBER, 31, 23, 59, 59);
 
     @Mock private InsightsRepository insightsRepository;
     @Mock private ProductRepository productRepository;
@@ -76,8 +77,8 @@ class InsightsServiceTest {
     void spend_mapsAllBucketsFromRepositoryRows() {
         var user = buildUser();
         var householdId = user.getHousehold().getId();
-        var from = LocalDateTime.of(2026, 1, 1, 0, 0);
-        var to = LocalDateTime.of(2026, 6, 30, 23, 59);
+        var from = LocalDateTime.of(2026, Month.JANUARY, 1, 0, 0);
+        var to = LocalDateTime.of(2026, Month.JUNE, 30, 23, 59);
 
         when(insightsRepository.totalSpend(householdId, from, to)).thenReturn(new BigDecimal("123.45"));
         when(insightsRepository.spendByMonth(householdId, from, to))
@@ -289,7 +290,7 @@ class InsightsServiceTest {
         var householdId = user.getHousehold().getId();
         var productId = UUID.randomUUID();
         var product = Product.builder().id(productId).normalizedName("Leite Italac 1L").build();
-        var issuedAt = LocalDateTime.of(2026, 5, 1, 10, 0);
+        var issuedAt = LocalDateTime.of(2026, Month.MAY, 1, 10, 0);
 
         when(productRepository.findById(productId)).thenReturn(Optional.of(product));
         when(insightsRepository.priceHistoryForProduct(householdId, productId, EPOCH_FLOOR, EPOCH_CEIL))
@@ -316,8 +317,8 @@ class InsightsServiceTest {
         var householdId = user.getHousehold().getId();
         var productId = UUID.randomUUID();
         var product = Product.builder().id(productId).normalizedName("Arroz").build();
-        var from = LocalDateTime.of(2026, 1, 1, 0, 0);
-        var to = LocalDateTime.of(2026, 3, 1, 0, 0);
+        var from = LocalDateTime.of(2026, Month.JANUARY, 1, 0, 0);
+        var to = LocalDateTime.of(2026, Month.MARCH, 1, 0, 0);
 
         when(productRepository.findById(productId)).thenReturn(Optional.of(product));
         when(insightsRepository.priceHistoryForProduct(householdId, productId, from, to))

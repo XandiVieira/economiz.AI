@@ -18,6 +18,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -65,7 +66,7 @@ class SubscriptionWebhookControllerTest {
                 .andExpect(status().isOk());
 
         verify(subscriptionService).activatePro(eq(user), eq("stripe"), eq("sub_1"),
-                eq(LocalDateTime.of(2026, 12, 31, 0, 0)));
+                eq(LocalDateTime.of(2026, Month.DECEMBER, 31, 0, 0)));
     }
 
     @Test

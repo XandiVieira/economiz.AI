@@ -11,6 +11,7 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -37,7 +38,7 @@ class NotificationRuleBackfillTest {
                 .name("User " + suffix).email("user" + suffix + "@test.com").password("x")
                 .household(household)
                 .acceptedTermsVersion("1.0").acceptedPrivacyVersion("1.0")
-                .acceptedLegalAt(LocalDateTime.of(2026, 1, 1, 0, 0))
+                .acceptedLegalAt(LocalDateTime.of(2026, Month.JANUARY, 1, 0, 0))
                 .build());
     }
 
