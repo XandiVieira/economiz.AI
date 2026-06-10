@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -56,10 +57,13 @@ class RealBistekFixtureTest {
         assertEquals(0, water.unitPrice().compareTo(new BigDecimal("1.39")));
         assertEquals(0, water.totalPrice().compareTo(new BigDecimal("2.78")));
 
+        // no "Descontos R$" line on this receipt → discountTotal is null
+        assertNull(parsed.discountTotal());
+
         var sumOfItems = parsed.items().stream()
                 .map(i -> i.totalPrice())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         assertEquals(0, sumOfItems.compareTo(parsed.totalAmount()),
-                "items total should equal grand total");
+                "items total should equal grand total (no discount on this receipt)");
     }
 }

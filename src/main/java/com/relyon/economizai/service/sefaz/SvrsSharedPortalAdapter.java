@@ -15,7 +15,6 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -175,7 +174,7 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
             throw new ReceiptParseException("no-items-found");
         }
         var totalAmount = parseTotal(document);
-        items = reconcileItemsToTotal(items, totalAmount);
+        var discountTotal = parseDiscount(document);
         var tax = parseApproxTax(document);
         var parsed = ParsedReceipt.builder()
                 .chaveAcesso(chaveAcesso)
@@ -184,6 +183,7 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
                 .marketAddress(parseMarketAddress(document))
                 .issuedAt(parseIssuedAt(document))
                 .totalAmount(totalAmount)
+                .discountTotal(discountTotal)
                 .approxTaxFederal(tax.federal())
                 .approxTaxEstadual(tax.estadual())
                 .sourceUrl(sourceUrl)
@@ -205,51 +205,22 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
     }
 
     /**
-     * If the items don't sum to the receipt's "Valor a pagar", a discount
-     * is hiding somewhere — either a per-line one we couldn't read or a
-     * receipt-level rebate. Distribute the gap proportionally so each
-     * item's totalPrice (and recomputed unitPrice) reflects what the
-     * household actually paid. Portal-agnostic: works whether per-line
-     * `valor` is gross or net. No-op when sums already match within
-     * rounding tolerance, when the receipt total is missing, or when
-     * items somehow sum to less than the receipt total (a bug we'd
-     * rather log than silently mask).
+     * Receipt-level discount as printed on the NFC-e ("Descontos R$"). We
+     * deliberately do NOT distribute it across item prices — item prices
+     * stay gross-as-printed so the collaborative price index records the
+     * real shelf price, and the discount is tracked at the receipt level
+     * for later use. Returns null when the receipt declared no discount
+     * (the common case) or the line is absent.
      */
-    static List<ParsedReceiptItem> reconcileItemsToTotal(List<ParsedReceiptItem> items, BigDecimal receiptTotal) {
-        if (receiptTotal == null || receiptTotal.signum() <= 0 || items.isEmpty()) return items;
-        var sum = items.stream()
-                .map(ParsedReceiptItem::totalPrice)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        if (sum.signum() <= 0) return items;
-        var diff = sum.subtract(receiptTotal);
-        if (diff.abs().compareTo(new BigDecimal("0.05")) <= 0) return items;
-        if (diff.signum() < 0) {
-            log.warn("reconcile.items.sum_below_total itemSum={} total={} diff={} — leaving items as-is",
-                    sum, receiptTotal, diff);
-            return items;
+    private BigDecimal parseDiscount(Document document) {
+        for (var row : document.select("#linhaTotal, .linhaTotal")) {
+            var label = row.selectFirst("label");
+            if (label == null || !label.text().toLowerCase().contains("descont")) continue;
+            var value = row.selectFirst("span.totalNumb, .totalNumb");
+            var parsed = value == null ? null : parseDecimalOrNull(value.text());
+            if (parsed != null && parsed.signum() > 0) return parsed;
         }
-        log.info("reconcile.items.discount_distributed itemSum={} total={} discount={} count={}",
-                sum, receiptTotal, diff, items.size());
-        var ratio = receiptTotal.divide(sum, 10, RoundingMode.HALF_UP);
-        var adjusted = new ArrayList<ParsedReceiptItem>(items.size());
-        for (var item : items) {
-            var newTotal = item.totalPrice().multiply(ratio).setScale(2, RoundingMode.HALF_UP);
-            var qty = item.quantity();
-            var newUnit = qty != null && qty.signum() > 0
-                    ? newTotal.divide(qty, 4, RoundingMode.HALF_UP)
-                    : item.unitPrice();
-            adjusted.add(ParsedReceiptItem.builder()
-                    .lineNumber(item.lineNumber())
-                    .rawDescription(item.rawDescription())
-                    .ean(item.ean())
-                    .quantity(qty)
-                    .unit(item.unit())
-                    .unitPrice(newUnit)
-                    .totalPrice(newTotal)
-                    .nfcePromoFlag(item.nfcePromoFlag())
-                    .build());
-        }
-        return adjusted;
+        return null;
     }
 
     private List<ParsedReceiptItem> parseItems(Document document) {

@@ -14,6 +14,7 @@ public record ParsedReceipt(
         String marketAddress,
         LocalDateTime issuedAt,
         BigDecimal totalAmount,
+        BigDecimal discountTotal,
         BigDecimal approxTaxFederal,
         BigDecimal approxTaxEstadual,
         String sourceUrl,

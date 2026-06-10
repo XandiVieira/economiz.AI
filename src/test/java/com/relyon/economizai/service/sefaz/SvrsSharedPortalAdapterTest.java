@@ -118,25 +118,30 @@ class SvrsSharedPortalAdapterTest {
     }
 
     @Test
-    void parseHtml_distributesReceiptDiscountAcrossItems() throws Exception {
+    void parseHtml_tracksReceiptDiscountWithoutTouchingItemPrices() throws Exception {
         var html = loadFixture("nfce-with-discount.html");
         var parsed = adapter.parseHtml(html, CHAVE_RS, null);
 
         assertEquals(new BigDecimal("76.00"), parsed.totalAmount());
+        // the "Descontos R$ 4,00" line is tracked, not distributed across items
+        assertEquals(new BigDecimal("4.00"), parsed.discountTotal());
         assertEquals(2, parsed.items().size());
 
+        // item prices stay gross-as-printed
         var arroz = parsed.items().get(0);
-        assertEquals(new BigDecimal("47.50"), arroz.totalPrice());
-        assertEquals(new BigDecimal("23.7500"), arroz.unitPrice());
+        assertEquals(new BigDecimal("50.00"), arroz.totalPrice());
+        assertEquals(new BigDecimal("25.00"), arroz.unitPrice());
 
         var leite = parsed.items().get(1);
-        assertEquals(new BigDecimal("28.50"), leite.totalPrice());
-        assertEquals(new BigDecimal("28.5000"), leite.unitPrice());
+        assertEquals(new BigDecimal("30.00"), leite.totalPrice());
+        assertEquals(new BigDecimal("30.00"), leite.unitPrice());
 
+        // gross item sum == amount paid + tracked discount
         var sum = parsed.items().stream()
                 .map(ParsedReceiptItem::totalPrice)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        assertEquals(new BigDecimal("76.00"), sum);
+        assertEquals(new BigDecimal("80.00"), sum);
+        assertEquals(0, sum.compareTo(parsed.totalAmount().add(parsed.discountTotal())));
     }
 
     @Test

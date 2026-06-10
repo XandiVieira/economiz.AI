@@ -64,6 +64,9 @@ public class Receipt extends BaseEntity {
     @Column(name = "total_amount", precision = 12, scale = 2)
     private BigDecimal totalAmount;
 
+    @Column(name = "discount_total", precision = 12, scale = 2)
+    private BigDecimal discountTotal;
+
     @Column(name = "approx_tax_federal", precision = 12, scale = 2)
     private BigDecimal approxTaxFederal;
 

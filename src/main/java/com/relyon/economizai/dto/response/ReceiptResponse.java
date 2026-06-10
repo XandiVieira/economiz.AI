@@ -22,6 +22,7 @@ public record ReceiptResponse(
         LocalDateTime issuedAt,
         BigDecimal totalAmount,
         BigDecimal householdTotalAmount,
+        BigDecimal discountTotal,
         BigDecimal approxTaxFederal,
         BigDecimal approxTaxEstadual,
         BigDecimal approxTaxTotal,
@@ -55,6 +56,7 @@ public record ReceiptResponse(
                 receipt.getIssuedAt(),
                 receipt.getTotalAmount(),
                 householdTotal,
+                receipt.getDiscountTotal(),
                 receipt.getApproxTaxFederal(),
                 receipt.getApproxTaxEstadual(),
                 approxTaxTotal(receipt),
@@ -71,7 +73,7 @@ public record ReceiptResponse(
     public ReceiptResponse withMarketFriendlyName(String marketFriendlyName) {
         return new ReceiptResponse(
                 id, chaveAcesso, uf, cnpjEmitente, marketName, marketFriendlyName, marketAddress,
-                issuedAt, totalAmount, householdTotalAmount, approxTaxFederal, approxTaxEstadual,
+                issuedAt, totalAmount, householdTotalAmount, discountTotal, approxTaxFederal, approxTaxEstadual,
                 approxTaxTotal, status, confirmedAt, createdAt, items);
     }
 

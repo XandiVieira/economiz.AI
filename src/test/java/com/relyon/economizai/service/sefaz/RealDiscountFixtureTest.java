@@ -17,9 +17,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * we don't want to regress:
  *
  * <ul>
- *   <li>{@code reconcileItemsToTotal} distributes the R$ 5,84 discount
- *       proportionally so every per-item totalPrice reflects the household's
- *       paid share, and the items sum back to the printed grand total.</li>
+ *   <li>Item prices are kept <b>gross-as-printed</b> — we no longer distribute
+ *       the discount across them (that distorted the per-item price index).
+ *       The R$ 5,84 discount is tracked at the receipt level as
+ *       {@code discountTotal}, and the items keep summing to the printed
+ *       subtotal (R$ 112,41), not to "valor a pagar".</li>
  *   <li>{@code parseApproxTax} extracts the IBPT line as
  *       (federal=15.13, estadual=13.73). This is what powers the
  *       "carga tributária aproximada" UX.</li>
@@ -33,7 +35,7 @@ class RealDiscountFixtureTest {
             RestClient.builder(), 5000, "test-agent", "RS", 5, 0L);
 
     @Test
-    void parseDiscountReceipt_distributesAndExtractsTax() throws Exception {
+    void parseDiscountReceipt_keepsGrossItemsAndTracksDiscount() throws Exception {
         var html = new String(new ClassPathResource("fixtures/sefaz/rs/nfce-real-discount.html")
                 .getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         var parsed = adapter.parseHtml(html, CHAVE, "https://test/source");
@@ -45,12 +47,18 @@ class RealDiscountFixtureTest {
         assertEquals(0, parsed.totalAmount().compareTo(new BigDecimal("106.57")));
         assertEquals(6, parsed.items().size());
 
-        // items printed sum to 112.41; reconcile must distribute the 5.84 gap
+        // receipt-level discount is tracked, NOT distributed across items
+        assertEquals(0, parsed.discountTotal().compareTo(new BigDecimal("5.84")));
+
+        // items keep their gross printed prices → they sum to the subtotal
+        // (112,41), which is exactly totalAmount + discountTotal
         var sum = parsed.items().stream()
                 .map(ParsedReceiptItem::totalPrice)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        assertEquals(0, sum.compareTo(new BigDecimal("106.57")),
-                "post-reconcile item sum must equal grand total within rounding");
+        assertEquals(0, sum.compareTo(new BigDecimal("112.41")),
+                "items must keep gross printed prices (no discount distribution)");
+        assertEquals(0, sum.compareTo(parsed.totalAmount().add(parsed.discountTotal())),
+                "subtotal must equal paid total + tracked discount");
 
         // IBPT-source approximate tax — surfaces "Trib aprox R$ 15,13 Federal, R$ 13,73 Estadual"
         assertEquals(0, parsed.approxTaxFederal().compareTo(new BigDecimal("15.13")));

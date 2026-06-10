@@ -33,6 +33,7 @@ public record ReceiptSummaryResponse(
         LocalDateTime issuedAt,
         BigDecimal totalAmount,
         BigDecimal householdTotalAmount,
+        BigDecimal discountTotal,
         BigDecimal approxTaxTotal,
         int itemCount,
         ReceiptStatus status
@@ -49,6 +50,7 @@ public record ReceiptSummaryResponse(
                 receipt.getIssuedAt(),
                 receipt.getTotalAmount(),
                 householdTotal,
+                receipt.getDiscountTotal(),
                 approxTaxTotal(receipt),
                 receipt.getItems().size(),
                 receipt.getStatus()
@@ -58,7 +60,7 @@ public record ReceiptSummaryResponse(
     /** Copy with the household's custom display name applied; leaves the original {@code marketName} intact. */
     public ReceiptSummaryResponse withMarketFriendlyName(String marketFriendlyName) {
         return new ReceiptSummaryResponse(id, marketName, marketFriendlyName, issuedAt,
-                totalAmount, householdTotalAmount, approxTaxTotal, itemCount, status);
+                totalAmount, householdTotalAmount, discountTotal, approxTaxTotal, itemCount, status);
     }
 
     private static BigDecimal approxTaxTotal(Receipt receipt) {
