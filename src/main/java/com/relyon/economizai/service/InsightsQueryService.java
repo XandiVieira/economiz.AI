@@ -190,11 +190,10 @@ public class InsightsQueryService {
             var total = (BigDecimal) row[3];
             var itemCount = ((Number) row[4]).longValue();
             var override = productId != null ? overrides.get(productId) : null;
-            var label = override != null ? override.label()
-                    : (globalCategory != null ? globalCategory.name() : ProductCategory.OTHER.name());
+            var categoryName = globalCategory != null ? globalCategory.name() : ProductCategory.OTHER.name();
+            var label = override != null ? override.label() : categoryName;
             // Discriminated bucket key so a custom category named like an enum doesn't merge.
-            var bucketKey = override != null ? override.key()
-                    : "enum:" + (globalCategory != null ? globalCategory.name() : ProductCategory.OTHER.name());
+            var bucketKey = override != null ? override.key() : "enum:" + categoryName;
             accumulators.computeIfAbsent(bucketKey, key -> new CategoryAccumulator(label))
                     .add(total, itemCount, receiptId);
         }

@@ -206,9 +206,16 @@ public class ProfilePictureService {
     }
 
     private static Color paletteFor(User user) {
-        var seed = user.getEmail() != null ? user.getEmail() : (user.getName() != null ? user.getName() : "?");
+        var seed = paletteSeed(user);
         var idx = Math.floorMod(seed.hashCode(), FALLBACK_PALETTE.length);
         return FALLBACK_PALETTE[idx];
+    }
+
+    /** Stable per-user seed for palette selection: email, then name, then a constant fallback. */
+    private static String paletteSeed(User user) {
+        if (user.getEmail() != null) return user.getEmail();
+        if (user.getName() != null) return user.getName();
+        return "?";
     }
 
     private record ProcessedImage(byte[] bytes, String contentType) {}

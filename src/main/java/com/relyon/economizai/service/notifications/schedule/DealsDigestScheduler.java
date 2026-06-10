@@ -203,10 +203,11 @@ public class DealsDigestScheduler {
                 .setScale(0, RoundingMode.HALF_UP)
                 .intValueExact();
         var others = newsworthyCount - 1;
+        var ofertaWord = others == 1 ? "oferta" : "ofertas";
         var title = "Ofertas pra você";
         var body = others > 0
                 ? String.format("%s %d%% mais barato — e mais %d %s pra você",
-                        best.productName(), discountPct, others, others == 1 ? "oferta" : "ofertas")
+                        best.productName(), discountPct, others, ofertaWord)
                 : String.format("%s %d%% mais barato pra você", best.productName(), discountPct);
 
         var extras = new HashMap<String, Object>();

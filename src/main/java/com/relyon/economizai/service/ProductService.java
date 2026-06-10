@@ -57,10 +57,10 @@ public class ProductService {
         }
         var extracted = productExtractor.extract(request.normalizedName());
         var category = request.category() != null ? request.category() : extracted.category();
-        var source = request.category() != null
-                ? CategorizationSource.USER
-                : (category != null ? extracted.categorizationSource()
-                                    : CategorizationSource.NONE);
+        // When the user didn't pick a category, the source follows the extractor —
+        // but only if it actually produced one; otherwise there's no categorization.
+        var extractedSource = category != null ? extracted.categorizationSource() : CategorizationSource.NONE;
+        var source = request.category() != null ? CategorizationSource.USER : extractedSource;
         var product = productRepository.save(Product.builder()
                 .ean(blankToNull(request.ean()))
                 .normalizedName(request.normalizedName())

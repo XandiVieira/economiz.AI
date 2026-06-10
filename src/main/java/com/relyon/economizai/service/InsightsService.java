@@ -142,11 +142,10 @@ public class InsightsService {
             var total = toBigDecimal(row[2]);
             var itemCount = ((Number) row[3]).longValue();
             var override = productId != null ? overrides.get(productId) : null;
-            var label = override != null ? override.label()
-                    : (globalCategory != null ? globalCategory.name() : ProductCategory.OTHER.name());
+            var categoryName = globalCategory != null ? globalCategory.name() : ProductCategory.OTHER.name();
+            var label = override != null ? override.label() : categoryName;
             // Discriminated bucket key so a custom category named like an enum doesn't merge.
-            var bucketKey = override != null ? override.key()
-                    : ENUM_PREFIX + (globalCategory != null ? globalCategory.name() : ProductCategory.OTHER.name());
+            var bucketKey = override != null ? override.key() : ENUM_PREFIX + categoryName;
             // Derive the enum category from the (collision-free) key, not the label: a
             // custom bucket carries a null enum even when its name matches one.
             var effectiveCategory = categoryFromKey(bucketKey);
