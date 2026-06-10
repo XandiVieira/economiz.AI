@@ -28,6 +28,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -58,14 +59,7 @@ public class HouseholdProductService {
     @Transactional(readOnly = true)
     public List<HouseholdProductResponse> listHouseholdProducts(User user) {
         var householdId = user.getHousehold().getId();
-        // Oldest -> newest, so the last item seen per product is the most recent purchase.
-        var history = receiptItemRepository.findConfirmedHistoryForHousehold(householdId);
-        var byProduct = new LinkedHashMap<UUID, Aggregate>();
-        for (var item : history) {
-            var product = item.getProduct();
-            if (product == null) continue;
-            byProduct.computeIfAbsent(product.getId(), key -> new Aggregate(product)).accept(item);
-        }
+        var byProduct = aggregatePurchaseHistory(householdId);
         if (byProduct.isEmpty()) return List.of();
 
         var cnpjs = byProduct.values().stream().map(aggregate -> aggregate.lastCnpj).distinct().toList();
@@ -78,14 +72,45 @@ public class HouseholdProductService {
                 .toList();
     }
 
+    /** Collapse the household's confirmed history into one Aggregate per product
+     *  (fed oldest -> newest, so the last item seen per product is the most recent). */
+    private LinkedHashMap<UUID, Aggregate> aggregatePurchaseHistory(UUID householdId) {
+        var history = receiptItemRepository.findConfirmedHistoryForHousehold(householdId);
+        var byProduct = new LinkedHashMap<UUID, Aggregate>();
+        for (var item : history) {
+            var product = item.getProduct();
+            if (product == null) continue;
+            byProduct.computeIfAbsent(product.getId(), key -> new Aggregate(product)).accept(item);
+        }
+        return byProduct;
+    }
+
     @Transactional(readOnly = true)
     public List<ProductMarketPriceResponse> productMarkets(User user, UUID productId,
                                                            boolean includeNearby, Double radiusKm) {
         productRepository.findById(productId).orElseThrow(ProductNotFoundException::new);
         var householdId = user.getHousehold().getId();
+        var watchedCnpjs = watchedMarketService.watchedCnpjs(user);
         var rowsByCnpj = new LinkedHashMap<String, ProductMarketPriceResponse>();
 
-        // 1. Own data: the household's own last paid price at each market it shopped at (exact, no k-anon needed).
+        collectOwnPriceRows(user, productId, householdId, watchedCnpjs, rowsByCnpj);
+        overlayCommunityPriceRows(user, productId, includeNearby, radiusKm, watchedCnpjs, rowsByCnpj);
+
+        var overrides = marketNameService.resolveNames(householdId, rowsByCnpj.keySet());
+        return rowsByCnpj.values().stream()
+                .map(row -> withFriendlyName(row, overrides))
+                .sorted(Comparator.comparing(ProductMarketPriceResponse::price,
+                        Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
+    }
+
+    /**
+     * Own data: the household's own last-paid price at each market it shopped
+     * at — exact, no k-anon needed. Last purchase per CNPJ wins (history is
+     * oldest -> newest).
+     */
+    private void collectOwnPriceRows(User user, UUID productId, UUID householdId, Set<String> watchedCnpjs,
+                                     Map<String, ProductMarketPriceResponse> rowsByCnpj) {
         var ownHistory = receiptItemRepository.findHouseholdHistoryForProduct(productId, householdId);
         var ownLatest = new LinkedHashMap<String, ReceiptItem>();
         for (var item : ownHistory) { // oldest -> newest, last wins
@@ -93,7 +118,6 @@ public class HouseholdProductService {
             if (cnpj != null) ownLatest.put(cnpj, item);
         }
         var ownLocations = marketLocationService.findByCnpjs(new ArrayList<>(ownLatest.keySet()));
-        var watchedCnpjs = watchedMarketService.watchedCnpjs(user);
         for (var entry : ownLatest.entrySet()) {
             var item = entry.getValue();
             var marketName = item.getReceipt().getMarketName();
@@ -106,8 +130,16 @@ public class HouseholdProductService {
                     watchedCnpjs.contains(entry.getKey()), true,
                     item.getReceipt().getIssuedAt()));
         }
+    }
 
-        // 2. Community data: k-anon-guarded medians for watched (always) + nearby (opt-in) markets.
+    /**
+     * Community data: k-anon-guarded medians for watched (always) + nearby
+     * (opt-in) markets. A market where the household has its own exact price is
+     * skipped — own price wins over the community median.
+     */
+    private void overlayCommunityPriceRows(User user, UUID productId, boolean includeNearby, Double radiusKm,
+                                           Set<String> watchedCnpjs,
+                                           Map<String, ProductMarketPriceResponse> rowsByCnpj) {
         var communityRows = priceIndexService.bestMarkets(productId, MARKET_LIMIT,
                 user.getHomeLatitude(), user.getHomeLongitude(),
                 includeNearby ? radiusKm : null, watchedCnpjs);
@@ -122,13 +154,6 @@ public class HouseholdProductService {
                     row.minPrice(), row.sampleCount(), row.distinctHouseholds(),
                     row.distanceKm(), row.watching(), false, null));
         }
-
-        var overrides = marketNameService.resolveNames(householdId, rowsByCnpj.keySet());
-        return rowsByCnpj.values().stream()
-                .map(row -> withFriendlyName(row, overrides))
-                .sorted(Comparator.comparing(ProductMarketPriceResponse::price,
-                        Comparator.nullsLast(Comparator.naturalOrder())))
-                .toList();
     }
 
     /** Set friendlyName to the household rename when present; leave the original marketName intact. */
