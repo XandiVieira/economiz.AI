@@ -5,6 +5,7 @@ import com.relyon.economizai.model.MarketLocation;
 import com.relyon.economizai.model.PriceObservation;
 import com.relyon.economizai.model.PriceObservationAudit;
 import com.relyon.economizai.model.Receipt;
+import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.repository.PriceObservationAuditRepository;
 import com.relyon.economizai.repository.PriceObservationAuditRepository.MarketHouseholdCount;
 import com.relyon.economizai.repository.PriceObservationRepository;
@@ -62,67 +63,15 @@ public class PriceIndexService {
 
     @Transactional
     public int recordContributions(Receipt receipt) {
-        if (!properties.getCollaborative().isEnabled()) {
-            log.debug("price_index.write.skipped reason=master_switch_off receipt={}", receipt.getId());
-            return 0;
-        }
-        if (!receipt.getUser().isContributionOptIn()) {
-            log.info("price_index.write.skipped reason=user_opt_out receipt={}", receipt.getId());
-            return 0;
-        }
-        if (receipt.getCnpjEmitente() == null) {
-            log.warn("price_index.write.skipped reason=no_market_cnpj receipt={}", receipt.getId());
-            return 0;
-        }
-        if (receipt.getChaveAcesso() != null
-                && auditRepository.existsContributionForChaveFromOtherHousehold(
-                        receipt.getChaveAcesso(), receipt.getHousehold().getId())) {
-            log.warn("price_index.write.skipped reason=duplicate_chave_other_household receipt={} chave={}",
-                    receipt.getId(), receipt.getChaveAcesso());
+        if (isContributionBlocked(receipt)) {
             return 0;
         }
 
-        // Snapshot location at write time so retroactive geocode changes don't
-        // rewrite the history of where a price was observed.
-        var marketLoc = marketLocationService.findByCnpjs(List.of(receipt.getCnpjEmitente()))
-                .get(receipt.getCnpjEmitente());
-        var city = marketLoc != null ? marketLoc.getCity() : null;
-        var state = marketLoc != null ? marketLoc.getState() : null;
-
+        var location = snapshotMarketLocation(receipt);
         var contributed = new ArrayList<PriceObservation>();
         for (var item : receipt.getItems()) {
-            if (item.isExcluded()) continue;
-            if (item.getProduct() == null || item.getUnitPrice() == null) continue;
-            var product = item.getProduct();
-            var normalized = UnitConverter.normalizeItemPrice(
-                    item.getQuantity(), item.getUnit(),
-                    product.getPackSize(), product.getPackUnit(),
-                    item.getTotalPrice());
-            var observation = PriceObservation.builder()
-                    .product(product)
-                    .marketCnpj(receipt.getCnpjEmitente())
-                    .marketCnpjRoot(cnpjRoot(receipt.getCnpjEmitente()))
-                    .marketName(receipt.getMarketName())
-                    .unitPrice(item.getUnitPrice())
-                    .quantity(item.getQuantity())
-                    .packSize(product.getPackSize())
-                    .packUnit(product.getPackUnit())
-                    .observedAt(receipt.getIssuedAt() != null ? receipt.getIssuedAt() : LocalDateTime.now())
-                    .promoFlag(item.isNfcePromoFlag())
-                    .normalizedUnitPrice(normalized.map(UnitConverter.NormalizedPrice::pricePerBaseUnit).orElse(null))
-                    .normalizedUnit(normalized.map(n -> n.baseUnit().name()).orElse(null))
-                    .city(city)
-                    .state(state)
-                    .build();
-            var saved = observationRepository.save(observation);
-
-            auditRepository.save(PriceObservationAudit.builder()
-                    .observation(saved)
-                    .receiptId(receipt.getId())
-                    .householdId(receipt.getHousehold().getId())
-                    .contributedAt(LocalDateTime.now())
-                    .build());
-            contributed.add(saved);
+            if (!isContributable(item)) continue;
+            contributed.add(recordItemObservation(receipt, item, location));
         }
         log.info("price_index.write.done receipt={} contributed={} marketCnpj={}",
                 receipt.getId(), contributed.size(), receipt.getCnpjEmitente());
@@ -132,6 +81,87 @@ public class PriceIndexService {
         notificationRuleEngine.evaluate(contributed, receipt.getHousehold().getId());
         return contributed.size();
     }
+
+    /**
+     * Skip guards for the whole write, in cheapest-first order: master switch,
+     * user opt-out, missing market CNPJ, then the cross-household duplicate-chave
+     * check (a DB hit, so last). Each logs its own reason before returning true.
+     */
+    private boolean isContributionBlocked(Receipt receipt) {
+        if (!properties.getCollaborative().isEnabled()) {
+            log.debug("price_index.write.skipped reason=master_switch_off receipt={}", receipt.getId());
+            return true;
+        }
+        if (!receipt.getUser().isContributionOptIn()) {
+            log.info("price_index.write.skipped reason=user_opt_out receipt={}", receipt.getId());
+            return true;
+        }
+        if (receipt.getCnpjEmitente() == null) {
+            log.warn("price_index.write.skipped reason=no_market_cnpj receipt={}", receipt.getId());
+            return true;
+        }
+        if (receipt.getChaveAcesso() != null
+                && auditRepository.existsContributionForChaveFromOtherHousehold(
+                        receipt.getChaveAcesso(), receipt.getHousehold().getId())) {
+            log.warn("price_index.write.skipped reason=duplicate_chave_other_household receipt={} chave={}",
+                    receipt.getId(), receipt.getChaveAcesso());
+            return true;
+        }
+        return false;
+    }
+
+    private boolean isContributable(ReceiptItem item) {
+        return !item.isExcluded() && item.getProduct() != null && item.getUnitPrice() != null;
+    }
+
+    /**
+     * Snapshot market city/state at write time so retroactive geocode changes
+     * don't rewrite the history of where a price was observed.
+     */
+    private MarketSnapshot snapshotMarketLocation(Receipt receipt) {
+        var marketLoc = marketLocationService.findByCnpjs(List.of(receipt.getCnpjEmitente()))
+                .get(receipt.getCnpjEmitente());
+        return new MarketSnapshot(
+                marketLoc != null ? marketLoc.getCity() : null,
+                marketLoc != null ? marketLoc.getState() : null);
+    }
+
+    /** Build + persist one anonymized observation and its private audit row. */
+    private PriceObservation recordItemObservation(Receipt receipt, ReceiptItem item,
+                                                   MarketSnapshot location) {
+        var product = item.getProduct();
+        var normalized = UnitConverter.normalizeItemPrice(
+                item.getQuantity(), item.getUnit(),
+                product.getPackSize(), product.getPackUnit(),
+                item.getTotalPrice());
+        var observation = PriceObservation.builder()
+                .product(product)
+                .marketCnpj(receipt.getCnpjEmitente())
+                .marketCnpjRoot(cnpjRoot(receipt.getCnpjEmitente()))
+                .marketName(receipt.getMarketName())
+                .unitPrice(item.getUnitPrice())
+                .quantity(item.getQuantity())
+                .packSize(product.getPackSize())
+                .packUnit(product.getPackUnit())
+                .observedAt(receipt.getIssuedAt() != null ? receipt.getIssuedAt() : LocalDateTime.now())
+                .promoFlag(item.isNfcePromoFlag())
+                .normalizedUnitPrice(normalized.map(UnitConverter.NormalizedPrice::pricePerBaseUnit).orElse(null))
+                .normalizedUnit(normalized.map(n -> n.baseUnit().name()).orElse(null))
+                .city(location.city())
+                .state(location.state())
+                .build();
+        var saved = observationRepository.save(observation);
+
+        auditRepository.save(PriceObservationAudit.builder()
+                .observation(saved)
+                .receiptId(receipt.getId())
+                .householdId(receipt.getHousehold().getId())
+                .contributedAt(LocalDateTime.now())
+                .build());
+        return saved;
+    }
+
+    private record MarketSnapshot(String city, String state) {}
 
     @Transactional(readOnly = true)
     public ReferencePrice referencePrice(UUID productId, String marketCnpj) {
