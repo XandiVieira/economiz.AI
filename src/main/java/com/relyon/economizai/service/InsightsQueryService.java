@@ -64,13 +64,8 @@ public class InsightsQueryService {
 
     @Transactional(readOnly = true)
     public InsightsQueryResponse query(User user, QueryFilters input) {
-        // FREE tier: clamp the requested lower bound to the allowed history window.
-        var clampedFrom = subscriptionGate.clampFrom(user, input.from());
-        input = new QueryFilters(input.householdId(), clampedFrom, input.to(),
-                input.marketCnpjs(), input.marketCnpjRoots(), input.categories(),
-                input.productIds(), input.eans(), input.minReceiptTotal(),
-                input.maxReceiptTotal(), input.groupBy(), input.limit(), input.categoryView());
-        var filters = QueryFilters.normalize(input, user.getHousehold().getId());
+        var clampedInput = clampToAllowedHistory(user, input);
+        var filters = QueryFilters.normalize(clampedInput, user.getHousehold().getId());
         var groupBy = filters.groupBy();
         var summary = computeSummary(filters);
         List<Bucket> buckets;
@@ -88,13 +83,27 @@ public class InsightsQueryService {
 
         return new InsightsQueryResponse(
                 new Filters(
-                        input.from(), input.to(),
+                        clampedInput.from(), clampedInput.to(),
                         filters.marketCnpjs(), filters.marketCnpjRoots(),
                         filters.categories(), filters.productIds(), filters.eans(),
                         filters.minReceiptTotal(), filters.maxReceiptTotal()),
                 summary,
                 groupBy,
                 buckets);
+    }
+
+    /**
+     * FREE plan only sees a limited history window; clamp the requested lower
+     * bound ({@code from}) up to that window. Returns the input unchanged for PRO
+     * (or when already within the window). The echoed Filters reflect the clamped
+     * value so the client sees the window that was actually applied.
+     */
+    private QueryFilters clampToAllowedHistory(User user, QueryFilters input) {
+        var clampedFrom = subscriptionGate.clampFrom(user, input.from());
+        return new QueryFilters(input.householdId(), clampedFrom, input.to(),
+                input.marketCnpjs(), input.marketCnpjRoots(), input.categories(),
+                input.productIds(), input.eans(), input.minReceiptTotal(),
+                input.maxReceiptTotal(), input.groupBy(), input.limit(), input.categoryView());
     }
 
     private Summary computeSummary(QueryFilters f) {
