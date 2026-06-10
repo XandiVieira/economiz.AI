@@ -79,34 +79,57 @@ public class ReceiptService {
     private final SubscriptionGateService subscriptionGate;
     private final SavingsAttributionService savingsAttributionService;
 
+    /**
+     * Ingest a receipt from a scanned QR code. Reads top-to-bottom as the business
+     * flow: enforce the plan's monthly cap, enforce per-household uniqueness,
+     * fetch+parse from SEFAZ, then persist as PENDING_CONFIRMATION for review.
+     */
     @Transactional
     public ReceiptResponse submit(User user, SubmitReceiptRequest request) {
         var qrPayload = request.qrPayload();
         var chave = ChaveAcessoParser.extractChave(qrPayload);
         log.info("submit chave={}", LogMasker.chave(chave));
 
-        // Monthly receipt cap (FREE). Counts ALL statuses this calendar month so
-        // reject/delete-and-resubmit can't game the limit. PRO bypasses.
-        var monthlyLimit = subscriptionGate.monthlyReceiptLimit(user);
-        if (monthlyLimit != Integer.MAX_VALUE) {
-            var startOfMonth = YearMonth.now().atDay(1).atStartOfDay();
-            var thisMonth = receiptRepository.countByUserIdAndCreatedAtGreaterThanEqual(user.getId(), startOfMonth);
-            if (thisMonth >= monthlyLimit) {
-                log.info("paywall.blocked user={} feature={} thisMonth={} limit={}",
-                        LogMasker.email(user.getEmail()), Feature.RECEIPT_UPLOAD_UNLIMITED, thisMonth, monthlyLimit);
-                throw new PaywallException(Feature.RECEIPT_UPLOAD_UNLIMITED.name());
-            }
-        }
+        enforceMonthlyReceiptCap(user);
+        replaceStalePriorOrRejectConfirmedDuplicate(user, chave);
+        var parsed = fetchAndParseOrRecordFailure(user, qrPayload);
 
-        // Per-household uniqueness: a household can't double-import its own
-        // CONFIRMED receipts (data has been committed downstream — price
-        // observations, audit rows, notifications). But re-submit is allowed
-        // when the prior row is in any non-final state — typically PENDING_
-        // CONFIRMATION (user closed the app mid-review and wants to retry),
-        // REJECTED (user changed their mind), or FAILED_PARSE (parser fix
-        // landed). In those cases we discard the stale row so the fresh
-        // submission can take its place. Two different households can
-        // always both record the same fiscal event regardless.
+        var receipt = persistParsed(user, qrPayload, parsed);
+        MDC.put(MdcContextFilter.RECEIPT_ID, abbrev(receipt.getId()));
+        log.info("submit ok status=PENDING_CONFIRMATION items={} total={} market='{}'",
+                receipt.getItems().size(), receipt.getTotalAmount(), receipt.getMarketName());
+        return withFriendlyName(user.getHousehold().getId(), receipt, ReceiptResponse.from(receipt));
+    }
+
+    /**
+     * FREE plan caps receipts per calendar month. Counts ALL statuses this month
+     * so reject/delete-and-resubmit can't game the limit; PRO (limit MAX_VALUE)
+     * bypasses entirely.
+     */
+    private void enforceMonthlyReceiptCap(User user) {
+        var monthlyLimit = subscriptionGate.monthlyReceiptLimit(user);
+        if (monthlyLimit == Integer.MAX_VALUE) {
+            return;
+        }
+        var startOfMonth = YearMonth.now().atDay(1).atStartOfDay();
+        var thisMonth = receiptRepository.countByUserIdAndCreatedAtGreaterThanEqual(user.getId(), startOfMonth);
+        if (thisMonth >= monthlyLimit) {
+            log.info("paywall.blocked user={} feature={} thisMonth={} limit={}",
+                    LogMasker.email(user.getEmail()), Feature.RECEIPT_UPLOAD_UNLIMITED, thisMonth, monthlyLimit);
+            throw new PaywallException(Feature.RECEIPT_UPLOAD_UNLIMITED.name());
+        }
+    }
+
+    /**
+     * Per-household uniqueness rule. A household can't double-import its own
+     * CONFIRMED receipt (downstream data is already committed — price
+     * observations, audit rows, notifications) → reject. But a prior row in any
+     * non-final state (PENDING_CONFIRMATION: closed app mid-review; REJECTED:
+     * changed mind; FAILED_PARSE: parser fix landed) is stale → discard it so the
+     * fresh submission takes its place. Different households may always both
+     * record the same fiscal event.
+     */
+    private void replaceStalePriorOrRejectConfirmedDuplicate(User user, String chave) {
         receiptRepository.findByHouseholdIdAndChaveAcesso(user.getHousehold().getId(), chave)
                 .ifPresent(existing -> {
                     if (existing.getStatus() == ReceiptStatus.CONFIRMED) {
@@ -119,23 +142,21 @@ public class ReceiptService {
                     receiptRepository.delete(existing);
                     receiptRepository.flush();
                 });
+    }
 
+    /**
+     * Fetch the document from SEFAZ and parse it. On a parse failure, record the
+     * failure in a SEPARATE transaction (REQUIRES_NEW on the recorder bean) so the
+     * row survives this method's @Transactional rollback when we rethrow.
+     */
+    private ParsedReceipt fetchAndParseOrRecordFailure(User user, String qrPayload) {
         var fetched = sefazIngestionService.fetch(qrPayload);
-        ParsedReceipt parsed;
         try {
-            parsed = sefazIngestionService.parse(fetched);
+            return sefazIngestionService.parse(fetched);
         } catch (ReceiptParseException ex) {
-            // Record in a separate transaction (REQUIRES_NEW on the recorder
-            // bean) so the row survives this method's @Transactional rollback
-            // when we rethrow.
             failedParseRecorder.record(user, qrPayload, fetched, ex);
             throw ex;
         }
-        var receipt = persistParsed(user, qrPayload, parsed);
-        MDC.put(MdcContextFilter.RECEIPT_ID, abbrev(receipt.getId()));
-        log.info("submit ok status=PENDING_CONFIRMATION items={} total={} market='{}'",
-                receipt.getItems().size(), receipt.getTotalAmount(), receipt.getMarketName());
-        return withFriendlyName(user.getHousehold().getId(), receipt, ReceiptResponse.from(receipt));
     }
 
     @Transactional(readOnly = true)
@@ -206,6 +227,12 @@ public class ReceiptService {
         return withFriendlyName(user.getHousehold().getId(), receipt, ReceiptResponse.from(receipt, overrides));
     }
 
+    /**
+     * Confirm a pending receipt: apply any user exclusions, mark CONFIRMED, then
+     * fan out to the downstream consumers (canonicalize → personal promos → price
+     * index → market registry → notifications → savings). Returns the receipt plus
+     * the personal promos detected for this purchase.
+     */
     @Transactional
     public ConfirmReceiptResponse confirm(User user, UUID receiptId, ConfirmReceiptRequest request) {
         MDC.put(MdcContextFilter.RECEIPT_ID, abbrev(receiptId));
@@ -213,21 +240,7 @@ public class ReceiptService {
         var receipt = loadOwned(user, receiptId);
         requirePending(receipt);
 
-        // Apply per-item exclusions BEFORE downstream processing so canonicalization,
-        // promo detection, and price-index contributions all skip the excluded rows.
-        var excludedIds = request != null && request.excludedItemIds() != null
-                ? Set.copyOf(request.excludedItemIds())
-                : Set.<UUID>of();
-        if (!excludedIds.isEmpty()) {
-            var excludedCount = 0;
-            for (var item : receipt.getItems()) {
-                if (excludedIds.contains(item.getId())) {
-                    item.setExcluded(true);
-                    excludedCount++;
-                }
-            }
-            log.info("confirm.exclusions applied={}/{} items", excludedCount, receipt.getItems().size());
-        }
+        applyItemExclusions(receipt, request);
 
         receipt.setStatus(ReceiptStatus.CONFIRMED);
         receipt.setConfirmedAt(LocalDateTime.now());
@@ -242,6 +255,28 @@ public class ReceiptService {
         log.info("confirm ok status=CONFIRMED personalPromos={}", personalPromos.size());
         return new ConfirmReceiptResponse(
                 withFriendlyName(user.getHousehold().getId(), saved, ReceiptResponse.from(saved)), personalPromos);
+    }
+
+    /**
+     * Mark the user's chosen items as excluded BEFORE downstream processing, so
+     * canonicalization, promo detection, and price-index contributions all skip
+     * them. No-op when the request carries no exclusions.
+     */
+    private void applyItemExclusions(Receipt receipt, ConfirmReceiptRequest request) {
+        var excludedIds = request != null && request.excludedItemIds() != null
+                ? Set.copyOf(request.excludedItemIds())
+                : Set.<UUID>of();
+        if (excludedIds.isEmpty()) {
+            return;
+        }
+        var excludedCount = 0;
+        for (var item : receipt.getItems()) {
+            if (excludedIds.contains(item.getId())) {
+                item.setExcluded(true);
+                excludedCount++;
+            }
+        }
+        log.info("confirm.exclusions applied={}/{} items", excludedCount, receipt.getItems().size());
     }
 
     /**
