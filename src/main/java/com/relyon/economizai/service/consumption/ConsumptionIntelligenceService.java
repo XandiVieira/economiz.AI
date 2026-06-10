@@ -51,6 +51,19 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ConsumptionIntelligenceService {
 
+    /**
+     * A larger-than-usual last basket stretches the next-purchase ETA, but only
+     * within these bounds. Below 1× (bought less than usual) we don't shrink the
+     * cycle — the user is likely just topping up. Above 5× we cap, so one
+     * wholesale run can't push the ETA arbitrarily far into the future.
+     */
+    private static final double MIN_QUANTITY_MULTIPLIER = 1.0;
+    private static final double MAX_QUANTITY_MULTIPLIER = 5.0;
+
+    /** Purchase-count thresholds at which a prediction earns more confidence. */
+    private static final int HIGH_CONFIDENCE_MIN_SAMPLES = 8;
+    private static final int MEDIUM_CONFIDENCE_MIN_SAMPLES = 5;
+
     private final ReceiptItemRepository receiptItemRepository;
     private final ManualPurchaseRepository manualPurchaseRepository;
     private final ConsumptionSnoozeRepository snoozeRepository;
@@ -169,25 +182,30 @@ public class ConsumptionIntelligenceService {
                 .collect(Collectors.toSet());
     }
 
+    /**
+     * Turns one product's purchase history into a next-purchase prediction, or
+     * {@code null} when there isn't enough signal to predict. Reads as the
+     * algorithm's steps: require enough purchases on distinct days → derive the
+     * average cycle → stretch it for an unusually large last basket → project the
+     * next purchase date → classify how urgent it is.
+     */
     private ConsumptionPredictionResponse predictForProduct(List<PurchaseEvent> events,
                                                             CollaborativeProperties.Consumption cfg) {
-        if (events.size() < cfg.getMinPurchasesForPrediction()) return null;
+        if (!hasEnoughPurchases(events, cfg)) return null;
 
         events.sort(Comparator.comparing(PurchaseEvent::date));
-        var dates = events.stream().map(PurchaseEvent::date).distinct().toList();
-        if (dates.size() < cfg.getMinPurchasesForPrediction()) return null;
+        var distinctPurchaseDates = events.stream().map(PurchaseEvent::date).distinct().toList();
+        if (distinctPurchaseDates.size() < cfg.getMinPurchasesForPrediction()) return null;
 
-        var avgIntervalDays = averageIntervalDays(dates);
+        var avgIntervalDays = averageIntervalDays(distinctPurchaseDates);
         if (avgIntervalDays <= 0) return null;
 
         var avgQty = averageQty(events);
         var lastEvent = events.get(events.size() - 1);
-        var qtyMultiplier = quantityMultiplier(lastEvent.quantity(), avgQty);
-        var adjustedInterval = avgIntervalDays * qtyMultiplier;
+        var adjustedIntervalDays = avgIntervalDays * quantityMultiplier(lastEvent.quantity(), avgQty);
 
-        var nextPurchase = lastEvent.date().plusDays(Math.round(adjustedInterval));
-        var daysUntil = ChronoUnit.DAYS.between(LocalDate.now(), nextPurchase);
-        var status = classifyStatus(daysUntil, cfg);
+        var nextPurchase = lastEvent.date().plusDays(Math.round(adjustedIntervalDays));
+        var daysUntilNextPurchase = ChronoUnit.DAYS.between(LocalDate.now(), nextPurchase);
 
         return new ConsumptionPredictionResponse(
                 lastEvent.product().getId(),
@@ -195,24 +213,29 @@ public class ConsumptionIntelligenceService {
                 lastEvent.product().getCategory(),
                 lastEvent.date(),
                 nextPurchase,
-                daysUntil,
-                BigDecimal.valueOf(adjustedInterval).setScale(1, RoundingMode.HALF_UP),
+                daysUntilNextPurchase,
+                BigDecimal.valueOf(adjustedIntervalDays).setScale(1, RoundingMode.HALF_UP),
                 avgQty,
                 events.size(),
                 confidenceFor(events.size()),
-                status
+                classifyStatus(daysUntilNextPurchase, cfg)
         );
     }
 
+    private boolean hasEnoughPurchases(List<PurchaseEvent> events, CollaborativeProperties.Consumption cfg) {
+        return events.size() >= cfg.getMinPurchasesForPrediction();
+    }
+
+    /**
+     * How much the last (possibly oversized) basket stretches the next-purchase
+     * ETA: the ratio of the last quantity to the usual quantity, clamped to
+     * {@code [MIN_QUANTITY_MULTIPLIER, MAX_QUANTITY_MULTIPLIER]}.
+     */
     private double quantityMultiplier(BigDecimal lastQty, BigDecimal avgQty) {
-        if (lastQty == null || avgQty == null || avgQty.signum() <= 0) return 1.0;
+        if (lastQty == null || avgQty == null || avgQty.signum() <= 0) return MIN_QUANTITY_MULTIPLIER;
         var ratio = lastQty.doubleValue() / avgQty.doubleValue();
-        // Clamp to [1.0, 5.0] so a single weird outlier (e.g. wholesale run)
-        // can't push the next ETA arbitrarily far. <1.0 is treated as 1.0 —
-        // buying less than usual doesn't shrink the cycle, the user is
-        // probably topping up.
-        if (ratio < 1.0) return 1.0;
-        if (ratio > 5.0) return 5.0;
+        if (ratio < MIN_QUANTITY_MULTIPLIER) return MIN_QUANTITY_MULTIPLIER;
+        if (ratio > MAX_QUANTITY_MULTIPLIER) return MAX_QUANTITY_MULTIPLIER;
         return ratio;
     }
 
@@ -240,8 +263,8 @@ public class ConsumptionIntelligenceService {
     }
 
     private ConsumptionPredictionResponse.Confidence confidenceFor(int sampleSize) {
-        if (sampleSize >= 8) return ConsumptionPredictionResponse.Confidence.HIGH;
-        if (sampleSize >= 5) return ConsumptionPredictionResponse.Confidence.MEDIUM;
+        if (sampleSize >= HIGH_CONFIDENCE_MIN_SAMPLES) return ConsumptionPredictionResponse.Confidence.HIGH;
+        if (sampleSize >= MEDIUM_CONFIDENCE_MIN_SAMPLES) return ConsumptionPredictionResponse.Confidence.MEDIUM;
         return ConsumptionPredictionResponse.Confidence.LOW;
     }
 
