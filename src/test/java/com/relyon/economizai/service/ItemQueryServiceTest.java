@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -240,8 +241,8 @@ class ItemQueryServiceTest {
         service.query(user, filters, PageRequest.of(0, 20));
 
         var jpql = capturedCountJpql.getValue();
-        assertTrue(jpql.contains("r.cnpjEmitente IN (:marketCnpjs)") == false);
-        assertTrue(jpql.contains("ri.ean IN (:eans)") == false);
+        assertFalse(jpql.contains("r.cnpjEmitente IN (:marketCnpjs)"));
+        assertFalse(jpql.contains("ri.ean IN (:eans)"));
         verify(countQuery, never()).setParameter(eq("marketCnpjs"), any());
         verify(countQuery, never()).setParameter(eq("eans"), any());
     }

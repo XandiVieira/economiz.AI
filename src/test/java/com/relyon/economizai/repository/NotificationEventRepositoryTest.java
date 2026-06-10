@@ -19,6 +19,7 @@ import java.time.LocalDateTime;
 import java.time.Month;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DataJpaTest
@@ -65,7 +66,7 @@ class NotificationEventRepositoryTest {
         assertEquals(NotificationEventType.DEAL_TAPPED, loaded.getEventType());
         assertEquals(product.getId(), loaded.getProductId());
         assertEquals("12345678000199", loaded.getMarketCnpj());
-        assertTrue(loaded.getOccurredAt() != null, "occurred_at defaulted on persist");
+        assertNotNull(loaded.getOccurredAt(), "occurred_at defaulted on persist");
     }
 
     @Test

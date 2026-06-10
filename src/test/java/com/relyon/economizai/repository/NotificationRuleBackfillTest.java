@@ -16,6 +16,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -113,6 +114,6 @@ class NotificationRuleBackfillTest {
         UUID ruleId = ruleForUser.get().getId();
         assertTrue(ruleForUser.get().isDefault());
         assertNull(ruleForUser.get().getProduct());
-        assertTrue(ruleId != null);
+        assertNotNull(ruleId);
     }
 }

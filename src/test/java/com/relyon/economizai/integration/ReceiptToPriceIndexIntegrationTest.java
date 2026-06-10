@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -166,7 +167,7 @@ class ReceiptToPriceIndexIntegrationTest {
                 .andExpect(status().isCreated())
                 .andReturn();
         var secondId = objectMapper.readTree(second.getResponse().getContentAsString()).get("id").asText();
-        assertTrue(!secondId.equals(firstId), "re-submit should produce a fresh receipt id");
+        assertNotEquals(firstId, secondId, "re-submit should produce a fresh receipt id");
 
         // Confirm the second one — first must be gone.
         mockMvc.perform(post("/api/v1/receipts/" + secondId + "/confirm")
