@@ -27,7 +27,7 @@ GET /api/v1/dashboard
 ```
 
 Single round-trip returns:
-- `currentMonth` — `{ year, month, total, receiptCount, averageTicket }`
+- `currentMonth` — `{ year, month, total, discount, receiptCount, averageTicket }` (`total` is gross; `discount` is the month's receipt-level discount — net = `total − discount`)
 - `recentReceipts` — last 5 confirmed receipts (newest first)
 - `suggestedShoppingList` — top 5 RAN_OUT/RUNNING_LOW items
 - `communityPromosNearby` — top 5 community promos (radius-aware, watched markets bypass)
@@ -326,14 +326,16 @@ Returns:
   "from": "2026-04-01T00:00:00",
   "to": "2026-04-30T23:59:59",
   "total": 1234.50,
-  "byMonth": [{ "year": 2026, "month": 4, "total": 1234.50, "receiptCount": 5 }],
-  "byWeek":  [{ "year": 2026, "week": 17, "total": 312.00, "receiptCount": 1 }, ...],
-  "byMarket": [{ "cnpj": "...", "marketName": "...", "total": 850.00, "receiptCount": 3 }, ...],
+  "totalDiscount": 18.40,
+  "byMonth": [{ "year": 2026, "month": 4, "total": 1234.50, "discount": 18.40, "receiptCount": 5 }],
+  "byWeek":  [{ "year": 2026, "week": 17, "total": 312.00, "discount": 4.00, "receiptCount": 1 }, ...],
+  "byMarket": [{ "cnpj": "...", "marketName": "...", "total": 850.00, "discount": 12.40, "receiptCount": 3 }, ...],
   "byCategory": [{ "category": "GROCERIES", "total": 600.00, "itemCount": 18 }, ...]
 }
 ```
+- **Spend totals are gross** (sum of item prices). The receipt-level discount is reported **alongside**, not subtracted: `totalDiscount` for the period, and `discount` per `byMonth`/`byWeek`/`byMarket` bucket. **Net spend = `total − discount`** — compute on the FE. `byCategory` has **no** `discount` (a receipt-level discount can't be split across categories); use `totalDiscount` there.
 - **Ticket médio** is `total / receipts.count` — compute on the FE.
-- **Empty state** = `total: 0` + all arrays empty. No errors.
+- **Empty state** = `total: 0`, `totalDiscount: 0` + all arrays empty. No errors.
 
 ```
 GET /api/v1/insights/markets/top?limit=5
@@ -391,14 +393,15 @@ GET /api/v1/insights/query
   },
   "summary": {
     "total": 234.50,
+    "totalDiscount": 6.40,
     "receiptCount": 3,
     "itemCount": 18,
     "averageTicket": 78.17
   },
   "groupBy": "WEEK",
   "buckets": [
-    { "key": "2026-W14", "label": "2026-W14", "total": 80.00, "receiptCount": 1, "itemCount": 6, "averageTicket": 80.00 },
-    { "key": "2026-W15", "label": "2026-W15", "total": 154.50, "receiptCount": 2, "itemCount": 12, "averageTicket": 77.25 }
+    { "key": "2026-W14", "label": "2026-W14", "total": 80.00, "discount": 2.40, "receiptCount": 1, "itemCount": 6, "averageTicket": 80.00 },
+    { "key": "2026-W15", "label": "2026-W15", "total": 154.50, "discount": 4.00, "receiptCount": 2, "itemCount": 12, "averageTicket": 77.25 }
   ]
 }
 ```
@@ -407,6 +410,7 @@ GET /api/v1/insights/query
 - All filters are **optional** — empty filter = no constraint on that dimension.
 - Repeated query params = OR within the same dimension (`?category=A&category=B`). Different dimensions are AND'd together.
 - `key` is the canonical machine value (CNPJ, UUID, "GROCERIES", "2026-04"). `label` is the human-friendly version (market name, product name) — use it for display.
+- **Spend is gross**; the receipt-level discount is reported alongside. `summary.totalDiscount` is the discount for the whole slice. Each `bucket.discount` is the per-bucket discount for **receipt-level** groupings (`DAY`/`WEEK`/`MONTH`/`YEAR`/`MARKET`/`CHAIN`); it is **`null`** for `CATEGORY`/`PRODUCT` (a receipt's discount can't be attributed to one category/product bucket) — use `summary.totalDiscount` there. Net = `total − discount`.
 - Empty result is `summary.total = 0` + `buckets = []`, NOT a 404.
 
 **Examples for common dashboards:**

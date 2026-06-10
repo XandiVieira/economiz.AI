@@ -16,6 +16,18 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-10 — insights/dashboard: gross spend + a `discount` figure per slice
+
+Follow-up to the discount change below. Spend totals stay **gross** (sum of item prices, internally consistent across every breakdown) and we now report the receipt-level discount **alongside**, aggregated for whatever slice you're showing. Net spend = `total − discount`, computed by the FE.
+
+- **`GET /insights/spend`** (`SpendInsightsResponse`): new top-level `totalDiscount`; new `discount` on each `byMonth` / `byWeek` / `byMarket` bucket. `byCategory` buckets have **no** per-bucket discount (a receipt-level discount can't be split across categories) — use `totalDiscount` there.
+- **`GET /insights/query`** (`InsightsQueryResponse`): new `summary.totalDiscount`; new `discount` on each bucket for **receipt-level** groupings (`DAY`/`WEEK`/`MONTH`/`YEAR`/`MARKET`/`CHAIN`). For `CATEGORY`/`PRODUCT` groupings `bucket.discount` is **`null`** — use `summary.totalDiscount`.
+- **Dashboard** (`SpendSnapshot`): new `discount` for the current month.
+
+No rateio: we never split a discount across items/categories. `discount` is only attached where each receipt falls wholly in the slice.
+
+---
+
 ## 2026-06-10 — receipts: discounts are no longer distributed across items; new `discountTotal` field
 
 **Behavior change (price accuracy):** we **stopped distributing** a receipt-level discount across item prices. Until now, when a receipt's items summed to more than what was paid, we spread the gap proportionally over every line — which silently distorted per-item prices (a promo on one item bled into all the others). Now **item prices are kept exactly as printed** on the NFC-e (`unitPrice` / `totalPrice` are gross), and the receipt's discount is tracked separately.
