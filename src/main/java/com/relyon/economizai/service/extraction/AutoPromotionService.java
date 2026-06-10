@@ -92,33 +92,49 @@ public class AutoPromotionService {
         var skippedSamples = 0;
 
         for (var entry : byToken.entrySet()) {
-            var token = entry.getKey();
-            var stats = entry.getValue();
-            if (stats.userOverrides > 0) {
-                if (stats.mlSamples >= minSamples) skippedHuman++;
-                continue;
+            switch (evaluateToken(entry.getKey(), entry.getValue())) {
+                case PROMOTED -> promoted++;
+                case SKIPPED_HUMAN -> skippedHuman++;
+                case SKIPPED_AGREEMENT -> skippedAgreement++;
+                case SKIPPED_SAMPLES -> skippedSamples++;
+                case IGNORED -> { /* below sample floor and human-blocked: not a reportable skip */ }
             }
-            if (stats.mlSamples < minSamples) {
-                skippedSamples++;
-                continue;
-            }
-            var topCategory = stats.topCategory();
-            var agreement = (double) stats.categoryCounts.get(topCategory) / stats.mlSamples;
-            if (agreement < minAgreement) {
-                skippedAgreement++;
-                continue;
-            }
-            var topGeneric = stats.topGenericName();
-            upsertLearnedEntry(token, topGeneric, topCategory, stats.mlSamples);
-            promoted++;
-            log.info("auto_promote.promoted token='{}' category={} genericName='{}' samples={} agreement={}",
-                    token, topCategory, topGeneric, stats.mlSamples, String.format("%.2f", agreement));
         }
 
         var totalLearned = refreshClassifierMemory();
         var outcome = new PromotionOutcome(promoted, skippedHuman, skippedAgreement, skippedSamples, totalLearned);
         log.info("auto_promote.done {}", outcome);
         return outcome;
+    }
+
+    /**
+     * Decide one token's fate against the promotion criteria, in this order:
+     * <ol>
+     *   <li>any USER override blocks promotion outright — reported as
+     *       SKIPPED_HUMAN only if it otherwise had enough samples (an override
+     *       on a token below the sample floor is just IGNORED, not a near-miss);</li>
+     *   <li>below the ML sample floor → SKIPPED_SAMPLES;</li>
+     *   <li>majority-class agreement below threshold → SKIPPED_AGREEMENT;</li>
+     *   <li>otherwise upsert the learned entry → PROMOTED.</li>
+     * </ol>
+     */
+    private TokenDecision evaluateToken(String token, TokenStats stats) {
+        if (stats.userOverrides > 0) {
+            return stats.mlSamples >= minSamples ? TokenDecision.SKIPPED_HUMAN : TokenDecision.IGNORED;
+        }
+        if (stats.mlSamples < minSamples) {
+            return TokenDecision.SKIPPED_SAMPLES;
+        }
+        var topCategory = stats.topCategory();
+        var agreement = (double) stats.categoryCounts.get(topCategory) / stats.mlSamples;
+        if (agreement < minAgreement) {
+            return TokenDecision.SKIPPED_AGREEMENT;
+        }
+        var topGeneric = stats.topGenericName();
+        upsertLearnedEntry(token, topGeneric, topCategory, stats.mlSamples);
+        log.info("auto_promote.promoted token='{}' category={} genericName='{}' samples={} agreement={}",
+                token, topCategory, topGeneric, stats.mlSamples, String.format("%.2f", agreement));
+        return TokenDecision.PROMOTED;
     }
 
     /**
@@ -206,6 +222,9 @@ public class AutoPromotionService {
                     .orElse(null);
         }
     }
+
+    /** Per-token outcome of {@link #evaluateToken}, tallied into {@link PromotionOutcome}. */
+    private enum TokenDecision { PROMOTED, SKIPPED_HUMAN, SKIPPED_AGREEMENT, SKIPPED_SAMPLES, IGNORED }
 
     public record PromotionOutcome(int promoted, int skippedDueToHuman, int skippedDueToAgreement,
                                    int skippedDueToSamples, int learnedTotal) {}
