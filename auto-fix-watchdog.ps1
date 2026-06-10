@@ -323,20 +323,34 @@ function ReadNewLogLines {
     $appLog = ResolveAppLog
     if (Test-Path $appLog) {
         try {
-            # Count lines WITHOUT materializing the file: a streaming reader holds
-            # one line at a time, so memory stays flat regardless of file size.
+            # ONE streaming pass with SHARED read access. We must open FileShare
+            # ReadWrite: the app, OneDrive and AV all hold this file open, and an
+            # exclusive open (Get-Content's default / File.OpenText) throws "being
+            # used by another process" - which made every poll fall back to docker
+            # logs and lose the persistent history. Memory stays flat: we keep only
+            # a rolling buffer of the last $logTailCap lines while counting, so a
+            # multi-MB file is never materialized.
+            $fs = New-Object System.IO.FileStream($appLog, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+            $reader = New-Object System.IO.StreamReader($fs)
             $count = 0
-            $reader = [System.IO.File]::OpenText($appLog)
-            try { while ($null -ne $reader.ReadLine()) { $count++ } } finally { $reader.Dispose() }
+            $buf = New-Object System.Collections.Generic.Queue[string]
+            try {
+                while ($null -ne ($ln = $reader.ReadLine())) {
+                    $count++
+                    $buf.Enqueue($ln)
+                    if ($buf.Count -gt $script:logTailCap) { [void]$buf.Dequeue() }
+                }
+            } finally { $reader.Dispose(); $fs.Dispose() }
 
             if ($null -eq $script:logLineMark) { $script:logLineMark = $count; return ,@() }
             if ($count -lt $script:logLineMark) { $script:logLineMark = 0 }   # rotation/redeploy shrank the file
             if ($count -le $script:logLineMark) { return ,@() }
 
-            # Read only the new tail. Bounded by $logTailCap so a huge backlog
-            # (first poll after a shrink, or a flood) never balloons memory.
-            $newCount = [Math]::Min($count - $script:logLineMark, $script:logTailCap)
-            $new = @(Get-Content -Path $appLog -Tail $newCount -ErrorAction Stop)
+            # Emit only the new lines (capped at the rolling buffer size). A burst
+            # bigger than $logTailCap spills its oldest lines - acceptable.
+            $newCount = [Math]::Min($count - $script:logLineMark, $buf.Count)
+            $all = $buf.ToArray()
+            $new = $all[($all.Count - $newCount)..($all.Count - 1)]
             $script:logLineMark = $count
             return ,@($new)
         } catch {
