@@ -1,6 +1,7 @@
 package com.relyon.economizai.controller;
 
 import com.relyon.economizai.dto.response.InsightsQueryResponse;
+import com.relyon.economizai.dto.response.MarketDiscountResponse;
 import com.relyon.economizai.dto.response.PriceHistoryResponse;
 import com.relyon.economizai.dto.response.SpendInsightsResponse;
 import com.relyon.economizai.model.User;
@@ -50,6 +51,15 @@ public class InsightsController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
             @RequestParam(defaultValue = "5") int limit) {
         return ResponseEntity.ok(insightsService.topMarkets(user, from, to, limit));
+    }
+
+    @GetMapping("/markets/top-discounts")
+    public ResponseEntity<List<MarketDiscountResponse>> topMarketsByDiscount(
+            @AuthenticationPrincipal User user,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
+            @RequestParam(defaultValue = "5") int limit) {
+        return ResponseEntity.ok(insightsService.topMarketsByDiscount(user, from, to, limit));
     }
 
     @GetMapping("/categories/top")

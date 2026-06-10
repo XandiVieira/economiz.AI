@@ -174,6 +174,33 @@ class InsightsServiceTest {
     }
 
     @Test
+    void topMarketsByDiscount_ranksByDiscountDescExcludesZeroAndComputesRate() {
+        var user = buildUser();
+        var householdId = user.getHousehold().getId();
+        stubEmptyAggregates(householdId, EPOCH_FLOOR, EPOCH_CEIL);
+        when(insightsRepository.spendByMarket(householdId, EPOCH_FLOOR, EPOCH_CEIL))
+                .thenReturn(List.of(
+                        new Object[]{"111", "A", new BigDecimal("30.00"), 3L},
+                        new Object[]{"222", "B", new BigDecimal("20.00"), 2L},
+                        new Object[]{"333", "C", new BigDecimal("10.00"), 1L}));
+        when(insightsRepository.discountByMarket(householdId, EPOCH_FLOOR, EPOCH_CEIL))
+                .thenReturn(List.of(
+                        new Object[]{"111", new BigDecimal("3.00")},
+                        new Object[]{"222", new BigDecimal("9.00")}));
+        // market "333" gave no discount → excluded entirely.
+
+        var top = insightsService.topMarketsByDiscount(user, null, null, 5);
+
+        assertEquals(2, top.size());
+        // ranked by discount desc: B (9.00) before A (3.00)
+        assertEquals("222", top.get(0).cnpj());
+        assertEquals(0, new BigDecimal("9.00").compareTo(top.get(0).discount()));
+        assertEquals(0, new BigDecimal("0.4500").compareTo(top.get(0).discountRate()));
+        assertEquals("111", top.get(1).cnpj());
+        assertEquals(0, new BigDecimal("0.1000").compareTo(top.get(1).discountRate()));
+    }
+
+    @Test
     void topMarkets_negativeLimit_returnsEmptyInsteadOfThrowing() {
         var user = buildUser();
         var householdId = user.getHousehold().getId();

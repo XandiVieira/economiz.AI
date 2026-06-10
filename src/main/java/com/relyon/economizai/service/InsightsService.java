@@ -1,5 +1,6 @@
 package com.relyon.economizai.service;
 
+import com.relyon.economizai.dto.response.MarketDiscountResponse;
 import com.relyon.economizai.dto.response.PriceHistoryResponse;
 import com.relyon.economizai.dto.response.SpendInsightsResponse;
 import com.relyon.economizai.dto.response.SpendInsightsResponse.CategoryBucket;
@@ -130,6 +131,21 @@ public class InsightsService {
     @Transactional(readOnly = true)
     public List<SpendInsightsResponse.MarketBucket> topMarkets(User user, LocalDateTime from, LocalDateTime to, int limit) {
         return spend(user, from, to).byMarket().stream().limit(Math.max(0, limit)).toList();
+    }
+
+    /**
+     * Markets ranked by the discount the household received there, biggest first.
+     * Markets that gave no discount are excluded. Reuses the cached {@link #spend}
+     * aggregation (gross spend + per-market discount), so it costs nothing extra.
+     */
+    @Transactional(readOnly = true)
+    public List<MarketDiscountResponse> topMarketsByDiscount(User user, LocalDateTime from, LocalDateTime to, int limit) {
+        return spend(user, from, to).byMarket().stream()
+                .filter(bucket -> bucket.discount() != null && bucket.discount().signum() > 0)
+                .sorted(Comparator.comparing(SpendInsightsResponse.MarketBucket::discount).reversed())
+                .limit(Math.max(0, limit))
+                .map(MarketDiscountResponse::from)
+                .toList();
     }
 
     /** Backwards-compatible entry point — uses the default HOUSEHOLD lens. */

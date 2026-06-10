@@ -2,6 +2,7 @@ package com.relyon.economizai.controller;
 
 import com.relyon.economizai.config.SecurityConfig;
 import com.relyon.economizai.dto.response.PriceHistoryResponse;
+import com.relyon.economizai.dto.response.MarketDiscountResponse;
 import com.relyon.economizai.dto.response.SpendInsightsResponse;
 import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.User;
@@ -81,6 +82,22 @@ class InsightsControllerTest {
                         .with(SecurityMockMvcRequestPostProcessors.user(user)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].marketName").value("Mercado X"));
+    }
+
+    @Test
+    void topMarketsByDiscount_returnsRankedList() throws Exception {
+        var user = buildUser();
+        var market = new MarketDiscountResponse("123", "Mercado X", "Mercado X",
+                new BigDecimal("100.00"), new BigDecimal("9.00"), new BigDecimal("0.0900"), 2L);
+        when(insightsService.topMarketsByDiscount(any(User.class), any(), any(), anyInt()))
+                .thenReturn(List.of(market));
+
+        mockMvc.perform(get("/api/v1/insights/markets/top-discounts?limit=5")
+                        .with(SecurityMockMvcRequestPostProcessors.user(user)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].marketName").value("Mercado X"))
+                .andExpect(jsonPath("$[0].discount").value(9.00))
+                .andExpect(jsonPath("$[0].discountRate").value(0.09));
     }
 
     @Test
