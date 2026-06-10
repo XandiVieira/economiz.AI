@@ -105,19 +105,33 @@ public class DealsService {
                 includeNearby ? radiusKm : null, watchedCnpjs);
         if (markets.isEmpty()) return null;
 
+        var best = cheapestQualifyingMarket(markets, lastPaid);
+        if (best == null) return null;
+
+        return buildDeal(user, aggregate, best, lastPaid);
+    }
+
+    /**
+     * The genuinely cheapest market whose median beats last-paid by the
+     * progressive relevance threshold, or null if none qualify. bestMarkets
+     * returns cheapest-median first within (watched, median) ordering, but
+     * watched markets sort ahead regardless of price — so we scan for the
+     * cheapest qualifying market rather than trusting position 0.
+     */
+    private PriceIndexService.MarketPriceRow cheapestQualifyingMarket(
+            List<PriceIndexService.MarketPriceRow> markets, BigDecimal lastPaid) {
         var requiredDrop = RelevanceThreshold.requiredDropFraction(lastPaid);
         var threshold = lastPaid.multiply(BigDecimal.valueOf(1.0 - requiredDrop));
-
-        // bestMarkets returns cheapest-median first within (watched, median) ordering,
-        // but watched markets sort ahead regardless of price — so scan for the
-        // genuinely cheapest qualifying market rather than trusting position 0.
-        var best = markets.stream()
+        return markets.stream()
                 .filter(market -> market.medianPrice() != null)
                 .filter(market -> market.medianPrice().compareTo(threshold) <= 0)
                 .min(Comparator.comparing(PriceIndexService.MarketPriceRow::medianPrice))
                 .orElse(null);
-        if (best == null) return null;
+    }
 
+    /** Compute savings (amount, fraction, pct) against last-paid and assemble the response row. */
+    private DealResponse buildDeal(User user, ProductAggregate aggregate,
+                                   PriceIndexService.MarketPriceRow best, BigDecimal lastPaid) {
         var currentPrice = best.medianPrice().setScale(2, RoundingMode.HALF_UP);
         var savingsAmount = lastPaid.subtract(currentPrice).setScale(2, RoundingMode.HALF_UP);
         var discountFraction = lastPaid.subtract(currentPrice)
