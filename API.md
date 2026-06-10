@@ -339,9 +339,12 @@ Returns:
 
 ```
 GET /api/v1/insights/markets/top?limit=5
+GET /api/v1/insights/markets/top-discounts?from=&to=&limit=5
 GET /api/v1/insights/categories/top?limit=5&categoryView=HOUSEHOLD
 GET /api/v1/insights/products/{productId}/price-history?from=&to=
 ```
+
+`markets/top-discounts` ranks the household's markets by **discount received** (biggest first), excluding markets that gave none. Each row: `{ cnpj, marketName, marketFriendlyName, grossTotal, discount, discountRate, receiptCount }` — `discount` in R$, `discountRate` = `discount / grossTotal` (0–1 fraction, format as %). Personal to your household, so it works even without community volume.
 
 `categories/top` takes the same **category lens** as `/items` via `categoryView` (default `HOUSEHOLD`). In the HOUSEHOLD lens each product is counted **once** under its effective category, so a product moved by an override is removed from its old enum bucket and added to the override target (custom name → its own bucket). Each `CategoryBucket` carries `category` (the global enum, **null** for custom-category buckets), `label` (always present — the display name), `total`, and `itemCount`. Pass `categoryView=GLOBAL` to group purely by `Product.category` (the pre-lens behavior).
 

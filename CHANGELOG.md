@@ -16,6 +16,18 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-10 — insights: new `GET /insights/markets/top-discounts` (where you got the most discount)
+
+New endpoint ranking the household's markets by the **discount received** there (biggest first), built on the receipt-level discount we now track. Markets that gave no discount are excluded.
+
+```
+GET /api/v1/insights/markets/top-discounts?from=&to=&limit=5
+→ [{ cnpj, marketName, marketFriendlyName, grossTotal, discount, discountRate, receiptCount }, ...]
+```
+`discount` is R$ received; `grossTotal` is gross spend; `discountRate` = `discount / grossTotal` as a 0–1 fraction (format as %). Same date/limit params as `/insights/markets/top`. Personal (your household's receipts), so it works without community volume.
+
+---
+
 ## 2026-06-10 — insights/dashboard: gross spend + a `discount` figure per slice
 
 Follow-up to the discount change below. Spend totals stay **gross** (sum of item prices, internally consistent across every breakdown) and we now report the receipt-level discount **alongside**, aggregated for whatever slice you're showing. Net spend = `total − discount`, computed by the FE.
