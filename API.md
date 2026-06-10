@@ -266,9 +266,10 @@ Two ways to mark an item excluded:
 1. **At confirm time**: `POST /receipts/{id}/confirm` with `{ "excludedItemIds": ["uuid-1", "uuid-2"] }` in the body. Items in the list get marked excluded *before* downstream processing.
 2. **Per-item PATCH** (works on PENDING_CONFIRMATION receipts): `PATCH /receipts/{id}/items/{itemId}` with `{ "excluded": true, ... }`.
 
-`ReceiptResponse` now exposes both:
-- `totalAmount` — the original NF total. Never changes.
-- `householdTotalAmount` — sum of non-excluded items. Use this for "what we actually spent".
+`ReceiptResponse` now exposes:
+- `totalAmount` — the amount actually paid ("Valor a pagar"). Never changes. Use this for "what we spent".
+- `householdTotalAmount` — sum of non-excluded **item** prices. Items are stored gross-as-printed (we no longer distribute discounts across them), so this can be **higher than `totalAmount`** when the receipt had a discount.
+- `discountTotal` — the receipt-level "Descontos R$" as printed, or `null` when none. Relationship: `sum(item totals) ≈ totalAmount + discountTotal`. Render it as a separate "desconto" line; don't expect summed item prices to equal what was paid. (`ReceiptSummaryResponse` carries it too.)
 
 **Approximate-tax fields (new)** — `ReceiptResponse` now also carries the IBPT-source tax disclosure required by Lei 12.741/2012:
 - `approxTaxFederal` — federal portion (BigDecimal, nullable)
@@ -303,7 +304,7 @@ GET /api/v1/receipts
     &status=CONFIRMED                  ← optional: PENDING_CONFIRMATION|CONFIRMED|REJECTED|FAILED_PARSE (invalid → 400; absent → all)
     &q=leite condensado
     &page=0&size=20
-→ Page<ReceiptSummaryResponse>  (each row has marketName, issuedAt, totalAmount, householdTotalAmount, approxTaxTotal, itemCount, status)
+→ Page<ReceiptSummaryResponse>  (each row has marketName, issuedAt, totalAmount, householdTotalAmount, discountTotal, approxTaxTotal, itemCount, status)
 ```
 
 Default sort is `issuedAt DESC`. All filters optional. `category` accepts one or many (same as `/items` and `/insights/query`).

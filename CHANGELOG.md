@@ -16,6 +16,16 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-10 — receipts: discounts are no longer distributed across items; new `discountTotal` field
+
+**Behavior change (price accuracy):** we **stopped distributing** a receipt-level discount across item prices. Until now, when a receipt's items summed to more than what was paid, we spread the gap proportionally over every line — which silently distorted per-item prices (a promo on one item bled into all the others). Now **item prices are kept exactly as printed** on the NFC-e (`unitPrice` / `totalPrice` are gross), and the receipt's discount is tracked separately.
+
+**New field:** `ReceiptResponse` and `ReceiptSummaryResponse` now carry `discountTotal` — the "Descontos R$" value as printed on the receipt, or `null` when the receipt declared no discount. Future use: surfacing things like "markets with the biggest discounts."
+
+**FE impact — read this:** because items are now gross, `householdTotalAmount` (and any spend total derived from summing items) is now **gross of the discount**, so it can be **higher than `totalAmount`** (the amount actually paid). The relationship is: `sum(item totals) ≈ totalAmount + discountTotal`. If you show "what I spent," use `totalAmount` (paid) and render `discountTotal` as a separate "desconto" line; don't sum item prices and expect it to equal what was paid.
+
+---
+
 ## 2026-06-09 — notifications: `destination` for deep-linking + discovery moved to the digest
 
 **New field:** every `NotificationResponse` now carries `destination` — a routing hint derived from `type` so the FE knows which screen to open on tap (the id it needs is already in `payload`). Values: `DEALS` (`PROMO_PERSONAL`/`PROMO_COMMUNITY`/`CHEAPER_MARKET`/`DEALS_DIGEST`/`DIGEST`), `REPLENISHMENT` (`STOCKOUT`), `PRODUCT` (`PRICE_DROP`), `BUDGET` (`BUDGET`), `INBOX` (`SYSTEM` + fallback). See API.md §10b for the table.

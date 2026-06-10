@@ -281,6 +281,17 @@ Helper scripts at repo root (run each in an **Administrator** PowerShell once):
 - **Now**: `PATCH /products/{id}` mutates the shared canonical product; any authenticated user changes categories/brand for everyone, and it's not admin-gated.
 - **Fix before real multi-user volume**: household-scoped overrides + corrections-as-votes (design in HELP.md). Interim: gate `PATCH /products/**` to ADMIN.
 
+### Cross-household chave dedup breaks if a receipt ever has no chave
+- **Now**: the same-chave double-count guard is solid for the only ingestion path we have (QR scan → 44-digit chave always present). Same household, same chave: CONFIRMED → 409, non-final → replaced. Different households, same chave: the second household keeps its own personal receipt, but `PriceIndexService.recordContributions` skips the community write (`existsContributionForChaveFromOtherHousehold`) and logs `price_index.write.skipped reason=duplicate_chave_other_household`. This is exactly the desired behavior.
+- **The gap**: that guard is wrapped in `if (receipt.getChaveAcesso() != null)`. A receipt ingested **without** a chave would bypass dedup entirely and could double-count in the community index. No such path exists today.
+- **Revisit when** we add any non-QR ingestion (manual 44-digit entry, photo/OCR fallback — backlog #21, or manual item entry). At that point either require a chave before a receipt can contribute to the community index, or add a content-hash fallback dedup (market CNPJ + issuedAt + item set) for chave-less receipts.
+
+### Receipt discounts: tracked, not distributed (and `discountTotal` is unused for now)
+- **Now**: we stopped distributing the receipt-level discount across item prices (the old `reconcileItemsToTotal` proportional rateio — deleted). Item `unitPrice`/`totalPrice` are kept gross-as-printed so the collaborative price index records the real shelf price. The "Descontos R$" line is parsed into `receipts.discount_total` (V46) and exposed as `discountTotal` on receipt responses. **Nothing consumes `discountTotal` yet** — it's tracked for a future feature ("markets with the biggest discounts").
+- **Consequence to watch**: because items are now gross, `householdTotalAmount` and any insights/spend total that sums item prices are **gross of the discount** — they overstate what the user actually paid by `discountTotal`. `totalAmount` is still the real paid amount. We accepted this to avoid distorting per-item prices.
+- **Why OK for dev**: the price index (the thing that matters most) is now honest; the spend-total overstatement only affects receipts that carried a discount, and the FE can net it (`totalAmount`) or show the discount line explicitly.
+- **Revisit**: if personal spend accuracy becomes important, net the discount at the **receipt total** level for spend displays (never back into item prices) — e.g. an effective-spend = `totalAmount` path through insights. Also: per-item discount attribution is impossible on SVRS (the portal only gives the receipt-level total), so don't try to read which item was discounted.
+
 ### IBGE municipality code missing
 - **Now**: `PriceObservation` carries `city` (string from Nominatim) + `state` (UF) but not the IBGE 7-digit municipality code that the FE spec wanted (PRO-53/54).
 - **Why OK for dev**: city + state is enough for "show me everything in Porto Alegre".
