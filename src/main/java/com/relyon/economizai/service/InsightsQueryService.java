@@ -123,7 +123,59 @@ public class InsightsQueryService {
         var total = (BigDecimal) row[0];
         var receiptCount = ((Number) row[1]).longValue();
         var itemCount = ((Number) row[2]).longValue();
-        return new Summary(total, receiptCount, itemCount, averageTicket(total, receiptCount));
+        var totalDiscount = computeTotalDiscount(f);
+        return new Summary(total, totalDiscount, receiptCount, itemCount, averageTicket(total, receiptCount));
+    }
+
+    /**
+     * Receipt-level discount across the filtered slice. We select DISTINCT
+     * (receipt id, discountTotal) over the item-join so each receipt's discount
+     * is counted exactly once (the join would otherwise multiply it by the line
+     * count), then sum in code. Item prices stay gross; this is reported aside.
+     */
+    private BigDecimal computeTotalDiscount(QueryFilters f) {
+        var clauses = buildClauses(f);
+        var jpql = """
+                SELECT DISTINCT r.id, r.discountTotal
+                FROM ReceiptItem ri
+                JOIN ri.receipt r
+                LEFT JOIN ri.product p
+                WHERE %s
+                """.formatted(clauses.where());
+        var query = entityManager.createQuery(jpql, Object[].class);
+        clauses.bind(query);
+        var sum = BigDecimal.ZERO;
+        for (var row : query.getResultList()) {
+            if (row[1] != null) sum = sum.add((BigDecimal) row[1]);
+        }
+        return sum;
+    }
+
+    /**
+     * Per-bucket discount for receipt-level dimensions only. Same DISTINCT-receipt
+     * technique as {@link #computeTotalDiscount}, keyed by the dimension's bucket
+     * key. Empty for category/product (a receipt's discount can't be attributed to
+     * a single category/product bucket without distribution).
+     */
+    private Map<String, BigDecimal> bucketDiscounts(QueryFilters f, Dimension dimension) {
+        if (!dimension.attributesDiscount()) return Map.of();
+        var clauses = buildClauses(f);
+        var jpql = """
+                SELECT DISTINCT r.id, %s, r.discountTotal
+                FROM ReceiptItem ri
+                JOIN ri.receipt r
+                LEFT JOIN ri.product p
+                WHERE %s
+                """.formatted(dimension.groupByKeys(), clauses.where());
+        var query = entityManager.createQuery(jpql, Object[].class);
+        clauses.bind(query);
+        var discounts = new LinkedHashMap<String, BigDecimal>();
+        for (var row : query.getResultList()) {
+            var key = dimension.discountKey(row, 1);
+            var discount = row[row.length - 1] == null ? BigDecimal.ZERO : (BigDecimal) row[row.length - 1];
+            discounts.merge(key, discount, BigDecimal::add);
+        }
+        return discounts;
     }
 
     private List<Bucket> computeBuckets(QueryFilters f) {
@@ -146,8 +198,12 @@ public class InsightsQueryService {
         clauses.bind(query);
         query.setMaxResults(f.limit());
 
+        var discounts = bucketDiscounts(f, dimension);
         return query.getResultList().stream()
                 .map(dimension::toBucket)
+                .map(bucket -> dimension.attributesDiscount()
+                        ? bucket.withDiscount(discounts.getOrDefault(bucket.key(), BigDecimal.ZERO))
+                        : bucket)
                 .toList();
     }
 
@@ -226,7 +282,8 @@ public class InsightsQueryService {
 
         Bucket toBucket() {
             var receiptCount = receiptIds.size();
-            return new Bucket(label, label, total, receiptCount, itemCount, averageTicket(total, receiptCount));
+            // CATEGORY (household lens) is item-level: no per-bucket discount.
+            return new Bucket(label, label, total, null, receiptCount, itemCount, averageTicket(total, receiptCount));
         }
     }
 
@@ -404,6 +461,9 @@ public class InsightsQueryService {
                 var key = "%04d-%02d-%02d".formatted(intAt(row, 0), intAt(row, 1), intAt(row, 2));
                 return bucketOf(key, key, row, 3);
             }
+            @Override String discountKey(Object[] row, int offset) {
+                return "%04d-%02d-%02d".formatted(intAt(row, offset), intAt(row, offset + 1), intAt(row, offset + 2));
+            }
         },
         WEEK(
                 "EXTRACT(YEAR FROM r.issuedAt), EXTRACT(WEEK FROM r.issuedAt)",
@@ -412,6 +472,9 @@ public class InsightsQueryService {
             @Override Bucket toBucket(Object[] row) {
                 var key = "%04d-W%02d".formatted(intAt(row, 0), intAt(row, 1));
                 return bucketOf(key, key, row, 2);
+            }
+            @Override String discountKey(Object[] row, int offset) {
+                return "%04d-W%02d".formatted(intAt(row, offset), intAt(row, offset + 1));
             }
         },
         MONTH(
@@ -422,6 +485,9 @@ public class InsightsQueryService {
                 var key = "%04d-%02d".formatted(intAt(row, 0), intAt(row, 1));
                 return bucketOf(key, key, row, 2);
             }
+            @Override String discountKey(Object[] row, int offset) {
+                return "%04d-%02d".formatted(intAt(row, offset), intAt(row, offset + 1));
+            }
         },
         YEAR(
                 "EXTRACT(YEAR FROM r.issuedAt)",
@@ -430,6 +496,9 @@ public class InsightsQueryService {
             @Override Bucket toBucket(Object[] row) {
                 var key = String.valueOf(intAt(row, 0));
                 return bucketOf(key, key, row, 1);
+            }
+            @Override String discountKey(Object[] row, int offset) {
+                return String.valueOf(intAt(row, offset));
             }
         },
         MARKET(
@@ -441,6 +510,9 @@ public class InsightsQueryService {
                 var marketName = (String) row[1];
                 return bucketOf(cnpj, marketName != null ? marketName : cnpj, row, 2);
             }
+            @Override String discountKey(Object[] row, int offset) {
+                return (String) row[offset];
+            }
         },
         CHAIN(
                 "SUBSTRING(r.cnpjEmitente, 1, 8), MAX(r.marketName)",
@@ -451,6 +523,9 @@ public class InsightsQueryService {
                 var sampleName = (String) row[1];
                 return bucketOf(cnpjRoot, sampleName != null ? sampleName : cnpjRoot, row, 2);
             }
+            @Override String discountKey(Object[] row, int offset) {
+                return (String) row[offset];
+            }
         },
         CATEGORY(
                 "p.category",
@@ -460,6 +535,7 @@ public class InsightsQueryService {
                 var category = row[0] == null ? ProductCategory.OTHER : (ProductCategory) row[0];
                 return bucketOf(category.name(), category.name(), row, 1);
             }
+            @Override boolean attributesDiscount() { return false; }
         },
         PRODUCT(
                 "p.id, MAX(p.normalizedName)",
@@ -471,6 +547,7 @@ public class InsightsQueryService {
                 var label = name != null ? name : productId;
                 return bucketOf(productId != null ? productId : "unknown", label, row, 2);
             }
+            @Override boolean attributesDiscount() { return false; }
         };
 
         private final String selectKeys;
@@ -488,6 +565,20 @@ public class InsightsQueryService {
         String orderBy() { return orderBy; }
 
         abstract Bucket toBucket(Object[] row);
+
+        /**
+         * Whether a receipt-level discount can be attributed to this dimension's
+         * buckets. True when each receipt falls wholly in one bucket (time /
+         * market / chain); false for item-level groupings (category / product).
+         */
+        boolean attributesDiscount() { return true; }
+
+        /**
+         * Builds the bucket key for a discount row whose grouping columns start at
+         * {@code offset} (mirrors the key in {@link #toBucket}). Only called for
+         * dimensions where {@link #attributesDiscount()} is true.
+         */
+        String discountKey(Object[] row, int offset) { return null; }
 
         static Dimension forGroupBy(InsightsGroupBy groupBy) {
             return switch (groupBy) {
@@ -507,7 +598,8 @@ public class InsightsQueryService {
             var total = (BigDecimal) row[aggregateOffset];
             var receiptCount = ((Number) row[aggregateOffset + 1]).longValue();
             var itemCount = ((Number) row[aggregateOffset + 2]).longValue();
-            return new Bucket(key, label, total, receiptCount, itemCount,
+            // discount is filled in later (per-bucket) only for receipt-level dimensions.
+            return new Bucket(key, label, total, null, receiptCount, itemCount,
                     averageTicket(total, receiptCount));
         }
 

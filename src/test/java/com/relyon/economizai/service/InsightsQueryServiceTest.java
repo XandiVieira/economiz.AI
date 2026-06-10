@@ -42,6 +42,8 @@ class InsightsQueryServiceTest {
     @Mock private EntityManager entityManager;
     @Mock private TypedQuery<Object[]> summaryQuery;
     @Mock private TypedQuery<Object[]> bucketQuery;
+    @Mock private TypedQuery<Object[]> totalDiscountQuery;
+    @Mock private TypedQuery<Object[]> bucketDiscountQuery;
     @Mock private HouseholdProductCategoryOverrideService categoryOverrideService;
     @Mock private SubscriptionGateService subscriptionGate;
 
@@ -56,6 +58,21 @@ class InsightsQueryServiceTest {
         // constructor injection and won't populate the @PersistenceContext field;
         // wire the EntityManager mock in by reflection.
         ReflectionTestUtils.setField(insightsQueryService, "entityManager", entityManager);
+        // Route each created query to the right mock by JPQL shape, so tests only
+        // stub the result rows and don't depend on the internal call order:
+        // receipt-level discount queries (total + per-bucket) carry "discountTotal";
+        // bucket queries carry "GROUP BY"; everything else is the summary scalar.
+        lenient().when(entityManager.createQuery(anyString(), eq(Object[].class)))
+                .thenAnswer(invocation -> {
+                    String jpql = invocation.getArgument(0);
+                    if (jpql.contains("r.id, r.discountTotal")) return totalDiscountQuery;
+                    if (jpql.contains("discountTotal")) return bucketDiscountQuery;
+                    if (jpql.contains("GROUP BY")) return bucketQuery;
+                    return summaryQuery;
+                });
+        // Discount queries default to "no discount" unless a test says otherwise.
+        lenient().when(totalDiscountQuery.getResultList()).thenReturn(List.<Object[]>of());
+        lenient().when(bucketDiscountQuery.getResultList()).thenReturn(List.<Object[]>of());
         // Default: PRO passthrough (no history clamping).
         lenient().when(subscriptionGate.clampFrom(any(), any()))
                 .thenAnswer(invocation -> invocation.getArgument(1));
@@ -75,8 +92,8 @@ class InsightsQueryServiceTest {
 
     @Test
     void query_groupByNone_returnsSummaryOnlyNoBuckets() {
-        // Only the summary query is created when groupBy is NONE.
-        when(entityManager.createQuery(anyString(), eq(Object[].class))).thenReturn(summaryQuery);
+        // groupBy NONE: only the summary scalar + the receipt-level discount total
+        // (no bucket query).
         when(summaryQuery.getSingleResult())
                 .thenReturn(new Object[]{new BigDecimal("100.00"), 4L, 12L});
 
@@ -89,12 +106,11 @@ class InsightsQueryServiceTest {
         assertEquals(4L, summary.receiptCount());
         assertEquals(12L, summary.itemCount());
         assertEquals(new BigDecimal("25.00"), summary.averageTicket());
-        verify(entityManager, times(1)).createQuery(anyString(), eq(Object[].class));
+        verify(entityManager, times(2)).createQuery(anyString(), eq(Object[].class));
     }
 
     @Test
     void query_averageTicketIsZeroWhenNoReceipts() {
-        when(entityManager.createQuery(anyString(), eq(Object[].class))).thenReturn(summaryQuery);
         when(summaryQuery.getSingleResult())
                 .thenReturn(new Object[]{BigDecimal.ZERO, 0L, 0L});
 
@@ -105,8 +121,6 @@ class InsightsQueryServiceTest {
 
     @Test
     void query_groupByCategory_globalLens_buildsBucketsAndAppliesLimit() {
-        when(entityManager.createQuery(anyString(), eq(Object[].class)))
-                .thenReturn(summaryQuery, bucketQuery);
         when(summaryQuery.getSingleResult())
                 .thenReturn(new Object[]{new BigDecimal("60.00"), 3L, 9L});
         when(bucketQuery.getResultList()).thenReturn(List.<Object[]>of(
@@ -138,8 +152,6 @@ class InsightsQueryServiceTest {
         var arroz = UUID.randomUUID();   // global GROCERIES, no override
         var receiptOne = UUID.randomUUID();
         var receiptTwo = UUID.randomUUID();
-        when(entityManager.createQuery(anyString(), eq(Object[].class)))
-                .thenReturn(summaryQuery, bucketQuery);
         when(summaryQuery.getSingleResult())
                 .thenReturn(new Object[]{new BigDecimal("40.00"), 2L, 3L});
         // (productId, category, receiptId, total, itemCount) — leite + arroz share receiptOne.
@@ -171,8 +183,6 @@ class InsightsQueryServiceTest {
         var customId = UUID.randomUUID();
         var receiptOne = UUID.randomUUID();
         var receiptTwo = UUID.randomUUID();
-        when(entityManager.createQuery(anyString(), eq(Object[].class)))
-                .thenReturn(summaryQuery, bucketQuery);
         when(summaryQuery.getSingleResult())
                 .thenReturn(new Object[]{new BigDecimal("19.00"), 2L, 2L});
         when(bucketQuery.getResultList()).thenReturn(List.<Object[]>of(
@@ -193,8 +203,6 @@ class InsightsQueryServiceTest {
 
     @Test
     void query_groupByMonth_formatsTemporalKey() {
-        when(entityManager.createQuery(anyString(), eq(Object[].class)))
-                .thenReturn(summaryQuery, bucketQuery);
         when(summaryQuery.getSingleResult())
                 .thenReturn(new Object[]{new BigDecimal("10.00"), 1L, 1L});
         when(bucketQuery.getResultList()).thenReturn(List.<Object[]>of(
@@ -209,8 +217,6 @@ class InsightsQueryServiceTest {
 
     @Test
     void query_groupByDay_formatsTemporalKey() {
-        when(entityManager.createQuery(anyString(), eq(Object[].class)))
-                .thenReturn(summaryQuery, bucketQuery);
         when(summaryQuery.getSingleResult())
                 .thenReturn(new Object[]{new BigDecimal("10.00"), 1L, 1L});
         when(bucketQuery.getResultList()).thenReturn(List.<Object[]>of(
@@ -223,8 +229,6 @@ class InsightsQueryServiceTest {
 
     @Test
     void query_groupByWeek_formatsTemporalKey() {
-        when(entityManager.createQuery(anyString(), eq(Object[].class)))
-                .thenReturn(summaryQuery, bucketQuery);
         when(summaryQuery.getSingleResult())
                 .thenReturn(new Object[]{new BigDecimal("10.00"), 1L, 1L});
         when(bucketQuery.getResultList()).thenReturn(List.<Object[]>of(
@@ -237,8 +241,6 @@ class InsightsQueryServiceTest {
 
     @Test
     void query_groupByYear_formatsTemporalKey() {
-        when(entityManager.createQuery(anyString(), eq(Object[].class)))
-                .thenReturn(summaryQuery, bucketQuery);
         when(summaryQuery.getSingleResult())
                 .thenReturn(new Object[]{new BigDecimal("10.00"), 1L, 1L});
         when(bucketQuery.getResultList()).thenReturn(List.<Object[]>of(
@@ -251,8 +253,6 @@ class InsightsQueryServiceTest {
 
     @Test
     void query_groupByMarket_usesMarketNameAsLabelAndCnpjFallback() {
-        when(entityManager.createQuery(anyString(), eq(Object[].class)))
-                .thenReturn(summaryQuery, bucketQuery);
         when(summaryQuery.getSingleResult())
                 .thenReturn(new Object[]{new BigDecimal("30.00"), 2L, 4L});
         when(bucketQuery.getResultList()).thenReturn(List.<Object[]>of(
@@ -268,8 +268,6 @@ class InsightsQueryServiceTest {
 
     @Test
     void query_groupByChain_fallsBackToCnpjRoot() {
-        when(entityManager.createQuery(anyString(), eq(Object[].class)))
-                .thenReturn(summaryQuery, bucketQuery);
         when(summaryQuery.getSingleResult())
                 .thenReturn(new Object[]{new BigDecimal("10.00"), 1L, 2L});
         when(bucketQuery.getResultList()).thenReturn(List.<Object[]>of(
@@ -283,8 +281,6 @@ class InsightsQueryServiceTest {
 
     @Test
     void query_groupByProduct_usesNameLabelAndUnknownFallback() {
-        when(entityManager.createQuery(anyString(), eq(Object[].class)))
-                .thenReturn(summaryQuery, bucketQuery);
         when(summaryQuery.getSingleResult())
                 .thenReturn(new Object[]{new BigDecimal("30.00"), 2L, 4L});
         var productId = UUID.randomUUID();
@@ -302,8 +298,6 @@ class InsightsQueryServiceTest {
 
     @Test
     void query_echoesFiltersAndClampsLimit() {
-        when(entityManager.createQuery(anyString(), eq(Object[].class)))
-                .thenReturn(summaryQuery, bucketQuery);
         when(summaryQuery.getSingleResult())
                 .thenReturn(new Object[]{new BigDecimal("5.00"), 1L, 1L});
         when(bucketQuery.getResultList()).thenReturn(List.<Object[]>of(
@@ -359,8 +353,6 @@ class InsightsQueryServiceTest {
     void query_householdCategoryLens_negativeLimit_doesNotThrow() {
         var arroz = UUID.randomUUID();
         var receiptOne = UUID.randomUUID();
-        when(entityManager.createQuery(anyString(), eq(Object[].class)))
-                .thenReturn(summaryQuery, bucketQuery);
         when(summaryQuery.getSingleResult())
                 .thenReturn(new Object[]{new BigDecimal("20.00"), 1L, 1L});
         when(bucketQuery.getResultList()).thenReturn(List.<Object[]>of(
@@ -384,7 +376,6 @@ class InsightsQueryServiceTest {
 
     @Test
     void query_bindsAllOptionalFilterParameters() {
-        when(entityManager.createQuery(anyString(), eq(Object[].class))).thenReturn(summaryQuery);
         when(summaryQuery.getSingleResult())
                 .thenReturn(new Object[]{new BigDecimal("5.00"), 1L, 1L});
 
@@ -414,7 +405,6 @@ class InsightsQueryServiceTest {
 
     @Test
     void query_bindsOnlyMandatoryParametersWhenNoFilters() {
-        when(entityManager.createQuery(anyString(), eq(Object[].class))).thenReturn(summaryQuery);
         when(summaryQuery.getSingleResult())
                 .thenReturn(new Object[]{new BigDecimal("5.00"), 1L, 1L});
 
@@ -423,5 +413,50 @@ class InsightsQueryServiceTest {
         // householdId, status, from, to only — no optional filters bound
         verify(summaryQuery, times(4)).setParameter(anyString(), any());
         verify(summaryQuery, never()).setMaxResults(anyInt());
+    }
+
+    @Test
+    void query_receiptLevelDimension_attachesPerBucketDiscountAndTotal() {
+        when(summaryQuery.getSingleResult())
+                .thenReturn(new Object[]{new BigDecimal("100.00"), 2L, 5L});
+        when(bucketQuery.getResultList()).thenReturn(List.<Object[]>of(
+                new Object[]{2026, 4, new BigDecimal("60.00"), 1L, 3L},
+                new Object[]{2026, 5, new BigDecimal("40.00"), 1L, 2L}));
+        // totalDiscount: DISTINCT (receiptId, discountTotal)
+        when(totalDiscountQuery.getResultList()).thenReturn(List.<Object[]>of(
+                new Object[]{UUID.randomUUID(), new BigDecimal("5.00")},
+                new Object[]{UUID.randomUUID(), new BigDecimal("3.00")}));
+        // per-bucket discount: DISTINCT (receiptId, year, month, discountTotal)
+        when(bucketDiscountQuery.getResultList()).thenReturn(List.<Object[]>of(
+                new Object[]{UUID.randomUUID(), 2026, 4, new BigDecimal("5.00")},
+                new Object[]{UUID.randomUUID(), 2026, 5, new BigDecimal("3.00")}));
+
+        var response = insightsQueryService.query(user, filtersWith(InsightsGroupBy.MONTH));
+
+        assertEquals(0, new BigDecimal("8.00").compareTo(response.summary().totalDiscount()));
+        var april = response.buckets().get(0);
+        assertEquals("2026-04", april.key());
+        assertEquals(0, new BigDecimal("5.00").compareTo(april.discount()));
+        var may = response.buckets().get(1);
+        assertEquals("2026-05", may.key());
+        assertEquals(0, new BigDecimal("3.00").compareTo(may.discount()));
+    }
+
+    @Test
+    void query_itemLevelDimension_hasNullBucketDiscountButStillReportsTotal() {
+        when(summaryQuery.getSingleResult())
+                .thenReturn(new Object[]{new BigDecimal("60.00"), 3L, 9L});
+        when(bucketQuery.getResultList()).thenReturn(List.<Object[]>of(
+                new Object[]{ProductCategory.GROCERIES, new BigDecimal("40.00"), 2L, 5L}));
+        when(totalDiscountQuery.getResultList()).thenReturn(List.<Object[]>of(
+                new Object[]{UUID.randomUUID(), new BigDecimal("4.00")}));
+
+        var response = insightsQueryService.query(user,
+                filtersWith(InsightsGroupBy.CATEGORY, CategoryView.GLOBAL));
+
+        // period-level discount is still reported...
+        assertEquals(0, new BigDecimal("4.00").compareTo(response.summary().totalDiscount()));
+        // ...but a receipt-level discount can't be attributed to a category bucket
+        assertEquals(null, response.buckets().get(0).discount());
     }
 }

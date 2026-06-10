@@ -73,7 +73,7 @@ public class DashboardCacheService {
                 ? spendInsights.total().divide(BigDecimal.valueOf(receiptCount), 2, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
         var spendSnapshot = new SpendSnapshot(ym.getYear(), ym.getMonthValue(),
-                spendInsights.total(), receiptCount, avgTicket);
+                spendInsights.total(), spendInsights.totalDiscount(), receiptCount, avgTicket);
 
         var householdId = user.getHousehold().getId();
         var recentReceipts = receiptRepository

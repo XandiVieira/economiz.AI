@@ -22,10 +22,13 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.Month;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Function;
 
 @Slf4j
 @Service
@@ -53,11 +56,19 @@ public class InsightsService {
         var fromBound = from != null ? from : EPOCH_FLOOR;
         var toBound = to != null ? to : EPOCH_CEIL;
         var total = insightsRepository.totalSpend(householdId, fromBound, toBound);
+        var totalDiscount = toBigDecimal(insightsRepository.totalDiscount(householdId, fromBound, toBound));
+        var discountByMonth = discountMap(insightsRepository.discountByMonth(householdId, fromBound, toBound),
+                row -> pairKey(((Number) row[0]).intValue(), ((Number) row[1]).intValue()));
+        var discountByWeek = discountMap(insightsRepository.discountByWeek(householdId, fromBound, toBound),
+                row -> pairKey(((Number) row[0]).intValue(), ((Number) row[1]).intValue()));
+        var discountByMarket = discountMap(insightsRepository.discountByMarket(householdId, fromBound, toBound),
+                row -> (String) row[0]);
         var byMonth = insightsRepository.spendByMonth(householdId, fromBound, toBound).stream()
                 .map(row -> new SpendInsightsResponse.MonthBucket(
                         ((Number) row[0]).intValue(),
                         ((Number) row[1]).intValue(),
                         toBigDecimal(row[2]),
+                        discountFor(discountByMonth, pairKey(((Number) row[0]).intValue(), ((Number) row[1]).intValue())),
                         ((Number) row[3]).longValue()))
                 .toList();
         var byWeek = insightsRepository.spendByWeek(householdId, fromBound, toBound).stream()
@@ -65,6 +76,7 @@ public class InsightsService {
                         ((Number) row[0]).intValue(),
                         ((Number) row[1]).intValue(),
                         toBigDecimal(row[2]),
+                        discountFor(discountByWeek, pairKey(((Number) row[0]).intValue(), ((Number) row[1]).intValue())),
                         ((Number) row[3]).longValue()))
                 .toList();
         var marketBuckets = insightsRepository.spendByMarket(householdId, fromBound, toBound).stream()
@@ -73,6 +85,7 @@ public class InsightsService {
                         (String) row[1],
                         (String) row[1],
                         toBigDecimal(row[2]),
+                        discountFor(discountByMarket, (String) row[0]),
                         ((Number) row[3]).longValue()))
                 .toList();
         var marketOverrides = marketNameService.resolveNames(householdId, marketBuckets.stream()
@@ -90,8 +103,28 @@ public class InsightsService {
                         toBigDecimal(row[1]),
                         ((Number) row[2]).longValue()))
                 .toList();
-        log.debug("Spend insights for household {} (from={}, to={}): total={}", householdId, from, to, total);
-        return new SpendInsightsResponse(from, to, total, byMonth, byWeek, byMarket, byCategory);
+        log.debug("Spend insights for household {} (from={}, to={}): total={} discount={}",
+                householdId, from, to, total, totalDiscount);
+        return new SpendInsightsResponse(from, to, total, totalDiscount, byMonth, byWeek, byMarket, byCategory);
+    }
+
+    /** Index receipt-level discount rows by a bucket key for O(1) lookup when merging into spend buckets. */
+    private static Map<String, BigDecimal> discountMap(List<Object[]> rows, Function<Object[], String> keyOf) {
+        var map = new HashMap<String, BigDecimal>();
+        for (var row : rows) {
+            var key = keyOf.apply(row);
+            if (key != null) map.merge(key, toBigDecimal(row[row.length - 1]), BigDecimal::add);
+        }
+        return map;
+    }
+
+    private static BigDecimal discountFor(Map<String, BigDecimal> discounts, String key) {
+        return discounts.getOrDefault(key, BigDecimal.ZERO);
+    }
+
+    /** Stable key joining two grouping ints (year+month or year+week). */
+    private static String pairKey(int first, int second) {
+        return first + "-" + second;
     }
 
     @Transactional(readOnly = true)

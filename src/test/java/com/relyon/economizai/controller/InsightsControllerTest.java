@@ -54,10 +54,10 @@ class InsightsControllerTest {
     void spend_returnsAggregatedResponse() throws Exception {
         var user = buildUser();
         var response = new SpendInsightsResponse(
-                null, null, new BigDecimal("250.50"),
-                List.of(new SpendInsightsResponse.MonthBucket(2026, 4, new BigDecimal("250.50"), 3L)),
-                List.of(new SpendInsightsResponse.WeekBucket(2026, 17, new BigDecimal("250.50"), 3L)),
-                List.of(new SpendInsightsResponse.MarketBucket("12345678000190", "Mercado X", "Mercado X", new BigDecimal("250.50"), 3L)),
+                null, null, new BigDecimal("250.50"), new BigDecimal("5.00"),
+                List.of(new SpendInsightsResponse.MonthBucket(2026, 4, new BigDecimal("250.50"), new BigDecimal("5.00"), 3L)),
+                List.of(new SpendInsightsResponse.WeekBucket(2026, 17, new BigDecimal("250.50"), new BigDecimal("5.00"), 3L)),
+                List.of(new SpendInsightsResponse.MarketBucket("12345678000190", "Mercado X", "Mercado X", new BigDecimal("250.50"), new BigDecimal("5.00"), 3L)),
                 List.of(SpendInsightsResponse.CategoryBucket.ofEnum(ProductCategory.GROCERIES, new BigDecimal("100.00"), 5L))
         );
         when(insightsService.spend(any(User.class), any(), any())).thenReturn(response);
@@ -74,7 +74,7 @@ class InsightsControllerTest {
     @Test
     void topMarkets_respectsLimit() throws Exception {
         var user = buildUser();
-        var bucket = new SpendInsightsResponse.MarketBucket("123", "Mercado X", "Mercado X", new BigDecimal("100"), 2L);
+        var bucket = new SpendInsightsResponse.MarketBucket("123", "Mercado X", "Mercado X", new BigDecimal("100"), new BigDecimal("2.00"), 2L);
         when(insightsService.topMarkets(any(User.class), any(), any(), anyInt())).thenReturn(List.of(bucket));
 
         mockMvc.perform(get("/api/v1/insights/markets/top?limit=3")

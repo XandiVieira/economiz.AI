@@ -48,6 +48,7 @@ public record InsightsQueryResponse(
 
     public record Summary(
             BigDecimal total,
+            BigDecimal totalDiscount,
             long receiptCount,
             long itemCount,
             BigDecimal averageTicket
@@ -60,12 +61,25 @@ public record InsightsQueryResponse(
      * isn't readable on its own (e.g. market name for a CNPJ key, product name
      * for a product-id key).
      */
+    /**
+     * {@code discount} is the receipt-level discount aggregated for this bucket,
+     * provided only for receipt-level groupings (day/week/month/year/market/chain
+     * — where each receipt falls wholly in one bucket). It is {@code null} for
+     * category/product groupings, where a receipt-level discount can't be split
+     * across buckets without distribution; use {@code summary.totalDiscount} there.
+     */
     public record Bucket(
             String key,
             String label,
             BigDecimal total,
+            BigDecimal discount,
             long receiptCount,
             long itemCount,
             BigDecimal averageTicket
-    ) {}
+    ) {
+        /** Copy with the per-bucket discount filled in. */
+        public Bucket withDiscount(BigDecimal discount) {
+            return new Bucket(key, label, total, discount, receiptCount, itemCount, averageTicket);
+        }
+    }
 }

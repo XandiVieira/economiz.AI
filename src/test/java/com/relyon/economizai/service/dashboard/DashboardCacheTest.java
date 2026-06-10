@@ -59,7 +59,7 @@ class DashboardCacheTest {
                 .household(Household.builder().id(UUID.randomUUID()).build())
                 .build();
         when(insightsService.spend(eq(user), any(), any())).thenReturn(
-                new SpendInsightsResponse(null, null, BigDecimal.ZERO, List.of(), List.of(), List.of(), List.of()));
+                new SpendInsightsResponse(null, null, BigDecimal.ZERO, BigDecimal.ZERO, List.of(), List.of(), List.of(), List.of()));
         when(consumptionService.suggestedList(eq(user), eq(false), eq(0)))
                 .thenReturn(new SuggestedShoppingListResponse(List.of(), null));
         when(communityPromoService.detectAll(any(), any(), any(), any())).thenReturn(List.of());

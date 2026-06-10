@@ -47,6 +47,67 @@ public interface InsightsRepository extends JpaRepository<Receipt, UUID> {
                                 @Param("from") LocalDateTime from,
                                 @Param("to") LocalDateTime to);
 
+    // Receipt-level discount aggregations. These query Receipt directly (NO item
+    // join) so the receipt-level discountTotal is counted once per receipt, never
+    // multiplied by the line-item count. Item prices stay gross everywhere; the
+    // discount is reported alongside as a separate figure per displayed slice.
+
+    @Query("""
+        SELECT COALESCE(SUM(r.discountTotal), 0)
+        FROM Receipt r
+        WHERE r.household.id = :householdId
+          AND r.status = 'CONFIRMED'
+          AND r.issuedAt >= :from
+          AND r.issuedAt <= :to
+    """)
+    BigDecimal totalDiscount(@Param("householdId") UUID householdId,
+                             @Param("from") LocalDateTime from,
+                             @Param("to") LocalDateTime to);
+
+    @Query("""
+        SELECT EXTRACT(YEAR FROM r.issuedAt) AS year,
+               EXTRACT(MONTH FROM r.issuedAt) AS month,
+               COALESCE(SUM(r.discountTotal), 0) AS discount
+        FROM Receipt r
+        WHERE r.household.id = :householdId
+          AND r.status = 'CONFIRMED'
+          AND r.issuedAt >= :from
+          AND r.issuedAt <= :to
+        GROUP BY EXTRACT(YEAR FROM r.issuedAt), EXTRACT(MONTH FROM r.issuedAt)
+    """)
+    List<Object[]> discountByMonth(@Param("householdId") UUID householdId,
+                                   @Param("from") LocalDateTime from,
+                                   @Param("to") LocalDateTime to);
+
+    @Query("""
+        SELECT EXTRACT(YEAR FROM r.issuedAt) AS year,
+               EXTRACT(WEEK FROM r.issuedAt) AS week,
+               COALESCE(SUM(r.discountTotal), 0) AS discount
+        FROM Receipt r
+        WHERE r.household.id = :householdId
+          AND r.status = 'CONFIRMED'
+          AND r.issuedAt >= :from
+          AND r.issuedAt <= :to
+        GROUP BY EXTRACT(YEAR FROM r.issuedAt), EXTRACT(WEEK FROM r.issuedAt)
+    """)
+    List<Object[]> discountByWeek(@Param("householdId") UUID householdId,
+                                  @Param("from") LocalDateTime from,
+                                  @Param("to") LocalDateTime to);
+
+    @Query("""
+        SELECT r.cnpjEmitente AS cnpj,
+               COALESCE(SUM(r.discountTotal), 0) AS discount
+        FROM Receipt r
+        WHERE r.household.id = :householdId
+          AND r.status = 'CONFIRMED'
+          AND r.issuedAt >= :from
+          AND r.issuedAt <= :to
+        GROUP BY r.cnpjEmitente
+    """)
+    List<Object[]> discountByMarket(@Param("householdId") UUID householdId,
+                                    @Param("from") LocalDateTime from,
+                                    @Param("to") LocalDateTime to);
+
     @Query("""
         SELECT r.cnpjEmitente AS cnpj,
                MAX(r.marketName) AS marketName,

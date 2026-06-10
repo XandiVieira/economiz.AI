@@ -32,6 +32,7 @@ public record DashboardResponse(
             int year,
             int month,
             BigDecimal total,
+            BigDecimal discount,
             long receiptCount,
             BigDecimal averageTicket
     ) {}

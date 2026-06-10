@@ -10,18 +10,19 @@ public record SpendInsightsResponse(
         LocalDateTime from,
         LocalDateTime to,
         BigDecimal total,
+        BigDecimal totalDiscount,
         List<MonthBucket> byMonth,
         List<WeekBucket> byWeek,
         List<MarketBucket> byMarket,
         List<CategoryBucket> byCategory
 ) {
-    public record MonthBucket(int year, int month, BigDecimal total, long receiptCount) {}
-    public record WeekBucket(int year, int week, BigDecimal total, long receiptCount) {}
+    public record MonthBucket(int year, int month, BigDecimal total, BigDecimal discount, long receiptCount) {}
+    public record WeekBucket(int year, int week, BigDecimal total, BigDecimal discount, long receiptCount) {}
     public record MarketBucket(String cnpj, String marketName, String marketFriendlyName,
-                               BigDecimal total, long receiptCount) {
+                               BigDecimal total, BigDecimal discount, long receiptCount) {
         /** Copy with the household's custom display name applied; leaves the original {@code marketName} intact. */
         public MarketBucket withMarketFriendlyName(String marketFriendlyName) {
-            return new MarketBucket(cnpj, marketName, marketFriendlyName, total, receiptCount);
+            return new MarketBucket(cnpj, marketName, marketFriendlyName, total, discount, receiptCount);
         }
     }
     /**
