@@ -81,6 +81,17 @@ public class CanonicalizationService {
         }
     }
 
+    /**
+     * Links one item to a canonical {@link Product} by trying each matching
+     * strategy in priority order:
+     * <ol>
+     *   <li>already linked → nothing to do;</li>
+     *   <li>has EAN → exact code, metadata dedup, or create-new (the EAN path
+     *       always resolves, hence its own terminal branch);</li>
+     *   <li>no EAN → exact-alias then fuzzy-alias on the normalized description.</li>
+     * </ol>
+     * Falls through to UNMATCHED only when an EAN-less item matches no alias.
+     */
     private ItemResult canonicalizeItem(ReceiptItem item, boolean pharmacyMerchant) {
         if (item.getProduct() != null) {
             log.info("item.skip already linked product={}", abbrev(item.getProduct().getId()));
@@ -90,33 +101,55 @@ public class CanonicalizationService {
         var normalized = DescriptionNormalizer.normalize(item.getRawDescription());
 
         if (hasEan(item)) {
-            var byEan = productRepository.findByEan(item.getEan());
-            if (byEan.isPresent()) {
-                item.setProduct(byEan.get());
-                ensureAlias(byEan.get(), item.getRawDescription(), normalized);
-                log.info("item.matched_by_ean ean={} product={}", item.getEan(), abbrev(byEan.get().getId()));
-                return ItemResult.MATCHED;
-            }
-            var extraction = productExtractor.extract(item.getRawDescription());
-            var dedup = tryMetadataDedup(extraction);
-            if (dedup != null) {
-                item.setProduct(dedup);
-                ensureAlias(dedup, item.getRawDescription(), normalized);
-                log.info("item.matched_by_metadata ean={} product={} brand={} pack={}{}",
-                        item.getEan(), abbrev(dedup.getId()), extraction.brand(),
-                        extraction.packSize(), extraction.packUnit());
-                return ItemResult.MATCHED;
-            }
-            var newProduct = buildEnrichedProduct(item, extraction);
-            applyPharmacyMerchantFallback(newProduct, pharmacyMerchant);
-            var created = productRepository.save(newProduct);
-            item.setProduct(created);
-            ensureAlias(created, item.getRawDescription(), normalized);
-            log.info("item.created_from_ean ean={} product={} description='{}' extracted={}",
-                    item.getEan(), abbrev(created.getId()), item.getRawDescription(), extraction);
-            return ItemResult.CREATED;
+            return canonicalizeByEan(item, normalized, pharmacyMerchant);
         }
+        return canonicalizeByAlias(item, normalized);
+    }
 
+    /**
+     * EAN path: exact code match → metadata dedup → create a new product.
+     * Always terminal — an item with an EAN ends up either matched or created,
+     * never unmatched.
+     */
+    private ItemResult canonicalizeByEan(ReceiptItem item, String normalized, boolean pharmacyMerchant) {
+        var byEan = productRepository.findByEan(item.getEan());
+        if (byEan.isPresent()) {
+            item.setProduct(byEan.get());
+            ensureAlias(byEan.get(), item.getRawDescription(), normalized);
+            log.info("item.matched_by_ean ean={} product={}", item.getEan(), abbrev(byEan.get().getId()));
+            return ItemResult.MATCHED;
+        }
+        var extraction = productExtractor.extract(item.getRawDescription());
+        var dedup = tryMetadataDedup(extraction);
+        if (dedup != null) {
+            item.setProduct(dedup);
+            ensureAlias(dedup, item.getRawDescription(), normalized);
+            log.info("item.matched_by_metadata ean={} product={} brand={} pack={}{}",
+                    item.getEan(), abbrev(dedup.getId()), extraction.brand(),
+                    extraction.packSize(), extraction.packUnit());
+            return ItemResult.MATCHED;
+        }
+        return createProductFromEan(item, normalized, extraction, pharmacyMerchant);
+    }
+
+    private ItemResult createProductFromEan(ReceiptItem item, String normalized,
+                                            ProductExtraction extraction, boolean pharmacyMerchant) {
+        var newProduct = buildEnrichedProduct(item, extraction);
+        applyPharmacyMerchantFallback(newProduct, pharmacyMerchant);
+        var created = productRepository.save(newProduct);
+        item.setProduct(created);
+        ensureAlias(created, item.getRawDescription(), normalized);
+        log.info("item.created_from_ean ean={} product={} description='{}' extracted={}",
+                item.getEan(), abbrev(created.getId()), item.getRawDescription(), extraction);
+        return ItemResult.CREATED;
+    }
+
+    /**
+     * No-EAN path: exact-alias match → fuzzy-alias match. Unlike the EAN path
+     * this never creates a product — an EAN-less item we can't place is left
+     * UNMATCHED for manual review rather than spawning a low-confidence row.
+     */
+    private ItemResult canonicalizeByAlias(ReceiptItem item, String normalized) {
         var byAlias = aliasRepository.findByNormalizedDescription(normalized);
         if (byAlias.isPresent()) {
             item.setProduct(byAlias.get().getProduct());
