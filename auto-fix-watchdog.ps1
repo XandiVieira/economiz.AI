@@ -313,15 +313,30 @@ function Signature([string]$line, [string]$snippet = "") {
 # current count (ignore all pre-existing history); a shrink (rotation/redeploy)
 # resets it. $script: so it persists across calls.
 $script:logLineMark = $null
+# Cap on lines pulled in one poll. The poll interval is short, so only a handful
+# of lines are ever new; this bounds the tail read so we NEVER load the whole
+# (multi-MB, ever-growing) log into memory. A burst bigger than this just spills
+# to the next poll - acceptable, and far better than the cold-boot stall that a
+# full-file Get-Content caused (the watchdog was killed mid-read 3min after boot).
+$script:logTailCap = 4000
 function ReadNewLogLines {
     $appLog = ResolveAppLog
     if (Test-Path $appLog) {
         try {
-            $all = @(Get-Content -Path $appLog -ErrorAction Stop)
-            $count = $all.Count
+            # Count lines WITHOUT materializing the file: a streaming reader holds
+            # one line at a time, so memory stays flat regardless of file size.
+            $count = 0
+            $reader = [System.IO.File]::OpenText($appLog)
+            try { while ($null -ne $reader.ReadLine()) { $count++ } } finally { $reader.Dispose() }
+
             if ($null -eq $script:logLineMark) { $script:logLineMark = $count; return ,@() }
-            if ($count -lt $script:logLineMark) { $script:logLineMark = 0 }
-            $new = if ($count -gt $script:logLineMark) { $all[$script:logLineMark..($count-1)] } else { @() }
+            if ($count -lt $script:logLineMark) { $script:logLineMark = 0 }   # rotation/redeploy shrank the file
+            if ($count -le $script:logLineMark) { return ,@() }
+
+            # Read only the new tail. Bounded by $logTailCap so a huge backlog
+            # (first poll after a shrink, or a flood) never balloons memory.
+            $newCount = [Math]::Min($count - $script:logLineMark, $script:logTailCap)
+            $new = @(Get-Content -Path $appLog -Tail $newCount -ErrorAction Stop)
             $script:logLineMark = $count
             return ,@($new)
         } catch {
