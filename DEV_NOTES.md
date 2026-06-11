@@ -318,10 +318,9 @@ Helper scripts at repo root (run each in an **Administrator** PowerShell once):
 
 ## Monitoring / ops
 
-### `/actuator/prometheus` is public (no auth)
-- **Now**: `/actuator/prometheus` is exposed and `permitAll`'d so a scraper can hit it without credentials. Leaks JVM stats, request counts per route, error rates, GC timings.
-- **Why OK for dev**: nobody is scraping yet, the data is only useful with context, and no scraper SDK natively does JWT bearer auth.
-- **Fix before serious traffic**: tighten via one of (a) basic auth on the actuator chain, (b) IP allowlist to the scraper's egress, (c) a separate management port not exposed to the internet, (d) a dedicated `metrics-scraper` service account behind the existing JWT filter. ~30 min.
+### ~~`/actuator/prometheus` is public (no auth)~~ — RESOLVED (2026-06-11)
+- **Fixed**: `/actuator/prometheus` now sits behind a dedicated HTTP Basic security chain (`SecurityConfig.metricsSecurityFilterChain`, `@Order(1)`), with the credential from `economizai.metrics.username/password` (`METRICS_USERNAME`/`METRICS_PASSWORD`). **Fail-closed**: blank password ⇒ no user ⇒ every request 401, so it's never exposed unauthenticated. `/actuator/health` stays public on the main chain for UptimeRobot.
+- **Remaining (infra, not code)**: nothing scrapes it yet — stand up Prometheus + Grafana on the box and set `METRICS_PASSWORD`. Steps in INFRASTRUCTURE.md → Monitoring → Metrics.
 
 ### Logs go to stdout only — no aggregation
 - **Now**: Render captures stdout. Searchable in their dashboard but no retention beyond the free-tier window.

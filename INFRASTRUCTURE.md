@@ -120,7 +120,8 @@ FE anywhere ──https──▶ economizai.economizai.workers.dev   (permanent 
 ## Config & secrets (`.env`)
 
 - `.env` at repo root (gitignored): `DB_USERNAME/PASSWORD`, `JWT_SECRET` (CSPRNG),
-  `CORS_ORIGINS` (localhost + LAN IP + the workers.dev URL), `NOTIFICATIONS_EMAIL_ENABLED`.
+  `CORS_ORIGINS` (localhost + LAN IP + the workers.dev URL), `NOTIFICATIONS_EMAIL_ENABLED`,
+  `METRICS_PASSWORD` (+ optional `METRICS_USERNAME`) to enable Prometheus scraping — blank = `/actuator/prometheus` is locked (401).
 - **⚠️ Two copies:** the runner service can't reliably read the OneDrive path, so a
   copy lives at **`C:\actions-runner\.env`**. **If you change `.env`, update BOTH** or
   auto-deploy uses stale values.
@@ -182,6 +183,32 @@ DB data and profile pictures already live in Docker named volumes
 - **UptimeRobot** (free) pings `…/actuator/health` every 5 min, emails/pushes on
   down/up. Catches outages the watchdog can't self-heal (machine off, internet down).
 - **→ prod:** add latency/error-rate alerting, status page, on-call.
+
+### Metrics — `/actuator/prometheus` (HTTP Basic protected)
+
+The app exposes Prometheus metrics at `/actuator/prometheus`. It is **fail-closed**:
+with no password set it returns `401` to everyone (so it's never leaked publicly).
+`/actuator/health` stays public for UptimeRobot.
+
+To enable scraping:
+1. In the server `.env` set `METRICS_PASSWORD` (and optionally `METRICS_USERNAME`,
+   default `metrics`), then `docker compose --profile server up -d` to apply.
+2. Scrape over the **LAN** (`http://192.168.68.108:8080/actuator/prometheus`),
+   not the public tunnel. Example `prometheus.yml` job:
+   ```yaml
+   scrape_configs:
+     - job_name: economizai
+       metrics_path: /actuator/prometheus
+       basic_auth: { username: metrics, password: <METRICS_PASSWORD> }
+       static_configs:
+         - targets: ['192.168.68.108:8080']
+   ```
+3. **Grafana** (not yet installed): add Prometheus as a data source and import a
+   Spring Boot / JVM (Micrometer) dashboard, e.g. dashboard ID `4701` or `11378`.
+   Run both as containers on the box (compose) when set up.
+
+**Not yet done:** Prometheus + Grafana aren't running on the box yet — the endpoint
+is ready and secured; standing up the scraper + dashboards is the remaining step.
 
 ---
 
