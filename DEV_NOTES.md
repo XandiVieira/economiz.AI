@@ -127,16 +127,16 @@ mirror entries here.
 
 ## Security / secrets
 
-### JWT secret in code default = weak placeholder
-- **Now**: `application.yaml` has `JWT_SECRET=economizai-dev-secret-key-...for-hs256` as a fallback default. Production overrides via env.
+### JWT secret in code default = weak placeholder — SOLVED for prod (2026-06-12)
+- **Now**: the dev fallback only exists on the `dev` profile (default). The `prod`
+  profile (`application-prod.yaml`, activated with `SPRING_PROFILES_ACTIVE=prod`)
+  declares `jwt.secret: ${JWT_SECRET}` with NO default → boot fails if unset.
 - **Why OK for dev**: every dev machine has the same predictable token signing for testing.
-- **Why NOT OK for prod**: if the env var is ever forgotten, the placeholder kicks in and anyone can forge tokens.
-- **Fix before prod**: drop the default entirely so the app fails to start without a real secret. Or have `JwtService` panic-on-startup if the secret matches the known dev value. ~10 min.
 
-### CORS still includes localhost
-- **Now**: production `CORS_ORIGINS` env still has `http://localhost:3000,http://localhost:5173` — needed while FE is in dev.
-- **Why NOT OK for prod**: any localhost-served page can hit prod with a logged-in user's token if they get one. Edge-case but real.
-- **Fix before prod launch**: drop localhost entries, leave only the deployed FE origin(s). ~1 min in Render env tab.
+### CORS still includes localhost — SOLVED for prod (2026-06-12)
+- **Now**: localhost fallback only on the `dev` profile. The `prod` profile requires
+  `CORS_ORIGINS` (no default) → set only the deployed FE origin(s) at deploy time.
+- **Why OK for dev**: FE devs hit the dev server from localhost.
 
 ---
 

@@ -1,0 +1,7 @@
+# Dev profile — active by default (spring.profiles.default: dev).
+#
+# Intentionally thin: every dev value (localhost DB, weak JWT fallback,
+# localhost CORS, SMTP off, swagger on) already lives in application.yaml as
+# an env-var fallback, so the self-hosted dev server and local Maven runs work
+# with no extra setup. Add a key here only when dev needs to DIFFER from the
+# shared base rather than just fall back.

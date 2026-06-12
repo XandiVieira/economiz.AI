@@ -1,6 +1,12 @@
 spring:
   application:
     name: economizai
+  profiles:
+    # No profile set (local Maven run, current dev server) → "dev" activates.
+    # The prod deploy must set SPRING_PROFILES_ACTIVE=prod explicitly, which
+    # layers application-prod.yaml on top of this file (strict, no weak
+    # fallbacks). Values below are the shared base + dev-friendly defaults.
+    default: dev
   servlet:
     multipart:
       max-file-size: 6MB     # leaves headroom over the app-level 5MB profile-picture cap

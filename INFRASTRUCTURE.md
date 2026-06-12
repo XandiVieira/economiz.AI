@@ -249,6 +249,12 @@ Plus the **GitHub runner** Windows service (`actions.runner.XandiVieira-economiz
 When the time comes, this is the dev→prod swap (most are "delete the home-box
 workaround, use the platform feature"):
 
+0. **Spring profile:** set `SPRING_PROFILES_ACTIVE=prod`. No profile (today's
+   setup) defaults to `dev` and keeps every current fallback, so the dev box
+   needs no change. The `prod` profile (`application-prod.yaml`) has NO weak
+   defaults — boot fails unless `DATABASE_URL`, `DB_USERNAME`, `DB_PASSWORD`,
+   `JWT_SECRET`, `CORS_ORIGINS`, `FRONTEND_BASE_URL` are set — and disables
+   Swagger. The file's header is the full prod env-var checklist.
 1. **Host:** home Windows box → managed platform (Fly.io / Railway / paid Render / VPS).
    Deletes: all scheduled tasks, the self-hosted runner, the always-on scripts.
 2. **DB:** Docker Postgres on one disk → managed Postgres (Neon/Supabase/RDS) with
@@ -264,4 +270,4 @@ workaround, use the platform feature"):
 
 ---
 
-_Last updated: 2026-06-06. Keep this in sync when infra changes._
+_Last updated: 2026-06-12. Keep this in sync when infra changes._
