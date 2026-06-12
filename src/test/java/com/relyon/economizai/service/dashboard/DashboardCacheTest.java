@@ -81,4 +81,29 @@ class DashboardCacheTest {
         dashboardCacheService.core(user);
         verify(insightsService, times(2)).spend(eq(user), any(), any());
     }
+
+    @Test
+    void bumpingAnotherHousehold_keepsCoreCached() {
+        dashboardCacheService.core(user);
+        householdCacheGen.bump(UUID.randomUUID());
+        dashboardCacheService.core(user);
+        verify(insightsService, times(1)).spend(eq(user), any(), any());
+    }
+
+    @Test
+    void differentUsers_getDistinctCacheEntries() {
+        var housemate = User.builder().id(UUID.randomUUID()).email("h@e")
+                .household(user.getHousehold())
+                .build();
+        when(insightsService.spend(eq(housemate), any(), any())).thenReturn(
+                new SpendInsightsResponse(null, null, BigDecimal.ZERO, BigDecimal.ZERO, List.of(), List.of(), List.of(), List.of()));
+        when(consumptionService.suggestedList(eq(housemate), eq(false), eq(0)))
+                .thenReturn(new SuggestedShoppingListResponse(List.of(), null));
+
+        dashboardCacheService.core(user);
+        dashboardCacheService.core(housemate);
+
+        verify(insightsService, times(1)).spend(eq(user), any(), any());
+        verify(insightsService, times(1)).spend(eq(housemate), any(), any());
+    }
 }

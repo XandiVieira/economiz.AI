@@ -11,6 +11,7 @@ import com.relyon.economizai.model.ProductAlias;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.CategorizationSource;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.repository.ProductAliasRepository;
 import com.relyon.economizai.repository.ProductRepository;
@@ -29,6 +30,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -135,6 +137,82 @@ class ProductServiceTest {
 
         assertThrows(ProductNotFoundException.class,
                 () -> productService.addAlias(user, id, request));
+    }
+
+    @Test
+    void createProduct_userCategoryWinsOverExtractorAndMarksSourceUser() {
+        var request = new CreateProductRequest(null, "Arroz Tio Joao", null, null, ProductCategory.GROCERIES, null, null, null);
+        // Extractor disagrees — the user's explicit pick must win, with source USER.
+        when(productExtractor.extract("Arroz Tio Joao")).thenReturn(new ProductExtraction(
+                "Arroz", "Tio Joao", null, null, ProductCategory.OTHER, CategorizationSource.DICTIONARY));
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> {
+            var saved = inv.<Product>getArgument(0);
+            saved.setId(UUID.randomUUID());
+            return saved;
+        });
+
+        var response = productService.create(request);
+
+        assertEquals(ProductCategory.GROCERIES, response.category());
+        assertEquals(CategorizationSource.USER, response.categorizationSource());
+    }
+
+    @Test
+    void createProduct_noCategoryAnywhere_setsSourceNone() {
+        var request = new CreateProductRequest(null, "Produto Misterioso", null, null, null, null, null, null);
+        when(productExtractor.extract("Produto Misterioso")).thenReturn(ProductExtraction.EMPTY);
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> {
+            var saved = inv.<Product>getArgument(0);
+            saved.setId(UUID.randomUUID());
+            return saved;
+        });
+
+        var response = productService.create(request);
+
+        assertNull(response.category());
+        assertEquals(CategorizationSource.NONE, response.categorizationSource());
+        verify(receiptItemRepository, never()).linkByEan(any(Product.class), any());
+    }
+
+    @Test
+    void createProduct_blankEan_skipsDuplicateCheckAndBackfill() {
+        var request = new CreateProductRequest("   ", "Arroz", null, null, null, null, null, null);
+        when(productExtractor.extract("Arroz")).thenReturn(ProductExtraction.EMPTY);
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> {
+            var saved = inv.<Product>getArgument(0);
+            saved.setId(UUID.randomUUID());
+            return saved;
+        });
+
+        var response = productService.create(request);
+
+        assertNull(response.ean());
+        verify(productRepository, never()).findByEan(any());
+        verify(receiptItemRepository, never()).linkByEan(any(Product.class), any());
+    }
+
+    @Test
+    void addAlias_descriptionNormalizingToBlank_throwsConflict() {
+        var user = buildUser();
+        var product = Product.builder().id(UUID.randomUUID()).normalizedName("Arroz").build();
+        when(productRepository.findById(product.getId())).thenReturn(Optional.of(product));
+        var productId = product.getId();
+        // Only symbols/accents-free junk: normalizes to "" and must be rejected before any save.
+        var request = new CreateAliasRequest("!!! ### ***");
+
+        assertThrows(ProductAliasConflictException.class,
+                () -> productService.addAlias(user, productId, request));
+        verify(aliasRepository, never()).save(any());
+        verify(aliasRepository, never()).existsByNormalizedDescription(any());
+    }
+
+    @Test
+    void listUnmatched_emptyWhenHouseholdHasNoUnmatchedItems() {
+        var user = buildUser();
+        when(receiptItemRepository.findUnmatchedForHousehold(user.getHousehold().getId()))
+                .thenReturn(List.of());
+
+        assertEquals(List.of(), productService.listUnmatched(user));
     }
 
     @Test

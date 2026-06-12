@@ -34,7 +34,10 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -121,6 +124,56 @@ class HouseholdProductServiceTest {
         when(receiptItemRepository.findConfirmedHistoryForHousehold(HOUSEHOLD_ID)).thenReturn(List.of());
 
         assertEquals(List.of(), service.listHouseholdProducts(user));
+    }
+
+    @Test
+    void listHouseholdProducts_skipsItemsWithoutProduct() {
+        var product = product("Leite");
+        var matched = item(product, "5.00", CNPJ_ZAFFARI, "Zaffari",
+                LocalDateTime.of(2026, Month.JANUARY, 1, 10, 0));
+        var unmatched = item(null, "9.99", CNPJ_ZAFFARI, "Zaffari",
+                LocalDateTime.of(2026, Month.FEBRUARY, 1, 10, 0));
+        when(receiptItemRepository.findConfirmedHistoryForHousehold(HOUSEHOLD_ID))
+                .thenReturn(List.of(matched, unmatched));
+
+        var result = service.listHouseholdProducts(user);
+
+        assertEquals(1, result.size());
+        assertEquals(product.getId(), result.get(0).productId());
+        assertEquals(1, result.get(0).timesBought());
+    }
+
+    @Test
+    void listHouseholdProducts_fallsBackToConfirmedAtWhenIssuedAtNull() {
+        var product = product("Leite");
+        var confirmedAt = LocalDateTime.of(2026, Month.MARCH, 3, 9, 0);
+        var item = item(product, "5.00", CNPJ_ZAFFARI, "Zaffari", null);
+        item.getReceipt().setConfirmedAt(confirmedAt);
+        when(receiptItemRepository.findConfirmedHistoryForHousehold(HOUSEHOLD_ID))
+                .thenReturn(List.of(item));
+
+        var result = service.listHouseholdProducts(user);
+
+        assertEquals(confirmedAt, result.get(0).lastBoughtAt());
+    }
+
+    @Test
+    void listHouseholdProducts_sortsMostRecentFirstWithUndatedLast() {
+        var older = product("Arroz");
+        var newer = product("Leite");
+        var undated = product("Feijao");
+        var undatedItem = item(undated, "3.00", CNPJ_ZAFFARI, "Zaffari", null);
+        when(receiptItemRepository.findConfirmedHistoryForHousehold(HOUSEHOLD_ID)).thenReturn(List.of(
+                item(older, "5.00", CNPJ_ZAFFARI, "Zaffari", LocalDateTime.of(2026, Month.JANUARY, 1, 10, 0)),
+                item(newer, "4.50", CNPJ_NACIONAL, "Nacional", LocalDateTime.of(2026, Month.FEBRUARY, 1, 10, 0)),
+                undatedItem));
+
+        var result = service.listHouseholdProducts(user);
+
+        assertEquals(3, result.size());
+        assertEquals(newer.getId(), result.get(0).productId());
+        assertEquals(older.getId(), result.get(1).productId());
+        assertEquals(undated.getId(), result.get(2).productId(), "no purchase date sorts last");
     }
 
     // ---------------------------------------------------------- productMarkets
@@ -222,6 +275,118 @@ class HouseholdProductServiceTest {
         service.productMarkets(user, product.getId(), true, 7.5);
 
         verify(priceIndexService).bestMarkets(eq(product.getId()), anyInt(), any(), any(), eq(7.5), any());
+    }
+
+    @Test
+    void productMarkets_lastPurchasePerCnpjWins() {
+        var product = product("Leite");
+        when(productRepository.findById(product.getId())).thenReturn(Optional.of(product));
+        // Same market, oldest -> newest: the newest price must win.
+        var olderItem = item(product, "6.00", CNPJ_ZAFFARI, "Zaffari",
+                LocalDateTime.of(2026, Month.JANUARY, 1, 10, 0));
+        var newerItem = item(product, "5.25", CNPJ_ZAFFARI, "Zaffari",
+                LocalDateTime.of(2026, Month.FEBRUARY, 1, 10, 0));
+        when(receiptItemRepository.findHouseholdHistoryForProduct(product.getId(), HOUSEHOLD_ID))
+                .thenReturn(List.of(olderItem, newerItem));
+        when(marketLocationService.findByCnpjs(any())).thenReturn(Map.of());
+        when(watchedMarketService.watchedCnpjs(user)).thenReturn(Set.of());
+        when(priceIndexService.bestMarkets(eq(product.getId()), anyInt(), any(), any(), isNull(), any()))
+                .thenReturn(List.of());
+
+        var result = service.productMarkets(user, product.getId(), false, null);
+
+        assertEquals(1, result.size());
+        assertEquals(0, result.get(0).price().compareTo(new BigDecimal("5.25")));
+        assertEquals(LocalDateTime.of(2026, Month.FEBRUARY, 1, 10, 0), result.get(0).observedAt());
+    }
+
+    @Test
+    void productMarkets_marksWatchedAndComputesDistanceFromHome() {
+        var product = product("Leite");
+        when(productRepository.findById(product.getId())).thenReturn(Optional.of(product));
+        var ownItem = item(product, "5.00", CNPJ_ZAFFARI, "Zaffari",
+                LocalDateTime.of(2026, Month.FEBRUARY, 1, 10, 0));
+        when(receiptItemRepository.findHouseholdHistoryForProduct(product.getId(), HOUSEHOLD_ID))
+                .thenReturn(List.of(ownItem));
+        var locatedMarket = MarketLocation.builder().cnpj(CNPJ_ZAFFARI).name("Zaffari")
+                .latitude(new BigDecimal("-30.1")).longitude(new BigDecimal("-51.1")).build();
+        when(marketLocationService.findByCnpjs(any())).thenReturn(Map.of(CNPJ_ZAFFARI, locatedMarket));
+        when(watchedMarketService.watchedCnpjs(user)).thenReturn(Set.of(CNPJ_ZAFFARI));
+        when(priceIndexService.bestMarkets(eq(product.getId()), anyInt(), any(), any(), isNull(), any()))
+                .thenReturn(List.of());
+
+        var result = service.productMarkets(user, product.getId(), false, null);
+
+        var row = result.get(0);
+        assertTrue(row.watched());
+        assertTrue(row.visited(), "own purchase marks the market as visited");
+        assertNotNull(row.distanceKm());
+        assertTrue(row.distanceKm() > 0 && row.distanceKm() < 30,
+                "0.1 degree offset in lat/long is a small positive distance");
+    }
+
+    @Test
+    void productMarkets_distanceNullWhenUserHasNoHomeCoordinates() {
+        var noHomeUser = User.builder()
+                .id(UUID.randomUUID())
+                .email("nohome@e")
+                .household(Household.builder().id(HOUSEHOLD_ID).build())
+                .build();
+        var product = product("Leite");
+        when(productRepository.findById(product.getId())).thenReturn(Optional.of(product));
+        var ownItem = item(product, "5.00", CNPJ_ZAFFARI, "Zaffari",
+                LocalDateTime.of(2026, Month.FEBRUARY, 1, 10, 0));
+        when(receiptItemRepository.findHouseholdHistoryForProduct(product.getId(), HOUSEHOLD_ID))
+                .thenReturn(List.of(ownItem));
+        var locatedMarket = MarketLocation.builder().cnpj(CNPJ_ZAFFARI).name("Zaffari")
+                .latitude(new BigDecimal("-30.1")).longitude(new BigDecimal("-51.1")).build();
+        when(marketLocationService.findByCnpjs(any())).thenReturn(Map.of(CNPJ_ZAFFARI, locatedMarket));
+        when(watchedMarketService.watchedCnpjs(noHomeUser)).thenReturn(Set.of());
+        when(priceIndexService.bestMarkets(eq(product.getId()), anyInt(), isNull(), isNull(), isNull(), any()))
+                .thenReturn(List.of());
+
+        var result = service.productMarkets(noHomeUser, product.getId(), false, null);
+
+        assertNull(result.get(0).distanceKm());
+    }
+
+    @Test
+    void productMarkets_ownItemWithNullCnpjIsSkipped() {
+        var product = product("Leite");
+        when(productRepository.findById(product.getId())).thenReturn(Optional.of(product));
+        var noCnpjItem = item(product, "5.00", null, "Feira sem CNPJ",
+                LocalDateTime.of(2026, Month.FEBRUARY, 1, 10, 0));
+        when(receiptItemRepository.findHouseholdHistoryForProduct(product.getId(), HOUSEHOLD_ID))
+                .thenReturn(List.of(noCnpjItem));
+        when(marketLocationService.findByCnpjs(any())).thenReturn(Map.of());
+        when(watchedMarketService.watchedCnpjs(user)).thenReturn(Set.of());
+        when(priceIndexService.bestMarkets(eq(product.getId()), anyInt(), any(), any(), isNull(), any()))
+                .thenReturn(List.of());
+
+        assertEquals(List.of(), service.productMarkets(user, product.getId(), false, null));
+    }
+
+    @Test
+    void productMarkets_nullCommunityMedianSortsLast() {
+        var product = product("Leite");
+        when(productRepository.findById(product.getId())).thenReturn(Optional.of(product));
+        var ownItem = item(product, "5.00", CNPJ_ZAFFARI, "Zaffari",
+                LocalDateTime.of(2026, Month.FEBRUARY, 1, 10, 0));
+        when(receiptItemRepository.findHouseholdHistoryForProduct(product.getId(), HOUSEHOLD_ID))
+                .thenReturn(List.of(ownItem));
+        when(marketLocationService.findByCnpjs(any())).thenReturn(Map.of());
+        when(watchedMarketService.watchedCnpjs(user)).thenReturn(Set.of());
+        // k-anon-suppressed market: row present but no median price.
+        when(priceIndexService.bestMarkets(eq(product.getId()), anyInt(), any(), any(), isNull(), any()))
+                .thenReturn(List.of(new MarketPriceRow(CNPJ_NACIONAL, "99887766", "Nacional",
+                        null, null, 2, 2L, 2.0, false)));
+
+        var result = service.productMarkets(user, product.getId(), false, null);
+
+        assertEquals(2, result.size());
+        assertEquals(CNPJ_ZAFFARI, result.get(0).cnpj(), "priced rows come first");
+        assertEquals(CNPJ_NACIONAL, result.get(1).cnpj());
+        assertNull(result.get(1).price());
     }
 
     // ---------------------------------------------------------- helpers

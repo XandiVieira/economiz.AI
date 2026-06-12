@@ -42,6 +42,43 @@ class DashboardServiceTest {
     }
 
     @Test
+    void build_passesAllCachedSectionsThroughUnchanged() {
+        var user = user();
+        var core = core();
+        when(dashboardCacheService.core(user)).thenReturn(core);
+        when(notificationInboxService.unreadCount(user)).thenReturn(7L);
+
+        var response = service.build(user);
+
+        assertEquals(core.currentMonth(), response.currentMonth());
+        assertEquals(core.recentReceipts(), response.recentReceipts());
+        assertEquals(core.suggestedShoppingList(), response.suggestedShoppingList());
+        assertEquals(core.communityPromosNearby(), response.communityPromosNearby());
+        assertEquals(core.generatedAt(), response.generatedAt());
+        assertEquals(7L, response.unreadNotificationCount(), "placeholder unread is replaced by the live count");
+    }
+
+    @Test
+    void build_emptyHousehold_returnsEmptySectionsNotErrors() {
+        var user = user();
+        var emptyCore = new DashboardResponse(
+                new SpendSnapshot(2026, 6, BigDecimal.ZERO, BigDecimal.ZERO, 0, BigDecimal.ZERO),
+                List.of(), List.of(), List.of(), 0L,
+                LocalDateTime.of(2026, Month.JUNE, 6, 10, 0));
+        when(dashboardCacheService.core(user)).thenReturn(emptyCore);
+        when(notificationInboxService.unreadCount(user)).thenReturn(0L);
+
+        var response = service.build(user);
+
+        assertEquals(0, response.currentMonth().total().compareTo(BigDecimal.ZERO));
+        assertEquals(0L, response.currentMonth().receiptCount());
+        assertEquals(List.of(), response.recentReceipts());
+        assertEquals(List.of(), response.suggestedShoppingList());
+        assertEquals(List.of(), response.communityPromosNearby());
+        assertEquals(0L, response.unreadNotificationCount());
+    }
+
+    @Test
     void unreadCount_isAlwaysLive_evenWhenCoreIsCached() {
         var user = user();
         when(dashboardCacheService.core(user)).thenReturn(core());
