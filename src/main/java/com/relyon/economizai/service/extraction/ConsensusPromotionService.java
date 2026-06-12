@@ -82,15 +82,19 @@ public class ConsensusPromotionService {
                     .merge(override.getCategory(), 1, Integer::sum);
         }
 
+        // Resolve consensus first, then load the winning products in one query
+        // instead of a findById per product.
+        var consensusByProduct = new HashMap<UUID, ProductCategory>();
+        votesByProduct.forEach((productId, votes) -> {
+            var consensusCategory = categoryWithConsensus(votes);
+            if (consensusCategory != null) consensusByProduct.put(productId, consensusCategory);
+        });
+
         var graduatedProducts = 0;
         var tokenVotes = new HashMap<String, Map<ProductCategory, Integer>>();
 
-        for (var productEntry : votesByProduct.entrySet()) {
-            var consensusCategory = categoryWithConsensus(productEntry.getValue());
-            if (consensusCategory == null) continue;
-
-            var product = productRepository.findById(productEntry.getKey()).orElse(null);
-            if (product == null) continue;
+        for (var product : productRepository.findAllById(consensusByProduct.keySet())) {
+            var consensusCategory = consensusByProduct.get(product.getId());
 
             // Graduate the exact product to global truth (source USER).
             if (product.getCategory() != consensusCategory

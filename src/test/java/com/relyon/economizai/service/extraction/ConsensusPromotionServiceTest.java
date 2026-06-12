@@ -19,6 +19,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -77,7 +78,7 @@ class ConsensusPromotionServiceTest {
         when(overrideRepository.findAll()).thenReturn(List.of(
                 override(UUID.randomUUID(), milho, ProductCategory.GROCERIES),
                 override(UUID.randomUUID(), milho, ProductCategory.GROCERIES)));
-        when(productRepository.findById(milho.getId())).thenReturn(Optional.of(milho));
+        when(productRepository.findAllById(Set.of(milho.getId()))).thenReturn(List.of(milho));
 
         var outcome = service.promote();
 
@@ -95,7 +96,7 @@ class ConsensusPromotionServiceTest {
                 override(UUID.randomUUID(), milho, ProductCategory.GROCERIES),
                 override(UUID.randomUUID(), milho, ProductCategory.PRODUCE),
                 override(UUID.randomUUID(), milho, ProductCategory.PRODUCE)));
-        lenient().when(productRepository.findById(milho.getId())).thenReturn(Optional.of(milho));
+        lenient().when(productRepository.findAllById(any())).thenReturn(List.of());
 
         var outcome = service.promote();
 
@@ -111,8 +112,8 @@ class ConsensusPromotionServiceTest {
                 override(UUID.randomUUID(), milhoA, ProductCategory.GROCERIES),
                 override(UUID.randomUUID(), milhoB, ProductCategory.GROCERIES),
                 override(UUID.randomUUID(), milhoB, ProductCategory.GROCERIES)));
-        when(productRepository.findById(milhoA.getId())).thenReturn(Optional.of(milhoA));
-        when(productRepository.findById(milhoB.getId())).thenReturn(Optional.of(milhoB));
+        when(productRepository.findAllById(Set.of(milhoA.getId(), milhoB.getId())))
+                .thenReturn(List.of(milhoA, milhoB));
 
         var outcome = service.promote();
 
