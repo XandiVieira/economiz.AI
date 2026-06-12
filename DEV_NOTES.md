@@ -116,8 +116,15 @@ The report works identically in SHADOW and ON (computed purely from
 
 ---
 
-## Multi-state SEFAZ coverage = 1 / 27 verified
-- **Now**: only RS has a working end-to-end ingestion path (`SvrsSharedPortalAdapter` against `dfe-portal.svrs.rs.gov.br`, with real Zaffari/Bistek HTML fixtures). Submitting chaves from any other UF returns `UnsupportedStateException`.
+## Multi-state SEFAZ coverage = 2 / 27 verified (PR added 2026-06-12)
+- **Now**: RS + **PR** have working end-to-end ingestion. PR has its own portal
+  (`www.fazenda.pr.gov.br/nfce/qrcode`) but renders the SAME responsive-DANFE
+  layout as SVRS, so the shared adapter parses it unchanged — verified with a
+  real RaiaDrogasil/Curitiba fixture (`fixtures/sefaz/pr/`). The QR carries the
+  full portal URL; bare-chave fallback picks the portal by the chave's UF.
+  PR caveat learned: drugstores print merchant-internal item codes (6-7 digits)
+  in the EAN slot → codes < 8 digits are no longer stored as EANs (description
+  matching takes over). Other UFs still return `UnsupportedStateException`.
 - **What we know**: empirical probe of all 27 portals on 2026-05-06 documented in `docs/MULTI_STATE_RECON.md`. ~10 UFs are server-rendered + simple GET (Tier 1 — quick to add once we have real chaves). 3 UFs use JSF/ASP.NET ViewState (Tier 2, more code). 5 UFs gate behind captcha (Tier 4, needs 2Captcha or similar). 1-2 are SPAs requiring a headless browser.
 - **Bottleneck**: not code, **data**. Adapters can't be written safely against synthetic chaves; each UF needs 1 real, recent (≤ 3 months) cupom HTML to develop selectors against. See `docs/MULTI_STATE_RECON.md` for the population coverage analysis (Tier 1 + Tier 2 = ~54% of Brazil) and recommended implementation order.
 - **Fix when ready**: collect chaves via e-CAC, state cashback portals, or contacts in each state; save HTML in `src/test/resources/fixtures/sefaz/<uf>/`; implement adapter following `SvrsSharedPortalAdapter` template.

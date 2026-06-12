@@ -16,6 +16,25 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-12 — receipts: Paraná (PR) NFC-e now supported 🎉
+
+Second state live (after RS). PR's portal (`www.fazenda.pr.gov.br`) renders the
+same DANFE layout the parser already understands — verified end-to-end with a
+real Curitiba receipt. Scanning a PR QR code now works exactly like RS. Two
+related fixes that also help RS:
+
+- **QR URLs with raw `|` separators were being rejected** since the SSRF guard
+  shipped (earlier today) — real QR payloads carry pipes in the query string.
+  Fixed; full-URL payloads work again for all states.
+- **Merchant-internal item codes are no longer stored as EANs**: some chains
+  (e.g. drugstores) print a 6-7 digit internal code where others print the
+  GTIN/EAN. Codes under 8 digits now leave `ean` null and product matching
+  falls back to the description, preventing bogus cross-merchant product
+  merges. Items from such receipts arrive with `ean: null` — already a normal
+  case for the FE.
+
+---
+
 ## 2026-06-12 — deals: DISMISSED/MUTED telemetry now drives a relevance filter (SHADOW mode)
 
 The `DISMISSED` / `MUTED` events the app already reports via

@@ -96,6 +96,24 @@ class SvrsSharedPortalAdapterTest {
     }
 
     @Test
+    void resolveUrl_acceptsRealQrUrlWithRawPipeSeparators() {
+        // real NFC-e QR payloads carry raw '|' in the query string — java.net.URI
+        // rejects them, so host validation must not depend on URI parsing
+        var url = "https://dfe-portal.svrs.rs.gov.br/Dfe/QrCodeNFce?p=" + CHAVE_RS + "|2|1|1|ABCDEF";
+        assertEquals(url, adapter.resolveUrl(url));
+    }
+
+    @Test
+    void resolveUrl_rejectsUserinfoBypassTrick() {
+        // "allowed-host@evil.com" must not pass: the URL fetch would treat the
+        // allowed host as userinfo and actually connect to evil.com
+        assertThrows(InvalidQrPayloadException.class,
+                () -> adapter.resolveUrl("https://svrs.rs.gov.br@evil.com/?p=" + CHAVE_RS));
+        assertThrows(InvalidQrPayloadException.class,
+                () -> adapter.resolveUrl("https://svrs.rs.gov.br\\@evil.com/?p=" + CHAVE_RS));
+    }
+
+    @Test
     void resolveUrl_rejectsAllowlistedHostAsPrefixTrick() {
         // host must END with the allowed suffix — "svrs.rs.gov.br.evil.com" must not pass
         assertThrows(InvalidQrPayloadException.class,

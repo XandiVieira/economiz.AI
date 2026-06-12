@@ -16,7 +16,6 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 import java.math.BigDecimal;
-import java.net.URI;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -28,23 +27,28 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * NFC-e adapter for the SVRS shared portal
- * ({@code https://dfe-portal.svrs.rs.gov.br/Dfe/QrCodeNFce}). Originally built
- * for RS, but the underlying SEFAZ infrastructure hosts NFC-e for several
- * other states that delegate to SVRS. The set of UFs this adapter claims is
- * driven by config ({@code economizai.ingestion.sefaz.svrs.states}, default
- * {@code RS}) so a curator can opt-in additional states empirically — submit a
- * test chave from SC, verify the parser still extracts fields correctly, then
- * add SC to the env var.
+ * NFC-e adapter for portals that render the shared <b>responsive DANFE</b>
+ * layout. Originally built for the SVRS portal
+ * ({@code https://dfe-portal.svrs.rs.gov.br/Dfe/QrCodeNFce}, RS + the states
+ * that delegate to SVRS), but other states' own portals serve the exact same
+ * markup — PR ({@code www.fazenda.pr.gov.br/nfce/qrcode}) verified with a real
+ * fixture on 2026-06-12. The set of UFs this adapter claims is driven by config
+ * ({@code economizai.ingestion.sefaz.svrs.states}, default {@code RS,PR}) so a
+ * curator can opt-in additional states empirically — submit a real chave,
+ * verify the parser extracts fields correctly, then add the UF to the env var
+ * (and the portal host to {@code allowed-url-hosts}).
  *
- * <p>States with their own NFC-e portal (SP, MG, BA, PE, PR, …) need a
- * dedicated adapter — those won't render correctly through this URL.
+ * <p>Real QR codes carry the full portal URL, so fetching usually needs no
+ * URL-building; for bare-chave payloads {@link #resolveUrl} picks the portal
+ * by the chave's UF. States whose portal renders a DIFFERENT layout (SP, MG,
+ * BA, PE, …) need a dedicated adapter.
  */
 @Slf4j
 @Component
 public class SvrsSharedPortalAdapter implements SefazAdapter {
 
     private static final String PORTAL_URL = "https://dfe-portal.svrs.rs.gov.br/Dfe/QrCodeNFce";
+    private static final String PR_PORTAL_URL = "https://www.fazenda.pr.gov.br/nfce/qrcode";
     private static final DateTimeFormatter ISSUED_AT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
     private static final Pattern CNPJ = Pattern.compile("CNPJ\\s*+:?\\s*+([\\d./-]{14,18})", Pattern.CASE_INSENSITIVE);
     private static final Pattern EMISSION = Pattern.compile("Emiss[aã]o\\s*+:?\\s*+(\\d{2}/\\d{2}/\\d{4}\\s++\\d{2}:\\d{2}:\\d{2})", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
@@ -64,10 +68,10 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
     public SvrsSharedPortalAdapter(RestClient.Builder builder,
                                    @Value("${economizai.ingestion.sefaz.timeout-ms:30000}") int timeoutMs,
                                    @Value("${economizai.ingestion.sefaz.user-agent:economizai}") String userAgent,
-                                   @Value("${economizai.ingestion.sefaz.svrs.states:RS}") String svrsStates,
+                                   @Value("${economizai.ingestion.sefaz.svrs.states:RS,PR}") String svrsStates,
                                    @Value("${economizai.ingestion.sefaz.retry.max-attempts:5}") int maxAttempts,
                                    @Value("${economizai.ingestion.sefaz.retry.delay-ms:5000}") long retryDelayMs,
-                                   @Value("${economizai.ingestion.sefaz.allowed-url-hosts:svrs.rs.gov.br,sefaz.rs.gov.br}") String allowedUrlHosts) {
+                                   @Value("${economizai.ingestion.sefaz.allowed-url-hosts:svrs.rs.gov.br,sefaz.rs.gov.br,fazenda.pr.gov.br}") String allowedUrlHosts) {
         var requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Math.min(timeoutMs, 10000));
         requestFactory.setReadTimeout(timeoutMs);
@@ -209,6 +213,8 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
      * (suffix match, e.g. {@code svrs.rs.gov.br} admits
      * {@code dfe-portal.svrs.rs.gov.br}) — anything else is rejected so a
      * crafted QR code can't point the server at internal or arbitrary hosts.
+     * Bare-chave payloads (no URL — manual entry / reparse) build the consult
+     * URL on the portal that serves the chave's UF.
      */
     public String resolveUrl(String qrPayload) {
         var trimmed = qrPayload.trim();
@@ -219,21 +225,26 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
             }
             return trimmed;
         }
-        return PORTAL_URL + "?p=" + trimmed;
+        return fallbackPortalFor(trimmed) + "?p=" + trimmed;
     }
 
+    /** Portal that serves bare-chave consults for the payload's UF. */
+    private String fallbackPortalFor(String chavePayload) {
+        var uf = ChaveAcessoParser.extractUf(ChaveAcessoParser.extractChave(chavePayload));
+        return uf == UnidadeFederativa.PR ? PR_PORTAL_URL : PORTAL_URL;
+    }
+
+    // Manual scheme/host extraction instead of URI.create: real NFC-e QR URLs
+    // carry raw '|' separators in the query string, which java.net.URI rejects.
+    private static final Pattern URL_HOST = Pattern.compile(
+            "^(https?)://([^/?#@\\\\]+?)(?::\\d+)?(?=[/?#]|$)", Pattern.CASE_INSENSITIVE);
+
     private boolean isAllowedSefazUrl(String url) {
-        try {
-            var uri = URI.create(url);
-            var scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase();
-            var host = uri.getHost() == null ? "" : uri.getHost().toLowerCase();
-            if (!scheme.equals("https") && !scheme.equals("http")) return false;
-            if (host.isBlank()) return false;
-            return allowedUrlHosts.stream()
-                    .anyMatch(allowed -> host.equals(allowed) || host.endsWith("." + allowed));
-        } catch (IllegalArgumentException ex) {
-            return false;
-        }
+        var matcher = URL_HOST.matcher(url);
+        if (!matcher.find()) return false;
+        var host = matcher.group(2).toLowerCase();
+        return allowedUrlHosts.stream()
+                .anyMatch(allowed -> host.equals(allowed) || host.endsWith("." + allowed));
     }
 
     private Set<String> parseAllowedHosts(String csv) {
@@ -373,11 +384,20 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
         return (idx >= 0 ? text.substring(idx + 1) : text).trim();
     }
 
+    /**
+     * The "(Código: …)" slot carries a real GTIN/EAN (8-14 digits) at some
+     * merchants but a merchant-internal item code (shorter) at others —
+     * e.g. RaiaDrogasil/PR prints 6-7 digit internal codes. Internal codes
+     * must NOT be stored as EANs: the same number at another merchant is a
+     * different product, and a global EAN match would merge them. Below 8
+     * digits we return null and matching falls back to the description.
+     */
     private static String extractEan(String raw) {
         if (raw == null || raw.isBlank()) return null;
         var matcher = Pattern.compile("\\d+").matcher(raw);
         if (!matcher.find()) return null;
         var digits = matcher.group();
+        if (digits.length() < 8) return null;
         if (digits.length() > 14) digits = digits.substring(digits.length() - 14);
         return digits;
     }
