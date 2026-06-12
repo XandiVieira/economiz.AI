@@ -5,12 +5,16 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.relyon.economizai.service.LocalizedMessageService;
 import jakarta.servlet.FilterChain;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -39,6 +43,12 @@ class RateLimitFilterTest {
         objectMapper = mapper;
         filter = new RateLimitFilter(new RateLimitRegistry(), messageService, mapper);
         chain = mock(FilterChain.class);
+        SecurityContextHolder.clearContext();
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
     }
 
     @Test
@@ -108,6 +118,75 @@ class RateLimitFilterTest {
         var response = new MockHttpServletResponse();
         filter.doFilterInternal(differentClient, response, chain);
         assertEquals(200, response.getStatus());
+    }
+
+    @Test
+    void allowsThirtyReceiptSubmissionsPerUser() throws Exception {
+        authenticateAs("shopper@test.com");
+        for (var attempt = 0; attempt < 30; attempt++) {
+            var response = invokeSubmitRequest("1.2.3.4");
+            assertEquals(200, response.getStatus(), "submission " + (attempt + 1) + " should pass");
+        }
+    }
+
+    @Test
+    void blocksThirtyFirstReceiptSubmissionForSameUser() throws Exception {
+        authenticateAs("shopper@test.com");
+        for (var attempt = 0; attempt < 30; attempt++) invokeSubmitRequest("1.2.3.4");
+        var blocked = invokeSubmitRequest("1.2.3.4");
+        assertEquals(429, blocked.getStatus());
+        assertNotNull(blocked.getHeader("Retry-After"));
+    }
+
+    @Test
+    void submitBucketsAreKeyedByUserNotIp() throws Exception {
+        authenticateAs("heavy@test.com");
+        for (var attempt = 0; attempt < 30; attempt++) invokeSubmitRequest("1.2.3.4");
+
+        // Same IP, different user — must not be throttled by the first user's bucket.
+        authenticateAs("light@test.com");
+        var otherUser = invokeSubmitRequest("1.2.3.4");
+        assertEquals(200, otherUser.getStatus());
+    }
+
+    @Test
+    void unauthenticatedSubmitFallsBackToIpKey() throws Exception {
+        for (var attempt = 0; attempt < 30; attempt++) invokeSubmitRequest("4.4.4.4");
+        var blockedSameIp = invokeSubmitRequest("4.4.4.4");
+        assertEquals(429, blockedSameIp.getStatus());
+
+        var allowedOtherIp = invokeSubmitRequest("4.4.4.5");
+        assertEquals(200, allowedOtherIp.getStatus());
+    }
+
+    @Test
+    void getOnReceiptsRouteIsNotLimited() throws Exception {
+        for (var attempt = 0; attempt < 40; attempt++) {
+            var request = new MockHttpServletRequest("GET", "/api/v1/receipts");
+            request.setRemoteAddr("1.2.3.4");
+            var response = new MockHttpServletResponse();
+            filter.doFilterInternal(request, response, chain);
+            assertEquals(200, response.getStatus());
+        }
+    }
+
+    @Test
+    void successfulMatchedRequestExposesRemainingHeader() throws Exception {
+        var response = invokeAuthRequest("6.6.6.6");
+        assertEquals("4", response.getHeader("X-RateLimit-Remaining"));
+    }
+
+    private void authenticateAs(String email) {
+        var authentication = new UsernamePasswordAuthenticationToken(email, null, List.of());
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+    }
+
+    private MockHttpServletResponse invokeSubmitRequest(String ip) throws Exception {
+        var request = new MockHttpServletRequest("POST", "/api/v1/receipts");
+        request.setRemoteAddr(ip);
+        var response = new MockHttpServletResponse();
+        filter.doFilterInternal(request, response, chain);
+        return response;
     }
 
     private MockHttpServletResponse invokeAuthRequest(String ip) throws Exception {
