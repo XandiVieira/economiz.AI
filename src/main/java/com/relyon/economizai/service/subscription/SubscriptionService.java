@@ -1,5 +1,6 @@
 package com.relyon.economizai.service.subscription;
 
+import com.relyon.economizai.dto.response.SubscriptionStatusResponse;
 import com.relyon.economizai.model.Subscription;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.SubscriptionStatus;
@@ -63,6 +64,13 @@ public class SubscriptionService {
         userRepository.save(user);
         log.info("subscription.expired user={} periodEnd={}",
                 LogMasker.email(user.getEmail()), subscription.getCurrentPeriodEnd());
+    }
+
+    /** Current tier + provider lifecycle for the self-serve status endpoint. */
+    @Transactional(readOnly = true)
+    public SubscriptionStatusResponse statusFor(User user) {
+        var subscription = subscriptionRepository.findByUserId(user.getId()).orElse(null);
+        return SubscriptionStatusResponse.from(user, subscription);
     }
 
     /**

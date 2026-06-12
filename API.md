@@ -700,6 +700,30 @@ paid unit price *before* this receipt, falling back to the surfaced deal's
 baseline when there's no prior purchase). Attribution is best-effort and
 correlational, never causal — and it never blocks or delays a confirm.
 
+### Subscription status — "PRO until …"
+
+```
+GET /api/v1/users/me/subscription
+```
+
+Self-serve view of the user's billing state. Purchases happen **FE-side**
+(App Store / Play Store via RevenueCat; web provider later) and are reflected
+into the backend by webhooks — this endpoint is what the app reads to render
+the paywall state and a "manage subscription" screen.
+
+```json
+{ "tier": "PRO", "status": "ACTIVE", "provider": "revenuecat", "currentPeriodEnd": "2026-07-12T10:00:00" }
+```
+
+- `tier` — `FREE` | `PRO` (same value as in `GET /users/me`).
+- `status` — provider lifecycle: `ACTIVE` | `CANCELED` | `EXPIRED`, or `null`
+  if the user never had a subscription record (plain FREE).
+- `provider` — e.g. `revenuecat`, `manual` (admin grant), `null` for FREE.
+- `currentPeriodEnd` — when the paid period lapses; the hourly expiry sweep
+  downgrades to FREE after this. `null` for FREE.
+- Route "manage subscription" by `provider`: store-bought subs are managed in
+  the store (App Store / Play), not via our API.
+
 ---
 
 ## 8. Consumption intelligence

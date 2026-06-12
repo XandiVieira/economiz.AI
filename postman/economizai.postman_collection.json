@@ -912,6 +912,33 @@
           "response": []
         },
         {
+          "name": "My subscription (tier + billing status)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/me/subscription",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "me",
+                "subscription"
+              ]
+            },
+            "description": "Self-serve billing status: { tier, status, provider, currentPeriodEnd }. Purchases happen FE-side (App Store / Play via RevenueCat) and are reflected here by webhook. status/provider/currentPeriodEnd are null for FREE users who never subscribed."
+          },
+          "response": []
+        },
+        {
           "name": "Export my data (LGPD Art. 18 V)",
           "request": {
             "method": "GET",
@@ -5882,6 +5909,47 @@
               }
             }
           ]
+        },
+        {
+          "name": "29c. Subscription status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 + tier present', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.tier).to.be.oneOf(['FREE', 'PRO']);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/me/subscription",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "me",
+                "subscription"
+              ]
+            }
+          },
+          "response": []
         },
         {
           "name": "30. List markets (catalogue)",

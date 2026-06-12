@@ -9,12 +9,14 @@ import com.relyon.economizai.dto.request.UpdateUserRequest;
 import com.relyon.economizai.dto.response.DigestPreferencesResponse;
 import com.relyon.economizai.dto.response.HouseholdResponse;
 import com.relyon.economizai.dto.response.SavingsSummaryResponse;
+import com.relyon.economizai.dto.response.SubscriptionStatusResponse;
 import com.relyon.economizai.dto.response.UserDataExportResponse;
 import com.relyon.economizai.dto.response.UserResponse;
 import com.relyon.economizai.exception.InvalidCurrentPasswordException;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.DigestFrequency;
 import com.relyon.economizai.model.enums.Role;
+import com.relyon.economizai.model.enums.SubscriptionStatus;
 import com.relyon.economizai.model.enums.SubscriptionTier;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.LocalizedMessageService;
@@ -25,6 +27,7 @@ import com.relyon.economizai.exception.InvalidPhoneNumberException;
 import com.relyon.economizai.exception.InvalidPhoneVerificationException;
 import com.relyon.economizai.service.notifications.NotificationPreferenceService;
 import com.relyon.economizai.service.notifications.SavingsService;
+import com.relyon.economizai.service.subscription.SubscriptionService;
 import com.relyon.economizai.service.auth.EmailVerificationService;
 import com.relyon.economizai.service.auth.PhoneVerificationService;
 import com.relyon.economizai.service.profile.ProfilePictureService;
@@ -92,6 +95,9 @@ class UserControllerTest {
 
     @MockitoBean
     private SavingsService savingsService;
+
+    @MockitoBean
+    private SubscriptionService subscriptionService;
 
     private User buildUser() {
         var user = User.builder()
@@ -251,6 +257,41 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.totalSavings").value(42.50))
                 .andExpect(jsonPath("$.conversions").value(7))
                 .andExpect(jsonPath("$.last30DaysSavings").value(15.00));
+    }
+
+    @Test
+    void subscription_returns200WithLifecycleFields() throws Exception {
+        var user = buildUser();
+        var periodEnd = LocalDateTime.now().plusDays(12);
+        when(subscriptionService.statusFor(any(User.class)))
+                .thenReturn(new SubscriptionStatusResponse(
+                        SubscriptionTier.PRO, SubscriptionStatus.ACTIVE, "revenuecat", periodEnd));
+
+        mockMvc.perform(get("/api/v1/users/me/subscription")
+                        .with(SecurityMockMvcRequestPostProcessors.user(user)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tier").value("PRO"))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.provider").value("revenuecat"));
+    }
+
+    @Test
+    void subscription_returns200WithNullsForFreeUser() throws Exception {
+        var user = buildUser();
+        when(subscriptionService.statusFor(any(User.class)))
+                .thenReturn(new SubscriptionStatusResponse(SubscriptionTier.FREE, null, null, null));
+
+        mockMvc.perform(get("/api/v1/users/me/subscription")
+                        .with(SecurityMockMvcRequestPostProcessors.user(user)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tier").value("FREE"))
+                .andExpect(jsonPath("$.status").isEmpty());
+    }
+
+    @Test
+    void subscription_returns401WhenUnauthenticated() throws Exception {
+        mockMvc.perform(get("/api/v1/users/me/subscription"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

@@ -111,4 +111,34 @@ class SubscriptionServiceTest {
         assertEquals(SubscriptionTier.FREE, user.getSubscriptionTier());
         verify(userRepository).save(user);
     }
+
+    @Test
+    void statusFor_reflectsSubscriptionRow() {
+        var user = User.builder().id(UUID.randomUUID()).email("u@e")
+                .subscriptionTier(SubscriptionTier.PRO).build();
+        var periodEnd = LocalDateTime.now().plusDays(12);
+        var subscription = Subscription.builder().user(user).provider("revenuecat")
+                .status(SubscriptionStatus.ACTIVE).currentPeriodEnd(periodEnd).build();
+        when(subscriptionRepository.findByUserId(user.getId())).thenReturn(Optional.of(subscription));
+
+        var status = service.statusFor(user);
+
+        assertEquals(SubscriptionTier.PRO, status.tier());
+        assertEquals(SubscriptionStatus.ACTIVE, status.status());
+        assertEquals("revenuecat", status.provider());
+        assertEquals(periodEnd, status.currentPeriodEnd());
+    }
+
+    @Test
+    void statusFor_freeUserWithoutRowHasNullLifecycleFields() {
+        var user = freeUser();
+        when(subscriptionRepository.findByUserId(user.getId())).thenReturn(Optional.empty());
+
+        var status = service.statusFor(user);
+
+        assertEquals(SubscriptionTier.FREE, status.tier());
+        assertEquals(null, status.status());
+        assertEquals(null, status.provider());
+        assertEquals(null, status.currentPeriodEnd());
+    }
 }

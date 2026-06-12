@@ -16,6 +16,17 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-12 — users: new `GET /users/me/subscription` (self-serve billing status)
+
+Returns `{ tier, status, provider, currentPeriodEnd }` so the app can render
+"PRO until {date}" and route "manage subscription" to the right store.
+`status`/`provider`/`currentPeriodEnd` are `null` for FREE users who never
+subscribed. Reminder of the billing model: purchases happen FE-side (App
+Store / Play via RevenueCat) and the backend reflects them via webhook — there
+is no purchase endpoint in this API.
+
+---
+
 ## 2026-06-12 — receipts: QR codes carrying a non-SEFAZ URL are now rejected
 
 Security hardening (SSRF guard). If the scanned QR payload is a full URL, the

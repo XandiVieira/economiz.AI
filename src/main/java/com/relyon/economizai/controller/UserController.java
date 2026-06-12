@@ -12,6 +12,7 @@ import com.relyon.economizai.dto.request.VerifyPhoneRequest;
 import com.relyon.economizai.dto.response.DigestPreferencesResponse;
 import com.relyon.economizai.dto.response.NotificationPreferenceResponse;
 import com.relyon.economizai.dto.response.SavingsSummaryResponse;
+import com.relyon.economizai.dto.response.SubscriptionStatusResponse;
 import com.relyon.economizai.dto.response.UserDataExportResponse;
 import com.relyon.economizai.dto.response.UserResponse;
 import com.relyon.economizai.model.User;
@@ -22,6 +23,7 @@ import com.relyon.economizai.service.auth.PhoneVerificationService;
 import com.relyon.economizai.service.notifications.NotificationPreferenceService;
 import com.relyon.economizai.service.notifications.SavingsService;
 import com.relyon.economizai.service.profile.ProfilePictureService;
+import com.relyon.economizai.service.subscription.SubscriptionService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -55,6 +57,7 @@ public class UserController {
     private final EmailVerificationService emailVerificationService;
     private final PhoneVerificationService phoneVerificationService;
     private final SavingsService savingsService;
+    private final SubscriptionService subscriptionService;
 
     @GetMapping("/me")
     public ResponseEntity<UserResponse> getProfile(@AuthenticationPrincipal User user) {
@@ -121,6 +124,11 @@ public class UserController {
     @GetMapping("/me/savings")
     public ResponseEntity<SavingsSummaryResponse> savings(@AuthenticationPrincipal User user) {
         return ResponseEntity.ok(savingsService.summarize(user));
+    }
+
+    @GetMapping("/me/subscription")
+    public ResponseEntity<SubscriptionStatusResponse> subscription(@AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(subscriptionService.statusFor(user));
     }
 
     @GetMapping("/me/export")
