@@ -1,5 +1,6 @@
 package com.relyon.economizai.service.sefaz;
 
+import com.relyon.economizai.exception.InvalidQrPayloadException;
 import com.relyon.economizai.exception.ReceiptParseException;
 import com.relyon.economizai.exception.SefazFetchException;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
@@ -27,7 +28,7 @@ class SvrsSharedPortalAdapterTest {
     private static final String CHAVE_RS = "43260412345678000190650010000123451123456780";
 
     private final SvrsSharedPortalAdapter adapter = new SvrsSharedPortalAdapter(
-            RestClient.builder(), 5000, "test-agent", "RS", 5, 0L);
+            RestClient.builder(), 5000, "test-agent", "RS", 5, 0L, "svrs.rs.gov.br,sefaz.rs.gov.br");
 
     private String loadFixture() throws Exception {
         return loadFixture("nfce-sample.html");
@@ -47,7 +48,7 @@ class SvrsSharedPortalAdapterTest {
 
     @Test
     void supportedStates_acceptsCsvOfMultipleUfs() {
-        var multi = new SvrsSharedPortalAdapter(RestClient.builder(), 5000, "test", "RS, SC, RJ", 5, 0L);
+        var multi = new SvrsSharedPortalAdapter(RestClient.builder(), 5000, "test", "RS, SC, RJ", 5, 0L, "svrs.rs.gov.br,sefaz.rs.gov.br");
         assertEquals(3, multi.supportedStates().size());
         assertTrue(multi.supportedStates().contains(UnidadeFederativa.SC));
         assertTrue(multi.supportedStates().contains(UnidadeFederativa.RJ));
@@ -55,7 +56,7 @@ class SvrsSharedPortalAdapterTest {
 
     @Test
     void supportedStates_ignoresUnknownUfTokens() {
-        var partial = new SvrsSharedPortalAdapter(RestClient.builder(), 5000, "test", "RS,XX,SC", 5, 0L);
+        var partial = new SvrsSharedPortalAdapter(RestClient.builder(), 5000, "test", "RS,XX,SC", 5, 0L, "svrs.rs.gov.br,sefaz.rs.gov.br");
         assertEquals(2, partial.supportedStates().size());
         assertTrue(partial.supportedStates().contains(UnidadeFederativa.RS));
         assertTrue(partial.supportedStates().contains(UnidadeFederativa.SC));
@@ -63,7 +64,7 @@ class SvrsSharedPortalAdapterTest {
 
     @Test
     void supportedStates_blankConfigFallsBackToRs() {
-        var fallback = new SvrsSharedPortalAdapter(RestClient.builder(), 5000, "test", "", 5, 0L);
+        var fallback = new SvrsSharedPortalAdapter(RestClient.builder(), 5000, "test", "", 5, 0L, "svrs.rs.gov.br,sefaz.rs.gov.br");
         assertEquals(1, fallback.supportedStates().size());
         assertTrue(fallback.supportedStates().contains(UnidadeFederativa.RS));
     }
@@ -72,6 +73,39 @@ class SvrsSharedPortalAdapterTest {
     void resolveUrl_acceptsFullUrl() {
         var url = "https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx?p=" + CHAVE_RS;
         assertEquals(url, adapter.resolveUrl(url));
+    }
+
+    @Test
+    void resolveUrl_acceptsAllowlistedSubdomain() {
+        var url = "https://dfe-portal.svrs.rs.gov.br/Dfe/QrCodeNFce?p=" + CHAVE_RS;
+        assertEquals(url, adapter.resolveUrl(url));
+    }
+
+    @Test
+    void resolveUrl_rejectsHostOutsideAllowlist() {
+        assertThrows(InvalidQrPayloadException.class,
+                () -> adapter.resolveUrl("https://evil.example.com/?p=" + CHAVE_RS));
+    }
+
+    @Test
+    void resolveUrl_rejectsInternalHosts() {
+        assertThrows(InvalidQrPayloadException.class,
+                () -> adapter.resolveUrl("http://localhost:5432/"));
+        assertThrows(InvalidQrPayloadException.class,
+                () -> adapter.resolveUrl("http://169.254.169.254/latest/meta-data"));
+    }
+
+    @Test
+    void resolveUrl_rejectsAllowlistedHostAsPrefixTrick() {
+        // host must END with the allowed suffix — "svrs.rs.gov.br.evil.com" must not pass
+        assertThrows(InvalidQrPayloadException.class,
+                () -> adapter.resolveUrl("https://svrs.rs.gov.br.evil.com/?p=" + CHAVE_RS));
+    }
+
+    @Test
+    void resolveUrl_rejectsNonHttpSchemes() {
+        assertThrows(InvalidQrPayloadException.class,
+                () -> adapter.resolveUrl("httpfile://svrs.rs.gov.br/etc/passwd"));
     }
 
     @Test
@@ -174,7 +208,7 @@ class SvrsSharedPortalAdapterTest {
     /** Builds an adapter whose HTTP layer is driven by {@code behavior(callNumber)}. */
     private SvrsSharedPortalAdapter adapterWithHttp(int maxAttempts, AtomicInteger calls,
                                                     IntFunction<String> behavior) {
-        return new SvrsSharedPortalAdapter(RestClient.builder(), 5000, "test", "RS", maxAttempts, 0L) {
+        return new SvrsSharedPortalAdapter(RestClient.builder(), 5000, "test", "RS", maxAttempts, 0L, "svrs.rs.gov.br,sefaz.rs.gov.br") {
             @Override
             protected String httpGet(String url) {
                 return behavior.apply(calls.incrementAndGet());

@@ -1,5 +1,6 @@
 package com.relyon.economizai.service.sefaz;
 
+import com.relyon.economizai.exception.InvalidQrPayloadException;
 import com.relyon.economizai.exception.ReceiptParseException;
 import com.relyon.economizai.exception.SefazFetchException;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
@@ -15,13 +16,16 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 import java.math.BigDecimal;
+import java.net.URI;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * NFC-e adapter for the SVRS shared portal
@@ -55,13 +59,15 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
     private final Set<UnidadeFederativa> supportedStates;
     private final int maxAttempts;
     private final long retryDelayMs;
+    private final Set<String> allowedUrlHosts;
 
     public SvrsSharedPortalAdapter(RestClient.Builder builder,
                                    @Value("${economizai.ingestion.sefaz.timeout-ms:30000}") int timeoutMs,
                                    @Value("${economizai.ingestion.sefaz.user-agent:economizai}") String userAgent,
                                    @Value("${economizai.ingestion.sefaz.svrs.states:RS}") String svrsStates,
                                    @Value("${economizai.ingestion.sefaz.retry.max-attempts:5}") int maxAttempts,
-                                   @Value("${economizai.ingestion.sefaz.retry.delay-ms:5000}") long retryDelayMs) {
+                                   @Value("${economizai.ingestion.sefaz.retry.delay-ms:5000}") long retryDelayMs,
+                                   @Value("${economizai.ingestion.sefaz.allowed-url-hosts:svrs.rs.gov.br,sefaz.rs.gov.br}") String allowedUrlHosts) {
         var requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Math.min(timeoutMs, 10000));
         requestFactory.setReadTimeout(timeoutMs);
@@ -73,8 +79,9 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
         this.supportedStates = parseStates(svrsStates);
         this.maxAttempts = Math.max(1, maxAttempts);
         this.retryDelayMs = Math.max(0, retryDelayMs);
-        log.info("SvrsSharedPortalAdapter active for UFs: {} (retry maxAttempts={} delayMs={})",
-                this.supportedStates, this.maxAttempts, this.retryDelayMs);
+        this.allowedUrlHosts = parseAllowedHosts(allowedUrlHosts);
+        log.info("SvrsSharedPortalAdapter active for UFs: {} (retry maxAttempts={} delayMs={} allowedUrlHosts={})",
+                this.supportedStates, this.maxAttempts, this.retryDelayMs, this.allowedUrlHosts);
     }
 
     private Set<UnidadeFederativa> parseStates(String csv) {
@@ -196,12 +203,46 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
         return parsed;
     }
 
+    /**
+     * Resolves the QR payload into the URL we will fetch. Absolute URLs are
+     * only accepted when their host matches the configured SEFAZ allowlist
+     * (suffix match, e.g. {@code svrs.rs.gov.br} admits
+     * {@code dfe-portal.svrs.rs.gov.br}) — anything else is rejected so a
+     * crafted QR code can't point the server at internal or arbitrary hosts.
+     */
     public String resolveUrl(String qrPayload) {
         var trimmed = qrPayload.trim();
         if (trimmed.toLowerCase().startsWith("http")) {
+            if (!isAllowedSefazUrl(trimmed)) {
+                log.warn("sefaz.url.rejected host not in allowlist");
+                throw new InvalidQrPayloadException();
+            }
             return trimmed;
         }
         return PORTAL_URL + "?p=" + trimmed;
+    }
+
+    private boolean isAllowedSefazUrl(String url) {
+        try {
+            var uri = URI.create(url);
+            var scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase();
+            var host = uri.getHost() == null ? "" : uri.getHost().toLowerCase();
+            if (!scheme.equals("https") && !scheme.equals("http")) return false;
+            if (host.isBlank()) return false;
+            return allowedUrlHosts.stream()
+                    .anyMatch(allowed -> host.equals(allowed) || host.endsWith("." + allowed));
+        } catch (IllegalArgumentException ex) {
+            return false;
+        }
+    }
+
+    private Set<String> parseAllowedHosts(String csv) {
+        var hosts = Arrays.stream(csv == null ? new String[0] : csv.split(","))
+                .map(String::trim)
+                .filter(host -> !host.isEmpty())
+                .map(String::toLowerCase)
+                .collect(Collectors.toUnmodifiableSet());
+        return hosts.isEmpty() ? Set.of("svrs.rs.gov.br") : hosts;
     }
 
     /**

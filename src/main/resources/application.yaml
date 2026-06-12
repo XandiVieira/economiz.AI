@@ -63,6 +63,10 @@ economizai:
         # delay-ms apart (default schedule: 0s, 5s, 5s, 5s). 4xx never retries.
         max-attempts: ${SEFAZ_RETRY_MAX_ATTEMPTS:5}
         delay-ms: ${SEFAZ_RETRY_DELAY_MS:5000}
+      # SSRF guard: when a QR payload carries a full URL, we only fetch it if
+      # the host matches one of these suffixes (e.g. svrs.rs.gov.br admits
+      # dfe-portal.svrs.rs.gov.br). Extend when onboarding new state portals.
+      allowed-url-hosts: ${SEFAZ_ALLOWED_URL_HOSTS:svrs.rs.gov.br,sefaz.rs.gov.br}
       svrs:
         # UFs that delegate NFC-e consultation to the SVRS shared portal.
         # Start with RS (proven to work). Other states known to delegate to
