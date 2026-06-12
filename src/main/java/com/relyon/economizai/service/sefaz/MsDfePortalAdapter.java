@@ -27,11 +27,13 @@ import java.util.regex.Pattern;
  * enabled yet" message rather than a confusing parse error — the day a solver
  * key is set, the same path just works.
  *
- * <p><b>Unverified until first real solve:</b> we have the captcha page (sitekey
- * extraction is fixture-tested) but not the post-captcha DANFE, since we can't
- * pass the captcha without a solver. The resubmit request shape in
- * {@link #fetchAuthorizedDanfe} and the consult-URL params are best-effort and
- * isolated so they're a quick adjustment once a solver lets us see a real page.
+ * <p>The post-captcha DANFE layout is <b>verified</b> — a real MS receipt
+ * parses correctly via the shared parser (see {@code RealMsFixtureTest}), and
+ * the captcha page's sitekey extraction is fixture-tested. The one piece still
+ * <b>unverified until the first real solve</b> is the HTTP transport that turns
+ * a solved token into the DANFE: the consult-URL params and the resubmit shape
+ * in {@link #fetchAuthorizedDanfe} (isolated here for a quick adjustment once a
+ * solver lets us watch a live request).
  */
 @Slf4j
 @Component
