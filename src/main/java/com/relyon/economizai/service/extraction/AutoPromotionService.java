@@ -78,7 +78,7 @@ public class AutoPromotionService {
     @Scheduled(fixedDelayString = "${economizai.ml.auto-promote-interval-ms:86400000}",
                initialDelayString = "${economizai.ml.auto-promote-interval-ms:86400000}")
     public void scheduledPromote() {
-        log.info("auto_promote.scheduled trigger");
+        log.info("auto_promote.scheduled");
         self.promote();
     }
 

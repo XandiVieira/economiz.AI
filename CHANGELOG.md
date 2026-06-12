@@ -16,6 +16,17 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-12 — receipts: QR codes carrying a non-SEFAZ URL are now rejected
+
+Security hardening (SSRF guard). If the scanned QR payload is a full URL, the
+backend now only fetches it when the host is an official SEFAZ domain
+(`*.svrs.rs.gov.br` / `*.sefaz.rs.gov.br` for now). Anything else returns the
+existing `400` with message key `receipt.qr.invalid` — the same error the FE
+already handles for malformed QR codes. Payloads that are just the chave (the
+common case) are unaffected.
+
+---
+
 ## 2026-06-10 — insights: new `GET /insights/markets/top-discounts` (where you got the most discount)
 
 New endpoint ranking the household's markets by the **discount received** there (biggest first), built on the receipt-level discount we now track. Markets that gave no discount are excluded.

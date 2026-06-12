@@ -80,7 +80,7 @@ public class MlClassifierService {
     @Scheduled(fixedDelayString = "${economizai.ml.retrain-interval-ms:604800000}",
                initialDelayString = "${economizai.ml.retrain-interval-ms:604800000}")
     public void scheduledRetrain() {
-        log.info("ml.retrain.scheduled trigger");
+        log.info("ml.retrain.scheduled");
         self.retrain();
     }
 

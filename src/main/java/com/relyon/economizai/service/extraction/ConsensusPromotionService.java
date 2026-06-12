@@ -65,7 +65,7 @@ public class ConsensusPromotionService {
     @Scheduled(fixedDelayString = "${economizai.categorizer.consensus.interval-ms:86400000}",
                initialDelayString = "${economizai.categorizer.consensus.interval-ms:86400000}")
     public void scheduledPromote() {
-        log.info("consensus_promote.scheduled trigger");
+        log.info("consensus_promote.scheduled");
         self.promote();
     }
 
