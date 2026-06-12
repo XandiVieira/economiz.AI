@@ -192,29 +192,43 @@ function ErrorSnippet($allLines, [int]$startIdx) {
 # dirty - in which case the caller must abort this cycle, not fix on a bad base.
 #
 # SAFETY GUARD: this runs against the OneDrive working copy, which is ALSO the
-# human's editing checkout. If the tree has uncommitted HUMAN changes (someone
-# is mid-edit), we must NEVER `git reset --hard` - that silently destroys their
-# work. Skip the whole cycle instead and log it; the human commits when ready.
+# human's editing checkout. If the tree has uncommitted changes (someone is
+# mid-edit, OR a stray untracked file was left behind), we must NEVER blindly
+# `git reset --hard` - that silently destroys real work.
+#
+# RESILIENCE (changed): we no longer DEFER FOREVER on a dirty tree. A single
+# leftover file (e.g. a test-output .txt) used to wedge the whole watchdog
+# indefinitely and silently - it kept detecting bugs but never fixed any, because
+# every cycle saw the dirty tree and skipped. Instead we now STASH everything
+# aside (`git stash -u`, includes untracked) and carry on. Stash is REVERSIBLE
+# and LOSSLESS: worst case the human recovers their work with `git stash pop`,
+# and a stray junk file just sits harmlessly in a stash. So we get both: the tree
+# is clean enough to sync+fix, and nothing is ever deleted or lost. We DON'T
+# stash the ledger (it's the watchdog's own audit log) - commit it first.
 #
 # CRUCIAL: the ledger ($ledger, AUTONOMOUS_FIXES.md) is written by THIS watchdog
-# every time it acts. On the NEEDS-HUMAN paths it is written but NOT committed,
-# so it would leave the tree dirty forever and DEADLOCK this guard (the watchdog
-# writes the ledger, then skips every future cycle because its own ledger write
-# made the tree dirty). To prevent that, the ledger is auto-committed right after
-# each write (see CommitLedger), so by the time we get here the tree should carry
-# only genuine human edits. We still exclude the ledger defensively.
+# every time it acts. It's auto-committed right after each write (see
+# CommitLedger), so it never counts as dirty here.
 # (TODO(prod): move the watchdog to a dedicated clone outside OneDrive so it can
-# never collide with human edits - see INFRASTRUCTURE.md.)
+# never collide with human edits at all - see INFRASTRUCTURE.md.)
 function SyncBranch {
     $ledgerRel = [regex]::Escape((Split-Path $ledger -Leaf))
+    # Commit the ledger first so it's never swept into the stash below.
+    CommitLedger
     $dirty = @(& git status --porcelain 2>$null | Where-Object { $_ -notmatch $ledgerRel })
     if ($dirty.Count -gt 0) {
-        Log ("sync.skip {0} uncommitted human change(s) - not resetting; deferring to protect work" -f $dirty.Count)
-        return $false
+        # Stash ALL changes (tracked + untracked) aside, losslessly, so the tree is
+        # clean enough to sync and fix. Never deletes; the human can `git stash pop`.
+        $stamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        & git stash push -u -m "watchdog auto-stash $stamp ($($dirty.Count) change(s))" 2>$null | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            # Stash itself failed - do NOT reset --hard (that would destroy the work
+            # the stash was meant to preserve). Defer this one cycle and retry.
+            Log ("sync.skip stash failed for {0} change(s); deferring (work untouched)" -f $dirty.Count)
+            return $false
+        }
+        Log ("sync.stashed {0} uncommitted change(s) aside (recoverable via 'git stash pop'); continuing" -f $dirty.Count)
     }
-    # Belt-and-suspenders: if the ledger somehow stayed dirty, commit it now so
-    # the rebase has a clean tree (never reset --hard over an unsaved ledger).
-    CommitLedger
     & git fetch origin $Branch 2>$null
     & git rebase "origin/$Branch" 2>$null | Out-Null
     if ($LASTEXITCODE -ne 0) {
