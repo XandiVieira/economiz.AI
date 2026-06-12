@@ -61,14 +61,30 @@ public class CnpjActivityClient {
      * on without business-type context".
      */
     public MerchantSegment classify(String cnpj) {
-        if (!enabled || cnpj == null || cnpj.isBlank()) return MerchantSegment.UNKNOWN;
+        return lookup(cnpj).segment();
+    }
+
+    /**
+     * Full registry lookup: business segment (from CNAE) + the official IBGE
+     * municipality code. Same best-effort semantics as {@link #classify} —
+     * failures yield (UNKNOWN, null), never an exception.
+     */
+    public CnpjLookup lookup(String cnpj) {
+        if (!enabled || cnpj == null || cnpj.isBlank()) return CnpjLookup.empty();
         var body = fetchWithRetry(cnpj);
-        if (body == null) return MerchantSegment.UNKNOWN;
+        if (body == null) return CnpjLookup.empty();
         try {
-            return segmentFromCnae(parseCnaes(body));
+            var json = objectMapper.readTree(body);
+            return new CnpjLookup(segmentFromCnae(parseCnaes(json)), parseIbgeCityCode(json));
         } catch (Exception ex) {
             log.warn("merchant.classify.parse_failed cnpj={} {}: {}", cnpj, ex.getClass().getSimpleName(), ex.getMessage());
-            return MerchantSegment.UNKNOWN;
+            return CnpjLookup.empty();
+        }
+    }
+
+    public record CnpjLookup(MerchantSegment segment, String ibgeCityCode) {
+        static CnpjLookup empty() {
+            return new CnpjLookup(MerchantSegment.UNKNOWN, null);
         }
     }
 
@@ -86,8 +102,7 @@ public class CnpjActivityClient {
         return null;
     }
 
-    private List<String> parseCnaes(String body) throws Exception {
-        var json = objectMapper.readTree(body);
+    private List<String> parseCnaes(JsonNode json) {
         var codes = new ArrayList<String>();
         var primary = json.get("cnae_fiscal");
         if (primary != null && !primary.isNull()) codes.add(primary.asText());
@@ -99,6 +114,14 @@ public class CnpjActivityClient {
             }
         }
         return codes;
+    }
+
+    /** BrasilAPI returns the municipality as `codigo_municipio_ibge` (7-digit number). */
+    private String parseIbgeCityCode(JsonNode json) {
+        var code = json.get("codigo_municipio_ibge");
+        if (code == null || code.isNull()) return null;
+        var digits = code.asText().replaceAll("\\D", "");
+        return digits.length() == 7 ? digits : null;
     }
 
     /** Pure mapping (CNAE prefixes → segment), extracted for testability. */

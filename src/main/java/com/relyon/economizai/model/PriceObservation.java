@@ -92,4 +92,8 @@ public class PriceObservation extends BaseEntity {
 
     @Column(length = 2)
     private String state;
+
+    /** Official IBGE municipality code (7 digits) — stable key for regional aggregation. */
+    @Column(name = "ibge_city_code", length = 7)
+    private String ibgeCityCode;
 }

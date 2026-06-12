@@ -65,6 +65,10 @@ public class MarketLocation extends BaseEntity {
     @Column(length = 2)
     private String state;
 
+    /** Official IBGE municipality code (7 digits), from the BrasilAPI CNPJ lookup. */
+    @Column(name = "ibge_city_code", length = 7)
+    private String ibgeCityCode;
+
     @Enumerated(EnumType.STRING)
     @Column(length = 20, nullable = false)
     @lombok.Builder.Default

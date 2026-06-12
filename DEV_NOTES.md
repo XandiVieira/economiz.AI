@@ -293,10 +293,14 @@ Helper scripts at repo root (run each in an **Administrator** PowerShell once):
 - **Implementation note**: discount aggregations query `Receipt` directly (no item join) so `discountTotal` is counted once per receipt; `/insights/query` uses a DISTINCT-(receiptId, …) select so the item-join doesn't multiply it.
 - **Why OK for dev**: the price index (what matters most) is honest, spend breakdowns stay internally consistent (gross everywhere), and the FE can show "gastou R$ X · R$ Y em descontos". Still no use of the discount beyond reporting (e.g. a future "markets with the biggest discounts").
 
-### IBGE municipality code missing
-- **Now**: `PriceObservation` carries `city` (string from Nominatim) + `state` (UF) but not the IBGE 7-digit municipality code that the FE spec wanted (PRO-53/54).
-- **Why OK for dev**: city + state is enough for "show me everything in Porto Alegre".
-- **Fix before prod B2B sales**: load the IBGE municipality CSV (5,570 rows) into a lookup table, backfill the column on existing rows, derive on geocode. Important for regional aggregation and for matching against external datasets (IBGE's own published prices, IPCA, etc). ~3 hr.
+### IBGE municipality code — SOLVED (2026-06-12)
+- **Now**: `market_locations.ibge_city_code` + `price_observations.ibge_city_code` (V47). No CSV
+  lookup table needed: the BrasilAPI CNPJ response (already fetched for merchant-segment
+  classification) carries `codigo_municipio_ibge`, so the classification job captures it and the
+  price-index write snapshots it per observation, like city/state. Already-classified markets
+  missing the code are backfilled by the same scheduled scan (attempts-bounded).
+- **Residual**: observations written before a market's code arrives stay null (snapshot design —
+  intentional). Backfill old observation rows only if B2B aggregation ever needs the history.
 
 ---
 

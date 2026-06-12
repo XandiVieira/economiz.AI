@@ -21,4 +21,9 @@ public interface MarketLocationRepository extends JpaRepository<MarketLocation, 
     /** Markets whose business segment isn't resolved yet (for the scheduled
      *  CNAE classification job). */
     List<MarketLocation> findAllBySegmentAndSegmentAttemptsLessThan(MerchantSegment segment, int maxAttempts);
+
+    /** Already-classified markets still missing the IBGE municipality code
+     *  (backfill — rows classified before the code was captured). */
+    List<MarketLocation> findAllByIbgeCityCodeIsNullAndSegmentNotAndSegmentAttemptsLessThan(
+            MerchantSegment segment, int maxAttempts);
 }

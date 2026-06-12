@@ -208,7 +208,7 @@ class MarketLocationServiceTest {
         var summary = service.classifyPendingSegments();
 
         assertThat(summary.attempted()).isZero();
-        verify(cnpjActivityClient, never()).classify(any());
+        verify(cnpjActivityClient, never()).lookup(any());
     }
 
     @Test
@@ -220,10 +220,10 @@ class MarketLocationServiceTest {
         when(cnpjActivityClient.isEnabled()).thenReturn(true);
         when(repository.findAllBySegmentAndSegmentAttemptsLessThan(eq(MerchantSegment.UNKNOWN), anyInt()))
                 .thenReturn(List.of(pharmacyMarket, supermarketMarket, otherMarket, unknownMarket));
-        when(cnpjActivityClient.classify("p")).thenReturn(MerchantSegment.PHARMACY);
-        when(cnpjActivityClient.classify("s")).thenReturn(MerchantSegment.SUPERMARKET);
-        when(cnpjActivityClient.classify("o")).thenReturn(MerchantSegment.OTHER);
-        when(cnpjActivityClient.classify("u")).thenReturn(MerchantSegment.UNKNOWN);
+        when(cnpjActivityClient.lookup("p")).thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.PHARMACY, null));
+        when(cnpjActivityClient.lookup("s")).thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.SUPERMARKET, null));
+        when(cnpjActivityClient.lookup("o")).thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.OTHER, null));
+        when(cnpjActivityClient.lookup("u")).thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.UNKNOWN, null));
         when(productRepository.findOtherCategoryProductsByMerchant("p")).thenReturn(List.of());
 
         var summary = service.classifyPendingSegments();
@@ -241,7 +241,7 @@ class MarketLocationServiceTest {
     void classifySegmentOne_setsSegmentWhenResolved() {
         var market = MarketLocation.builder().cnpj("c").cnpjRoot("cccccccc")
                 .segment(MerchantSegment.UNKNOWN).segmentAttempts(0).build();
-        when(cnpjActivityClient.classify("c")).thenReturn(MerchantSegment.SUPERMARKET);
+        when(cnpjActivityClient.lookup("c")).thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.SUPERMARKET, null));
 
         service.classifySegmentOne(market);
 
@@ -256,7 +256,7 @@ class MarketLocationServiceTest {
     void classifySegmentOne_leavesUnknownWhenUnresolved() {
         var market = MarketLocation.builder().cnpj("c").cnpjRoot("cccccccc")
                 .segment(MerchantSegment.UNKNOWN).segmentAttempts(2).build();
-        when(cnpjActivityClient.classify("c")).thenReturn(MerchantSegment.UNKNOWN);
+        when(cnpjActivityClient.lookup("c")).thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.UNKNOWN, null));
 
         service.classifySegmentOne(market);
 
@@ -274,7 +274,7 @@ class MarketLocationServiceTest {
                 .category(ProductCategory.OTHER).categorizationSource(CategorizationSource.NONE).build();
         var productTwo = Product.builder().normalizedName("paracetamol")
                 .category(ProductCategory.OTHER).categorizationSource(CategorizationSource.NONE).build();
-        when(cnpjActivityClient.classify("ph")).thenReturn(MerchantSegment.PHARMACY);
+        when(cnpjActivityClient.lookup("ph")).thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.PHARMACY, null));
         when(productRepository.findOtherCategoryProductsByMerchant("ph"))
                 .thenReturn(List.of(productOne, productTwo));
 
@@ -290,12 +290,58 @@ class MarketLocationServiceTest {
     void classifySegmentOne_pharmacyWithNoProducts_doesNotSaveAll() {
         var market = MarketLocation.builder().cnpj("ph").cnpjRoot("pppppppp")
                 .segment(MerchantSegment.UNKNOWN).segmentAttempts(0).build();
-        when(cnpjActivityClient.classify("ph")).thenReturn(MerchantSegment.PHARMACY);
+        when(cnpjActivityClient.lookup("ph")).thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.PHARMACY, null));
         when(productRepository.findOtherCategoryProductsByMerchant("ph")).thenReturn(List.of());
 
         service.classifySegmentOne(market);
 
         verify(productRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void classifySegmentOne_capturesIbgeCityCode() {
+        var market = MarketLocation.builder().cnpj("c").cnpjRoot("cccccccc")
+                .segment(MerchantSegment.UNKNOWN).segmentAttempts(0).build();
+        when(cnpjActivityClient.lookup("c"))
+                .thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.SUPERMARKET, "4314902"));
+
+        service.classifySegmentOne(market);
+
+        assertThat(market.getIbgeCityCode()).isEqualTo("4314902");
+        verify(repository).save(market);
+    }
+
+    @Test
+    void classifySegmentOne_neverOverwritesExistingIbgeCityCode() {
+        var market = MarketLocation.builder().cnpj("c").cnpjRoot("cccccccc")
+                .segment(MerchantSegment.UNKNOWN).segmentAttempts(0)
+                .ibgeCityCode("4314902").build();
+        when(cnpjActivityClient.lookup("c"))
+                .thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.SUPERMARKET, "9999999"));
+
+        service.classifySegmentOne(market);
+
+        assertThat(market.getIbgeCityCode()).isEqualTo("4314902");
+    }
+
+    @Test
+    void classifyPendingSegments_includesIbgeBackfillRows() {
+        // already classified before the IBGE column existed → picked up by backfill
+        var classified = MarketLocation.builder().cnpj("b").cnpjRoot("bbbbbbbb")
+                .segment(MerchantSegment.SUPERMARKET).segmentAttempts(1).build();
+        when(cnpjActivityClient.isEnabled()).thenReturn(true);
+        when(repository.findAllBySegmentAndSegmentAttemptsLessThan(eq(MerchantSegment.UNKNOWN), anyInt()))
+                .thenReturn(List.of());
+        when(repository.findAllByIbgeCityCodeIsNullAndSegmentNotAndSegmentAttemptsLessThan(
+                eq(MerchantSegment.UNKNOWN), anyInt()))
+                .thenReturn(List.of(classified));
+        when(cnpjActivityClient.lookup("b"))
+                .thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.SUPERMARKET, "4314902"));
+
+        var summary = service.classifyPendingSegments();
+
+        assertThat(summary.attempted()).isEqualTo(1);
+        assertThat(classified.getIbgeCityCode()).isEqualTo("4314902");
     }
 
     // ---------- findByCnpjs ----------

@@ -123,7 +123,8 @@ public class PriceIndexService {
                 .get(receipt.getCnpjEmitente());
         return new MarketSnapshot(
                 marketLoc != null ? marketLoc.getCity() : null,
-                marketLoc != null ? marketLoc.getState() : null);
+                marketLoc != null ? marketLoc.getState() : null,
+                marketLoc != null ? marketLoc.getIbgeCityCode() : null);
     }
 
     /** Build + persist one anonymized observation and its private audit row. */
@@ -149,6 +150,7 @@ public class PriceIndexService {
                 .normalizedUnit(normalized.map(n -> n.baseUnit().name()).orElse(null))
                 .city(location.city())
                 .state(location.state())
+                .ibgeCityCode(location.ibgeCityCode())
                 .build();
         var saved = observationRepository.save(observation);
 
@@ -161,7 +163,7 @@ public class PriceIndexService {
         return saved;
     }
 
-    private record MarketSnapshot(String city, String state) {}
+    private record MarketSnapshot(String city, String state, String ibgeCityCode) {}
 
     @Transactional(readOnly = true)
     public ReferencePrice referencePrice(UUID productId, String marketCnpj) {

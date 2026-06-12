@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -37,6 +38,7 @@ public class MarketLocationService {
 
     private static final int MAX_GEOCODE_ATTEMPTS = 3;
     private static final int MAX_SEGMENT_ATTEMPTS = 3;
+    private static final int MAX_IBGE_BACKFILL_ATTEMPTS = 3;
     private static final String BRASIL_SUFFIX = ", Brasil";
 
     private final MarketLocationRepository repository;
@@ -128,8 +130,13 @@ public class MarketLocationService {
      */
     public SegmentClassificationSummary classifyPendingSegments() {
         if (!cnpjActivityClient.isEnabled()) return new SegmentClassificationSummary(0, 0, 0, 0, 0);
-        var pending = repository.findAllBySegmentAndSegmentAttemptsLessThan(
-                MerchantSegment.UNKNOWN, MAX_SEGMENT_ATTEMPTS);
+        var pending = new ArrayList<>(repository.findAllBySegmentAndSegmentAttemptsLessThan(
+                MerchantSegment.UNKNOWN, MAX_SEGMENT_ATTEMPTS));
+        // Backfill: rows classified before we captured the IBGE code. Bounded by
+        // the attempts counter (incremented per lookup) so a registry that never
+        // returns the code can't be polled forever.
+        pending.addAll(repository.findAllByIbgeCityCodeIsNullAndSegmentNotAndSegmentAttemptsLessThan(
+                MerchantSegment.UNKNOWN, MAX_SEGMENT_ATTEMPTS + MAX_IBGE_BACKFILL_ATTEMPTS));
         if (pending.isEmpty()) return new SegmentClassificationSummary(0, 0, 0, 0, 0);
         log.info("merchant.classify.batch.start pending={}", pending.size());
         var pharmacy = 0;
@@ -156,12 +163,16 @@ public class MarketLocationService {
     @Transactional
     public void classifySegmentOne(MarketLocation market) {
         market.setSegmentAttempts(market.getSegmentAttempts() + 1);
-        var segment = cnpjActivityClient.classify(market.getCnpj());
+        var lookup = cnpjActivityClient.lookup(market.getCnpj());
+        var segment = lookup.segment();
         if (segment != MerchantSegment.UNKNOWN) {
             market.setSegment(segment);
             market.setSegmentClassifiedAt(LocalDateTime.now());
-            log.info("merchant.classify.ok cnpj={} segment={} name='{}'",
-                    market.getCnpj(), segment, market.getName());
+            log.info("merchant.classify.ok cnpj={} segment={} ibgeCityCode={} name='{}'",
+                    market.getCnpj(), segment, lookup.ibgeCityCode(), market.getName());
+        }
+        if (market.getIbgeCityCode() == null && lookup.ibgeCityCode() != null) {
+            market.setIbgeCityCode(lookup.ibgeCityCode());
         }
         repository.save(market);
         if (segment == MerchantSegment.PHARMACY) {

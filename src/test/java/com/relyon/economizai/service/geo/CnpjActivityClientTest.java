@@ -82,4 +82,45 @@ class CnpjActivityClientTest {
     void emptyIsUnknown() {
         assertEquals(MerchantSegment.UNKNOWN, CnpjActivityClient.segmentFromCnae(List.of()));
     }
+
+    /** Client whose HTTP seam returns a canned BrasilAPI body. */
+    private CnpjActivityClient clientWithBody(String body) {
+        return new CnpjActivityClient(RestClient.builder(),
+                "https://example.test/api/cnpj/v1", 1, 3, "test-agent", true) {
+            @Override protected String fetchWithRetry(String cnpj) {
+                return body;
+            }
+        };
+    }
+
+    @Test
+    void lookup_extractsSegmentAndIbgeCityCode() {
+        var lookup = clientWithBody(
+                "{\"cnae_fiscal\":\"4711301\",\"codigo_municipio_ibge\":4314902}")
+                .lookup("11111111000111");
+        assertEquals(MerchantSegment.SUPERMARKET, lookup.segment());
+        assertEquals("4314902", lookup.ibgeCityCode());
+    }
+
+    @Test
+    void lookup_nullIbgeWhenFieldMissingOrMalformed() {
+        assertEquals(null, clientWithBody("{\"cnae_fiscal\":\"4711301\"}")
+                .lookup("11111111000111").ibgeCityCode());
+        // wrong length → discarded rather than stored corrupt
+        assertEquals(null, clientWithBody("{\"codigo_municipio_ibge\":\"123\"}")
+                .lookup("11111111000111").ibgeCityCode());
+    }
+
+    @Test
+    void lookup_emptyOnUnparseableBody() {
+        var lookup = clientWithBody("not-json").lookup("11111111000111");
+        assertEquals(MerchantSegment.UNKNOWN, lookup.segment());
+        assertEquals(null, lookup.ibgeCityCode());
+    }
+
+    @Test
+    void classify_delegatesToLookup() {
+        assertEquals(MerchantSegment.PHARMACY,
+                clientWithBody("{\"cnae_fiscal\":\"4771701\"}").classify("11111111000111"));
+    }
 }
