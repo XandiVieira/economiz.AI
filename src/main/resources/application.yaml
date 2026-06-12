@@ -85,6 +85,23 @@ economizai:
         # States whose portal renders a DIFFERENT layout (SP, MG, BA, PE, …)
         # need a dedicated adapter.
         states: ${SEFAZ_SVRS_STATES:RS,PR}
+      captcha:
+        # UFs whose consult portal gates the DANFE behind a captcha and is
+        # handled by MsDfePortalAdapter (currently MS — www.dfe.ms.gov.br with
+        # reCAPTCHA v2). Solving needs a provider configured under
+        # economizai.captcha below; until then these states fail fast with a
+        # clear 503 "coming soon". Each captcha state has its own portal, so
+        # adding one usually means a dedicated adapter, not just this list.
+        states: ${SEFAZ_CAPTCHA_STATES:MS}
+  # Captcha solver — OFF by default (provider=none → captcha states 503).
+  # Pick a provider + key when ready; twocaptcha is implemented and its API is
+  # shared by compatible services (set base-url). See DEV_NOTES "Captcha solver".
+  captcha:
+    provider: ${CAPTCHA_PROVIDER:none}          # none | twocaptcha
+    api-key: ${CAPTCHA_API_KEY:}
+    base-url: ${CAPTCHA_BASE_URL:https://2captcha.com}
+    timeout-ms: ${CAPTCHA_TIMEOUT_MS:120000}
+    poll-interval-ms: ${CAPTCHA_POLL_INTERVAL_MS:5000}
   subscription:
     # Master paywall switch. OFF by default — every feature is allowed for all users
     # and the FREE caps below are dormant. Set SUBSCRIPTION_ENFORCE=true to turn paywalls on.

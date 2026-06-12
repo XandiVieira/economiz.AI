@@ -16,6 +16,19 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-12 — receipts: captcha-gated states (MS) return a clear "coming soon" instead of failing
+
+Mato Grosso do Sul's portal hides the receipt behind a reCAPTCHA, so we can't
+read it until a captcha-solver provider is configured (a backend/ops decision,
+not shipped yet). Until then, submitting an MS NFC-e returns **HTTP 503** with
+message key `receipt.captcha.unavailable` ("NFC-e from this state requires a
+captcha step we haven't enabled yet — coming soon"). The FE should treat 503 on
+receipt submit as a soft "try again later / state not ready" state, distinct
+from 400 (bad QR) and 502 (SEFAZ down). The whole solving path is built and
+dormant; the day the key is set, MS just works with no API change.
+
+---
+
 ## 2026-06-12 — receipts: Paraná (PR) NFC-e now supported 🎉
 
 Second state live (after RS). PR's portal (`www.fazenda.pr.gov.br`) renders the

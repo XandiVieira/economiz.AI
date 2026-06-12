@@ -77,6 +77,16 @@ public class GlobalExceptionHandler {
         return respond(ex, HttpStatus.BAD_GATEWAY, "SEFAZ fetch failed");
     }
 
+    @ExceptionHandler(CaptchaSolveFailedException.class)
+    public ResponseEntity<ErrorResponse> handleCaptchaSolveFailed(CaptchaSolveFailedException ex) {
+        return respond(ex, HttpStatus.BAD_GATEWAY, "Captcha solve failed");
+    }
+
+    @ExceptionHandler(CaptchaUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleCaptchaUnavailable(CaptchaUnavailableException ex) {
+        return respond(ex, HttpStatus.SERVICE_UNAVAILABLE, "Captcha-gated state, no solver configured");
+    }
+
     @ExceptionHandler(PaywallException.class)
     public ResponseEntity<ErrorResponse> handlePaywall(PaywallException ex) {
         return respond(ex, HttpStatus.PAYMENT_REQUIRED, "Paywall: PRO feature blocked for FREE tier");

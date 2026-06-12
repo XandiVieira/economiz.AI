@@ -116,7 +116,13 @@ The report works identically in SHADOW and ON (computed purely from
 
 ---
 
-## Multi-state SEFAZ coverage = 2 / 27 verified (PR added 2026-06-12)
+## Captcha solver — seam ready, dormant (MS wired, 2026-06-12)
+- **Now**: captcha-gated states have a full ingestion path that's switched OFF until a solver provider is configured. `MsDfePortalAdapter` claims MS (`www.dfe.ms.gov.br`, reCAPTCHA v2): GET consult page → detect captcha + extract sitekey → `CaptchaSolver.solveRecaptchaV2` → resubmit → parse with the shared `ResponsiveDanfeParser`. With the default `provider=none` (`NoopCaptchaSolver`), an MS receipt fails fast with **503 `receipt.captcha.unavailable`** ("coming soon"), not a confusing parse error.
+- **To turn MS on when you pick a provider**: set `CAPTCHA_PROVIDER=twocaptcha` + `CAPTCHA_API_KEY=<key>` (+ `CAPTCHA_BASE_URL` if using a 2Captcha-compatible service like CapMonster). `TwoCaptchaSolver` is already implemented (submit→poll flow, unit-tested). A provider with a different HTTP API = one new class implementing `CaptchaSolver` with `@ConditionalOnProperty(...havingValue="<name>")`; nothing else changes.
+- **VERIFY ON FIRST REAL SOLVE**: we have the MS captcha page (sitekey extraction is fixture-tested) but NOT a real post-captcha DANFE — can't pass the captcha without a solver. So two things are best-effort until the first live run: `MsDfePortalAdapter.consultUrl` params and `fetchAuthorizedDanfe`'s resubmit shape (both isolated for a quick fix), and whether MS's post-captcha layout is exactly the responsive DANFE (assumed; `parseHtml` delegates to the shared parser). Cost when live: ~US$1-3 / 1000 solves.
+- **Other captcha states**: each has its own portal, so they need their own adapter (reusing `CaptchaSolver` + `ResponsiveDanfeParser`); `economizai.ingestion.sefaz.captcha.states` lists which UFs the MS adapter claims (MS only for now).
+
+## Multi-state SEFAZ coverage = 2 / 27 verified (PR added 2026-06-12; MS ready, needs solver)
 - **Now**: RS + **PR** have working end-to-end ingestion. PR has its own portal
   (`www.fazenda.pr.gov.br/nfce/qrcode`) but renders the SAME responsive-DANFE
   layout as SVRS, so the shared adapter parses it unchanged — verified with a
