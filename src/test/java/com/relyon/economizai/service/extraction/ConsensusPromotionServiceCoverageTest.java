@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -78,7 +79,7 @@ class ConsensusPromotionServiceCoverageTest {
         var outcome = service.promote();
 
         assertEquals(0, outcome.productsGraduated());
-        verify(productRepository, never()).findById(any());
+        verify(productRepository).findAllById(Set.of());
         verify(productRepository, never()).save(any());
     }
 
@@ -89,7 +90,7 @@ class ConsensusPromotionServiceCoverageTest {
         when(overrideRepository.findAll()).thenReturn(List.of(
                 override(milho, ProductCategory.GROCERIES),
                 override(milho, ProductCategory.GROCERIES)));
-        when(productRepository.findById(milho.getId())).thenReturn(Optional.of(milho));
+        when(productRepository.findAllById(Set.of(milho.getId()))).thenReturn(List.of(milho));
 
         var outcome = service.promote();
 
@@ -103,7 +104,7 @@ class ConsensusPromotionServiceCoverageTest {
         when(overrideRepository.findAll()).thenReturn(List.of(
                 override(milho, ProductCategory.GROCERIES),
                 override(milho, ProductCategory.GROCERIES)));
-        when(productRepository.findById(milho.getId())).thenReturn(Optional.empty());
+        when(productRepository.findAllById(Set.of(milho.getId()))).thenReturn(List.of());
 
         var outcome = service.promote();
 
@@ -122,8 +123,8 @@ class ConsensusPromotionServiceCoverageTest {
                 override(milhoA, ProductCategory.GROCERIES),
                 override(milhoB, ProductCategory.PRODUCE),
                 override(milhoB, ProductCategory.PRODUCE)));
-        when(productRepository.findById(milhoA.getId())).thenReturn(Optional.of(milhoA));
-        when(productRepository.findById(milhoB.getId())).thenReturn(Optional.of(milhoB));
+        when(productRepository.findAllById(Set.of(milhoA.getId(), milhoB.getId())))
+                .thenReturn(List.of(milhoA, milhoB));
 
         var outcome = service.promote();
 
@@ -138,7 +139,7 @@ class ConsensusPromotionServiceCoverageTest {
         when(overrideRepository.findAll()).thenReturn(List.of(
                 override(milho, ProductCategory.GROCERIES),
                 override(milho, ProductCategory.GROCERIES)));
-        when(productRepository.findById(milho.getId())).thenReturn(Optional.of(milho));
+        when(productRepository.findAllById(Set.of(milho.getId()))).thenReturn(List.of(milho));
 
         var outcome = service.promote();
 
@@ -156,8 +157,8 @@ class ConsensusPromotionServiceCoverageTest {
                 override(milhoA, ProductCategory.GROCERIES),
                 override(milhoB, ProductCategory.GROCERIES),
                 override(milhoB, ProductCategory.GROCERIES)));
-        when(productRepository.findById(milhoA.getId())).thenReturn(Optional.of(milhoA));
-        when(productRepository.findById(milhoB.getId())).thenReturn(Optional.of(milhoB));
+        when(productRepository.findAllById(Set.of(milhoA.getId(), milhoB.getId())))
+                .thenReturn(List.of(milhoA, milhoB));
         var existing = LearnedDictionaryEntry.builder()
                 .normalizedToken("milho").category(ProductCategory.OTHER)
                 .promotedAt(LocalDateTime.now().minusDays(5)).build();
@@ -177,7 +178,7 @@ class ConsensusPromotionServiceCoverageTest {
         when(overrideRepository.findAll()).thenReturn(List.of(
                 override(milho, ProductCategory.GROCERIES),
                 override(milho, ProductCategory.GROCERIES)));
-        when(productRepository.findById(milho.getId())).thenReturn(Optional.of(milho));
+        when(productRepository.findAllById(Set.of(milho.getId()))).thenReturn(List.of(milho));
         var learnedEntry = LearnedDictionaryEntry.builder()
                 .normalizedToken("milho").genericName("milho").category(ProductCategory.GROCERIES)
                 .promotedAt(LocalDateTime.now()).build();
