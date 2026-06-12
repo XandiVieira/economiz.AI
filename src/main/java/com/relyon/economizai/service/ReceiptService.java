@@ -36,6 +36,7 @@ import com.relyon.economizai.service.priceindex.PromoDetector;
 import com.relyon.economizai.service.sefaz.ChaveAcessoParser;
 import com.relyon.economizai.service.sefaz.FailedParseRecorder;
 import com.relyon.economizai.service.sefaz.ParsedReceipt;
+import com.relyon.economizai.service.sefaz.ParsedReceiptItem;
 import com.relyon.economizai.service.sefaz.SefazIngestionService;
 import com.relyon.economizai.service.subscription.Feature;
 import com.relyon.economizai.service.subscription.SubscriptionGateService;
@@ -364,16 +365,7 @@ public class ReceiptService {
                 receipt.getUf(), receipt.getRawHtml(), receipt.getChaveAcesso(), receipt.getSourceUrl());
 
         receipt.getItems().clear();
-        parsed.items().forEach(p -> receipt.addItem(ReceiptItem.builder()
-                .lineNumber(p.lineNumber())
-                .rawDescription(p.rawDescription())
-                .ean(p.ean())
-                .quantity(p.quantity())
-                .unit(p.unit())
-                .unitPrice(p.unitPrice())
-                .totalPrice(p.totalPrice())
-                .nfcePromoFlag(p.nfcePromoFlag())
-                .build()));
+        parsed.items().forEach(parsedItem -> receipt.addItem(toReceiptItem(parsedItem)));
         receipt.setMarketName(parsed.marketName());
         receipt.setMarketAddress(parsed.marketAddress());
         receipt.setIssuedAt(parsed.issuedAt());
@@ -502,17 +494,22 @@ public class ReceiptService {
                 .rawHtml(parsed.rawHtml())
                 .status(ReceiptStatus.PENDING_CONFIRMATION)
                 .build();
-        parsed.items().forEach(p -> receipt.addItem(ReceiptItem.builder()
-                .lineNumber(p.lineNumber())
-                .rawDescription(p.rawDescription())
-                .ean(p.ean())
-                .quantity(p.quantity())
-                .unit(p.unit())
-                .unitPrice(p.unitPrice())
-                .totalPrice(p.totalPrice())
-                .nfcePromoFlag(p.nfcePromoFlag())
-                .build()));
+        parsed.items().forEach(parsedItem -> receipt.addItem(toReceiptItem(parsedItem)));
         return receiptRepository.save(receipt);
+    }
+
+    /** Single mapping from a SEFAZ-parsed line to a persisted item (submit + reparse). */
+    private static ReceiptItem toReceiptItem(ParsedReceiptItem parsedItem) {
+        return ReceiptItem.builder()
+                .lineNumber(parsedItem.lineNumber())
+                .rawDescription(parsedItem.rawDescription())
+                .ean(parsedItem.ean())
+                .quantity(parsedItem.quantity())
+                .unit(parsedItem.unit())
+                .unitPrice(parsedItem.unitPrice())
+                .totalPrice(parsedItem.totalPrice())
+                .nfcePromoFlag(parsedItem.nfcePromoFlag())
+                .build();
     }
 
     private void applyUpdate(ReceiptItem item, UpdateReceiptItemRequest request) {
