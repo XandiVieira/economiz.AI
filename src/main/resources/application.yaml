@@ -180,6 +180,17 @@ economizai:
     # Alexa remains a stub — structure only, dispatch records a "not implemented" failure.
     alexa:
       enabled: ${NOTIFICATIONS_ALEXA_ENABLED:false}     # Alexa Skill Messaging / Proactive Events
+    # Relevance-feedback filter: the user's own DISMISSED/MUTED telemetry
+    # suppresses deals from the screen + digest. Rollout via mode:
+    #   OFF    — no signal lookup at all
+    #   SHADOW — compute + log + measurable in the relevance report, UX unchanged
+    #   ON     — suppressed deals actually disappear
+    # Validate with GET /admin/notifications/relevance-report before flipping ON
+    # (near-zero regret = safe). See DEV_NOTES "Relevance filter rollout".
+    relevance:
+      mode: ${RELEVANCE_MODE:SHADOW}
+      dismissed-days: ${RELEVANCE_DISMISSED_DAYS:14}    # dismissal hides (product[, market]) this long
+      muted-days: ${RELEVANCE_MUTED_DAYS:180}           # mute hides the product everywhere this long
     # Background jobs that drive scheduled notification types.
     replenishment:
       interval-ms: ${NOTIFICATIONS_REPLENISHMENT_INTERVAL_MS:21600000}   # every 6h: predict product runout

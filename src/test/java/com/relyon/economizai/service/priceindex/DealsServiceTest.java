@@ -6,10 +6,12 @@ import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.RelevanceMode;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.service.geo.MarketNameService;
 import com.relyon.economizai.service.geo.WatchedMarketService;
+import com.relyon.economizai.service.notifications.DealFeedbackService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -28,6 +31,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -37,6 +42,7 @@ class DealsServiceTest {
     @Mock private PriceIndexService priceIndexService;
     @Mock private WatchedMarketService watchedMarketService;
     @Mock private MarketNameService marketNameService;
+    @Mock private DealFeedbackService dealFeedbackService;
 
     private final CollaborativeProperties properties = new CollaborativeProperties();
 
@@ -50,7 +56,10 @@ class DealsServiceTest {
     @BeforeEach
     void setUp() {
         dealsService = new DealsService(receiptItemRepository, priceIndexService, properties,
-                watchedMarketService, marketNameService);
+                watchedMarketService, marketNameService, dealFeedbackService);
+        lenient().when(dealFeedbackService.mode()).thenReturn(RelevanceMode.OFF);
+        lenient().when(dealFeedbackService.suppressionsFor(any()))
+                .thenReturn(DealFeedbackService.SuppressionSet.empty());
         lenient().when(watchedMarketService.watchedCnpjs(any())).thenReturn(Set.of(WATCHED_CNPJ));
         lenient().when(marketNameService.resolve(any(), any(), any()))
                 .thenAnswer(invocation -> invocation.getArgument(2));
@@ -99,6 +108,49 @@ class DealsServiceTest {
         assertEquals(0, new BigDecimal("0.3000").compareTo(deal.discountFraction()));
         assertTrue(deal.isWatched());
         assertEquals(3L, deal.distinctHouseholds());
+    }
+
+    @Test
+    void relevanceOn_productSuppressedByFeedback_skipsWithoutPriceLookup() {
+        when(dealFeedbackService.mode()).thenReturn(RelevanceMode.ON);
+        when(dealFeedbackService.suppressionsFor(any())).thenReturn(
+                new DealFeedbackService.SuppressionSet(Set.of(PRODUCT_ID), Set.of(), Map.of()));
+        when(receiptItemRepository.findConfirmedHistoryForHousehold(HOUSEHOLD_ID))
+                .thenReturn(List.of(purchase(new BigDecimal("10.00"), LocalDateTime.now())));
+
+        assertTrue(dealsService.findDeals(user(), false, null, 20).isEmpty());
+        verify(priceIndexService, never()).bestMarkets(any(), anyInt(), any(), any(), any(), any());
+    }
+
+    @Test
+    void relevanceOn_dismissedPairSuppressed_otherMarketStillSurfaces() {
+        when(dealFeedbackService.mode()).thenReturn(RelevanceMode.ON);
+        when(dealFeedbackService.suppressionsFor(any())).thenReturn(
+                new DealFeedbackService.SuppressionSet(Set.of(), Set.of(),
+                        Map.of(PRODUCT_ID, Set.of(WATCHED_CNPJ))));
+        when(receiptItemRepository.findConfirmedHistoryForHousehold(HOUSEHOLD_ID))
+                .thenReturn(List.of(purchase(new BigDecimal("10.00"), LocalDateTime.now())));
+        // dismissed market is cheapest, but another market also qualifies
+        when(priceIndexService.bestMarkets(eq(PRODUCT_ID), anyInt(), any(), any(), any(), any()))
+                .thenReturn(List.of(market(WATCHED_CNPJ, new BigDecimal("7.00"), 3L, null, true)));
+
+        // the surviving cheapest qualifying market IS the dismissed pair → suppressed
+        assertTrue(dealsService.findDeals(user(), false, null, 20).isEmpty());
+    }
+
+    @Test
+    void relevanceShadow_suppressedDealStillShown() {
+        when(dealFeedbackService.mode()).thenReturn(RelevanceMode.SHADOW);
+        when(dealFeedbackService.suppressionsFor(any())).thenReturn(
+                new DealFeedbackService.SuppressionSet(Set.of(PRODUCT_ID), Set.of(), Map.of()));
+        when(receiptItemRepository.findConfirmedHistoryForHousehold(HOUSEHOLD_ID))
+                .thenReturn(List.of(purchase(new BigDecimal("10.00"), LocalDateTime.now())));
+        when(priceIndexService.bestMarkets(eq(PRODUCT_ID), anyInt(), any(), any(), any(), any()))
+                .thenReturn(List.of(market(WATCHED_CNPJ, new BigDecimal("7.00"), 3L, null, true)));
+
+        var deals = dealsService.findDeals(user(), false, null, 20);
+
+        assertEquals(1, deals.size(), "SHADOW counts but never hides");
     }
 
     @Test

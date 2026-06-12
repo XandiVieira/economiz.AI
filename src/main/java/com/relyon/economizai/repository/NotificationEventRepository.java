@@ -1,6 +1,7 @@
 package com.relyon.economizai.repository;
 
 import com.relyon.economizai.model.NotificationEvent;
+import com.relyon.economizai.model.enums.NotificationEventType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -8,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.Collection;
+import java.util.List;
 import java.util.UUID;
 
 public interface NotificationEventRepository extends JpaRepository<NotificationEvent, UUID> {
@@ -31,5 +33,62 @@ public interface NotificationEventRepository extends JpaRepository<NotificationE
     interface SavingsRollup {
         BigDecimal getTotalSavings();
         long getConversions();
+    }
+
+    /**
+     * A user's own deal-feedback signals (DISMISSED / MUTED with a product)
+     * inside the suppression horizon — input for {@code DealFeedbackService}.
+     */
+    @Query("""
+        SELECT event
+        FROM NotificationEvent event
+        WHERE event.user.id = :userId
+          AND event.eventType IN ('DISMISSED', 'MUTED')
+          AND event.productId IS NOT NULL
+          AND event.occurredAt >= :since
+    """)
+    List<NotificationEvent> findFeedbackSignals(@Param("userId") UUID userId,
+                                                          @Param("since") OffsetDateTime since);
+
+    /** Event volume per type in a window — the relevance report's engagement block. */
+    @Query("""
+        SELECT event.eventType AS eventType, COUNT(event) AS occurrences,
+               COALESCE(SUM(event.savingsAmount), 0) AS savings
+        FROM NotificationEvent event
+        WHERE event.occurredAt >= :since
+        GROUP BY event.eventType
+    """)
+    List<TypeCount> countByTypeSince(@Param("since") OffsetDateTime since);
+
+    /** Projection for {@link #countByTypeSince}. */
+    interface TypeCount {
+        NotificationEventType getEventType();
+        long getOccurrences();
+        BigDecimal getSavings();
+    }
+
+    /**
+     * Product-keyed signals for the regret analysis: suppression signals
+     * (DISMISSED/MUTED) plus the engagement events a suppression could have
+     * prevented (DEAL_TAPPED / ADDED_TO_LIST / CONVERTED), joined in code.
+     */
+    @Query("""
+        SELECT event.user.id AS userId, event.productId AS productId,
+               event.eventType AS eventType, event.occurredAt AS occurredAt,
+               event.savingsAmount AS savingsAmount
+        FROM NotificationEvent event
+        WHERE event.occurredAt >= :since
+          AND event.productId IS NOT NULL
+          AND event.eventType IN ('DISMISSED', 'MUTED', 'DEAL_TAPPED', 'ADDED_TO_LIST', 'CONVERTED')
+    """)
+    List<RelevanceSignal> findRelevanceSignals(@Param("since") OffsetDateTime since);
+
+    /** Projection for {@link #findRelevanceSignals}. */
+    interface RelevanceSignal {
+        UUID getUserId();
+        UUID getProductId();
+        NotificationEventType getEventType();
+        OffsetDateTime getOccurredAt();
+        BigDecimal getSavingsAmount();
     }
 }

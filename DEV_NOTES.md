@@ -22,7 +22,32 @@ mirror entries here.
 - **Why OK for dev**: no real right-of-access requests yet.
 - **Before prod**: extend `exportData` to include those entities for a complete, defensible LGPD export. ~half a day.
 
-## Notification telemetry: foundation only — nothing consumes it yet (Phase A)
+## Relevance filter rollout — first telemetry CONSUMER (2026-06-12, in SHADOW)
+
+The first thing that *reads* `notification_events`: a user's own DISMISSED/MUTED
+signals suppress deals from their screen + digest (`DealFeedbackService` plugged
+into `DealsService`). Rules: MUTED product → hidden everywhere for 180d;
+DISMISSED → hidden for 14d (the (product, market) pair when the event carries
+`marketCnpj`, the whole product when it doesn't). Per-user scope — one member's
+dismissal never hides a deal from the rest of the household.
+
+**Rollout + validation protocol (`RELEVANCE_MODE`, default `SHADOW`):**
+1. **SHADOW (now)**: filter computed + logged (`relevance.shadow suppressed=N`),
+   UX unchanged. Let it run while real users dismiss/mute things.
+2. **Check the report**: `GET /api/v1/admin/notifications/relevance-report?days=30`.
+   The decision metric is **regret** — taps/list-adds/conversions on a product
+   the same user had recently dismissed/muted, i.e. engagement the filter would
+   have prevented. `regretSavings` is the R$ of conversions it would have blocked.
+3. **Flip ON** when regret ≈ 0 with meaningful signal volume (`suppression.signals`
+   double digits+). Record the pre-flip report numbers.
+4. **Compare after 2–4 weeks**: `dismissalRate` should fall, `tapThroughRate`
+   hold or rise, `conversions`/`attributedSavings` not fall. Worse → flip back to
+   SHADOW (one env var, no data loss — everything derives from the event log).
+
+The report works identically in SHADOW and ON (computed purely from
+`notification_events`), so before/after windows are directly comparable.
+
+## Notification telemetry: foundation (Phase A) — first consumer shipped 2026-06-12 (see "Relevance filter rollout" above)
 - **Now**: `POST /api/v1/notifications/events` + `NotificationEventService` write a `notification_events` row per user-feedback signal (push opened, deal viewed/tapped, added-to-list, dismissed/muted; plus server-only SENT/DELIVERED/CONVERTED for later). The `deal_surface_state` table (dedup-by-state-change for a future digest) is created but **unread/unwritten**. This is the **telemetry foundation for a future ranking/learning engine** — events are logged now even though no code reads them yet.
 - **`metadata` is a JSON string in a TEXT column** (not jsonb) to stay H2-test-portable. If we ever need to query *inside* it (e.g. filter by `discountFraction`), migrate to `jsonb`.
 - **LGPD**: `notification_events` is per-user behavioral data on the user's own account. The DB FK is `ON DELETE CASCADE` (account delete reaps it), but it is **NOT yet in `UserService.exportData`** — fold it into the LGPD data-export when that's extended (see the entry above). Flagged.

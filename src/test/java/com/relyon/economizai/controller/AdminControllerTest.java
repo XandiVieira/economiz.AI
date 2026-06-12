@@ -18,6 +18,7 @@ import com.relyon.economizai.dto.response.ReceiptItemResponse;
 import com.relyon.economizai.dto.response.ReceiptResponse;
 import com.relyon.economizai.dto.response.ReceiptSummaryResponse;
 import com.relyon.economizai.dto.response.RecategorizeReportResponse;
+import com.relyon.economizai.dto.response.RelevanceReportResponse;
 import com.relyon.economizai.dto.response.RecategorizeResultResponse;
 import com.relyon.economizai.exception.ProductNotFoundException;
 import com.relyon.economizai.exception.ReceiptNotFoundException;
@@ -40,6 +41,7 @@ import com.relyon.economizai.service.admin.AdminReceiptService;
 import com.relyon.economizai.service.admin.AdminUserService;
 import com.relyon.economizai.service.extraction.CategorizationQualityService;
 import com.relyon.economizai.service.geo.MarketLocationService;
+import com.relyon.economizai.service.notifications.RelevanceReportService;
 import com.relyon.economizai.service.geo.MarketLocationService.SegmentClassificationSummary;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -91,6 +93,7 @@ class AdminControllerTest {
     @MockitoBean private AdminProductService adminProductService;
     @MockitoBean private CategorizationQualityService categorizationQualityService;
     @MockitoBean private MarketLocationService marketLocationService;
+    @MockitoBean private RelevanceReportService relevanceReportService;
     @MockitoBean private JwtService jwtService;
     @MockitoBean private UserDetailsService userDetailsService;
     @MockitoBean private LocalizedMessageService localizedMessageService;
@@ -307,6 +310,45 @@ class AdminControllerTest {
                 .andExpect(status().isBadRequest());
 
         verify(adminNotificationService, never()).sendTest(any());
+    }
+
+    // --- relevance report ---
+
+    @Test
+    void relevanceReport_returnsReportForAdmin() throws Exception {
+        when(relevanceReportService.report(30)).thenReturn(new RelevanceReportResponse(
+                "SHADOW", 30, 14, 180,
+                new RelevanceReportResponse.Engagement(5, 1, 2, 10, 4, 1, 2, 0, 1,
+                        new BigDecimal("12.50"), new BigDecimal("0.4000"), new BigDecimal("0.2000")),
+                new RelevanceReportResponse.Suppression(3, 2, 2, 0, BigDecimal.ZERO)));
+
+        mockMvc.perform(get("/api/v1/admin/notifications/relevance-report")
+                        .with(SecurityMockMvcRequestPostProcessors.user(adminUser())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mode").value("SHADOW"))
+                .andExpect(jsonPath("$.engagement.dealViews").value(10))
+                .andExpect(jsonPath("$.suppression.regretEngagements").value(0));
+    }
+
+    @Test
+    void relevanceReport_forbiddenForRegularUser() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/notifications/relevance-report")
+                        .with(SecurityMockMvcRequestPostProcessors.user(regularUser())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void relevanceReport_clampsNonPositiveDaysToOne() throws Exception {
+        when(relevanceReportService.report(1)).thenReturn(new RelevanceReportResponse(
+                "SHADOW", 1, 14, 180,
+                new RelevanceReportResponse.Engagement(0, 0, 0, 0, 0, 0, 0, 0, 0,
+                        BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO),
+                new RelevanceReportResponse.Suppression(0, 0, 0, 0, BigDecimal.ZERO)));
+
+        mockMvc.perform(get("/api/v1/admin/notifications/relevance-report?days=-5")
+                        .with(SecurityMockMvcRequestPostProcessors.user(adminUser())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.windowDays").value(1));
     }
 
     @Test

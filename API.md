@@ -641,6 +641,14 @@ price is disclosed only when ≥ 3 distinct households contributed; below that t
 market is dropped. Returns `[]` when the collaborative index is off or nothing
 qualifies.
 
+**Relevance feedback (2026-06-12):** the `DISMISSED` / `MUTED` events the app
+reports (§10b) feed a per-user suppression filter on this list and the digest —
+mute hides the product everywhere for 180 days, dismissal for 14 days. A
+`DISMISSED` **with `marketCnpj`** hides only that (product, market) pair;
+without it, the whole product. Currently in SHADOW (measured, not applied);
+once validated it flips ON server-side with no API change — so always send
+`productId` (+ `marketCnpj` for dismissals) on these events.
+
 ### How the daily deals digest works (push)
 
 The deals screen above is always-on and read-only. The **digest** is the push

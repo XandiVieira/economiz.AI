@@ -13,6 +13,7 @@ import com.relyon.economizai.dto.response.ProductDeletionResponse;
 import com.relyon.economizai.dto.response.ProductMergeResultResponse;
 import com.relyon.economizai.dto.response.RecategorizeReportResponse;
 import com.relyon.economizai.dto.response.RecategorizeResultResponse;
+import com.relyon.economizai.dto.response.RelevanceReportResponse;
 import com.relyon.economizai.dto.response.ProductResponse;
 import com.relyon.economizai.dto.response.ReceiptResponse;
 import com.relyon.economizai.dto.response.ReceiptSummaryResponse;
@@ -25,6 +26,7 @@ import com.relyon.economizai.service.admin.AdminReceiptService;
 import com.relyon.economizai.service.admin.AdminUserService;
 import com.relyon.economizai.service.extraction.CategorizationQualityService;
 import com.relyon.economizai.service.geo.MarketLocationService;
+import com.relyon.economizai.service.notifications.RelevanceReportService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -65,6 +67,7 @@ public class AdminController {
     private final AdminProductService adminProductService;
     private final CategorizationQualityService categorizationQualityService;
     private final MarketLocationService marketLocationService;
+    private final RelevanceReportService relevanceReportService;
 
     @PostMapping("/receipts/{id}/reparse")
     public ResponseEntity<ReceiptResponse> reparseReceipt(@PathVariable UUID id) {
@@ -111,6 +114,16 @@ public class AdminController {
     public ResponseEntity<Void> sendTestNotification(@Valid @RequestBody SendTestNotificationRequest request) {
         adminNotificationService.sendTest(request);
         return ResponseEntity.accepted().build();
+    }
+
+    /**
+     * Relevance-filter validation report (engagement rates + suppression regret)
+     * — the evidence for the SHADOW → ON decision. See RelevanceReportResponse.
+     */
+    @GetMapping("/notifications/relevance-report")
+    public ResponseEntity<RelevanceReportResponse> relevanceReport(
+            @RequestParam(defaultValue = "30") int days) {
+        return ResponseEntity.ok(relevanceReportService.report(Math.max(1, days)));
     }
 
     /** Full product catalog (paged) — dev tool for curating dictionary/brands. */

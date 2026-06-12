@@ -6,8 +6,10 @@ import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.repository.ReceiptItemRepository;
+import com.relyon.economizai.model.enums.RelevanceMode;
 import com.relyon.economizai.service.geo.MarketNameService;
 import com.relyon.economizai.service.geo.WatchedMarketService;
+import com.relyon.economizai.service.notifications.DealFeedbackService;
 import com.relyon.economizai.service.notifications.RelevanceThreshold;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -60,6 +62,7 @@ public class DealsService {
     private final CollaborativeProperties properties;
     private final WatchedMarketService watchedMarketService;
     private final MarketNameService marketNameService;
+    private final DealFeedbackService dealFeedbackService;
 
     @Transactional(readOnly = true)
     public List<DealResponse> findDeals(User user, boolean includeNearby, Double radiusKm, int limit) {
@@ -70,11 +73,32 @@ public class DealsService {
         var purchased = aggregateByProduct(history);
         if (purchased.isEmpty()) return List.of();
 
+        var relevanceMode = dealFeedbackService.mode();
+        var suppressions = dealFeedbackService.suppressionsFor(user);
         var watchedCnpjs = watchedMarketService.watchedCnpjs(user);
         var deals = new ArrayList<DealResponse>();
+        var suppressedCount = 0;
         for (var aggregate : purchased.values()) {
+            // ON-mode shortcut: a product muted/dismissed market-wide can't yield
+            // a visible deal, so skip the (expensive) bestMarkets lookup outright.
+            if (relevanceMode == RelevanceMode.ON
+                    && suppressions.suppressesProduct(aggregate.product.getId())) {
+                suppressedCount++;
+                continue;
+            }
             var deal = bestDealForProduct(user, aggregate, watchedCnpjs, includeNearby, radiusKm);
-            if (deal != null) deals.add(deal);
+            if (deal == null) continue;
+            if (suppressions.suppresses(deal.productId(), deal.marketCnpj())) {
+                suppressedCount++;
+                if (relevanceMode == RelevanceMode.ON) continue;
+                // SHADOW: counted for the relevance report, but still shown.
+            }
+            deals.add(deal);
+        }
+        if (suppressedCount > 0) {
+            log.info("relevance.{} suppressed={} candidates={}",
+                    relevanceMode == RelevanceMode.ON ? "applied" : "shadow",
+                    suppressedCount, purchased.size());
         }
 
         var ranked = deals.stream()

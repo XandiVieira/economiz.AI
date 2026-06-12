@@ -16,6 +16,22 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-12 — deals: DISMISSED/MUTED telemetry now drives a relevance filter (SHADOW mode)
+
+The `DISMISSED` / `MUTED` events the app already reports via
+`POST /notifications/events` now feed a per-user suppression filter for
+`GET /deals` and the daily digest: mute hides the product everywhere (180d),
+dismissal hides it for 14d — scoped to the **(product, market) pair when the
+DISMISSED event carries `marketCnpj`**, product-wide when it doesn't (so send
+`marketCnpj` on dismissals for the precise behavior).
+
+**No visible change yet**: the filter launches in SHADOW mode (computed and
+measured, never applied). It flips ON server-side once the validation report
+shows it wouldn't hide deals users actually want — after that, dismissed/muted
+deals genuinely disappear from the screen and digest for that user.
+
+---
+
 ## 2026-06-12 — users: new `GET /users/me/subscription` (self-serve billing status)
 
 Returns `{ tier, status, provider, currentPeriodEnd }` so the app can render

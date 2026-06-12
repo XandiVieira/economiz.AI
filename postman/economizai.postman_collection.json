@@ -7946,6 +7946,39 @@
           "response": []
         },
         {
+          "name": "Relevance report (filter validation)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/notifications/relevance-report?days=30",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "notifications",
+                "relevance-report"
+              ],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "30"
+                }
+              ]
+            },
+            "description": "Validation report for the DISMISSED/MUTED relevance filter (SHADOW -> ON decision). engagement = volume + tapThroughRate/dismissalRate; suppression.regretEngagements = taps/adds/conversions the filter would have prevented (near-zero = safe to turn ON). regretSavings = R$ of conversions it would have blocked."
+          },
+          "response": []
+        },
+        {
           "name": "List products missing brand (admin)",
           "request": {
             "method": "GET",
