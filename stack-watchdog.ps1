@@ -49,3 +49,67 @@ Start-Sleep -Seconds 12
 try { $code2 = (Invoke-WebRequest -Uri $health -UseBasicParsing -TimeoutSec 8).StatusCode } catch { $code2 = 0 }
 if ($code2 -eq 200) { Log "recover.ok app healthy after restart" }
 else                { Log "recover.pending app still not 200 (code=$code2); will retry next cycle" }
+
+# 5) DEAD-MAN'S SWITCH for the autonomous bug-fix watchdog.
+# The autofix loop has its own internal timeouts, but a hang INSIDE the loop (a
+# wedged Stop-Job/Wait-Job, blocked I/O) can freeze it with no exception, so its
+# own crash-relaunch never fires and it sits dead-alive holding the mutex - nothing
+# gets fixed. This watchdog runs every 5 min in a SEPARATE task, so it survives that
+# freeze and is the right place to enforce "stuck -> kill everything -> restart".
+# Rule: if status.json's heartbeat is older than $autofixStaleMin, OR the recorded
+# PID is gone, kill the autofix process tree and relaunch a fresh one. The autofix
+# single-instance mutex makes a redundant launch harmless (a live one just exits).
+$autofixStaleMin = 8   # > the 300s fixer deadline + slack, so a legit long fix isn't killed
+$autofixScript   = Join-Path $repo "auto-fix-watchdog.ps1"
+$statusFile      = Join-Path $dataRoot "logs\watchdog-status.json"
+
+function Restart-Autofix([string]$why) {
+    Log "autofix.restart $why"
+    # Kill any existing autofix process tree(s): the recorded PID and any stray
+    # powershell running the script. /T /F takes the children (claude/node/mvn) too.
+    try {
+        $st = $null
+        if (Test-Path $statusFile) { $st = Get-Content $statusFile -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json }
+        if ($st -and $st.pid) { & cmd /c "taskkill /PID $($st.pid) /T /F" 2>$null | Out-Null }
+    } catch { }
+    try {
+        Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue |
+            Where-Object { $_.CommandLine -and $_.CommandLine -match 'auto-fix-watchdog\.ps1' } |
+            ForEach-Object { & cmd /c "taskkill /PID $($_.ProcessId) /T /F" 2>$null | Out-Null }
+    } catch { }
+    Start-Sleep -Seconds 3   # let the OS reap the tree so the mutex frees
+    # Relaunch detached + hidden, same way the task and the self-relaunch do.
+    try {
+        Start-Process -FilePath "powershell.exe" `
+            -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File', $autofixScript) `
+            -WindowStyle Hidden | Out-Null
+        Log "autofix.relaunched fresh process started"
+    } catch { Log ("autofix.relaunch_failed " + $_.Exception.Message) }
+}
+
+if (-not (Test-Path $autofixScript)) {
+    # autofix not deployed here; skip the dead-man's switch
+} elseif (-not (Test-Path $statusFile)) {
+    Restart-Autofix "no status.json - autofix never wrote a heartbeat or is freshly dead"
+} else {
+    try {
+        $st = Get-Content $statusFile -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json
+        $alive = $false
+        if ($st.pid) { $alive = [bool](Get-Process -Id $st.pid -ErrorAction SilentlyContinue) }
+        $hbAgeMin = [double]::PositiveInfinity
+        if ($st.heartbeatUtc) {
+            $hb = [datetime]::Parse($st.heartbeatUtc, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::RoundtripKind)
+            $hbAgeMin = ((Get-Date).ToUniversalTime() - $hb.ToUniversalTime()).TotalMinutes
+        }
+        if (-not $alive) {
+            Restart-Autofix ("recorded pid {0} is gone (state={1}, hbAge={2:N1}min)" -f $st.pid, $st.state, $hbAgeMin)
+        } elseif ($hbAgeMin -gt $autofixStaleMin) {
+            Restart-Autofix ("heartbeat stale {0:N1}min > {1}min (state={2}, pid={3}) - loop is wedged" -f $hbAgeMin, $autofixStaleMin, $st.state, $st.pid)
+        } elseif ((Get-Date).Minute % 30 -eq 0) {
+            Log ("autofix.ok alive pid={0} state={1} hbAge={2:N1}min" -f $st.pid, $st.state, $hbAgeMin)
+        }
+    } catch {
+        Log ("autofix.check_error " + $_.Exception.Message + " - restarting to be safe")
+        Restart-Autofix "status.json unreadable/corrupt"
+    }
+}
