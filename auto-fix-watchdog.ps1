@@ -264,53 +264,6 @@ function CleanFixerEdits {
     & git clean -fd -e "*.log" 2>$null | Out-Null  # drop new untracked files (keep stray logs)
 }
 
-# Kill a background job's ENTIRE OS process tree, hard. Stop-Job alone signals only
-# the PowerShell job wrapper; the native `claude.exe` it spawned (and that child's
-# own descendants - node, mvn, java) keep running and can hang Stop-Job/Wait-Job
-# forever, freezing the whole loop past its deadline. We resolve each child PID the
-# job owns and `taskkill /T /F` the tree (/T = children too, /F = force). The job
-# cmdlets that can themselves block are then run inside their OWN timed job, so even
-# a wedged Stop-Job/Remove-Job cannot stall the caller. Best-effort throughout - a
-# kill failure must never throw into the loop.
-function KillJobTree($job) {
-    try {
-        # Resolve the native child PIDs the job owns; taskkill /T handles the
-        # descendants from each root.
-        $rootPids = @()
-        try {
-            $rootPids = @(Get-Job -Id $job.Id -ErrorAction SilentlyContinue |
-                ForEach-Object { $_.ChildJobs } |
-                ForEach-Object { $_.Runspace } |
-                Where-Object { $_ } |
-                ForEach-Object { $_.OriginalConnectionInfo.ProcessId } |
-                Where-Object { $_ })
-        } catch { }
-        # Fallback: any claude.exe started after this fix began (no reliable parent
-        # link from a job runspace on 5.1, so match the image name + start time).
-        if (-not $rootPids -or $rootPids.Count -eq 0) {
-            try {
-                $rootPids = @(Get-CimInstance Win32_Process -Filter "Name='claude.exe' OR Name='node.exe'" -ErrorAction SilentlyContinue |
-                    Where-Object { $_.CreationDate -and $_.CreationDate -ge $fixStarted } |
-                    Select-Object -ExpandProperty ProcessId)
-            } catch { }
-        }
-        foreach ($p in ($rootPids | Select-Object -Unique)) {
-            & cmd /c "taskkill /PID $p /T /F" 2>$null | Out-Null
-        }
-    } catch { }
-    # Stop-Job/Remove-Job can themselves block on a still-dying child. Run them in a
-    # disposable job with a short hard cap so the loop is never held hostage by them.
-    try {
-        $killer = Start-Job -ScriptBlock {
-            param($jid)
-            Stop-Job -Id $jid -ErrorAction SilentlyContinue
-            Remove-Job -Id $jid -Force -ErrorAction SilentlyContinue
-        } -ArgumentList $job.Id
-        if (-not (Wait-Job $killer -Timeout 15)) { Stop-Job $killer -ErrorAction SilentlyContinue }
-        Remove-Job $killer -Force -ErrorAction SilentlyContinue
-    } catch { }
-}
-
 # Push the just-made commit, surviving the common race where another machine (or
 # the app's own CI) pushed between our commit and our push. Re-syncs and retries
 # up to $maxTries with a backoff. Returns $true on success; on exhaustion returns
@@ -698,7 +651,15 @@ Rules:
         # 300s (was 600): one hard bug must not block the loop for 10 min - other
         # E2E errors and the self-update check starve that whole time. A legit
         # reproduce+fix+test rarely exceeds 5 min; if it does, abort and retry.
-        $ClaudeTimeoutSec = 300
+        # 480s (was 300): the 300s cap was killing legit fixes mid-flight - bugs that
+        # need a non-trivial reproduction (FK/constraint violations, Postgres-only
+        # quirks, bean-wiring failures) routinely ran reproduce+build+full-`mvnw test`
+        # past 5 min and got logged CLAUDE-TIMEOUT -> NEEDS-HUMAN without ever finishing
+        # (an E2E run produced back-to-back timeouts on exactly these). 480s gives the
+        # fixer room to actually land them. The external dead-man's switch + hard tree
+        # kill on timeout mean a genuinely hung fixer still can't wedge the loop, so a
+        # longer (but bounded) budget is safe now.
+        $ClaudeTimeoutSec = 480
         $claudeOut = ""
         # Progress log: a fix cycle is the one place the loop goes silent for up to
         # ClaudeTimeoutSec while the fixer reproduces + builds. Without this line a
@@ -715,21 +676,16 @@ Rules:
             if (Wait-Job $job -Timeout $ClaudeTimeoutSec) {
                 $claudeOut = (Receive-Job $job | Out-String).Trim()
             } else {
-                # A timed-out fixer must die HARD. Stop-Job only signals the job; the
-                # real `claude.exe` child (and ITS children: node, mvn, java) survive
-                # and can wedge Stop-Job/Wait-Job indefinitely - that's how the loop
-                # froze for 3h in FIXING past its own deadline. Kill the whole process
-                # TREE by PID with taskkill /T /F, wrapped so the kill itself can't
-                # hang the loop, BEFORE touching the (possibly stuck) job cmdlets.
-                KillJobTree $job
+                Stop-Job $job -ErrorAction SilentlyContinue
                 # CRITICAL: a timed-out fixer leaves HALF-EDITED prod/test files in
                 # the tree. If we don't discard them, the dirty-tree guard treats
                 # them as 'human work' and DEADLOCKS every subsequent cycle. Clean
                 # the partial edits (preserving the ledger) before moving on.
                 CleanFixerEdits
-                Log ("claude.timeout {0} after {1}s; killed process tree; discarded partial edits; skipping (loop stays up)" -f $shortSig, $ClaudeTimeoutSec)
+                Log ("claude.timeout {0} after {1}s; discarded partial edits; skipping (loop stays up)" -f $shortSig, $ClaudeTimeoutSec)
                 $failCount[$sig] = ([int]$failCount[$sig]) + 1
-                Ledger ("### [$(Stamp)] [NEEDS-HUMAN] CLAUDE-TIMEOUT (attempt $($failCount[$sig])x) - $shortSig`r`n$diag`r`n- **Outcome:** the fixer call exceeded ${ClaudeTimeoutSec}s and was killed (process tree); partial edits discarded.`r`n- **Note for human:** bug still live; autonomous diagnosis timed out - needs eyes.")
+                Ledger ("### [$(Stamp)] [NEEDS-HUMAN] CLAUDE-TIMEOUT (attempt $($failCount[$sig])x) - $shortSig`r`n$diag`r`n- **Outcome:** the fixer call exceeded ${ClaudeTimeoutSec}s and was killed; partial edits discarded.`r`n- **Note for human:** bug still live; autonomous diagnosis timed out - needs eyes.")
+                Remove-Job $job -Force -ErrorAction SilentlyContinue
                 continue
             }
             Remove-Job $job -Force -ErrorAction SilentlyContinue

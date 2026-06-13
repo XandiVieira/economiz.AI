@@ -59,7 +59,9 @@ else                { Log "recover.pending app still not 200 (code=$code2); will
 # Rule: if status.json's heartbeat is older than $autofixStaleMin, OR the recorded
 # PID is gone, kill the autofix process tree and relaunch a fresh one. The autofix
 # single-instance mutex makes a redundant launch harmless (a live one just exits).
-$autofixStaleMin = 8   # > the 300s fixer deadline + slack, so a legit long fix isn't killed
+$autofixStaleMin = 12  # > the 480s (8min) fixer deadline + slack: the heartbeat is
+                       # frozen for the whole fixer call, so this MUST exceed it or a
+                       # legit long fix gets killed as a false "wedged loop".
 $autofixScript   = Join-Path $repo "auto-fix-watchdog.ps1"
 $statusFile      = Join-Path $dataRoot "logs\watchdog-status.json"
 
