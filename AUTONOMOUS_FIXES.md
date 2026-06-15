@@ -68,6 +68,20 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-06-15 13:00:53] FIX 9cbca7a - ERROR [    c.r.e.e.GlobalExceptionHandler - Unexpected error
+- **Error snippet:**
+```r
+2026-06-15 15:51:49.203 ERROR [req=8137388c user=probe-evt-1781538708@e2e.test rcpt= item=] c.r.e.e.GlobalExceptionHandler - Unexpected error: org.springframework.dao.DataIntegrityViolationException: could not execute statement [ERROR: insert or update on table "notification_events" violates foreign key constraint "notification_events_product_id_fkey"
+at com.relyon.economizai.service.notifications.NotificationEventService$$SpringCGLIB$$0.record(<generated>)
+```
+- **Reproduced by:** `com.relyon.economizai.service.notifications.NotificationEventServiceFkIntegrationTest#record_withUnknownProductId_doesNotViolateFkAndStoresNullProduct` (failed before fix, passes after)
+- **Root cause + fix:** All 18 tests pass, including the reproduction test that now verifies the fix. The bug was reproduced (FK violation with the exact `notification_events_product_id_fkey` constraint), fixed minimally in the service, and no existing tests broke.
+
+FIXED com.relyon.economizai.service.notifications.NotificationEventServiceFkIntegrationTest#record_withUnknownProductId_doesNotViolateFkAndStoresNullProduct | Client-reported notification events passed a client-supplied productId straight into the insert; an unknown id violated the notification_events_product_id_fkey FK. NotificationEventService.record now resolves productId via ProductRepository.existsById and drops unknown ids to null (loose-reference intent), recording the telemetry without failing the insert.
+- **Build:** PASS (mvnw test, full suite)
+- **Deploy:** pushed 9cbca7a -> auto-deploy, health **UP**
+- **Outcome:** RESOLVED
+
 ### [2026-06-13 13:34:28] [NEEDS-HUMAN] CLAUDE-TIMEOUT (attempt 1x) - org.springframework.dao.DataIntegrityViolationException: cou
 - **Error snippet:**
 ```r
@@ -421,6 +435,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
