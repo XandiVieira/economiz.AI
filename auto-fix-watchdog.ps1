@@ -301,15 +301,44 @@ function PushWithRetry([int]$maxTries = 6) {
 # bugs. Without it, fixing one marks the message `seen` and the watchdog goes
 # blind to the other - the exact failure we hit live with /best-markets.
 function Signature([string]$line, [string]$snippet = "") {
-    $s = $line -replace '\d{4}-\d{2}-\d{2} [\d:.]+', '' `
-               -replace 'req=[a-f0-9]+', '' -replace 'user=\S*', '' `
-               -replace 'rcpt=\S*', '' -replace 'item=\S*', '' `
-               -replace '"[^"]*"', 'X' -replace '\d+', 'N'
-    $s = $s.Trim()
-    if ($snippet) {
-        $frame = ([regex]::Match($snippet, 'at\s+(com\.relyon\.[\w.$]+\([\w.]+:\d+\))')).Groups[1].Value
-        if ($frame) { $s = "$s @ $frame" }
-    }
+    # COLLAPSE the SAME bug logged at different layers to ONE signature. A single
+    # failure surfaces twice: once raw (`org.springframework...Exception: ...`) and
+    # once wrapped by our handler (`GlobalExceptionHandler - Unexpected error: <same
+    # exception>`). Keyed on the surface line text these look distinct, so the bug
+    # got fixed via one line and then re-attempted (a wasted 480s timeout) via the
+    # other. Anchor on the STABLE identity of the failure instead.
+    #
+    # NOTE we deliberately do NOT use the exception TYPE as the key: it is unstable
+    # across the two layers - the wrapped line carries the full trace incl. a
+    # `Caused by: org.postgresql...PSQLException`, while the raw line stops at
+    # `DataIntegrityViolationException`, so type-keying splits them again. The
+    # reliable shared anchor is the SPECIFIC CAUSE (DB constraint / SQLSTATE / quoted
+    # token) plus our first com.relyon frame - both layers log identical values for
+    # those. Distinct bugs differ in constraint or frame, so they stay separate.
+    $text = if ($snippet) { $snippet } else { $line }
+
+    # The cause token: prefer a DB constraint name, else a Postgres SQLSTATE, else
+    # the first quoted token. This is the strong, layer-stable discriminator.
+    $cause = ""
+    if     ($text -match 'constraint\s+"([^"]+)"')    { $cause = $Matches[1] }
+    elseif ($text -match 'SQLState:\s*([0-9A-Z]{5})') { $cause = $Matches[1] }
+    elseif ($text -match '"([^"]{3,})"')              { $cause = $Matches[1] }
+
+    $frame = ([regex]::Match($snippet, 'at\s+(com\.relyon\.[\w.$]+\([\w.]+:\d+\))')).Groups[1].Value
+
+    # If we found a strong cause AND our frame, those two ALONE are the identity -
+    # layer-stable, so both log lines collapse to one signature.
+    if ($cause -and $frame) { return "$cause | $frame" }
+
+    # Otherwise fall back to the OLD line-based key (with the wrapper prefix stripped
+    # so a wrapped/raw pair still has a chance to match), so detection of errors
+    # without a clean cause/frame is unchanged.
+    $s = ($line -replace '.*Unexpected error:\s*', '' `
+                -replace '\d{4}-\d{2}-\d{2} [\d:.]+', '' `
+                -replace 'req=[a-f0-9]+', '' -replace 'user=\S*', '' `
+                -replace 'rcpt=\S*', '' -replace 'item=\S*', '' `
+                -replace '"[^"]*"', 'X' -replace '\d+', 'N').Trim()
+    if ($frame) { $s = "$s @ $frame" }
     return $s
 }
 
