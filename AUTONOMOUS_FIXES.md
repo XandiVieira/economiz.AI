@@ -68,6 +68,15 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-06-13 13:34:28] [NEEDS-HUMAN] CLAUDE-TIMEOUT (attempt 1x) - org.springframework.dao.DataIntegrityViolationException: cou
+- **Error snippet:**
+```r
+org.springframework.dao.DataIntegrityViolationException: could not execute statement [ERROR: insert or update on table "notification_events" violates foreign key constraint "notification_events_product_id_fkey"
+at com.relyon.economizai.service.notifications.NotificationEventService$$SpringCGLIB$$0.record(<generated>)
+```
+- **Outcome:** the fixer call exceeded 300s and was killed; partial edits discarded.
+- **Note for human:** bug still live; autonomous diagnosis timed out - needs eyes.
+
 ### [2026-06-13 13:29:15] [NEEDS-HUMAN] CLAUDE-TIMEOUT (attempt 1x) - ERROR [    c.r.e.e.GlobalExceptionHandler - Unexpected error
 - **Status code:** 594
 - **Error snippet:**
@@ -412,6 +421,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
