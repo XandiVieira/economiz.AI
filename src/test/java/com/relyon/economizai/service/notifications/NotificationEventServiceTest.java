@@ -4,6 +4,7 @@ import com.relyon.economizai.model.NotificationEvent;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.NotificationEventType;
 import com.relyon.economizai.repository.NotificationEventRepository;
+import com.relyon.economizai.repository.NotificationRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.service.notifications.NotificationEventService.RecordContext;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,7 @@ class NotificationEventServiceTest {
 
     @Mock private NotificationEventRepository repository;
     @Mock private ProductRepository productRepository;
+    @Mock private NotificationRepository notificationRepository;
 
     @InjectMocks private NotificationEventService service;
 
@@ -41,6 +43,7 @@ class NotificationEventServiceTest {
         var notificationId = UUID.randomUUID();
         var productId = UUID.randomUUID();
         when(productRepository.existsById(productId)).thenReturn(true);
+        when(notificationRepository.existsById(notificationId)).thenReturn(true);
         when(repository.save(any(NotificationEvent.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         var context = RecordContext.builder()
@@ -93,5 +96,23 @@ class NotificationEventServiceTest {
         var captor = ArgumentCaptor.forClass(NotificationEvent.class);
         verify(repository).save(captor.capture());
         assertNull(captor.getValue().getMetadata());
+    }
+
+    @Test
+    void record_unknownNotificationId_isNulledButEventStillRecorded() {
+        // sibling of the product FK bug: a dangling notification_id would also
+        // violate its FK on insert; drop it to null, keep the event.
+        var user = user();
+        var ghostNotification = UUID.randomUUID();
+        when(notificationRepository.existsById(ghostNotification)).thenReturn(false);
+        when(repository.save(any(NotificationEvent.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.record(user, NotificationEventType.PUSH_OPENED,
+                RecordContext.builder().notificationId(ghostNotification).build());
+
+        var captor = ArgumentCaptor.forClass(NotificationEvent.class);
+        verify(repository).save(captor.capture());
+        assertNull(captor.getValue().getNotificationId(), "dangling notification ref dropped, not 500");
+        assertEquals(NotificationEventType.PUSH_OPENED, captor.getValue().getEventType());
     }
 }

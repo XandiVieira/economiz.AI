@@ -5,6 +5,7 @@ import com.relyon.economizai.model.NotificationEvent;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.NotificationEventType;
 import com.relyon.economizai.repository.NotificationEventRepository;
+import com.relyon.economizai.repository.NotificationRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.service.privacy.LogMasker;
 import lombok.Builder;
@@ -33,6 +34,7 @@ public class NotificationEventService {
 
     private final NotificationEventRepository repository;
     private final ProductRepository productRepository;
+    private final NotificationRepository notificationRepository;
     // Plain instance (not the Spring bean) to mirror NotificationService and stay
     // wireable in @WebMvcTest slices that don't load JacksonAutoConfiguration.
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -59,10 +61,11 @@ public class NotificationEventService {
     public NotificationEvent record(User user, NotificationEventType type, RecordContext context) {
         var safeContext = context != null ? context : RecordContext.empty();
         var productId = resolveProductId(safeContext.productId());
+        var notificationId = resolveNotificationId(safeContext.notificationId());
         var event = NotificationEvent.builder()
                 .user(user)
                 .eventType(type)
-                .notificationId(safeContext.notificationId())
+                .notificationId(notificationId)
                 .productId(productId)
                 .marketCnpj(safeContext.marketCnpj())
                 .channel(safeContext.channel())
@@ -91,6 +94,20 @@ public class NotificationEventService {
             return productId;
         }
         log.warn("notif.event.unknown_product product={}", productId);
+        return null;
+    }
+
+    /**
+     * Same loose-reference guard for {@code notification_id} (FK
+     * {@code notification_events_notification_id_fkey}): a client can report an
+     * event tied to a push that no longer exists, which would otherwise fail the
+     * insert. Drop the unknown link to null so the signal is still recorded.
+     */
+    private UUID resolveNotificationId(UUID notificationId) {
+        if (notificationId == null || notificationRepository.existsById(notificationId)) {
+            return notificationId;
+        }
+        log.warn("notif.event.unknown_notification notification={}", notificationId);
         return null;
     }
 
