@@ -4,6 +4,7 @@ import com.relyon.economizai.model.NotificationEvent;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.NotificationEventType;
 import com.relyon.economizai.repository.NotificationEventRepository;
+import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.service.notifications.NotificationEventService.RecordContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,6 +27,7 @@ import static org.mockito.Mockito.when;
 class NotificationEventServiceTest {
 
     @Mock private NotificationEventRepository repository;
+    @Mock private ProductRepository productRepository;
 
     @InjectMocks private NotificationEventService service;
 
@@ -38,6 +40,7 @@ class NotificationEventServiceTest {
         var user = user();
         var notificationId = UUID.randomUUID();
         var productId = UUID.randomUUID();
+        when(productRepository.existsById(productId)).thenReturn(true);
         when(repository.save(any(NotificationEvent.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         var context = RecordContext.builder()

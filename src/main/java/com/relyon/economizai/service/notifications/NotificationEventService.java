@@ -5,6 +5,7 @@ import com.relyon.economizai.model.NotificationEvent;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.NotificationEventType;
 import com.relyon.economizai.repository.NotificationEventRepository;
+import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.service.privacy.LogMasker;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +32,7 @@ import java.util.UUID;
 public class NotificationEventService {
 
     private final NotificationEventRepository repository;
+    private final ProductRepository productRepository;
     // Plain instance (not the Spring bean) to mirror NotificationService and stay
     // wireable in @WebMvcTest slices that don't load JacksonAutoConfiguration.
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -56,11 +58,12 @@ public class NotificationEventService {
     @Transactional
     public NotificationEvent record(User user, NotificationEventType type, RecordContext context) {
         var safeContext = context != null ? context : RecordContext.empty();
+        var productId = resolveProductId(safeContext.productId());
         var event = NotificationEvent.builder()
                 .user(user)
                 .eventType(type)
                 .notificationId(safeContext.notificationId())
-                .productId(safeContext.productId())
+                .productId(productId)
                 .marketCnpj(safeContext.marketCnpj())
                 .channel(safeContext.channel())
                 .metadata(serialize(safeContext.metadata()))
@@ -74,6 +77,21 @@ public class NotificationEventService {
     @Transactional
     public NotificationEvent record(User user, NotificationEventType type) {
         return record(user, type, RecordContext.empty());
+    }
+
+    /**
+     * {@code product_id} is a loose reference guarded by a DB FK
+     * ({@code notification_events_product_id_fkey}). A client may report an event
+     * for a product id that isn't (or is no longer) a canonical product; persisting
+     * it as-is fails the insert. Drop the unknown link to null so the behavioral
+     * signal is still recorded.
+     */
+    private UUID resolveProductId(UUID productId) {
+        if (productId == null || productRepository.existsById(productId)) {
+            return productId;
+        }
+        log.warn("notif.event.unknown_product product={}", productId);
+        return null;
     }
 
     private String serialize(Map<String, Object> metadata) {
