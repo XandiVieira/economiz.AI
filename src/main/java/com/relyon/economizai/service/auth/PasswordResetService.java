@@ -2,6 +2,7 @@ package com.relyon.economizai.service.auth;
 
 import com.relyon.economizai.dto.request.ForgotPasswordRequest;
 import com.relyon.economizai.dto.request.ResetPasswordRequest;
+import com.relyon.economizai.dto.request.VerifyResetCodeRequest;
 import com.relyon.economizai.exception.InvalidAuthTokenException;
 import com.relyon.economizai.model.PasswordResetToken;
 import com.relyon.economizai.model.User;
@@ -11,31 +12,28 @@ import com.relyon.economizai.repository.UserRepository;
 import com.relyon.economizai.service.privacy.LogMasker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
-import java.util.Base64;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class PasswordResetService {
 
-    private static final int TOKEN_BYTES = 32;
-    private static final int TOKEN_TTL_MINUTES = 60;
+    private static final int CODE_TTL_MINUTES = 60;
+    // 6-digit code: short enough to type on a phone, with a TTL + single-active-code
+    // + single-use to bound brute-force (10^6 space, one live code, 60-min window).
+    private static final int CODE_BOUND = 1_000_000;
 
     private final UserRepository userRepository;
     private final PasswordResetTokenRepository tokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthEmailSender emailSender;
     private final SecureRandom random = new SecureRandom();
-
-    @Value("${economizai.auth.frontend-base-url:http://localhost:3000}")
-    private String frontendBaseUrl;
 
     /**
      * Always returns success even when the email isn't registered — prevents
@@ -56,25 +54,35 @@ public class PasswordResetService {
             log.info("password_reset.requested social_account_noop user={}", LogMasker.email(user.getEmail()));
             return;
         }
-        var token = generateToken();
+        // Kill any prior still-open code so only the newest one works.
+        tokenRepository.consumeAllActiveForUser(user, LocalDateTime.now());
+        var code = generateCode();
         tokenRepository.save(PasswordResetToken.builder()
                 .user(user)
-                .token(token)
-                .expiresAt(LocalDateTime.now().plusMinutes(TOKEN_TTL_MINUTES))
+                .token(code)
+                .expiresAt(LocalDateTime.now().plusMinutes(CODE_TTL_MINUTES))
                 .build());
-        var link = frontendBaseUrl + "/reset-password?token=" + token;
-        emailSender.sendPasswordReset(user.getEmail(), link);
+        emailSender.sendPasswordResetCode(user.getEmail(), code, CODE_TTL_MINUTES);
         log.info("password_reset.requested user={} ttl_minutes={}",
-                LogMasker.email(user.getEmail()), TOKEN_TTL_MINUTES);
+                LogMasker.email(user.getEmail()), CODE_TTL_MINUTES);
+    }
+
+    /**
+     * Validate a code WITHOUT consuming it, so the app can gate the new-password
+     * screen on a correct code before the user types anything. Throws on a bad /
+     * expired / consumed code; returns quietly on success.
+     */
+    @Transactional(readOnly = true)
+    public void verifyCode(VerifyResetCodeRequest request) {
+        var user = userRepository.findByEmail(request.email()).orElseThrow(InvalidAuthTokenException::new);
+        findValidCode(user, request.code());   // throws if invalid
+        log.info("password_reset.code_verified user={}", LogMasker.email(user.getEmail()));
     }
 
     @Transactional
     public void resetPassword(ResetPasswordRequest request) {
-        var token = tokenRepository.findByToken(request.token()).orElseThrow(InvalidAuthTokenException::new);
-        if (token.getConsumedAt() != null || token.getExpiresAt().isBefore(LocalDateTime.now())) {
-            throw new InvalidAuthTokenException();
-        }
-        var user = token.getUser();
+        var user = userRepository.findByEmail(request.email()).orElseThrow(InvalidAuthTokenException::new);
+        var token = findValidCode(user, request.code());
         user.setPassword(passwordEncoder.encode(request.newPassword()));
         userRepository.save(user);
         token.setConsumedAt(LocalDateTime.now());
@@ -82,9 +90,16 @@ public class PasswordResetService {
         log.info("password_reset.completed user={}", LogMasker.email(user.getEmail()));
     }
 
-    private String generateToken() {
-        var bytes = new byte[TOKEN_BYTES];
-        random.nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    private PasswordResetToken findValidCode(User user, String code) {
+        var token = tokenRepository.findFirstByUserAndTokenOrderByCreatedAtDesc(user, code)
+                .orElseThrow(InvalidAuthTokenException::new);
+        if (token.getConsumedAt() != null || token.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new InvalidAuthTokenException();
+        }
+        return token;
+    }
+
+    private String generateCode() {
+        return String.format("%06d", random.nextInt(CODE_BOUND));
     }
 }

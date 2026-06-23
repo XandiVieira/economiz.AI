@@ -34,10 +34,11 @@ public class AuthEmailSender {
         this.smtpConfigured = mailSender.isPresent() && smtpUsername != null && !smtpUsername.isBlank();
     }
 
-    public void sendPasswordReset(String email, String resetLink) {
+    public void sendPasswordResetCode(String email, String code, int ttlMinutes) {
         send(email,
-                "Redefinição de senha — economizai",
-                "Você solicitou uma redefinição de senha. Abra o link abaixo (válido por 1 hora):\n\n" + resetLink
+                "Código de redefinição de senha — economizai",
+                "Você solicitou uma redefinição de senha. Use o código abaixo no app (válido por "
+                        + ttlMinutes + " minutos):\n\n" + code
                         + "\n\nSe não foi você, ignore este e-mail.",
                 "password-reset");
     }

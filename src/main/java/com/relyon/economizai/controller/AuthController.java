@@ -8,6 +8,7 @@ import com.relyon.economizai.dto.request.RefreshTokenRequest;
 import com.relyon.economizai.dto.request.RegisterRequest;
 import com.relyon.economizai.dto.request.ResetPasswordRequest;
 import com.relyon.economizai.dto.request.VerifyEmailRequest;
+import com.relyon.economizai.dto.request.VerifyResetCodeRequest;
 import com.relyon.economizai.dto.response.AuthResponse;
 import com.relyon.economizai.dto.response.UserResponse;
 import com.relyon.economizai.security.JwtService;
@@ -16,6 +17,7 @@ import com.relyon.economizai.service.auth.EmailVerificationService;
 import com.relyon.economizai.service.auth.PasswordResetService;
 import com.relyon.economizai.service.auth.RefreshTokenService;
 import com.relyon.economizai.service.auth.oauth.SocialLoginService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -59,6 +61,9 @@ public class AuthController {
         return ResponseEntity.ok(socialLoginService.loginWithApple(request));
     }
 
+    @Operation(summary = "Password reset — step 1: request a code",
+            description = "Emails a 6-digit code to the account (valid 60 min). Always returns 204, even for an " +
+                    "unknown or social-only email, so it never reveals which addresses exist.")
     @PostMapping("/forgot-password")
     public ResponseEntity<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         passwordResetService.requestReset(request);
@@ -66,6 +71,18 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
+    @Operation(summary = "Password reset — step 2: verify the code",
+            description = "Validates the emailed code WITHOUT consuming it, so the app can advance to the " +
+                    "new-password screen. 204 = valid; 400 = invalid/expired/used code.")
+    @PostMapping("/verify-reset-code")
+    public ResponseEntity<Void> verifyResetCode(@Valid @RequestBody VerifyResetCodeRequest request) {
+        passwordResetService.verifyCode(request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "Password reset — step 3: set the new password",
+            description = "Consumes the code and sets the new password. The code is single-use. " +
+                    "204 = done; 400 = invalid/expired/used code.")
     @PostMapping("/reset-password")
     public ResponseEntity<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         passwordResetService.resetPassword(request);

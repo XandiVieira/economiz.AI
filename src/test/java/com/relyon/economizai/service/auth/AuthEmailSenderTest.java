@@ -23,24 +23,24 @@ class AuthEmailSenderTest {
 
     private static final String FROM = "noreply@economiz.ai";
     private static final String RECIPIENT = "maria@example.com";
-    private static final String RESET_LINK = "https://app.economiz.ai/reset-password?token=abc";
+    private static final String RESET_CODE = "123456";
     private static final String VERIFY_LINK = "https://app.economiz.ai/verify-email?token=xyz";
 
     @Test
-    void sendsPasswordResetWhenSmtpConfigured() {
+    void sendsPasswordResetCodeWhenSmtpConfigured() {
         var mailSender = mock(JavaMailSender.class);
         var sender = new AuthEmailSender(Optional.of(mailSender), FROM, "smtp-user");
 
-        sender.sendPasswordReset(RECIPIENT, RESET_LINK);
+        sender.sendPasswordResetCode(RECIPIENT, RESET_CODE, 60);
 
         var messageCaptor = ArgumentCaptor.forClass(SimpleMailMessage.class);
         verify(mailSender).send(messageCaptor.capture());
         var sentMessage = messageCaptor.getValue();
         assertEquals(FROM, sentMessage.getFrom());
         assertArrayEquals(new String[]{RECIPIENT}, sentMessage.getTo());
-        assertEquals("Redefinição de senha — economizai", sentMessage.getSubject());
+        assertEquals("Código de redefinição de senha — economizai", sentMessage.getSubject());
         assertNotNull(sentMessage.getText());
-        assertTrue(sentMessage.getText().contains(RESET_LINK));
+        assertTrue(sentMessage.getText().contains(RESET_CODE));
     }
 
     @Test
@@ -63,7 +63,7 @@ class AuthEmailSenderTest {
         var mailSender = mock(JavaMailSender.class);
         var sender = new AuthEmailSender(Optional.of(mailSender), FROM, "   ");
 
-        sender.sendPasswordReset(RECIPIENT, RESET_LINK);
+        sender.sendPasswordResetCode(RECIPIENT, RESET_CODE, 60);
 
         verify(mailSender, never()).send(any(SimpleMailMessage.class));
     }
@@ -83,7 +83,7 @@ class AuthEmailSenderTest {
         var sender = new AuthEmailSender(Optional.empty(), FROM, "smtp-user");
 
         // No mailSender bean to send through; must be a silent no-op.
-        assertDoesNotThrow(() -> sender.sendPasswordReset(RECIPIENT, RESET_LINK));
+        assertDoesNotThrow(() -> sender.sendPasswordResetCode(RECIPIENT, RESET_CODE, 60));
     }
 
     @Test
@@ -92,7 +92,7 @@ class AuthEmailSenderTest {
         doThrow(new MailSendException("smtp down")).when(mailSender).send(any(SimpleMailMessage.class));
         var sender = new AuthEmailSender(Optional.of(mailSender), FROM, "smtp-user");
 
-        assertDoesNotThrow(() -> sender.sendPasswordReset(RECIPIENT, RESET_LINK));
+        assertDoesNotThrow(() -> sender.sendPasswordResetCode(RECIPIENT, RESET_CODE, 60));
         verify(mailSender).send(any(SimpleMailMessage.class));
     }
 }
