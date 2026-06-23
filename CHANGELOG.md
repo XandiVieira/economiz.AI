@@ -12,6 +12,28 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 - Swagger: `https://economizai.economizai.workers.dev/swagger-ui/index.html`
 - Health: `https://economizai.economizai.workers.dev/actuator/health`
 
+---
+
+## 2026-06-23 — Password reset is now a 3-step CODE flow (was a link) ⚠️ FE change
+
+Password reset no longer emails a link — it emails a **6-digit code** the user
+types into the app. Better for mobile (no deep-link/URL handling). **Three steps:**
+
+```
+1. POST /api/v1/auth/forgot-password    { "email" }                         -> 204 (always; emails the code)
+2. POST /api/v1/auth/verify-reset-code  { "email", "code" }                 -> 204 valid · 400 invalid/expired/used
+3. POST /api/v1/auth/reset-password     { "email", "code", "newPassword" }  -> 204 done · 400 invalid/expired/used
+```
+
+- **Step 2 is optional but recommended** — validate the code (without consuming it)
+  to gate the new-password screen, so the user learns the code is wrong *before*
+  typing a password.
+- The code is **single-use**, **expires in 60 min**, and requesting a new one
+  **invalidates the previous** code.
+- **Breaking:** `reset-password` body changed from `{ token, newPassword }` to
+  `{ email, code, newPassword }`. The old link-style `?token=` flow is gone.
+- `forgot-password` still always returns 204 (no email enumeration).
+
 (Full infra + links: [INFRASTRUCTURE.md](./INFRASTRUCTURE.md).)
 
 ---

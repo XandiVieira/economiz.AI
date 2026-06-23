@@ -366,7 +366,43 @@
           "response": []
         },
         {
-          "name": "Reset password (consume token from email or [DEV-MODE] log)",
+          "name": "Verify reset code (step 2 - validate without consuming)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/verify-reset-code",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "verify-reset-code"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"demo@example.com\",\n  \"code\": \"123456\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reset password (step 3 - consume code from email)",
           "request": {
             "method": "POST",
             "header": [
@@ -396,7 +432,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"token\": \"PASTE_TOKEN_HERE\",\n  \"newPassword\": \"newPassword123\"\n}"
+              "raw": "{\n  \"email\": \"demo@example.com\",\n  \"code\": \"123456\",\n  \"newPassword\": \"newPassword123\"\n}"
             }
           },
           "response": []

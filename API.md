@@ -141,15 +141,18 @@ DELETE /api/v1/users/me/profile-picture
 ### Password reset + email verification
 
 ```
-POST /api/v1/auth/forgot-password    { "email": "..." }                       → 204
-POST /api/v1/auth/reset-password     { "token": "...", "newPassword": "..." } → 204
-POST /api/v1/auth/verify-email       { "token": "..." }                       → 204
-POST /api/v1/users/me/email-verification/resend                               → 204
+POST /api/v1/auth/forgot-password    { "email" }                          → 204  (step 1: emails a 6-digit code)
+POST /api/v1/auth/verify-reset-code  { "email", "code" }                  → 204  (step 2: validate, doesn't consume)
+POST /api/v1/auth/reset-password     { "email", "code", "newPassword" }   → 204  (step 3: consume + set password)
+POST /api/v1/auth/verify-email       { "token": "..." }                   → 204
+POST /api/v1/users/me/email-verification/resend                           → 204
 ```
 
-`forgot-password` always returns 204 — even when the email isn't registered, to avoid leaking valid addresses. `reset-password` and `verify-email` return 400 on stale/used tokens.
+**Password reset is a 3-step code flow** (mobile-friendly — no link). Step 1 emails a **6-digit code**; step 2 lets the app validate the code before showing the new-password screen (optional but recommended); step 3 sets the password. The code is **single-use**, **expires in 60 min**, and a new request **invalidates the previous** code.
 
-**Dev mode**: when SMTP isn't configured (current Render setup), the link is logged with a `[DEV-MODE]` prefix in the server logs instead of being emailed. The endpoints still return 204, so the flow works for FE testing — grab the token from logs.
+`forgot-password` always returns 204 — even when the email isn't registered, to avoid leaking valid addresses. `verify-reset-code`, `reset-password`, and `verify-email` return **400** on an invalid/stale/used code or token.
+
+**Dev mode**: when SMTP isn't configured, the email body (incl. the code) is logged with a `[DEV-MODE]` prefix instead of being sent. The endpoints still return 204, so the flow works for FE testing — grab the code from logs.
 
 `UserResponse` now includes `emailVerified` + `emailVerifiedAt`. You can gate features behind `emailVerified === true` if you want.
 

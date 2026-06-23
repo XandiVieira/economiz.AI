@@ -10,6 +10,24 @@ mirror entries here.
 
 ---
 
+## SMTP wired to GoDaddy/Titan — deliverability not hardened
+- **Now**: auth emails (password-reset code, email verification) send via GoDaddy/Titan
+  SMTP (`smtpout.secureserver.net:587`, user `contato@relyonai.com.br`). Creds live in
+  the gitignored `.env` on the dev box and are passed through to the app container in
+  `docker-compose.yml`. Verified end-to-end (code arrives, reset works).
+- **Why OK for dev**: real send works; the FE flow is fully testable.
+- **Before prod**:
+  - **Deliverability**: test emails landed in **spam (Lixo Eletrônico)**. Add **SPF**,
+    **DKIM**, and **DMARC** DNS records for `relyonai.com.br` (Titan provides the values)
+    so mail authenticates and stops being junked. ~1 hr + DNS propagation.
+  - **Rotate the SMTP password** — it was shared in plaintext over chat during setup.
+  - Consider a dedicated transactional provider (SES/SendGrid/Resend) for volume +
+    bounce handling if auth-email traffic grows.
+  - **Rate-limit** `forgot-password` (per email + per IP) before prod — currently
+    unthrottled, so it can be used to spam an inbox. ~1 hr.
+
+---
+
 ## Billing: apps ready (RevenueCat), web still pending
 - **Now**: two webhook paths feed the same entitlement engine. **RevenueCat** (`POST /webhooks/revenuecat`, Authorization header == `REVENUECAT_WEBHOOK_AUTH`) covers iOS/Android IAP; the generic `POST /webhooks/subscription` (`BILLING_WEBHOOK_SECRET`, `X-Webhook-Secret`) is the seam for a web provider. Both **fail closed** when their secret is blank (constant-time compare). A scheduled `SubscriptionExpiryService` downgrades lapsed PRO hourly.
 - **Why OK for dev**: dev grants PRO via the admin set-tier endpoint; webhooks aren't needed locally.
