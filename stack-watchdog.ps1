@@ -6,7 +6,14 @@ $repo    = "C:\Users\Xandi\OneDrive\Documents\projects\economiz.AI"
 $dataRoot = $env:ECONOMIZAI_DATA_ROOT; if (-not $dataRoot) { $dataRoot = "C:\economizai-data" }
 New-Item -ItemType Directory -Force -Path (Join-Path $dataRoot "logs") | Out-Null
 $logFile = Join-Path $dataRoot "logs\stack-watchdog.log"
-$compose = "docker compose --profile server"
+# Always load env from the TRUSTED .env (service-account-readable, outside OneDrive)
+# via an explicit --env-file. The OneDrive checkout's .env is "not reliably readable"
+# (sync locks / permissions), so a bare `compose up` from $repo silently fell back to
+# compose defaults -> empty SMTP creds -> auth emails went to DEV-MODE after a reboot.
+# Pinning --env-file makes every recovery path load the real SMTP/JWT/etc. config.
+$trustedEnv = "C:\actions-runner\.env"
+$envArg = if (Test-Path $trustedEnv) { "--env-file `"$trustedEnv`"" } else { "" }
+$compose = "docker compose $envArg --profile server"
 $health  = "http://localhost:8080/actuator/health"
 
 function Log($msg){

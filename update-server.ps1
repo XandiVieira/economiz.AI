@@ -11,6 +11,10 @@ $dataRoot = $env:ECONOMIZAI_DATA_ROOT; if (-not $dataRoot) { $dataRoot = "C:\eco
 New-Item -ItemType Directory -Force -Path (Join-Path $dataRoot "logs") | Out-Null
 $branch  = "development"
 $logFile = Join-Path $dataRoot "logs\update-server.log"
+# Load env from the TRUSTED .env (outside OneDrive) via explicit --env-file, so a
+# rebuild never falls back to compose defaults when the OneDrive .env is unreadable.
+$trustedEnv = "C:\actions-runner\.env"
+$envArg = if (Test-Path $trustedEnv) { "--env-file `"$trustedEnv`"" } else { "" }
 function Log($m){ Add-Content -Path $logFile -Value ("{0}  {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $m) }
 
 Set-Location $repo
@@ -41,7 +45,7 @@ $pull = & git merge --ff-only "origin/$branch" 2>&1
 Log ("pull " + ($pull -join " | "))
 
 # 4) Rebuild + restart only the app (DB + volume untouched, data preserved).
-$out = & cmd /c "docker compose --profile server up -d --build 2>&1"
+$out = & cmd /c "docker compose $envArg --profile server up -d --build 2>&1"
 Log ("rebuild " + (($out | Select-Object -Last 3) -join " | "))
 
 # 5) Verify health came back.

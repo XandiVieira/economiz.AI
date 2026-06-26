@@ -34,7 +34,9 @@ Write-Host "log dir ready: $logDir"
 #    Stop) and only judge success by $LASTEXITCODE.
 $ctxOut = (& cmd /c "docker context use desktop-linux 2>&1")
 Write-Host "context: $ctxOut"
-$buildOut = (& cmd /c "docker compose --profile server up -d --build 2>&1")
+# Load env explicitly from the trusted .env (the same file copied in step 1) so the
+# build never relies on cwd-relative .env discovery — keeps SMTP/JWT/etc. config in.
+$buildOut = (& cmd /c "docker compose --env-file `"$src`" --profile server up -d --build 2>&1")
 $buildOut | ForEach-Object { Write-Host $_ }
 if ($LASTEXITCODE -ne 0) { Write-Host "::error::docker compose up failed (exit $LASTEXITCODE)"; exit 1 }
 
