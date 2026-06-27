@@ -21,6 +21,12 @@ public interface ReceiptRepository extends JpaRepository<Receipt, UUID>, JpaSpec
 
     boolean existsByHouseholdIdAndChaveAcesso(UUID householdId, String chaveAcesso);
 
+    // Deletion guard: a household must NOT be deleted while any receipt still points
+    // at it as current home OR as origin (parked data awaiting restore on split).
+    boolean existsByHouseholdId(UUID householdId);
+
+    boolean existsByOriginHouseholdId(UUID householdId);
+
     Optional<Receipt> findByHouseholdIdAndChaveAcesso(UUID householdId, String chaveAcesso);
 
     long countByHouseholdIdAndStatus(UUID householdId, ReceiptStatus status);

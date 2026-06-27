@@ -8,6 +8,7 @@ import com.relyon.economizai.exception.NotInHouseholdException;
 import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.repository.HouseholdRepository;
+import com.relyon.economizai.repository.ReceiptRepository;
 import com.relyon.economizai.repository.UserRepository;
 import com.relyon.economizai.service.privacy.LogMasker;
 import lombok.RequiredArgsConstructor;
@@ -32,7 +33,27 @@ public class HouseholdService {
 
     private final HouseholdRepository householdRepository;
     private final UserRepository userRepository;
+    private final ReceiptRepository receiptRepository;
     private final SecureRandom random = new SecureRandom();
+
+    // Delete a now-empty household ONLY if it owns no data (as current home OR as the
+    // origin of data parked elsewhere awaiting restore on split). Without this guard,
+    // a 0-member household was hard-deleted, orphaning/destroying its receipts and the
+    // provenance of any data that originated there. Keeps a dormant household alive as
+    // a "home" until its data is restored or removed.
+    private void deleteHouseholdIfEmptyAndOwnsNoData(Household household) {
+        if (userRepository.countByHouseholdId(household.getId()) != 0) {
+            return;
+        }
+        var ownsData = receiptRepository.existsByHouseholdId(household.getId())
+                || receiptRepository.existsByOriginHouseholdId(household.getId());
+        if (ownsData) {
+            log.info("household.keep_dormant {} has no members but still owns data; not deleting", household.getId());
+            return;
+        }
+        householdRepository.delete(household);
+        log.info("Household {} deleted (no members left, no data)", household.getId());
+    }
 
     @Transactional
     public Household createSoloHousehold() {
@@ -104,10 +125,7 @@ public class HouseholdService {
         userRepository.save(user);
         log.info("User {} joined household {} (left {})", LogMasker.email(user.getEmail()), target.getId(), previous.getId());
 
-        if (userRepository.countByHouseholdId(previous.getId()) == 0) {
-            householdRepository.delete(previous);
-            log.info("Household {} deleted (no members left)", previous.getId());
-        }
+        deleteHouseholdIfEmptyAndOwnsNoData(previous);
 
         var members = userRepository.findAllByHouseholdId(target.getId());
         return HouseholdResponse.from(target, members);
@@ -121,10 +139,7 @@ public class HouseholdService {
         userRepository.save(user);
         log.info("User {} left household {} for new solo household {}", LogMasker.email(user.getEmail()), previous.getId(), fresh.getId());
 
-        if (userRepository.countByHouseholdId(previous.getId()) == 0) {
-            householdRepository.delete(previous);
-            log.info("Household {} deleted (no members left)", previous.getId());
-        }
+        deleteHouseholdIfEmptyAndOwnsNoData(previous);
 
         return HouseholdResponse.from(fresh, userRepository.findAllByHouseholdId(fresh.getId()));
     }

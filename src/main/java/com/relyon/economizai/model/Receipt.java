@@ -12,6 +12,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -41,6 +42,13 @@ public class Receipt extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "household_id", nullable = false)
     private Household household;
+
+    // The household this receipt ORIGINALLY belonged to. Set once at scan time,
+    // never rewritten on merge (household_id is the current location). Lets a split
+    // restore each person's data to where it came from. See HouseholdMergeService.
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "origin_household_id", nullable = false)
+    private Household originHousehold;
 
     @Column(name = "chave_acesso", nullable = false, length = 44)
     private String chaveAcesso;
@@ -100,5 +108,15 @@ public class Receipt extends BaseEntity {
     public void addItem(ReceiptItem item) {
         items.add(item);
         item.setReceipt(this);
+    }
+
+    // Default origin to the current household on first persist, so callers that
+    // build a Receipt never have to remember to set it. Merge code overrides
+    // household_id later but leaves originHousehold untouched.
+    @PrePersist
+    private void defaultOriginHousehold() {
+        if (originHousehold == null) {
+            originHousehold = household;
+        }
     }
 }

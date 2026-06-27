@@ -6,6 +6,7 @@ import com.relyon.economizai.exception.InvalidInviteCodeException;
 import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.repository.HouseholdRepository;
+import com.relyon.economizai.repository.ReceiptRepository;
 import com.relyon.economizai.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,6 +36,9 @@ class HouseholdServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private ReceiptRepository receiptRepository;
 
     @InjectMocks
     private HouseholdService householdService;
@@ -97,6 +101,8 @@ class HouseholdServiceTest {
 
         when(householdRepository.findByInviteCode("NEW456")).thenReturn(Optional.of(target));
         when(userRepository.countByHouseholdId(previous.getId())).thenReturn(0L);
+        when(receiptRepository.existsByHouseholdId(previous.getId())).thenReturn(false);
+        when(receiptRepository.existsByOriginHouseholdId(previous.getId())).thenReturn(false);
         when(userRepository.findAllByHouseholdId(target.getId())).thenReturn(List.of(user));
 
         var response = householdService.join(user, new JoinHouseholdRequest("new456"));
@@ -104,6 +110,24 @@ class HouseholdServiceTest {
         assertEquals(target.getId(), user.getHousehold().getId());
         assertEquals(target.getId(), response.id());
         verify(householdRepository).delete(previous);
+    }
+
+    @Test
+    void join_keepsEmptyPreviousHouseholdWhenItStillOwnsData() {
+        var previous = buildHousehold("OLD123");
+        var target = buildHousehold("NEW456");
+        var user = buildUser(previous);
+
+        when(householdRepository.findByInviteCode("NEW456")).thenReturn(Optional.of(target));
+        when(userRepository.countByHouseholdId(previous.getId())).thenReturn(0L);
+        // no members, but data (receipts) still reference it as origin -> must NOT delete
+        when(receiptRepository.existsByHouseholdId(previous.getId())).thenReturn(false);
+        when(receiptRepository.existsByOriginHouseholdId(previous.getId())).thenReturn(true);
+        when(userRepository.findAllByHouseholdId(target.getId())).thenReturn(List.of(user));
+
+        householdService.join(user, new JoinHouseholdRequest("NEW456"));
+
+        verify(householdRepository, never()).delete(previous);
     }
 
     @Test
@@ -156,6 +180,8 @@ class HouseholdServiceTest {
             return h;
         });
         when(userRepository.countByHouseholdId(previous.getId())).thenReturn(0L);
+        when(receiptRepository.existsByHouseholdId(previous.getId())).thenReturn(false);
+        when(receiptRepository.existsByOriginHouseholdId(previous.getId())).thenReturn(false);
         when(userRepository.findAllByHouseholdId(any())).thenReturn(List.of(user));
 
         var response = householdService.leave(user);
@@ -163,5 +189,26 @@ class HouseholdServiceTest {
         assertNotEquals(previous.getId(), user.getHousehold().getId());
         assertNotNull(response.inviteCode());
         verify(householdRepository).delete(previous);
+    }
+
+    @Test
+    void leave_keepsEmptyPreviousHouseholdWhenItStillOwnsData() {
+        var previous = buildHousehold("OLD123");
+        var user = buildUser(previous);
+
+        when(householdRepository.existsByInviteCode(any())).thenReturn(false);
+        when(householdRepository.save(any(Household.class))).thenAnswer(inv -> {
+            var h = inv.<Household>getArgument(0);
+            h.setId(UUID.randomUUID());
+            h.setCreatedAt(LocalDateTime.now());
+            return h;
+        });
+        when(userRepository.countByHouseholdId(previous.getId())).thenReturn(0L);
+        when(receiptRepository.existsByHouseholdId(previous.getId())).thenReturn(true);
+        when(userRepository.findAllByHouseholdId(any())).thenReturn(List.of(user));
+
+        householdService.leave(user);
+
+        verify(householdRepository, never()).delete(previous);
     }
 }

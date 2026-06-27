@@ -8,6 +8,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
@@ -31,6 +32,13 @@ public class ManualBrandPreference extends BaseEntity {
     @JoinColumn(name = "household_id", nullable = false)
     private Household household;
 
+    // The household this row ORIGINALLY belonged to. Set once at creation, never
+    // rewritten on merge (household_id is the current location). Lets a split
+    // restore each person's data to where it came from. See HouseholdMergeService.
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "origin_household_id", nullable = false)
+    private Household originHousehold;
+
     @Column(name = "generic_name", nullable = false, length = 255)
     private String genericName;
 
@@ -40,4 +48,14 @@ public class ManualBrandPreference extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private BrandStrength strength;
+
+    // Default origin to the current household on first persist, so callers never
+    // have to remember to set it. Merge code overrides household_id later but leaves
+    // originHousehold untouched.
+    @PrePersist
+    private void defaultOriginHousehold() {
+        if (originHousehold == null) {
+            originHousehold = household;
+        }
+    }
 }
