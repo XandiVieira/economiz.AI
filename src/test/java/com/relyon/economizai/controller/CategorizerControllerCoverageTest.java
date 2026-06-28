@@ -19,6 +19,7 @@ import com.relyon.economizai.service.extraction.AutoPromotionService;
 import com.relyon.economizai.service.extraction.CategorizationBenchmarkService;
 import com.relyon.economizai.service.extraction.CategorizationDebugService;
 import com.relyon.economizai.service.extraction.CategorizationQualityService;
+import com.relyon.economizai.service.extraction.CategorizerAdminService;
 import com.relyon.economizai.service.extraction.ConsensusPromotionService;
 import com.relyon.economizai.service.extraction.ml.MlClassifierService;
 import org.junit.jupiter.api.Test;
@@ -55,6 +56,7 @@ class CategorizerControllerCoverageTest {
     @MockitoBean private CategorizationBenchmarkService categorizationBenchmarkService;
     @MockitoBean private CategorizationQualityService categorizationQualityService;
     @MockitoBean private ConsensusPromotionService consensusPromotionService;
+    @MockitoBean private CategorizerAdminService categorizerAdminService;
     @MockitoBean private JwtService jwtService;
     @MockitoBean private UserDetailsService userDetailsService;
     @MockitoBean private LocalizedMessageService localizedMessageService;

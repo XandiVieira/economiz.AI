@@ -140,12 +140,18 @@ economizai:
       # A token enters the learned dictionary only if it recurs across at least
       # this many consensus products, with no category disagreement.
       min-token-products: ${CONSENSUS_MIN_TOKEN_PRODUCTS:2}
+      interval-ms: ${CONSENSUS_INTERVAL_MS:86400000}
+      initial-delay-ms: ${CONSENSUS_INITIAL_DELAY_MS:86400000}
   ml:
     # Cascade applies ML category/genericName only when true. Currently OFF —
     # the model is still trained + measured (shadow) via the benchmark, but its
     # (unreliable) predictions are not written to products. Flip on once the
     # benchmark's mlCategoryAccuracyPct is good enough.
     category-apply-enabled: ${ML_CATEGORY_APPLY_ENABLED:false}
+    auto-promote-interval-ms: ${ML_AUTO_PROMOTE_INTERVAL_MS:86400000}
+    auto-promote-initial-delay-ms: ${ML_AUTO_PROMOTE_INITIAL_DELAY_MS:86400000}
+    retrain-interval-ms: ${ML_RETRAIN_INTERVAL_MS:604800000}
+    retrain-initial-delay-ms: ${ML_RETRAIN_INITIAL_DELAY_MS:604800000}
   personal-promo:
     threshold-pct: 10                          # personal promo if price < (user's own median - X%)
     min-purchases-for-baseline: 3              # need this many prior purchases to detect personal promos

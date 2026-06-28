@@ -14,6 +14,46 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-28 — Categorizer: CONSENSUS source, admin reset/import endpoints, expanded dictionary
+
+### New `CONSENSUS` categorization source
+
+Products graduated by the consensus promotion job now carry `source=CONSENSUS` (was `USER`). This lets the two origins be distinguished in queries and resets. `CategorizationSource` enum values: `NONE`, `DICTIONARY`, `LEARNED_DICTIONARY`, `ML`, `MERCHANT`, `USER`, `CONSENSUS`.
+
+### Four new admin endpoints
+
+```
+GET /api/v1/categorizer/consensus
+  → [{ id, ean, normalizedName, genericName, brand, category }, ...]
+  Lists all products the consensus job graduated (source=CONSENSUS).
+  Review and approve/reject before deciding to revert.
+
+DELETE /api/v1/categorizer/learned
+  → { removedEntries: N }
+  Wipes every auto-promoted learned dict entry and resets the in-memory
+  dictionary to the curated CSV seed.  Use when the learned dict drifts.
+
+DELETE /api/v1/categorizer/consensus
+  → { revertedProducts: N }
+  Reverts all CONSENSUS-graduated products to source=NONE / null category
+  so they re-enter the cascade on the next request.  Does NOT clear the
+  learned dict — run DELETE /learned too for a full restore.
+
+POST /api/v1/categorizer/dictionary/import
+  body: [{ "token": "milho", "genericName": "Milho", "category": "GROCERIES", "sampleCount": 999 }, ...]
+  → { imported: N, skipped: M }
+  Bulk-upserts token→category mappings directly into the learned dict and
+  swaps the in-memory reference immediately.  sampleCount defaults to 999.
+```
+
+All four require `Role.ADMIN`.
+
+### Product dictionary expanded (396 → ~700 entries)
+
+Added coverage for OTHER, CLEANING, PERSONAL_CARE, HEALTH, BEVERAGES, BAKERY, MEAT_DAIRY, and PRODUCE categories. Curated CSV seed lives at `src/main/resources/seed/product-dictionary.csv`.
+
+---
+
 ## 2026-06-28 — Household data merge on join/leave (behind a flag, dark)
 
 Joining/leaving a household can now optionally **bring your data with you** and

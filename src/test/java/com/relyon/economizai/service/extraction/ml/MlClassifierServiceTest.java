@@ -7,12 +7,14 @@ import com.relyon.economizai.repository.ProductRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -21,6 +23,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -49,10 +53,6 @@ class MlClassifierServiceTest {
                 .build();
     }
 
-    /**
-     * Builds a list large enough to clear MIN_TRAINING_SIZE (30) by repeating a
-     * handful of trusted, well-separated grocery/cleaning examples.
-     */
     private List<Product> trustedTrainingSet() {
         var products = new ArrayList<Product>();
         for (var index = 0; index < 20; index++) {
@@ -66,7 +66,7 @@ class MlClassifierServiceTest {
 
     @Test
     void retrain_trainsWhenEnoughTrustedExamples() {
-        when(productRepository.findAll()).thenReturn(trustedTrainingSet());
+        when(productRepository.findByCategorizationSourceIn(any())).thenReturn(trustedTrainingSet());
 
         var outcome = service.retrain();
 
@@ -84,7 +84,7 @@ class MlClassifierServiceTest {
                 product("arroz", ProductCategory.GROCERIES, "Arroz", CategorizationSource.DICTIONARY),
                 product("leite", ProductCategory.MEAT_DAIRY, "Leite", CategorizationSource.USER)
         );
-        when(productRepository.findAll()).thenReturn(tiny);
+        when(productRepository.findByCategorizationSourceIn(any())).thenReturn(tiny);
 
         var outcome = service.retrain();
 
@@ -96,16 +96,12 @@ class MlClassifierServiceTest {
 
     @Test
     void retrain_filtersOutNonTrustedSources() {
-        var products = new ArrayList<Product>();
-        // 40 ML-sourced products must NOT be used as training signal.
-        for (var index = 0; index < 40; index++) {
-            products.add(product("ml junk " + index, ProductCategory.OTHER,
-                    "Junk", CategorizationSource.ML));
-        }
-        // Only 2 trusted products → below MIN_TRAINING_SIZE once filtered.
-        products.add(product("arroz", ProductCategory.GROCERIES, "Arroz", CategorizationSource.DICTIONARY));
-        products.add(product("leite", ProductCategory.MEAT_DAIRY, "Leite", CategorizationSource.USER));
-        when(productRepository.findAll()).thenReturn(products);
+        // Repository is queried only for TRUSTED_SOURCES; ML products never come back.
+        // Simulate the real repo returning only the 2 trusted products that pass the filter.
+        when(productRepository.findByCategorizationSourceIn(any())).thenReturn(List.of(
+                product("arroz", ProductCategory.GROCERIES, "Arroz", CategorizationSource.DICTIONARY),
+                product("leite", ProductCategory.MEAT_DAIRY, "Leite", CategorizationSource.USER)
+        ));
 
         var outcome = service.retrain();
 
@@ -115,24 +111,28 @@ class MlClassifierServiceTest {
     }
 
     @Test
-    void retrain_acceptsLearnedDictionaryAsTrusted() {
-        var products = new ArrayList<Product>();
-        for (var index = 0; index < 35; index++) {
-            products.add(product("biscoito recheado " + index, ProductCategory.GROCERIES,
-                    "Biscoito", CategorizationSource.LEARNED_DICTIONARY));
-        }
-        when(productRepository.findAll()).thenReturn(products);
+    void retrain_excludesLearnedDictionaryFromTrustedSources() {
+        // LEARNED_DICTIONARY is ML-once-removed; including it would create a feedback loop.
+        // Verify the repo is queried with DICTIONARY + USER only.
+        when(productRepository.findByCategorizationSourceIn(any())).thenReturn(List.of());
 
-        var outcome = service.retrain();
+        service.retrain();
 
-        assertTrue(outcome.trained());
-        assertEquals(35, outcome.categoryExamples());
+        @SuppressWarnings("unchecked")
+        var captor = (ArgumentCaptor<Collection<CategorizationSource>>) (ArgumentCaptor<?>) ArgumentCaptor.forClass(Collection.class);
+        verify(productRepository).findByCategorizationSourceIn(captor.capture());
+        var sources = captor.getValue();
+        assertTrue(sources.contains(CategorizationSource.DICTIONARY));
+        assertTrue(sources.contains(CategorizationSource.USER));
+        assertTrue(sources.contains(CategorizationSource.CONSENSUS));
+        assertFalse(sources.contains(CategorizationSource.LEARNED_DICTIONARY),
+                "LEARNED_DICTIONARY excluded to prevent ML→learned_dict→ML feedback loop");
+        assertFalse(sources.contains(CategorizationSource.ML));
     }
 
     @Test
     void retrain_ignoresProductsWithNullCategoryForCategoryModel() {
         var products = new ArrayList<Product>();
-        // 35 trusted with category; plus extra trusted ones with null category.
         for (var index = 0; index < 35; index++) {
             products.add(product("arroz " + index, ProductCategory.GROCERIES,
                     "Arroz", CategorizationSource.DICTIONARY));
@@ -141,13 +141,12 @@ class MlClassifierServiceTest {
             products.add(product("sem categoria " + index, null,
                     "Misterio", CategorizationSource.USER));
         }
-        when(productRepository.findAll()).thenReturn(products);
+        when(productRepository.findByCategorizationSourceIn(any())).thenReturn(products);
 
         var outcome = service.retrain();
 
         assertTrue(outcome.trained());
         assertEquals(35, outcome.categoryExamples());
-        // genericName present on all 45 trusted products.
         assertEquals(45, outcome.genericNameExamples());
     }
 
@@ -169,7 +168,7 @@ class MlClassifierServiceTest {
 
     @Test
     void predictCategory_returnsTrainedLabelWhenReady() {
-        when(productRepository.findAll()).thenReturn(trustedTrainingSet());
+        when(productRepository.findByCategorizationSourceIn(any())).thenReturn(trustedTrainingSet());
         service.retrain();
 
         var prediction = service.predictCategory("arroz jasmim 5kg");
@@ -180,7 +179,7 @@ class MlClassifierServiceTest {
 
     @Test
     void predictGenericName_returnsTrainedLabelWhenReady() {
-        when(productRepository.findAll()).thenReturn(trustedTrainingSet());
+        when(productRepository.findByCategorizationSourceIn(any())).thenReturn(trustedTrainingSet());
         service.retrain();
 
         var prediction = service.predictGenericName("limpador multiuso 1l");
@@ -204,12 +203,11 @@ class MlClassifierServiceTest {
 
     @Test
     void retrainBecomesNotReadyAgainWhenDataDropsBelowMinimum() {
-        when(productRepository.findAll()).thenReturn(trustedTrainingSet());
+        when(productRepository.findByCategorizationSourceIn(any())).thenReturn(trustedTrainingSet());
         service.retrain();
         assertTrue(service.isReady());
 
-        // A subsequent retrain with too little data flips ready back to false.
-        when(productRepository.findAll()).thenReturn(List.of(
+        when(productRepository.findByCategorizationSourceIn(any())).thenReturn(List.of(
                 product("arroz", ProductCategory.GROCERIES, "Arroz", CategorizationSource.DICTIONARY)
         ));
         var outcome = service.retrain();
@@ -220,7 +218,7 @@ class MlClassifierServiceTest {
 
     @Test
     void scheduledRetrainDelegatesToRetrain() {
-        when(productRepository.findAll()).thenReturn(trustedTrainingSet());
+        when(productRepository.findByCategorizationSourceIn(any())).thenReturn(trustedTrainingSet());
 
         service.scheduledRetrain();
 

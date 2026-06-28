@@ -24,13 +24,15 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Auto-promotes stable ML predictions into the learned-dictionary so the
  * faster, deterministic dictionary path catches them next time.
  *
  * <p>Promotion criteria (all must hold for a token, thresholds tunable via
- * {@code economizai.ml.auto-promote.*}):
+ * {@code economizai.ml.auto-promote.*}):</p>
  * <ul>
  *   <li>at least <i>min-samples</i> ML-categorized Products contain the token</li>
  *   <li>at least <i>min-agreement</i> share of those Products share the same
@@ -42,10 +44,14 @@ import java.util.Map;
  * <p>Tokens are 1- to 3-word phrases extracted from each Product's
  * normalizedName, same way DictionaryClassifier looks them up. Curated CSV
  * always wins over learned, so promoting an entry that the curated CSV
- * already has is a no-op at lookup time.
+ * already has is a no-op at lookup time.</p>
+ *
+ * <p>Only ML and USER products are fetched — DICTIONARY and LEARNED_DICTIONARY
+ * products carry no token stats we need here, and skipping them avoids loading
+ * unrelated rows on large catalogs.</p>
  *
  * <p>Runs on app startup (after MlClassifierService training) and on a
- * fixed schedule (default daily). Manual trigger: POST /categorizer/auto-promote.
+ * fixed schedule (default daily). Manual trigger: POST /categorizer/auto-promote.</p>
  */
 @Slf4j
 @Service
@@ -76,7 +82,7 @@ public class AutoPromotionService {
     }
 
     @Scheduled(fixedDelayString = "${economizai.ml.auto-promote-interval-ms:86400000}",
-               initialDelayString = "${economizai.ml.auto-promote-interval-ms:86400000}")
+               initialDelayString = "${economizai.ml.auto-promote-initial-delay-ms:86400000}")
     public void scheduledPromote() {
         log.info("auto_promote.scheduled");
         self.promote();
@@ -84,15 +90,18 @@ public class AutoPromotionService {
 
     @Transactional
     public synchronized PromotionOutcome promote() {
-        var byToken = aggregateTokenStats(productRepository.findAll());
+        // Only ML and human-validated products carry stats relevant to this pass.
+        var relevantSources = List.of(CategorizationSource.ML, CategorizationSource.USER, CategorizationSource.CONSENSUS);
+        var byToken = aggregateTokenStats(productRepository.findByCategorizationSourceIn(relevantSources));
 
+        var toUpsert = new LinkedHashMap<String, TokenUpsertRequest>();
         var promoted = 0;
         var skippedHuman = 0;
         var skippedAgreement = 0;
         var skippedSamples = 0;
 
         for (var entry : byToken.entrySet()) {
-            switch (evaluateToken(entry.getKey(), entry.getValue())) {
+            switch (evaluateToken(entry.getKey(), entry.getValue(), toUpsert)) {
                 case PROMOTED -> promoted++;
                 case SKIPPED_HUMAN -> skippedHuman++;
                 case SKIPPED_AGREEMENT -> skippedAgreement++;
@@ -101,6 +110,7 @@ public class AutoPromotionService {
             }
         }
 
+        batchUpsertLearnedEntries(toUpsert);
         var totalLearned = refreshClassifierMemory();
         var outcome = new PromotionOutcome(promoted, skippedHuman, skippedAgreement, skippedSamples, totalLearned);
         log.info("auto_promote.done {}", outcome);
@@ -115,10 +125,10 @@ public class AutoPromotionService {
      *       on a token below the sample floor is just IGNORED, not a near-miss);</li>
      *   <li>below the ML sample floor → SKIPPED_SAMPLES;</li>
      *   <li>majority-class agreement below threshold → SKIPPED_AGREEMENT;</li>
-     *   <li>otherwise upsert the learned entry → PROMOTED.</li>
+     *   <li>otherwise add to toUpsert for batch save → PROMOTED.</li>
      * </ol>
      */
-    private TokenDecision evaluateToken(String token, TokenStats stats) {
+    private TokenDecision evaluateToken(String token, TokenStats stats, Map<String, TokenUpsertRequest> toUpsert) {
         if (stats.userOverrides > 0) {
             return stats.mlSamples >= minSamples ? TokenDecision.SKIPPED_HUMAN : TokenDecision.IGNORED;
         }
@@ -131,36 +141,59 @@ public class AutoPromotionService {
             return TokenDecision.SKIPPED_AGREEMENT;
         }
         var topGeneric = stats.topGenericName();
-        upsertLearnedEntry(token, topGeneric, topCategory, stats.mlSamples);
+        toUpsert.put(token, new TokenUpsertRequest(topGeneric, topCategory, stats.mlSamples));
         log.info("auto_promote.promoted token='{}' category={} genericName='{}' samples={} agreement={}",
                 token, topCategory, topGeneric, stats.mlSamples, String.format("%.2f", agreement));
         return TokenDecision.PROMOTED;
     }
 
     /**
-     * Aggregate per-token stats across all products: user-override counts and ML
-     * sample/category/genericName tallies. Extracted from promote() to keep its
-     * cognitive complexity within bounds (S3776).
+     * Aggregate per-token stats across all relevant products: user-override counts and ML
+     * sample/category/genericName tallies.
      */
     private HashMap<String, TokenStats> aggregateTokenStats(List<Product> products) {
         var byToken = new HashMap<String, TokenStats>();
-        for (var p : products) {
-            if (p.getNormalizedName() == null) continue;
-            for (var token : phraseTokens(p.getNormalizedName())) {
-                var stats = byToken.computeIfAbsent(token, k -> new TokenStats());
-                if (p.getCategorizationSource() == CategorizationSource.USER) {
-                    stats.userOverrides++;
-                } else if (p.getCategorizationSource() == CategorizationSource.ML
-                        && p.getCategory() != null) {
+        for (var product : products) {
+            if (product.getNormalizedName() == null) continue;
+            for (var token : phraseTokens(product.getNormalizedName())) {
+                var stats = byToken.computeIfAbsent(token, key -> new TokenStats());
+                var src = product.getCategorizationSource();
+                if (src == CategorizationSource.USER || src == CategorizationSource.CONSENSUS) {
+                    stats.userOverrides++; // human-validated — blocks auto-promotion for this token
+                } else if (src == CategorizationSource.ML
+                        && product.getCategory() != null) {
                     stats.mlSamples++;
-                    stats.categoryCounts.merge(p.getCategory(), 1, Integer::sum);
-                    if (p.getGenericName() != null) {
-                        stats.genericNameCounts.merge(p.getGenericName(), 1, Integer::sum);
+                    stats.categoryCounts.merge(product.getCategory(), 1, Integer::sum);
+                    if (product.getGenericName() != null) {
+                        stats.genericNameCounts.merge(product.getGenericName(), 1, Integer::sum);
                     }
                 }
             }
         }
         return byToken;
+    }
+
+    private void batchUpsertLearnedEntries(Map<String, TokenUpsertRequest> toUpsert) {
+        if (toUpsert.isEmpty()) return;
+        var existingByToken = learnedRepository.findByNormalizedTokenIn(toUpsert.keySet()).stream()
+                .collect(Collectors.toMap(LearnedDictionaryEntry::getNormalizedToken, Function.identity()));
+        var now = LocalDateTime.now();
+        var toSave = new ArrayList<LearnedDictionaryEntry>();
+        for (var e : toUpsert.entrySet()) {
+            var req = e.getValue();
+            var entry = existingByToken.getOrDefault(e.getKey(),
+                    LearnedDictionaryEntry.builder()
+                            .normalizedToken(e.getKey())
+                            .sampleCount(0)
+                            .promotedAt(now)
+                            .build());
+            entry.setGenericName(req.genericName());
+            entry.setCategory(req.category());
+            entry.setSampleCount(req.samples());
+            entry.setPromotedAt(now);
+            toSave.add(entry);
+        }
+        learnedRepository.saveAll(toSave);
     }
 
     private int refreshClassifierMemory() {
@@ -174,19 +207,6 @@ public class AutoPromotionService {
         }
         dictionaryClassifier.replaceLearnedEntries(map);
         return entries.size();
-    }
-
-    private void upsertLearnedEntry(String token, String genericName, ProductCategory category, int samples) {
-        var existing = learnedRepository.findByNormalizedToken(token).orElseGet(() ->
-                LearnedDictionaryEntry.builder()
-                        .normalizedToken(token)
-                        .promotedAt(LocalDateTime.now())
-                        .build());
-        existing.setGenericName(genericName);
-        existing.setCategory(category);
-        existing.setSampleCount(samples);
-        existing.setPromotedAt(LocalDateTime.now());
-        learnedRepository.save(existing);
     }
 
     private List<String> phraseTokens(String text) {
@@ -222,6 +242,8 @@ public class AutoPromotionService {
                     .orElse(null);
         }
     }
+
+    private record TokenUpsertRequest(String genericName, ProductCategory category, int samples) {}
 
     /** Per-token outcome of {@link #evaluateToken}, tallied into {@link PromotionOutcome}. */
     private enum TokenDecision { PROMOTED, SKIPPED_HUMAN, SKIPPED_AGREEMENT, SKIPPED_SAMPLES, IGNORED }

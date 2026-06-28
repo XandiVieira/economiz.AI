@@ -23,8 +23,10 @@ import java.util.List;
  * Owns the two trained classifiers (category, genericName) and exposes
  * predict() to the rest of the app. Trains on startup and on a periodic
  * schedule. Training data: only Products whose categorizationSource is
- * one of the TRUSTED_SOURCES (DICTIONARY, LEARNED_DICTIONARY, USER) —
- * never trains on its own ML predictions to avoid feedback contamination.
+ * DICTIONARY or USER — LEARNED_DICTIONARY is excluded because those products
+ * were themselves classified via tokens auto-promoted from ML predictions;
+ * including them would create a feedback loop (ML → learned_dict → product →
+ * ML training → amplified ML output).
  *
  * Models live in memory only. Cheap to retrain (NB + ~1k examples is
  * sub-second), so persisting them isn't worth the complexity.
@@ -36,8 +38,9 @@ public class MlClassifierService {
 
     private static final EnumSet<CategorizationSource> TRUSTED_SOURCES = EnumSet.of(
             CategorizationSource.DICTIONARY,
-            CategorizationSource.LEARNED_DICTIONARY,
-            CategorizationSource.USER
+            CategorizationSource.USER,
+            CategorizationSource.CONSENSUS
+            // LEARNED_DICTIONARY intentionally excluded — it's ML-once-removed (feedback loop risk)
     );
     private static final int MIN_TRAINING_SIZE = 30;
 
@@ -78,7 +81,7 @@ public class MlClassifierService {
     }
 
     @Scheduled(fixedDelayString = "${economizai.ml.retrain-interval-ms:604800000}",
-               initialDelayString = "${economizai.ml.retrain-interval-ms:604800000}")
+               initialDelayString = "${economizai.ml.retrain-initial-delay-ms:604800000}")
     public void scheduledRetrain() {
         log.info("ml.retrain.scheduled");
         self.retrain();
@@ -86,9 +89,9 @@ public class MlClassifierService {
 
     @Transactional(readOnly = true)
     public synchronized RetrainOutcome retrain() {
+        ready = false; // gate concurrent predictions while both models are being rebuilt
         var started = System.nanoTime();
-        var trustedProducts = productRepository.findAll().stream()
-                .filter(p -> TRUSTED_SOURCES.contains(p.getCategorizationSource()))
+        var trustedProducts = productRepository.findByCategorizationSourceIn(TRUSTED_SOURCES).stream()
                 .toList();
         var categoryExamples = trustedProducts.stream()
                 .filter(p -> p.getCategory() != null)

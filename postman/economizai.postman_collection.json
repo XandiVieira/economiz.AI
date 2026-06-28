@@ -2722,6 +2722,124 @@
             "description": "Graduates products corrected by ≥N households to a global category (source USER) and learns recurring agreed tokens into the learned dictionary. Returns { productsGraduated, tokensLearned, learnedTotal }."
           },
           "response": []
+        },
+        {
+          "name": "Reset learned dictionary (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categorizer/learned",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "categorizer",
+                "learned"
+              ]
+            },
+            "description": "[ADMIN] Clears all auto-promoted learned dictionary entries from the DB and resets the in-memory dictionary to just the curated CSV seed. Returns { removedEntries }. Use to restore a clean state if the learned dict is corrupted."
+          },
+          "response": []
+        },
+        {
+          "name": "List consensus-graduated products (admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categorizer/consensus",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "categorizer",
+                "consensus"
+              ]
+            },
+            "description": "[ADMIN] Lists all products whose category was set by consensus promotion (source=CONSENSUS). Use to review and approve/reject before deciding to revert. Returns [{ id, ean, normalizedName, genericName, brand, category }]."
+          },
+          "response": []
+        },
+        {
+          "name": "Reset consensus products (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categorizer/consensus",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "categorizer",
+                "consensus"
+              ]
+            },
+            "description": "[ADMIN] Reverts all products whose category was set by consensus (source=CONSENSUS) back to NONE / null category. Returns { revertedProducts }. The learned dictionary is NOT cleared by this — use DELETE /learned to clear that too."
+          },
+          "response": []
+        },
+        {
+          "name": "Bulk import dictionary entries (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  {\n    \"token\": \"milho\",\n    \"genericName\": \"Milho\",\n    \"category\": \"GROCERIES\",\n    \"sampleCount\": 999\n  },\n  {\n    \"token\": \"frango\",\n    \"genericName\": \"Frango\",\n    \"category\": \"MEAT_DAIRY\",\n    \"sampleCount\": 999\n  }\n]",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categorizer/dictionary/import",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "categorizer",
+                "dictionary",
+                "import"
+              ]
+            },
+            "description": "[ADMIN] Upserts a batch of token → (genericName, category) entries directly into the learned dictionary (sampleCount defaults to 999 if omitted). Immediately swaps the in-memory dictionary. Use to seed large volumes of known mappings without re-parsing receipts. Returns { imported, skipped }."
+          },
+          "response": []
         }
       ]
     },

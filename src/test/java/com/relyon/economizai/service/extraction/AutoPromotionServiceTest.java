@@ -9,6 +9,7 @@ import com.relyon.economizai.repository.ProductRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -16,15 +17,14 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -67,35 +67,35 @@ class AutoPromotionServiceTest {
         var products = IntStream.range(0, 30)
                 .mapToObj(i -> mlProduct("RACAO PEDIGREE FILHOTE " + i, ProductCategory.OTHER, "Ração"))
                 .toList();
-        when(productRepository.findAll()).thenReturn(products);
-        when(learnedRepository.findByNormalizedToken(any())).thenReturn(Optional.empty());
+        when(productRepository.findByCategorizationSourceIn(any())).thenReturn(products);
+        when(learnedRepository.findByNormalizedTokenIn(any())).thenReturn(List.of());
         when(learnedRepository.findAll()).thenReturn(List.of());
 
         var outcome = service.promote();
 
-        // "racao", "pedigree", "filhote", and N-gram phrases all reach 30 — multiple promotions.
-        verify(learnedRepository, times(outcome.promoted())).save(any(LearnedDictionaryEntry.class));
-        assert outcome.promoted() > 0;
+        assertTrue(outcome.promoted() > 0,
+                "racao, pedigree, filhote and N-gram phrases all reach 30 samples");
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<LearnedDictionaryEntry>> captor = ArgumentCaptor.captor();
+        verify(learnedRepository).saveAll(captor.capture());
+        assertEquals(outcome.promoted(), captor.getValue().size());
     }
 
     @Test
     void userOverrideBlocksPromotionOfThatExactToken() {
-        // 50 ML products say "RACAO" → OTHER. One user disagrees: "RACAO" → GROCERIES.
-        // The user override should block promotion of token "racao" specifically;
-        // tokens that don't appear in the user product (none here) would still be eligible.
         var products = new ArrayList<Product>(IntStream.range(0, 50)
                 .mapToObj(i -> mlProduct("RACAO " + i, ProductCategory.OTHER, "Ração"))
                 .toList());
         products.add(userProduct("RACAO", ProductCategory.GROCERIES));
-        when(productRepository.findAll()).thenReturn(products);
+        when(productRepository.findByCategorizationSourceIn(any())).thenReturn(products);
         when(learnedRepository.findAll()).thenReturn(List.of());
 
         var outcome = service.promote();
 
-        // "racao" had a user override → not promoted. Other tokens (numerals) won't
-        // hit the 30-sample threshold individually since each ML sample has a unique number.
+        // "racao" had a user override → not promoted. Per-number tokens don't
+        // reach 30 samples individually, so nothing else qualifies either.
         assertEquals(0, outcome.promoted());
-        verify(learnedRepository, never()).save(any());
+        verify(learnedRepository, never()).saveAll(any());
     }
 
     @Test
@@ -105,12 +105,12 @@ class AutoPromotionServiceTest {
         var cleaning = IntStream.range(0, 15)
                 .mapToObj(i -> mlProduct("FOO " + i, ProductCategory.CLEANING, "X"));
         var products = Stream.concat(groceries, cleaning).toList();
-        when(productRepository.findAll()).thenReturn(products);
+        when(productRepository.findByCategorizationSourceIn(any())).thenReturn(products);
         when(learnedRepository.findAll()).thenReturn(List.of());
 
         var outcome = service.promote();
 
-        // 35 samples for "foo" but only 20/35 = 57% agreement → blocked
+        // 35 samples for "foo" but only 20/35 = 57% agreement → below 90% threshold
         assertEquals(0, outcome.promoted());
     }
 
@@ -119,7 +119,7 @@ class AutoPromotionServiceTest {
         var products = IntStream.range(0, 10)
                 .mapToObj(i -> mlProduct("BAR " + i, ProductCategory.OTHER, "Y"))
                 .toList();
-        when(productRepository.findAll()).thenReturn(products);
+        when(productRepository.findByCategorizationSourceIn(any())).thenReturn(products);
         when(learnedRepository.findAll()).thenReturn(List.of());
 
         var outcome = service.promote();

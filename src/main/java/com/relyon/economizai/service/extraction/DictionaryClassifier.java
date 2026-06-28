@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Two-tier dictionary lookup:
@@ -30,7 +31,7 @@ public class DictionaryClassifier {
 
     private static final int MAX_PHRASE_TOKENS = 3;
     private final Map<String, DictEntry> curatedEntries = new LinkedHashMap<>();
-    private final Map<String, DictEntry> learnedEntries = new LinkedHashMap<>();
+    private final AtomicReference<Map<String, DictEntry>> learnedRef = new AtomicReference<>(Map.of());
 
     @PostConstruct
     void load() throws IOException {
@@ -51,26 +52,28 @@ public class DictionaryClassifier {
     }
 
     /**
-     * Replaces the in-memory learned-entries map. Called by
-     * AutoPromotionService after each promotion pass.
+     * Replaces the in-memory learned-entries map atomically. Called by
+     * AutoPromotionService and ConsensusPromotionService after each promotion
+     * pass. Lock-free: the reference swap is atomic, so classify() always reads
+     * a consistent snapshot even when a reload is in progress.
      */
-    public synchronized void replaceLearnedEntries(Map<String, DictEntry> entries) {
-        learnedEntries.clear();
-        learnedEntries.putAll(entries);
-        log.info("Loaded {} learned dictionary entries", learnedEntries.size());
+    public void replaceLearnedEntries(Map<String, DictEntry> entries) {
+        learnedRef.set(Map.copyOf(entries));
+        log.info("Loaded {} learned dictionary entries", entries.size());
     }
 
     public DictEntry classify(String rawDescription) {
         var normalized = DescriptionNormalizer.normalize(rawDescription);
         if (normalized.isBlank()) return DictEntry.EMPTY;
         var tokens = normalized.split("\\s+");
+        var learned = learnedRef.get(); // single read — consistent snapshot throughout this call
         for (var size = MAX_PHRASE_TOKENS; size >= 1; size--) {
             for (var i = 0; i + size <= tokens.length; i++) {
                 var phrase = String.join(" ", Arrays.copyOfRange(tokens, i, i + size));
                 var curated = curatedEntries.get(phrase);
                 if (curated != null) return curated;
-                var learned = learnedEntries.get(phrase);
-                if (learned != null) return learned;
+                var entry = learned.get(phrase);
+                if (entry != null) return entry;
             }
         }
         return DictEntry.EMPTY;

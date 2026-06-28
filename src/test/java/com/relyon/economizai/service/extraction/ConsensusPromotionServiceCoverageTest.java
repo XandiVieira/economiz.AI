@@ -20,14 +20,15 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -55,7 +56,7 @@ class ConsensusPromotionServiceCoverageTest {
         ReflectionTestUtils.setField(service, "minHouseholds", 2);
         ReflectionTestUtils.setField(service, "minTokenProducts", 2);
         lenient().when(learnedRepository.findAll()).thenReturn(List.of());
-        lenient().when(learnedRepository.findByNormalizedToken(any())).thenReturn(Optional.empty());
+        lenient().when(learnedRepository.findByNormalizedTokenIn(any())).thenReturn(List.of());
     }
 
     private HouseholdProductCategoryOverride override(Product product, ProductCategory category) {
@@ -72,7 +73,6 @@ class ConsensusPromotionServiceCoverageTest {
     @Test
     void nullCategoryOverrides_areIgnored() {
         var milho = product("MILHO ODERICH 200G", ProductCategory.OTHER, CategorizationSource.ML);
-        // Two null-category (custom) corrections — never count toward consensus.
         when(overrideRepository.findAll()).thenReturn(List.of(
                 override(milho, null), override(milho, null)));
 
@@ -80,13 +80,12 @@ class ConsensusPromotionServiceCoverageTest {
 
         assertEquals(0, outcome.productsGraduated());
         verify(productRepository).findAllById(Set.of());
-        verify(productRepository, never()).save(any());
+        verify(productRepository, never()).saveAll(any());
     }
 
     @Test
     void productAlreadyGraduatedToConsensusCategory_isNotResaved() {
-        // Already USER + GROCERIES → no mutation, but tokens still feed.
-        var milho = product("MILHO ODERICH", ProductCategory.GROCERIES, CategorizationSource.USER);
+        var milho = product("MILHO ODERICH", ProductCategory.GROCERIES, CategorizationSource.CONSENSUS);
         when(overrideRepository.findAll()).thenReturn(List.of(
                 override(milho, ProductCategory.GROCERIES),
                 override(milho, ProductCategory.GROCERIES)));
@@ -95,7 +94,7 @@ class ConsensusPromotionServiceCoverageTest {
         var outcome = service.promote();
 
         assertEquals(0, outcome.productsGraduated(), "no-op when already graduated identically");
-        verify(productRepository, never()).save(any());
+        verify(productRepository, never()).saveAll(any());
     }
 
     @Test
@@ -109,13 +108,11 @@ class ConsensusPromotionServiceCoverageTest {
         var outcome = service.promote();
 
         assertEquals(0, outcome.productsGraduated());
-        verify(productRepository, never()).save(any());
+        verify(productRepository, never()).saveAll(any());
     }
 
     @Test
     void tokenDisagreementAcrossProducts_isNotLearned() {
-        // Both products share token "milho" but graduate to DIFFERENT categories
-        // → token has 2 category votes → disagreement → not learned.
         var milhoA = product("MILHO ODERICH 200G", ProductCategory.OTHER, CategorizationSource.ML);
         var milhoB = product("MILHO VERDE PREDILECTA 170G", ProductCategory.OTHER, CategorizationSource.ML);
         when(overrideRepository.findAll()).thenReturn(List.of(
@@ -134,7 +131,6 @@ class ConsensusPromotionServiceCoverageTest {
 
     @Test
     void tokenBelowMinTokenProducts_isNotLearned() {
-        // Single consensus product → its tokens appear only once → below threshold 2.
         var milho = product("MILHO ODERICH 200G", ProductCategory.OTHER, CategorizationSource.ML);
         when(overrideRepository.findAll()).thenReturn(List.of(
                 override(milho, ProductCategory.GROCERIES),
@@ -145,7 +141,7 @@ class ConsensusPromotionServiceCoverageTest {
 
         assertEquals(1, outcome.productsGraduated());
         assertEquals(0, outcome.tokensLearned());
-        verify(learnedRepository, never()).save(any());
+        verify(learnedRepository, never()).saveAll(anyCollection());
     }
 
     @Test
@@ -161,15 +157,19 @@ class ConsensusPromotionServiceCoverageTest {
                 .thenReturn(List.of(milhoA, milhoB));
         var existing = LearnedDictionaryEntry.builder()
                 .normalizedToken("milho").category(ProductCategory.OTHER)
-                .promotedAt(LocalDateTime.now().minusDays(5)).build();
-        when(learnedRepository.findByNormalizedToken("milho")).thenReturn(Optional.of(existing));
+                .sampleCount(0).promotedAt(LocalDateTime.now().minusDays(5)).build();
+        // Return the existing entry when the batch lookup for tokens includes "milho"
+        when(learnedRepository.findByNormalizedTokenIn(anyCollection())).thenReturn(List.of(existing));
 
         var outcome = service.promote();
 
         assertTrue(outcome.tokensLearned() >= 1);
-        // existing instance reused and re-categorized, not replaced.
+        // existing instance reused and re-categorized, not replaced
         assertEquals(ProductCategory.GROCERIES, existing.getCategory());
-        verify(learnedRepository).save(existing);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<LearnedDictionaryEntry>> captor = ArgumentCaptor.captor();
+        verify(learnedRepository).saveAll(captor.capture());
+        assertTrue(captor.getValue().contains(existing));
     }
 
     @Test
@@ -181,15 +181,13 @@ class ConsensusPromotionServiceCoverageTest {
         when(productRepository.findAllById(Set.of(milho.getId()))).thenReturn(List.of(milho));
         var learnedEntry = LearnedDictionaryEntry.builder()
                 .normalizedToken("milho").genericName("milho").category(ProductCategory.GROCERIES)
-                .promotedAt(LocalDateTime.now()).build();
+                .sampleCount(0).promotedAt(LocalDateTime.now()).build();
         when(learnedRepository.findAll()).thenReturn(List.of(learnedEntry));
 
         var outcome = service.promote();
 
         assertEquals(1, outcome.learnedTotal());
-        var mapCaptor = ArgumentCaptor.forClass(Map.class);
-        verify(dictionaryClassifier).replaceLearnedEntries(mapCaptor.capture());
-        assertTrue(mapCaptor.getValue().containsKey("milho"));
+        verify(dictionaryClassifier).replaceLearnedEntries(argThat(map -> map.containsKey("milho")));
     }
 
     @Test

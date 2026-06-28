@@ -1,6 +1,7 @@
 package com.relyon.economizai.service.extraction;
 
 import com.relyon.economizai.model.LearnedDictionaryEntry;
+import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.enums.CategorizationSource;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.repository.HouseholdProductCategoryOverrideRepository;
@@ -24,6 +25,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Turns user category corrections into deterministic knowledge — the
@@ -32,11 +35,11 @@ import java.util.UUID;
  *
  * <p>A per-household correction (see {@code HouseholdProductCategoryOverride})
  * is only evidence. When at least {@code min-households} distinct households
- * correct the SAME product to the SAME category, that product **graduates**:
+ * correct the SAME product to the SAME category, that product <b>graduates</b>:
  * its global category is set (source USER, so everyone sees it). Tokens that
  * recur across consensus products (≥ {@code min-token-products}, all agreeing)
  * are also promoted into the learned dictionary so similar future products
- * inherit the category. A single household never changes anything globally.
+ * inherit the category. A single household never changes anything globally.</p>
  */
 @Slf4j
 @Service
@@ -63,7 +66,7 @@ public class ConsensusPromotionService {
     private int minTokenProducts;
 
     @Scheduled(fixedDelayString = "${economizai.categorizer.consensus.interval-ms:86400000}",
-               initialDelayString = "${economizai.categorizer.consensus.interval-ms:86400000}")
+               initialDelayString = "${economizai.categorizer.consensus.initial-delay-ms:86400000}")
     public void scheduledPromote() {
         log.info("consensus_promote.scheduled");
         self.promote();
@@ -90,19 +93,18 @@ public class ConsensusPromotionService {
             if (consensusCategory != null) consensusByProduct.put(productId, consensusCategory);
         });
 
-        var graduatedProducts = 0;
         var tokenVotes = new HashMap<String, Map<ProductCategory, Integer>>();
+        var toSave = new ArrayList<Product>();
 
         for (var product : productRepository.findAllById(consensusByProduct.keySet())) {
             var consensusCategory = consensusByProduct.get(product.getId());
 
-            // Graduate the exact product to global truth (source USER).
+            // Graduate the exact product to global truth (source CONSENSUS).
             if (product.getCategory() != consensusCategory
-                    || product.getCategorizationSource() != CategorizationSource.USER) {
+                    || product.getCategorizationSource() != CategorizationSource.CONSENSUS) {
                 product.setCategory(consensusCategory);
-                product.setCategorizationSource(CategorizationSource.USER);
-                productRepository.save(product);
-                graduatedProducts++;
+                product.setCategorizationSource(CategorizationSource.CONSENSUS);
+                toSave.add(product);
                 log.info("consensus_promote.product_graduated product={} category={}",
                         product.getId(), consensusCategory);
             }
@@ -114,9 +116,13 @@ public class ConsensusPromotionService {
             }
         }
 
+        if (!toSave.isEmpty()) {
+            productRepository.saveAll(toSave);
+        }
+
         var learnedTokens = promoteAgreedTokens(tokenVotes);
         var totalLearned = reloadLearnedEntries();
-        var outcome = new ConsensusOutcome(graduatedProducts, learnedTokens, totalLearned);
+        var outcome = new ConsensusOutcome(toSave.size(), learnedTokens, totalLearned);
         log.info("consensus_promote.done {}", outcome);
         return outcome;
     }
@@ -138,28 +144,40 @@ public class ConsensusPromotionService {
         return (!tie && winnerHouseholds >= minHouseholds) ? winner : null;
     }
 
-    /** Learn tokens that recur across consensus products with no disagreement. */
+    /** Collect agreed tokens then batch-upsert into the learned dictionary. */
     private int promoteAgreedTokens(Map<String, Map<ProductCategory, Integer>> tokenVotes) {
-        var learned = 0;
+        var toUpsert = new LinkedHashMap<String, ProductCategory>();
         for (var entry : tokenVotes.entrySet()) {
             var categories = entry.getValue();
             if (categories.size() != 1) continue; // any disagreement → skip
             var category = categories.keySet().iterator().next();
-            if (categories.get(category) < minTokenProducts) continue; // not recurrent enough
-            upsertLearnedEntry(entry.getKey(), category);
-            learned++;
+            var count = categories.get(category);
+            if (count < minTokenProducts) continue; // not recurrent enough
+            toUpsert.put(entry.getKey(), category);
             log.info("consensus_promote.token_learned token='{}' category={} products={}",
-                    entry.getKey(), category, categories.get(category));
+                    entry.getKey(), category, count);
         }
-        return learned;
+        if (toUpsert.isEmpty()) return 0;
+        batchUpsertLearnedTokens(toUpsert);
+        return toUpsert.size();
     }
 
-    private void upsertLearnedEntry(String token, ProductCategory category) {
-        var existing = learnedRepository.findByNormalizedToken(token).orElseGet(() ->
-                LearnedDictionaryEntry.builder().normalizedToken(token).build());
-        existing.setCategory(category);
-        existing.setPromotedAt(LocalDateTime.now());
-        learnedRepository.save(existing);
+    private void batchUpsertLearnedTokens(Map<String, ProductCategory> toUpsert) {
+        var existingByToken = learnedRepository.findByNormalizedTokenIn(toUpsert.keySet()).stream()
+                .collect(Collectors.toMap(LearnedDictionaryEntry::getNormalizedToken, Function.identity()));
+        var now = LocalDateTime.now();
+        var toSave = new ArrayList<LearnedDictionaryEntry>();
+        for (var e : toUpsert.entrySet()) {
+            var entry = existingByToken.getOrDefault(e.getKey(),
+                    LearnedDictionaryEntry.builder()
+                            .normalizedToken(e.getKey())
+                            .sampleCount(0)
+                            .build());
+            entry.setCategory(e.getValue());
+            entry.setPromotedAt(now);
+            toSave.add(entry);
+        }
+        learnedRepository.saveAll(toSave);
     }
 
     private int reloadLearnedEntries() {

@@ -18,11 +18,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.lenient;
@@ -46,7 +46,7 @@ class ConsensusPromotionServiceTest {
         ReflectionTestUtils.setField(service, "minHouseholds", 2);
         ReflectionTestUtils.setField(service, "minTokenProducts", 2);
         lenient().when(learnedRepository.findAll()).thenReturn(List.of());
-        lenient().when(learnedRepository.findByNormalizedToken(any())).thenReturn(Optional.empty());
+        lenient().when(learnedRepository.findByNormalizedTokenIn(any())).thenReturn(List.of());
     }
 
     private HouseholdProductCategoryOverride override(UUID household, Product product, ProductCategory category) {
@@ -69,7 +69,7 @@ class ConsensusPromotionServiceTest {
         var outcome = service.promote();
 
         assertEquals(0, outcome.productsGraduated());
-        verify(productRepository, never()).save(any());
+        verify(productRepository, never()).saveAll(any());
     }
 
     @Test
@@ -84,8 +84,11 @@ class ConsensusPromotionServiceTest {
 
         assertEquals(1, outcome.productsGraduated());
         assertEquals(ProductCategory.GROCERIES, milho.getCategory());
-        assertEquals(CategorizationSource.USER, milho.getCategorizationSource());
-        verify(productRepository).save(milho);
+        assertEquals(CategorizationSource.CONSENSUS, milho.getCategorizationSource());
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Product>> captor = ArgumentCaptor.captor();
+        verify(productRepository).saveAll(captor.capture());
+        assertTrue(captor.getValue().contains(milho));
     }
 
     @Test
@@ -118,11 +121,14 @@ class ConsensusPromotionServiceTest {
         var outcome = service.promote();
 
         assertEquals(2, outcome.productsGraduated());
-        // "milho" appears in both consensus products, all GROCERIES → learned
-        var captor = ArgumentCaptor.forClass(LearnedDictionaryEntry.class);
-        verify(learnedRepository, atLeastOnce()).save(captor.capture());
-        var learnedMilho = captor.getAllValues().stream()
-                .anyMatch(e -> e.getNormalizedToken().equals("milho") && e.getCategory() == ProductCategory.GROCERIES);
-        assertEquals(true, learnedMilho);
+        assertTrue(outcome.tokensLearned() > 0, "shared token 'milho' appears in both products");
+        // "milho" should be persisted with category GROCERIES
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<LearnedDictionaryEntry>> captor = ArgumentCaptor.captor();
+        verify(learnedRepository, atLeastOnce()).saveAll(captor.capture());
+        var savedMilho = captor.getAllValues().stream()
+                .flatMap(List::stream)
+                .anyMatch(e -> "milho".equals(e.getNormalizedToken()) && e.getCategory() == ProductCategory.GROCERIES);
+        assertTrue(savedMilho);
     }
 }
