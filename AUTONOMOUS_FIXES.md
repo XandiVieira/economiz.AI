@@ -68,6 +68,14 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-06-28 12:00:31] [NEEDS-HUMAN] CLAUDE-TIMEOUT (attempt 1x) - ERROR [req=    o.s.b.t.s.DeferredServletContainerInitializer
+- **Error snippet:**
+```r
+2026-06-28 14:51:40.125 ERROR [req= user= rcpt= item=] o.s.b.t.s.DeferredServletContainerInitializers - Error starting Tomcat context. Exception: org.springframework.beans.factory.UnsatisfiedDependencyException. Message: Error creating bean with name 'jwtAuthenticationFilterRegistration' defined in class path resource [com/relyon/economizai/security/JwtAuthenticationFilter$DisableAutoRegistration.class]: Unsatisfied dependency expressed through method 'jwtAuthenticationFilterRegistration' parameter 0: Error creating bean with name 'jwtAuthenticationFilter' defined in URL [jar:nested:/app/app.jar/!BOOT-INF/classes/!/com/relyon/economizai/security/JwtAuthenticationFilter.class]: Unsatisfied dependency expressed through constructor parameter 1: Error creating bean with name 'applicationConfig' defined in URL [jar:nested:/app/app.jar/!BOOT-INF/classes/!/com/relyon/economizai/config/ApplicationConfig.class]: Unsatisfied dependency expressed through constructor parameter 0: Error creating bean with name 'userRepository' defined in com.relyon.economizai.repository.UserRepository defined in @EnableJpaRepositories declared on DataJpaRepositoriesRegistrar.EnableJpaRepositoriesConfiguration: Cannot resolve reference to bean 'jpaSharedEM_entityManagerFactory' while setting bean property 'entityManager'
+```
+- **Outcome:** the fixer call exceeded 480s and was killed; partial edits discarded.
+- **Note for human:** bug still live; autonomous diagnosis timed out - needs eyes.
+
 ### [2026-06-15 13:00:53] FIX 9cbca7a - ERROR [    c.r.e.e.GlobalExceptionHandler - Unexpected error
 - **Error snippet:**
 ```r
@@ -435,6 +443,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
