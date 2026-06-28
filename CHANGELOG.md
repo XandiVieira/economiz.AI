@@ -14,6 +14,32 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-28 — Household data merge on join/leave (behind a flag, dark)
+
+Joining/leaving a household can now optionally **bring your data with you** and
+**restore it when you leave**. **Shipped OFF** (`economizai.households.merge-enabled`
+=false) — no behavior change until enabled, but the contract is here so the FE can
+build against it.
+
+- **`POST /households/join`** body gains two optional fields:
+  - `bringData` (bool) — merge your data into the household you're joining.
+  - `mergeCategories` (string[]) — which categories to bring; omit/empty = all.
+    Values: `RECEIPTS, SHOPPING_LISTS, MANUAL_PURCHASES, CONSUMPTION_SNOOZES,
+    CATEGORY_OVERRIDES, CUSTOM_CATEGORIES, PRODUCT_ALIASES, MARKET_ALIASES,
+    BRAND_PREFERENCES`. On a conflict (same item already in the target), the
+    target's copy is kept; yours is parked and restored if you later leave.
+  - Both optional — omitting them = today's behavior (membership only).
+- **`POST /households/leave`** — when merge is enabled, you return to your original
+  data (restored automatically). No body change yet.
+- **Consent (for taking a partner's data on split):** new endpoints
+  - `GET /households/consents/pending` — requests awaiting MY approval.
+  - `POST /households/consents/{id}/approve` — let the requester copy my data.
+  - `POST /households/consents/{id}/deny` — refuse.
+  - All return `ConsentResponse { id, requesterId/Name, grantorId/Name, scope,
+    status, expiresAt }`; 400 on not-mine / already-resolved / expired.
+
+---
+
 ## 2026-06-23 — Password reset is now a 3-step CODE flow (was a link) ⚠️ FE change
 
 Password reset no longer emails a link — it emails a **6-digit code** the user

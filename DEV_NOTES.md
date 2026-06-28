@@ -10,6 +10,27 @@ mirror entries here.
 
 ---
 
+## Household merge/split — shipped dark, two follow-ups before enabling
+- **Now**: full merge (join `bringData` + per-category), restore-on-leave by
+  `origin_household_id`, and mutual data-share consent are implemented and tested
+  (unit + real-DB integration), but gated OFF by `economizai.households.merge-enabled`
+  (default false). Conflict rule: host household wins; the joiner's colliding row is
+  parked on its origin, restorable on split.
+- **Why OK for dev**: flag is off, so join/leave behave exactly as before (membership
+  only, no data loss thanks to the Phase 0 provenance + delete guard).
+- **Before enabling in prod**:
+  - **Consent copy is receipt-HEADERS only** — `HouseholdMergeService.copyReceiptHeader`
+    does not deep-copy `ReceiptItem`s (TODO(prod) marker in the code). A partner who
+    approves sharing gives the requester market/total/date/chave, not line items.
+    Decide if that's the intended scope or wire an item deep-copy.
+  - **3-way LeaveScope is partially wired**: the `LeaveScope` enum + consent path exist,
+    but `leave()` currently restores ORIGINAL_ONLY; `ORIGINAL_PLUS_SHARED` needs a
+    per-membership `joined_at` to define the shared window (design Q2, not yet built).
+  - Add endpoint-level tests for the consent controller + a join-with-merge flow once
+    the flag is turned on.
+
+---
+
 ## SMTP wired to GoDaddy/Titan — deliverability not hardened
 - **Now**: auth emails (password-reset code, email verification) send via GoDaddy/Titan
   SMTP (`smtpout.secureserver.net:587`, user `contato@relyonai.com.br`). Creds live in
