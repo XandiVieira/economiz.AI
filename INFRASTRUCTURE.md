@@ -103,6 +103,27 @@ FE anywhere ──https──▶ economizai.economizai.workers.dev   (permanent 
 - **→ prod:** a managed host (Fly.io / Railway / VPS) handles all of this natively —
   none of these scripts are needed; they exist only because it's a home Windows box.
 
+### ⏸️ Pausing the watchdogs before editing the repo
+
+The autonomous bug-fix watchdog runs git `clean -fd` / `reset --hard origin/development`
+on the OneDrive checkout every ~20 s, so **any uncommitted/untracked file in the repo
+gets wiped within a poll**, and the stack-watchdog *revives* the autofix process after a
+kill. Both tasks run elevated, so a normal terminal can't stop them (`Acesso negado`).
+
+**Before hand-editing the repo on the box, pause them.** Control scripts live **outside**
+the repo (so the watchdog can't clean them), at `C:\economizai-data\`:
+
+| Action | Double-click | What happens |
+|---|---|---|
+| Pause | `pause-watchdogs.bat` | UAC prompt → **Sim** → disables both tasks + kills the autofix process (stays down) |
+| Resume | `resume-watchdogs.bat` | UAC prompt → **Sim** → re-enables + starts both tasks |
+| Status | `watchdog-control.ps1 -Action status` | reports state, no elevation needed |
+
+- The `.bat` files **self-elevate** (relaunch themselves as admin via UAC). Windows always
+  requires the UAC click — there is no fully-silent path short of disabling UAC (don't).
+- Tip: put desktop shortcuts to the two `.bat` files for one-click pause/resume.
+- **Remember to resume** when done — while paused, the box won't auto-deploy or self-heal.
+
 ---
 
 ## Auto-deploy (push → live)
