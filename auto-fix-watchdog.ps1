@@ -616,6 +616,61 @@ while ($true) {
         $shortSig = $sig.Substring(0, [Math]::Min(60, $sig.Length))
         Log ("detect new signature: {0}" -f $shortSig)
 
+        # FLYWAY DUPLICATE-VERSION BACKSTOP: two migrations claiming the same Vnn
+        # make the app abort on EVERY boot (no Spring context) -> crash loop -> 502.
+        # This is NOT reproducible with a unit test, so the normal Claude fixer would
+        # only ever reply REPRO_FAIL and mark it NEEDS-HUMAN while the server stays
+        # down. Handle it deterministically here instead: sync, auto-renumber the
+        # newcomer via the shared scripts/flyway-dedupe.ps1, commit, push. The
+        # pre-push hook is the FIRST line of defence; this is the safety net for a
+        # duplicate that landed some other way (direct push, --no-verify, etc).
+        # Match the header line OR the folded snippet: the telltale text lands on a
+        # `Caused by: ...FlywayException: Found more than one migration with version N`
+        # line, which ErrorSnippet folds into $snippet rather than the ERROR header.
+        if (($line -match 'more than one migration with version') -or
+            ($snippet -match 'more than one migration with version')) {
+            Log ("flyway.dupe detected; auto-renumbering newcomer (bypassing fixer)")
+            if (-not (SyncBranch)) {
+                Log ("flyway.dupe sync.skip could not reach origin/$Branch; deferring")
+                $seen.Remove($sig)
+                continue
+            }
+            $dedupe = Join-Path $repo "scripts\flyway-dedupe.ps1"
+            $before = (& git status --porcelain -- src/main/resources/db/migration 2>$null) | Out-String
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $dedupe -Fix -Branch $Branch 2>&1 | ForEach-Object { Log ("flyway.dedupe {0}" -f (OneLine "$_")) }
+            $after = (& git status --porcelain -- src/main/resources/db/migration 2>$null) | Out-String
+            if ($before -eq $after) {
+                Log ("flyway.dupe no renumber made (both versions may be on origin); needs human")
+                Ledger ("### [$(Stamp)] [NEEDS-HUMAN] FLYWAY-DUPE - $shortSig`r`n$diag`r`n- **Outcome:** duplicate migration version detected but auto-renumber made no change (both already on origin?).`r`n- **Note for human:** app is crash-looping on Flyway validation - needs eyes.")
+                continue
+            }
+            if ($DryRun) {
+                Log ("flyway.dupe dryrun renumbered but NOT pushing; reverting")
+                & git checkout -- . 2>$null; & git clean -fd -e "*.log" 2>$null | Out-Null
+                continue
+            }
+            & git add -A 2>$null | Out-Null
+            & git commit -q -m "fix(db): renumber duplicate Flyway migration version (auto)" 2>$null
+            $sha = (& git rev-parse --short HEAD).Trim()
+            if (-not (PushWithRetry)) {
+                Log ("flyway.dupe push.failed sha={0}; resetting" -f $sha)
+                & git reset --hard "origin/$Branch" 2>&1 | Out-Null
+                $seen.Remove($sig)
+                continue
+            }
+            RecordFixTime
+            Log ("flyway.dupe push.done sha={0}; awaiting redeploy" -f $sha)
+            SetStatus "DEPLOYING" ("flyway-dedupe sha={0}" -f $sha)
+            if (WaitForDeployAndHealth) {
+                Log ("flyway.dupe deploy.healthy sha={0}" -f $sha)
+                Ledger ("### [$(Stamp)] FIX $sha - FLYWAY-DUPE - $shortSig`r`n$diag`r`n- **Root cause:** two migrations shared one Vnn; app aborted on Flyway validation.`r`n- **Fix:** auto-renumbered the newcomer to the next free version.`r`n- **Deploy:** pushed $sha -> auto-deploy, health **UP**`r`n- **Outcome:** RESOLVED")
+            } else {
+                Log ("flyway.dupe deploy.unhealthy sha={0}; left for human (not reverting - revert would restore the dupe)" -f $sha)
+                Ledger ("### [$(Stamp)] [NEEDS-HUMAN] FLYWAY-DUPE-STILL-DOWN $sha - $shortSig`r`n$diag`r`n- **Outcome:** renumbered + pushed $sha but health still not UP.`r`n- **Note for human:** NOT auto-reverted (revert would re-introduce the duplicate). Another boot failure is in play - needs eyes.")
+            }
+            continue
+        }
+
         # Transient-error gate: a known external/network error must RECUR
         # ($TransientThreshold times within $TransientWindow) before we attempt a
         # code fix. A one-off SEFAZ blip is logged and skipped - retry will likely

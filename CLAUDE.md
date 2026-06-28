@@ -100,6 +100,7 @@ GitHub repo: `economiz.AI` (https://github.com/XandiVieira/economiz.AI.git)
 - Never touch the global git config
 
 ## Git Workflow
+- **ALWAYS pull before push.** Before any `git push`, run `git pull --rebase origin <branch>` first so the push lands on the current tip. This repo has an autonomous watchdog that also pushes — racing it causes rejected pushes and rebase conflicts. Pull-rebase-then-push every time.
 - Before reviewing or analyzing a branch, ALWAYS run `git fetch` and confirm with the user which branch to work on if there's any ambiguity.
 - Do NOT propose code fixes when the user is asking for understanding/diagnosis only — wait for explicit fix request.
 - When the user says "revert", confirm exactly what state they want before acting.
