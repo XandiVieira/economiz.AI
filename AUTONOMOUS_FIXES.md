@@ -68,6 +68,16 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-06-28 12:08:53] [NEEDS-HUMAN] CLAUDE-TIMEOUT (attempt 1x) - Error starting ApplicationContext. To display the condition 
+- **Error snippet:**
+```r
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+at com.relyon.economizai.EconomizaiApplication.main(EconomizaiApplication.java:12)
+Caused by: org.springframework.boot.web.server.WebServerException: Unable to start embedded Tomcat
+```
+- **Outcome:** the fixer call exceeded 480s and was killed; partial edits discarded.
+- **Note for human:** bug still live; autonomous diagnosis timed out - needs eyes.
+
 ### [2026-06-28 12:00:31] [NEEDS-HUMAN] CLAUDE-TIMEOUT (attempt 1x) - ERROR [req=    o.s.b.t.s.DeferredServletContainerInitializer
 - **Error snippet:**
 ```r
@@ -443,6 +453,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
