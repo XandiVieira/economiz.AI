@@ -11,6 +11,11 @@
 | **Logs (Dozzle UI)** | http://192.168.68.108:9999 | **same Wi-Fi only** (not public) |
 | **CI / deploy runs** | https://github.com/XandiVieira/economiz.AI/actions | auto-deploy status |
 | **Uptime monitor** | https://uptimerobot.com (dashboard) | down/up alerts |
+| **SonarCloud** | https://sonarcloud.io/project/overview?id=XandiVieira_economiz.AI | code quality / hotspots |
+
+**Auto-opened on boot:** the `economizai - open dashboards` Scheduled Task opens
+Dozzle (`:9999`), the UptimeRobot dashboard, and the SonarCloud project in Chrome
+~45s after logon.
 
 **On the LAN (same Wi-Fi), the API is also at** `http://192.168.68.108:8080/api/v1`
 (health `…/actuator/health`, swagger `…/swagger-ui/index.html`).
