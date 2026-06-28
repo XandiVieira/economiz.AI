@@ -130,7 +130,7 @@ class AdminUserServiceCoverageTest {
         // term lowercased and percent-wrapped on both columns
         verify(cb).like(eq(loweredEmail), contains("%bob%"));
         verify(cb).like(eq(loweredName), contains("%bob%"));
-        verify(cb).or(eq(like), eq(like));
+        verify(cb).or(like, like);
     }
 
     @Test

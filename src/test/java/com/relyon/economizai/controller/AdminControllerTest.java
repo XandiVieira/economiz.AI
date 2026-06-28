@@ -209,7 +209,7 @@ class AdminControllerTest {
         var detail = new AdminUserDetailResponse(id, "John", "john@test.com",
                 Role.USER, SubscriptionTier.PRO, true, true, true, UUID.randomUUID(),
                 1L, new ReceiptCounts(0L, 0L, 0L, 0L), BigDecimal.ZERO, LocalDateTime.now());
-        when(adminUserService.setTier(eq(id), eq(SubscriptionTier.PRO))).thenReturn(detail);
+        when(adminUserService.setTier(id, SubscriptionTier.PRO)).thenReturn(detail);
 
         mockMvc.perform(put("/api/v1/admin/users/" + id + "/subscription-tier")
                         .with(SecurityMockMvcRequestPostProcessors.user(adminUser()))
@@ -496,7 +496,7 @@ class AdminControllerTest {
     @Test
     void deleteProduct_returnsDeletionResponse() throws Exception {
         var id = UUID.randomUUID();
-        when(adminProductService.delete(eq(id), eq(false)))
+        when(adminProductService.delete(id, false))
                 .thenReturn(new ProductDeletionResponse(id, 0L));
 
         mockMvc.perform(delete("/api/v1/admin/products/" + id)
@@ -509,7 +509,7 @@ class AdminControllerTest {
     @Test
     void deleteProduct_withForceTrue_passesForceFlag() throws Exception {
         var id = UUID.randomUUID();
-        when(adminProductService.delete(eq(id), eq(true)))
+        when(adminProductService.delete(id, true))
                 .thenReturn(new ProductDeletionResponse(id, 4L));
 
         mockMvc.perform(delete("/api/v1/admin/products/" + id)

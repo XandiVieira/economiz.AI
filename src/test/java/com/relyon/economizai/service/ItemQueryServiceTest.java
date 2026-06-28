@@ -122,7 +122,7 @@ class ItemQueryServiceTest {
         when(countQuery.getSingleResult()).thenReturn(1L);
         when(entityManager.createQuery(anyString(), eq(ReceiptItem.class))).thenReturn(rowQuery);
         when(rowQuery.getResultList()).thenReturn(List.of(item));
-        when(categoryOverrideService.overridesByProduct(eq(householdId), eq(List.of(product.getId()))))
+        when(categoryOverrideService.overridesByProduct(householdId, List.of(product.getId())))
                 .thenReturn(Map.of(product.getId(), "Minha Categoria"));
 
         var page = service.query(user, emptyFilters(), PageRequest.of(0, 20));
@@ -152,7 +152,7 @@ class ItemQueryServiceTest {
         when(entityManager.createQuery(anyString(), eq(ReceiptItem.class))).thenReturn(rowQuery);
         when(rowQuery.getResultList()).thenReturn(List.of(unlinked));
         // No products → empty productIds list passed to override lookup.
-        when(categoryOverrideService.overridesByProduct(eq(householdId), eq(List.of())))
+        when(categoryOverrideService.overridesByProduct(householdId, List.of()))
                 .thenReturn(Map.of());
 
         var page = service.query(user, emptyFilters(), PageRequest.of(0, 20));
@@ -220,7 +220,7 @@ class ItemQueryServiceTest {
         verify(countQuery).setParameter(eq("eans"), any());
         verify(countQuery).setParameter(eq("minReceiptTotal"), any());
         verify(countQuery).setParameter(eq("maxReceiptTotal"), any());
-        verify(countQuery).setParameter(eq("householdId"), eq(householdId));
+        verify(countQuery).setParameter("householdId", householdId);
     }
 
     @Test

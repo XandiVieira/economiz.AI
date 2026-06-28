@@ -132,7 +132,7 @@ class PriceAlertControllerTest {
                         .with(SecurityMockMvcRequestPostProcessors.user(user)))
                 .andExpect(status().isNoContent());
 
-        verify(priceAlertService).delete(eq(user), eq(alertId));
+        verify(priceAlertService).delete(user, alertId);
     }
 
     @Test
@@ -140,7 +140,7 @@ class PriceAlertControllerTest {
         var user = buildUser();
         var alertId = UUID.randomUUID();
         when(localizedMessageService.translate(any(DomainException.class))).thenReturn("not found");
-        doThrow(new PriceAlertNotFoundException()).when(priceAlertService).delete(eq(user), eq(alertId));
+        doThrow(new PriceAlertNotFoundException()).when(priceAlertService).delete(user, alertId);
 
         mockMvc.perform(delete("/api/v1/alerts/" + alertId)
                         .with(SecurityMockMvcRequestPostProcessors.user(user)))

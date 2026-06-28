@@ -167,7 +167,7 @@ class MarketNameServiceTest {
 
         service.clearName(user, "12.345.678/0001-99");
 
-        verify(aliasRepository).deleteByHouseholdIdAndMarketCnpj(eq(HOUSEHOLD_ID), eq(CNPJ));
+        verify(aliasRepository).deleteByHouseholdIdAndMarketCnpj(HOUSEHOLD_ID, CNPJ);
     }
 
     @Test
@@ -184,7 +184,7 @@ class MarketNameServiceTest {
 
         service.clearName(user, CNPJ);
 
-        verify(aliasRepository).deleteByHouseholdIdAndMarketCnpj(eq(HOUSEHOLD_ID), eq(CNPJ));
+        verify(aliasRepository).deleteByHouseholdIdAndMarketCnpj(HOUSEHOLD_ID, CNPJ);
     }
 
     private HouseholdMarketAlias alias(String customName) {

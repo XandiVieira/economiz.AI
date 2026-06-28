@@ -60,7 +60,7 @@ class DashboardCacheTest {
                 .build();
         when(insightsService.spend(eq(user), any(), any())).thenReturn(
                 new SpendInsightsResponse(null, null, BigDecimal.ZERO, BigDecimal.ZERO, List.of(), List.of(), List.of(), List.of()));
-        when(consumptionService.suggestedList(eq(user), eq(false), eq(0)))
+        when(consumptionService.suggestedList(user, false, 0))
                 .thenReturn(new SuggestedShoppingListResponse(List.of(), null));
         when(communityPromoService.detectAll(any(), any(), any(), any())).thenReturn(List.of());
         when(watchedMarketService.watchedCnpjs(any())).thenReturn(Set.of());
@@ -97,7 +97,7 @@ class DashboardCacheTest {
                 .build();
         when(insightsService.spend(eq(housemate), any(), any())).thenReturn(
                 new SpendInsightsResponse(null, null, BigDecimal.ZERO, BigDecimal.ZERO, List.of(), List.of(), List.of(), List.of()));
-        when(consumptionService.suggestedList(eq(housemate), eq(false), eq(0)))
+        when(consumptionService.suggestedList(housemate, false, 0))
                 .thenReturn(new SuggestedShoppingListResponse(List.of(), null));
 
         dashboardCacheService.core(user);

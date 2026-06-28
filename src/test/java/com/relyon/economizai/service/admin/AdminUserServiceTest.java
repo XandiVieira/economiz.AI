@@ -59,7 +59,7 @@ class AdminUserServiceTest {
 
         var detail = service.setTier(user.getId(), SubscriptionTier.PRO);
 
-        verify(subscriptionService).activatePro(eq(user), eq("manual"), eq(null), eq(null));
+        verify(subscriptionService).activatePro(user, "manual", null, null);
         assertEquals("maria@test.com", detail.email());
     }
 

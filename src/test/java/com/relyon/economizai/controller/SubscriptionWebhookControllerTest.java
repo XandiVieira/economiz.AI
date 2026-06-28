@@ -65,8 +65,8 @@ class SubscriptionWebhookControllerTest {
                         .content(BODY_ACTIVATE))
                 .andExpect(status().isOk());
 
-        verify(subscriptionService).activatePro(eq(user), eq("stripe"), eq("sub_1"),
-                eq(LocalDateTime.of(2026, Month.DECEMBER, 31, 0, 0)));
+        verify(subscriptionService).activatePro(user, "stripe", "sub_1",
+                LocalDateTime.of(2026, Month.DECEMBER, 31, 0, 0));
     }
 
     @Test

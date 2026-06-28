@@ -48,7 +48,7 @@ class RevenueCatWebhookServiceTest {
         service.handle(event("INITIAL_PURCHASE", "u@e", EXP_MS));
 
         var expectedEnd = LocalDateTime.ofInstant(Instant.ofEpochMilli(EXP_MS), ZoneOffset.UTC);
-        verify(subscriptionService).activatePro(eq(user), eq("revenuecat"), eq("pro_monthly"), eq(expectedEnd));
+        verify(subscriptionService).activatePro(user, "revenuecat", "pro_monthly", expectedEnd);
     }
 
     @Test

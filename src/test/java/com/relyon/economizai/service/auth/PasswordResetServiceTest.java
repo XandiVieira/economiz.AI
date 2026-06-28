@@ -89,7 +89,7 @@ class PasswordResetServiceTest {
         assertTrue(savedToken.getExpiresAt().isAfter(LocalDateTime.now()));
 
         // the SAME code is emailed (no link)
-        verify(emailSender).sendPasswordResetCode(eq(user.getEmail()), eq(savedToken.getToken()), eq(60));
+        verify(emailSender).sendPasswordResetCode(user.getEmail(), savedToken.getToken(), 60);
     }
 
     @Test

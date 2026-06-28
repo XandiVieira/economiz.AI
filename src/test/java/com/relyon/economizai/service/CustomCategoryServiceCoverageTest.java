@@ -100,7 +100,7 @@ class CustomCategoryServiceCoverageTest {
 
         assertEquals(1, result.migrated());
         assertEquals(1, result.skipped());
-        verify(overrideService, times(1)).setOverride(eq(user), eq(known), eq(ProductCategory.PRODUCE));
+        verify(overrideService, times(1)).setOverride(user, known, ProductCategory.PRODUCE);
     }
 
     @Test

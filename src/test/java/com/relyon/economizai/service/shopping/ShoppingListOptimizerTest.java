@@ -100,7 +100,7 @@ class ShoppingListOptimizerTest {
     @Test
     void optimize_throwsPaywallForFreeTier() {
         org.mockito.Mockito.doThrow(new PaywallException(Feature.BASKET_OPTIMIZATION.name()))
-                .when(subscriptionGate).require(eq(user), eq(Feature.BASKET_OPTIMIZATION));
+                .when(subscriptionGate).require(user, Feature.BASKET_OPTIMIZATION);
 
         var request = request(UUID.randomUUID(), BigDecimal.ONE);
         assertThrows(PaywallException.class,

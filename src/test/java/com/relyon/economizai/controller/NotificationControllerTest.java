@@ -99,7 +99,7 @@ class NotificationControllerTest {
                         .with(SecurityMockMvcRequestPostProcessors.user(user)))
                 .andExpect(status().isNoContent());
 
-        verify(inbox).markRead(eq(user), eq(notificationId));
+        verify(inbox).markRead(user, notificationId);
     }
 
     @Test
@@ -107,7 +107,7 @@ class NotificationControllerTest {
         var user = buildUser();
         var notificationId = UUID.randomUUID();
         when(localizedMessageService.translate(any(DomainException.class))).thenReturn("not found");
-        doThrow(new NotificationNotFoundException()).when(inbox).markRead(eq(user), eq(notificationId));
+        doThrow(new NotificationNotFoundException()).when(inbox).markRead(user, notificationId);
 
         mockMvc.perform(post("/api/v1/notifications/" + notificationId + "/read")
                         .with(SecurityMockMvcRequestPostProcessors.user(user)))

@@ -106,7 +106,7 @@ class CategorizerControllerCoverageTest {
                 .andExpect(jsonPath("$.accuracyPct").value(80.0))
                 .andExpect(jsonPath("$.failures[0].field").value("category"));
 
-        verify(categorizationQualityService).record(eq(CategorizationQualityTrigger.BENCHMARK), eq(report));
+        verify(categorizationQualityService).record(CategorizationQualityTrigger.BENCHMARK, report);
     }
 
     @Test
