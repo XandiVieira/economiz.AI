@@ -9,11 +9,13 @@ import com.relyon.economizai.dto.response.ProductResponse;
 import com.relyon.economizai.dto.response.UnmatchedItemResponse;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.service.HouseholdProductService;
+import com.relyon.economizai.service.ProductRecentViewService;
 import com.relyon.economizai.service.ProductService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
@@ -39,10 +41,16 @@ public class ProductController {
 
     private final ProductService productService;
     private final HouseholdProductService householdProductService;
+    private final ProductRecentViewService recentViewService;
 
     @GetMapping
-    public ResponseEntity<Page<ProductResponse>> search(@RequestParam(required = false) String query,
+    public ResponseEntity<Page<ProductResponse>> search(@AuthenticationPrincipal User user,
+                                                        @RequestParam(required = false) String query,
+                                                        @RequestParam(required = false) Integer lastProducts,
                                                         @PageableDefault(size = 20) Pageable pageable) {
+        if (lastProducts != null && user != null) {
+            return ResponseEntity.ok(new PageImpl<>(recentViewService.listRecent(user, lastProducts)));
+        }
         return ResponseEntity.ok(productService.search(query, pageable));
     }
 
@@ -64,6 +72,20 @@ public class ProductController {
             @RequestParam(defaultValue = "false") boolean includeNearby,
             @RequestParam(required = false) Double radiusKm) {
         return ResponseEntity.ok(householdProductService.productMarkets(user, id, includeNearby, radiusKm));
+    }
+
+    /** Record that the authenticated user opened this product's detail screen. */
+    @PostMapping("/{id}/view")
+    public ResponseEntity<Void> recordView(@AuthenticationPrincipal User user, @PathVariable UUID id) {
+        recentViewService.track(user, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Recently viewed products for the authenticated user, newest first. */
+    @GetMapping("/recently-viewed")
+    public ResponseEntity<List<ProductResponse>> recentlyViewed(@AuthenticationPrincipal User user,
+                                                                @RequestParam(defaultValue = "10") int limit) {
+        return ResponseEntity.ok(recentViewService.listRecent(user, limit));
     }
 
     @GetMapping("/unmatched")
