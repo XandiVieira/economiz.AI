@@ -16,6 +16,7 @@ import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.LocalizedMessageService;
 import com.relyon.economizai.service.HouseholdProductService;
+import com.relyon.economizai.service.ProductRecentViewService;
 import com.relyon.economizai.service.ProductService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -53,6 +54,7 @@ class ProductControllerTest {
 
     @MockitoBean private ProductService productService;
     @MockitoBean private HouseholdProductService householdProductService;
+    @MockitoBean private ProductRecentViewService recentViewService;
     @MockitoBean private JwtService jwtService;
     @MockitoBean private UserDetailsService userDetailsService;
     @MockitoBean private LocalizedMessageService localizedMessageService;
