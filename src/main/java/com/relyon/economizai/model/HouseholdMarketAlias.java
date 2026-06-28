@@ -32,7 +32,7 @@ import lombok.experimental.SuperBuilder;
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder
-public class HouseholdMarketAlias extends BaseEntity {
+public class HouseholdMarketAlias extends BaseEntity implements HouseholdScoped {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "household_id", nullable = false)
@@ -59,5 +59,10 @@ public class HouseholdMarketAlias extends BaseEntity {
         if (originHousehold == null) {
             originHousehold = household;
         }
+    }
+
+    @Override
+    public String collisionKey() {
+        return marketCnpj;
     }
 }

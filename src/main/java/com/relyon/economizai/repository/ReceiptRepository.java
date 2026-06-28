@@ -27,6 +27,16 @@ public interface ReceiptRepository extends JpaRepository<Receipt, UUID>, JpaSpec
 
     boolean existsByOriginHouseholdId(UUID householdId);
 
+    List<Receipt> findAllByHouseholdId(UUID householdId);
+
+    List<Receipt> findAllByOriginHouseholdId(UUID householdId);
+
+    // On leave: the leaver's earliest own receipt whose ORIGIN differs from the
+    // household they're currently in — that origin is the "home" to reclaim. Keyed on
+    // origin (not current location): after a merge the receipt lives in the target,
+    // but its origin still points at the leaver's pre-merge home.
+    Optional<Receipt> findFirstByUserIdAndOriginHouseholdIdNotOrderByCreatedAtAsc(UUID userId, UUID originHouseholdId);
+
     Optional<Receipt> findByHouseholdIdAndChaveAcesso(UUID householdId, String chaveAcesso);
 
     long countByHouseholdIdAndStatus(UUID householdId, ReceiptStatus status);

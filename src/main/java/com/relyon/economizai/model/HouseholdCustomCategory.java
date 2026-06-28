@@ -27,7 +27,7 @@ import lombok.experimental.SuperBuilder;
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder
-public class HouseholdCustomCategory extends BaseEntity {
+public class HouseholdCustomCategory extends BaseEntity implements HouseholdScoped {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "household_id", nullable = false)
@@ -51,5 +51,10 @@ public class HouseholdCustomCategory extends BaseEntity {
         if (originHousehold == null) {
             originHousehold = household;
         }
+    }
+
+    @Override
+    public String collisionKey() {
+        return name;
     }
 }

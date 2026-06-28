@@ -10,6 +10,8 @@ import java.util.UUID;
 public interface HouseholdProductCategoryOverrideRepository
         extends JpaRepository<HouseholdProductCategoryOverride, UUID> {
 
+    List<HouseholdProductCategoryOverride> findAllByOriginHouseholdId(UUID householdId);
+
     Optional<HouseholdProductCategoryOverride> findByHouseholdIdAndProductId(UUID householdId, UUID productId);
 
     List<HouseholdProductCategoryOverride> findAllByHouseholdId(UUID householdId);

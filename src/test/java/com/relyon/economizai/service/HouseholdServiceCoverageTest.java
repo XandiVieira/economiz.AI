@@ -6,6 +6,7 @@ import com.relyon.economizai.exception.NotInHouseholdException;
 import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.repository.HouseholdRepository;
+import com.relyon.economizai.repository.ReceiptRepository;
 import com.relyon.economizai.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,6 +41,12 @@ class HouseholdServiceCoverageTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private ReceiptRepository receiptRepository;
+
+    @Mock
+    private HouseholdMergeService mergeService;
 
     @InjectMocks
     private HouseholdService householdService;
@@ -185,7 +192,7 @@ class HouseholdServiceCoverageTest {
         target.setInviteCodeExpiresAt(LocalDateTime.now().minusHours(1));
         var user = buildUser(current);
         when(householdRepository.findByInviteCode("EXP456")).thenReturn(Optional.of(target));
-        var request = new JoinHouseholdRequest("exp456");
+        var request = new JoinHouseholdRequest("exp456", null, null);
 
         assertThrows(InvalidInviteCodeException.class,
                 () -> householdService.join(user, request));

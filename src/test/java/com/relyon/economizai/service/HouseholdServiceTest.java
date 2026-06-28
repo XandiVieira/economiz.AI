@@ -40,6 +40,9 @@ class HouseholdServiceTest {
     @Mock
     private ReceiptRepository receiptRepository;
 
+    @Mock
+    private HouseholdMergeService mergeService;
+
     @InjectMocks
     private HouseholdService householdService;
 
@@ -105,7 +108,7 @@ class HouseholdServiceTest {
         when(receiptRepository.existsByOriginHouseholdId(previous.getId())).thenReturn(false);
         when(userRepository.findAllByHouseholdId(target.getId())).thenReturn(List.of(user));
 
-        var response = householdService.join(user, new JoinHouseholdRequest("new456"));
+        var response = householdService.join(user, new JoinHouseholdRequest("new456", null, null));
 
         assertEquals(target.getId(), user.getHousehold().getId());
         assertEquals(target.getId(), response.id());
@@ -125,7 +128,7 @@ class HouseholdServiceTest {
         when(receiptRepository.existsByOriginHouseholdId(previous.getId())).thenReturn(true);
         when(userRepository.findAllByHouseholdId(target.getId())).thenReturn(List.of(user));
 
-        householdService.join(user, new JoinHouseholdRequest("NEW456"));
+        householdService.join(user, new JoinHouseholdRequest("NEW456", null, null));
 
         verify(householdRepository, never()).delete(previous);
     }
@@ -140,7 +143,7 @@ class HouseholdServiceTest {
         when(userRepository.countByHouseholdId(previous.getId())).thenReturn(2L);
         when(userRepository.findAllByHouseholdId(target.getId())).thenReturn(List.of(user));
 
-        householdService.join(user, new JoinHouseholdRequest("NEW456"));
+        householdService.join(user, new JoinHouseholdRequest("NEW456", null, null));
 
         verify(householdRepository, never()).delete(previous);
     }
@@ -150,7 +153,7 @@ class HouseholdServiceTest {
         var household = buildHousehold("ABC123");
         var user = buildUser(household);
         when(householdRepository.findByInviteCode("XYZ999")).thenReturn(Optional.empty());
-        var request = new JoinHouseholdRequest("XYZ999");
+        var request = new JoinHouseholdRequest("XYZ999", null, null);
 
         assertThrows(InvalidInviteCodeException.class,
                 () -> householdService.join(user, request));
@@ -161,7 +164,7 @@ class HouseholdServiceTest {
         var household = buildHousehold("ABC123");
         var user = buildUser(household);
         when(householdRepository.findByInviteCode("ABC123")).thenReturn(Optional.of(household));
-        var request = new JoinHouseholdRequest("ABC123");
+        var request = new JoinHouseholdRequest("ABC123", null, null);
 
         assertThrows(AlreadyInHouseholdException.class,
                 () -> householdService.join(user, request));

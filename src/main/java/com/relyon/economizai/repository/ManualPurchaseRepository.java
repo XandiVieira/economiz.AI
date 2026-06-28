@@ -14,6 +14,8 @@ public interface ManualPurchaseRepository extends JpaRepository<ManualPurchase, 
 
     List<ManualPurchase> findAllByHouseholdId(UUID householdId);
 
+    List<ManualPurchase> findAllByOriginHouseholdId(UUID householdId);
+
     long countByProduct(Product product);
 
     @Modifying

@@ -15,6 +15,10 @@ public interface HouseholdProductAliasRepository extends JpaRepository<Household
 
     Optional<HouseholdProductAlias> findByHouseholdIdAndProductId(UUID householdId, UUID productId);
 
+    List<HouseholdProductAlias> findAllByHouseholdId(UUID householdId);
+
+    List<HouseholdProductAlias> findAllByOriginHouseholdId(UUID householdId);
+
     List<HouseholdProductAlias> findAllByHouseholdIdAndProductIdIn(UUID householdId, List<UUID> productIds);
 
     long countByProduct(Product product);

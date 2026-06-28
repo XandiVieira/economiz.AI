@@ -14,6 +14,8 @@ public interface HouseholdMarketAliasRepository extends JpaRepository<HouseholdM
 
     List<HouseholdMarketAlias> findAllByHouseholdId(UUID householdId);
 
+    List<HouseholdMarketAlias> findAllByOriginHouseholdId(UUID householdId);
+
     List<HouseholdMarketAlias> findAllByHouseholdIdAndMarketCnpjIn(UUID householdId, Collection<String> marketCnpjs);
 
     void deleteByHouseholdIdAndMarketCnpj(UUID householdId, String marketCnpj);

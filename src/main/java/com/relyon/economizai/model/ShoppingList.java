@@ -27,7 +27,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder
-public class ShoppingList extends BaseEntity {
+public class ShoppingList extends BaseEntity implements HouseholdScoped {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "household_id", nullable = false)
@@ -65,5 +65,11 @@ public class ShoppingList extends BaseEntity {
         if (originHousehold == null) {
             originHousehold = household;
         }
+    }
+
+    @Override
+    public String collisionKey() {
+        // no per-household unique constraint — lists never collide on merge
+        return null;
     }
 }

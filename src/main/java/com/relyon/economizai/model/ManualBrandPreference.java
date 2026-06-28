@@ -26,7 +26,7 @@ import lombok.experimental.SuperBuilder;
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder
-public class ManualBrandPreference extends BaseEntity {
+public class ManualBrandPreference extends BaseEntity implements HouseholdScoped {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "household_id", nullable = false)
@@ -57,5 +57,10 @@ public class ManualBrandPreference extends BaseEntity {
         if (originHousehold == null) {
             originHousehold = household;
         }
+    }
+
+    @Override
+    public String collisionKey() {
+        return genericName;
     }
 }

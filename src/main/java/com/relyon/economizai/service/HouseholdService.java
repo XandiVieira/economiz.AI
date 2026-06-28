@@ -10,10 +10,15 @@ import com.relyon.economizai.model.User;
 import com.relyon.economizai.repository.HouseholdRepository;
 import com.relyon.economizai.repository.ReceiptRepository;
 import com.relyon.economizai.repository.UserRepository;
+import com.relyon.economizai.model.enums.MergeCategory;
 import com.relyon.economizai.service.privacy.LogMasker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+
+import java.util.EnumSet;
+import java.util.Set;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
@@ -34,7 +39,15 @@ public class HouseholdService {
     private final HouseholdRepository householdRepository;
     private final UserRepository userRepository;
     private final ReceiptRepository receiptRepository;
+    private final HouseholdMergeService mergeService;
     private final SecureRandom random = new SecureRandom();
+
+    // Merge/restore is gated OFF by default — the endpoints + logic ship dark and are
+    // enabled per-environment once the product flow is ready (economizai.households.
+    // merge-enabled=true). With it off, join/leave only move membership (Phase 0
+    // behavior): data is never merged, but also never lost (provenance + delete guard).
+    @Value("${economizai.households.merge-enabled:false}")
+    private boolean mergeEnabled;
 
     // Delete a now-empty household ONLY if it owns no data (as current home OR as the
     // origin of data parked elsewhere awaiting restore on split). Without this guard,
@@ -125,23 +138,74 @@ public class HouseholdService {
         userRepository.save(user);
         log.info("User {} joined household {} (left {})", LogMasker.email(user.getEmail()), target.getId(), previous.getId());
 
+        // Optional data merge (Phase 1, feature-flagged). Runs BEFORE the delete guard
+        // so moved data lands in the target; anything shadowed (collision) stays parked
+        // on `previous`, which then keeps it alive as a dormant home for later restore.
+        if (mergeEnabled && Boolean.TRUE.equals(request.bringData())) {
+            var categories = resolveCategories(request.mergeCategories());
+            var result = mergeService.merge(previous, target, categories);
+            log.info("join.merge user={} categories={} moved={} shadowed={}",
+                    LogMasker.email(user.getEmail()), categories, result.moved(), result.shadowed());
+        }
+
         deleteHouseholdIfEmptyAndOwnsNoData(previous);
 
         var members = userRepository.findAllByHouseholdId(target.getId());
         return HouseholdResponse.from(target, members);
     }
 
+    // Empty/null selection = merge ALL categories; otherwise just the chosen ones.
+    private Set<MergeCategory> resolveCategories(Set<MergeCategory> requested) {
+        return (requested == null || requested.isEmpty())
+                ? EnumSet.allOf(MergeCategory.class)
+                : EnumSet.copyOf(requested);
+    }
+
     @Transactional
     public HouseholdResponse leave(User user) {
         var previous = user.getHousehold();
-        var fresh = createSoloHousehold();
-        user.setHousehold(fresh);
-        userRepository.save(user);
-        log.info("User {} left household {} for new solo household {}", LogMasker.email(user.getEmail()), previous.getId(), fresh.getId());
+
+        // Where does the leaver land? If merge is enabled and the leaver has a dormant
+        // ORIGIN household still alive (data they brought in, kept as their "home"),
+        // reclaim it and restore everything that originated there — including rows that
+        // were shadowed (parked) during the merge. Otherwise, a fresh solo household.
+        Household home;
+        if (mergeEnabled) {
+            home = reclaimOriginHomeOrFresh(user);
+            user.setHousehold(home);
+            userRepository.save(user);
+            var restored = mergeService.restoreOriginals(home);
+            log.info("leave.restore user={} home={} restored={}",
+                    LogMasker.email(user.getEmail()), home.getId(), restored.moved());
+        } else {
+            home = createSoloHousehold();
+            user.setHousehold(home);
+            userRepository.save(user);
+        }
+        log.info("User {} left household {} for household {}", LogMasker.email(user.getEmail()), previous.getId(), home.getId());
 
         deleteHouseholdIfEmptyAndOwnsNoData(previous);
 
-        return HouseholdResponse.from(fresh, userRepository.findAllByHouseholdId(fresh.getId()));
+        return HouseholdResponse.from(home, userRepository.findAllByHouseholdId(home.getId()));
+    }
+
+    // The leaver's "home" to return to: their data's origin household if one still
+    // exists and differs from the one they're leaving; else a fresh solo household.
+    // We read origin from the leaver's OWN receipts (user_id is the stable owner), so
+    // a user always lands back where their data came from.
+    private Household reclaimOriginHomeOrFresh(User user) {
+        var currentId = user.getHousehold().getId();
+        var originId = receiptRepository.findFirstByUserIdAndOriginHouseholdIdNotOrderByCreatedAtAsc(
+                        user.getId(), currentId)
+                .map(r -> r.getOriginHousehold().getId())
+                .orElse(null);
+        if (originId != null) {
+            var origin = householdRepository.findById(originId).orElse(null);
+            if (origin != null) {
+                return origin;
+            }
+        }
+        return createSoloHousehold();
     }
 
     private String generateUniqueInviteCode() {

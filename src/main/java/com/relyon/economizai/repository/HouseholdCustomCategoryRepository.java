@@ -9,6 +9,10 @@ import java.util.UUID;
 
 public interface HouseholdCustomCategoryRepository extends JpaRepository<HouseholdCustomCategory, UUID> {
 
+    List<HouseholdCustomCategory> findAllByHouseholdId(UUID householdId);
+
+    List<HouseholdCustomCategory> findAllByOriginHouseholdId(UUID householdId);
+
     List<HouseholdCustomCategory> findByHouseholdIdOrderByName(UUID householdId);
 
     Optional<HouseholdCustomCategory> findByHouseholdIdAndNameIgnoreCase(UUID householdId, String name);

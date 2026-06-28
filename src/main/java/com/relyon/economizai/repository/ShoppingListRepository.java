@@ -8,5 +8,9 @@ import java.util.UUID;
 
 public interface ShoppingListRepository extends JpaRepository<ShoppingList, UUID> {
 
+    List<ShoppingList> findAllByHouseholdId(UUID householdId);
+
+    List<ShoppingList> findAllByOriginHouseholdId(UUID householdId);
+
     List<ShoppingList> findAllByHouseholdIdOrderByCreatedAtDesc(UUID householdId);
 }

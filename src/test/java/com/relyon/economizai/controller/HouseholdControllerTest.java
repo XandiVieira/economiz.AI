@@ -102,7 +102,7 @@ class HouseholdControllerTest {
         mockMvc.perform(post("/api/v1/households/join")
                         .with(SecurityMockMvcRequestPostProcessors.user(user))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new JoinHouseholdRequest("ABC123"))))
+                        .content(objectMapper.writeValueAsString(new JoinHouseholdRequest("ABC123", null, null))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.inviteCode").value("ABC123"));
     }
@@ -116,7 +116,7 @@ class HouseholdControllerTest {
         mockMvc.perform(post("/api/v1/households/join")
                         .with(SecurityMockMvcRequestPostProcessors.user(user))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new JoinHouseholdRequest("XYZ999"))))
+                        .content(objectMapper.writeValueAsString(new JoinHouseholdRequest("XYZ999", null, null))))
                 .andExpect(status().isBadRequest());
     }
 

@@ -11,5 +11,7 @@ public interface ManualBrandPreferenceRepository extends JpaRepository<ManualBra
 
     List<ManualBrandPreference> findAllByHouseholdId(UUID householdId);
 
+    List<ManualBrandPreference> findAllByOriginHouseholdId(UUID householdId);
+
     Optional<ManualBrandPreference> findByHouseholdIdAndGenericName(UUID householdId, String genericName);
 }

@@ -14,6 +14,10 @@ import java.util.UUID;
 
 public interface ConsumptionSnoozeRepository extends JpaRepository<ConsumptionSnooze, UUID> {
 
+    List<ConsumptionSnooze> findAllByHouseholdId(UUID householdId);
+
+    List<ConsumptionSnooze> findAllByOriginHouseholdId(UUID householdId);
+
     Optional<ConsumptionSnooze> findByHouseholdIdAndProductId(UUID householdId, UUID productId);
 
     List<ConsumptionSnooze> findAllByHouseholdIdAndSnoozedUntilAfter(UUID householdId, LocalDateTime now);
