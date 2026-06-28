@@ -37,6 +37,10 @@ public interface ReceiptRepository extends JpaRepository<Receipt, UUID>, JpaSpec
     // but its origin still points at the leaver's pre-merge home.
     Optional<Receipt> findFirstByUserIdAndOriginHouseholdIdNotOrderByCreatedAtAsc(UUID userId, UUID originHouseholdId);
 
+    // Consent copy: the grantor's own receipts currently in the shared household, to
+    // duplicate into the requester's destination on approval.
+    List<Receipt> findAllByUserIdAndHouseholdId(UUID userId, UUID householdId);
+
     Optional<Receipt> findByHouseholdIdAndChaveAcesso(UUID householdId, String chaveAcesso);
 
     long countByHouseholdIdAndStatus(UUID householdId, ReceiptStatus status);

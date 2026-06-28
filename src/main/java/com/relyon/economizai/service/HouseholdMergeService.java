@@ -165,6 +165,59 @@ public class HouseholdMergeService {
         return new MergeResult(toRestore.size(), 0);
     }
 
+    /**
+     * Consent-approved copy: duplicate the grantor's own receipts currently in
+     * {@code shared} into {@code destination}, as NEW rows owned by the same scanner
+     * but homed in the destination. The grantor keeps their originals — this is a copy,
+     * not a move. Returns the number of receipts copied. Skips any chave already in the
+     * destination (the per-household UNIQUE guard). Receipt-only by design: the consent
+     * scope is "the partner's purchase history", which is the receipts.
+     */
+    public int copyUserData(UUID grantorUserId, Household shared, Household destination) {
+        var source = receiptRepository.findAllByUserIdAndHouseholdId(grantorUserId, shared.getId());
+        if (source.isEmpty()) {
+            return 0;
+        }
+        var existingKeys = collectKeys(receiptRepository.findAllByHouseholdId(destination.getId()));
+        var copies = new java.util.ArrayList<com.relyon.economizai.model.Receipt>();
+        for (var r : source) {
+            if (existingKeys.contains(r.getChaveAcesso())) {
+                continue;   // destination already has this NF-e — host wins
+            }
+            copies.add(copyReceiptHeader(r, destination));
+        }
+        if (!copies.isEmpty()) {
+            receiptRepository.saveAll(copies);
+            log.info("consent.copy grantor={} copied={} shared={} destination={}",
+                    grantorUserId, copies.size(), shared.getId(), destination.getId());
+        }
+        return copies.size();
+    }
+
+    // Header-level copy of a receipt into a new household: a fresh row (new id via
+    // @GeneratedValue) homed AND originating in the destination, preserving the scanner
+    // and the receipt's identifying/financial fields. Items are NOT deep-copied here —
+    // the consent scope is the partner's purchase HISTORY (markets, totals, dates), and
+    // an item-level deep copy is out of scope for this first version (TODO(prod)).
+    private com.relyon.economizai.model.Receipt copyReceiptHeader(com.relyon.economizai.model.Receipt src, Household destination) {
+        return com.relyon.economizai.model.Receipt.builder()
+                .user(src.getUser())
+                .household(destination)
+                .originHousehold(destination)
+                .chaveAcesso(src.getChaveAcesso())
+                .uf(src.getUf())
+                .cnpjEmitente(src.getCnpjEmitente())
+                .marketName(src.getMarketName())
+                .marketAddress(src.getMarketAddress())
+                .issuedAt(src.getIssuedAt())
+                .totalAmount(src.getTotalAmount())
+                .discountTotal(src.getDiscountTotal())
+                .qrPayload(src.getQrPayload())
+                .status(src.getStatus())
+                .confirmedAt(src.getConfirmedAt())
+                .build();
+    }
+
     private <T extends HouseholdScoped> Set<String> collectKeys(List<T> rows) {
         var keys = new HashSet<String>();
         for (T row : rows) {
