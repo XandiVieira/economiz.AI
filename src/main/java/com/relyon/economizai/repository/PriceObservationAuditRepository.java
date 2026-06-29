@@ -54,6 +54,25 @@ public interface PriceObservationAuditRepository extends JpaRepository<PriceObse
         long getHouseholds();
     }
 
+    /** Batched k-anonymity helper: distinct contributing households per product, in
+     * one query (avoids an N+1 over a search-results page in {@code ProductService.search}). */
+    @Query("""
+        SELECT a.observation.product.id AS productId, COUNT(DISTINCT a.householdId) AS households
+        FROM PriceObservationAudit a
+        WHERE a.observation.product.id IN :productIds
+          AND a.observation.outlier = false
+          AND a.observation.observedAt >= :since
+        GROUP BY a.observation.product.id
+    """)
+    List<ProductHouseholdCount> countDistinctHouseholdsByProductIn(@Param("productIds") List<UUID> productIds,
+                                                                   @Param("since") LocalDateTime since);
+
+    /** Projection for {@link #countDistinctHouseholdsByProductIn}. */
+    interface ProductHouseholdCount {
+        UUID getProductId();
+        long getHouseholds();
+    }
+
     /**
      * True when another household has already contributed observations for
      * a receipt sharing this fiscal chave. Used to keep the same NF from

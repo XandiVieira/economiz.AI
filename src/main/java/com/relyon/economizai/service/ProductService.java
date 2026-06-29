@@ -13,6 +13,9 @@ import com.relyon.economizai.model.ProductAlias;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.CategorizationSource;
+import com.relyon.economizai.config.CollaborativeProperties;
+import com.relyon.economizai.repository.PriceObservationAuditRepository;
+import com.relyon.economizai.repository.PriceObservationAuditRepository.ProductHouseholdCount;
 import com.relyon.economizai.repository.ProductAliasRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.repository.ReceiptItemRepository;
@@ -25,8 +28,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -37,11 +43,32 @@ public class ProductService {
     private final ProductAliasRepository aliasRepository;
     private final ReceiptItemRepository receiptItemRepository;
     private final ProductExtractor productExtractor;
+    private final PriceObservationAuditRepository priceObservationAuditRepository;
+    private final CollaborativeProperties collaborativeProperties;
 
     @Transactional(readOnly = true)
     public Page<ProductResponse> search(String query, Pageable pageable) {
         var q = (query == null || query.isBlank()) ? null : query.trim();
-        return productRepository.search(q, pageable).map(ProductResponse::from);
+        var page = productRepository.search(q, pageable);
+        var displayable = productsWithDisplayablePriceHistory(page.map(Product::getId).getContent());
+        return page.map(product -> ProductResponse.from(product, displayable.contains(product.getId())));
+    }
+
+    /**
+     * Of the given products, which have a publicly displayable collaborative price
+     * history — i.e. enough distinct households contributed observations (within the
+     * lookback window) to clear k-anonymity. Batched into one aggregate query to
+     * avoid an N+1 over the search-results page.
+     */
+    private Set<UUID> productsWithDisplayablePriceHistory(List<UUID> productIds) {
+        if (productIds.isEmpty()) return Set.of();
+        var collaborative = collaborativeProperties.getCollaborative();
+        var since = LocalDateTime.now().minusDays(collaborative.getLookbackDays());
+        var minHouseholds = collaborative.getMinHouseholdsForPublic();
+        return priceObservationAuditRepository.countDistinctHouseholdsByProductIn(productIds, since).stream()
+                .filter(count -> count.getHouseholds() >= minHouseholds)
+                .map(ProductHouseholdCount::getProductId)
+                .collect(Collectors.toSet());
     }
 
     @Transactional(readOnly = true)

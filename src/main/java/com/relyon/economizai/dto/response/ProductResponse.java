@@ -17,9 +17,25 @@ public record ProductResponse(
         String unit,
         BigDecimal packSize,
         String packUnit,
-        CategorizationSource categorizationSource
+        CategorizationSource categorizationSource,
+        boolean hasPriceHistory
 ) {
+    /**
+     * Without price-history context: defaults {@code hasPriceHistory} to false.
+     * Used by callers (single get, post-write echoes) that don't compute the
+     * collaborative k-anonymity count.
+     */
     public static ProductResponse from(Product product) {
+        return from(product, false);
+    }
+
+    /**
+     * {@code hasPriceHistory} is true when enough distinct households contributed
+     * price observations for this product to clear k-anonymity — i.e. the
+     * collaborative price history is publicly displayable. Computed in batch by
+     * the search path; see {@code ProductService.search}.
+     */
+    public static ProductResponse from(Product product, boolean hasPriceHistory) {
         return new ProductResponse(
                 product.getId(),
                 product.getEan(),
@@ -30,7 +46,8 @@ public record ProductResponse(
                 product.getUnit(),
                 product.getPackSize(),
                 product.getPackUnit(),
-                product.getCategorizationSource()
+                product.getCategorizationSource(),
+                hasPriceHistory
         );
     }
 }

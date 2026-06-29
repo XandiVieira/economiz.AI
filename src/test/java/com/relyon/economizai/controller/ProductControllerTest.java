@@ -67,7 +67,7 @@ class ProductControllerTest {
     private ProductResponse sampleProduct(UUID id) {
         return new ProductResponse(id, "789", "Arroz Tio Joao", "Arroz", "Tio João",
                 ProductCategory.GROCERIES, "UN", new BigDecimal("5"), "KG",
-                CategorizationSource.DICTIONARY);
+                CategorizationSource.DICTIONARY, false);
     }
 
     @Test
