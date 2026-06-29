@@ -137,7 +137,7 @@ esponja,Esponja,CLEANING
 saco lixo,Saco de Lixo,CLEANING
 saco de lixo,Saco de Lixo,CLEANING
 papel toalha,Papel Toalha,CLEANING
-guardanapo,Guardanapo,CLEANING
+guardanapo,Guardanapo,OTHER
 alcool,Álcool,CLEANING
 luva,Luva,CLEANING
 shampoo,Shampoo,PERSONAL_CARE
@@ -149,7 +149,7 @@ escova dente,Escova de Dente,PERSONAL_CARE
 fio dental,Fio Dental,PERSONAL_CARE
 desodorante,Desodorante,PERSONAL_CARE
 absorvente,Absorvente,PERSONAL_CARE
-fralda,Fralda,PERSONAL_CARE
+fralda,Fralda,OTHER
 papel higienico,Papel Higiênico,PERSONAL_CARE
 hidratante,Hidratante,PERSONAL_CARE
 protetor solar,Protetor Solar,PERSONAL_CARE
@@ -198,10 +198,8 @@ des dove,Desodorante,PERSONAL_CARE
 lava loucas,Lava-louças,CLEANING
 lav louca,Lava-louças,CLEANING
 lava roupas,Lava-roupas,CLEANING
-amaciante,Amaciante,CLEANING
 l roup,Lava-roupas,CLEANING
 esp,Esponja,CLEANING
-esponja,Esponja,CLEANING
 bebida,Bebida,BEVERAGES
 beb l,Bebida Láctea,MEAT_DAIRY
 chia,Chia,GROCERIES
@@ -214,8 +212,8 @@ palito suico,Palito Suíço,GROCERIES
 p h,Papel Higiênico,PERSONAL_CARE
 prato sob,Prato,OTHER
 brinde,Brinde,OTHER
-vitamina,Vitamina,OTHER
-gelol,Gelol,OTHER
+vitamina,Vitamina,HEALTH
+gelol,Gelol,HEALTH
 
 # === 2026-06 common-base expansion: Brazilian grocery staples ===
 # GROCERIES (mercearia / pantry)
@@ -257,7 +255,6 @@ leite de coco,Leite de Coco,GROCERIES
 rapadura,Rapadura,GROCERIES
 mistura para bolo,Mistura para Bolo,GROCERIES
 sagu,Sagu,GROCERIES
-mostarda,Mostarda,GROCERIES
 # MEAT_DAIRY (açougue / frios / laticínios)
 mussarela,Mussarela,MEAT_DAIRY
 parmesao,Parmesão,MEAT_DAIRY
@@ -276,13 +273,7 @@ musculo,Músculo,MEAT_DAIRY
 sobrecoxa,Sobrecoxa,MEAT_DAIRY
 asa de frango,Asa de Frango,MEAT_DAIRY
 # PRODUCE (hortifruti)
-mamao,Mamão,PRODUCE
-melancia,Melancia,PRODUCE
-melao,Melão,PRODUCE
-uva,Uva,PRODUCE
-manga,Manga,PRODUCE
 pera,Pera,PRODUCE
-morango,Morango,PRODUCE
 repolho,Repolho,PRODUCE
 chuchu,Chuchu,PRODUCE
 gengibre,Gengibre,PRODUCE
@@ -379,7 +370,6 @@ aspirina,Aspirina,HEALTH
 engov,Engov,HEALTH
 dramin,Dramin,HEALTH
 luftal,Luftal,HEALTH
-gelol,Gelol,HEALTH
 # Dosage forms (strong pharmacy signals)
 comprimido,Medicamento,HEALTH
 capsula,Medicamento,HEALTH
@@ -388,7 +378,6 @@ drageas,Medicamento,HEALTH
 xarope,Xarope,HEALTH
 pomada,Pomada,HEALTH
 # Supplements / vitamins
-vitamina,Vitamina,HEALTH
 polivitaminico,Polivitamínico,HEALTH
 suplemento,Suplemento,HEALTH
 whey,Whey Protein,HEALTH
@@ -402,7 +391,6 @@ curativo,Curativo,HEALTH
 gaze,Gaze,HEALTH
 seringa,Seringa,HEALTH
 termometro,Termômetro,HEALTH
-algodao,Algodão,HEALTH
 
 # Terms found landing in OTHER on real receipts (added 2026-06-08)
 # Açougue / meat cuts
@@ -443,10 +431,8 @@ vermifugo,Vermífugo,HEALTH
 coleira antipulga,Coleira Antipulga,OTHER
 
 # ── OTHER: Baby & infant care ─────────────────────────────────────────────────
-fralda,Fralda,OTHER
 fraldas,Fralda,OTHER
 fralda descartavel,Fralda Descartável,OTHER
-lenco umedecido,Lenço Umedecido,OTHER
 lencos umedecidos,Lenço Umedecido,OTHER
 lenco umido,Lenço Umedecido,OTHER
 toalha umida,Lenço Umedecido,OTHER
@@ -481,7 +467,6 @@ porta vela,Porta-Vela,OTHER
 difusor,Difusor de Ambiente,OTHER
 
 # ── OTHER: Plastic bags, kitchenware & home goods ───────────────────────────
-saco de lixo,Saco de Lixo,CLEANING
 sacos de lixo,Saco de Lixo,CLEANING
 saco para lixo,Saco de Lixo,CLEANING
 filme pvc,Filme PVC,OTHER
@@ -494,31 +479,18 @@ rodo,Rodo,CLEANING
 vassoura,Vassoura,CLEANING
 pano multiuso,Pano Multiuso,CLEANING
 luva domestica,Luva Doméstica,CLEANING
-guardanapo,Guardanapo,OTHER
 
 # ── CLEANING: Additional surface cleaners & laundry ─────────────────────────
-limpa vidro,Limpa-Vidro,CLEANING
 remove manchas,Tira-Manchas,CLEANING
-tira manchas,Tira-Manchas,CLEANING
-alvejante,Alvejante,CLEANING
-agua sanitaria,Água Sanitária,CLEANING
-multiuso,Limpador Multiuso,CLEANING
 limpador multiuso,Limpador Multiuso,CLEANING
-lustra moveis,Lustra Móveis,CLEANING
 desentupidor,Desentupidor,CLEANING
-inseticida,Inseticida,CLEANING
 repelente insetos,Repelente,HEALTH
 cera assoalho,Cera,CLEANING
-amaciante,Amaciante,CLEANING
-sabao liquido,Sabão Líquido,CLEANING
 
 # ── PERSONAL_CARE: Additions from stress-test gaps ───────────────────────────
-protetor solar,Protetor Solar,PERSONAL_CARE
 protecao solar,Protetor Solar,PERSONAL_CARE
 fps,Protetor Solar,PERSONAL_CARE
 filtro solar,Protetor Solar,PERSONAL_CARE
-cotonete,Cotonete,PERSONAL_CARE
-absorvente,Absorvente,PERSONAL_CARE
 absorvente interno,Absorvente Interno,PERSONAL_CARE
 lenco de papel,Lenço de Papel,PERSONAL_CARE
 lencos de papel,Lenço de Papel,PERSONAL_CARE
@@ -529,12 +501,9 @@ bucha vegetal,Esponja de Banho,PERSONAL_CARE
 escova de cabelo,Escova de Cabelo,PERSONAL_CARE
 pente,Pente,PERSONAL_CARE
 lixa de unha,Lixa de Unha,PERSONAL_CARE
-barbeador,Aparelho de Barbear,PERSONAL_CARE
 aparelho de barbear,Aparelho de Barbear,PERSONAL_CARE
 lamina de barbear,Lâmina de Barbear,PERSONAL_CARE
 creme de barbear,Creme de Barbear,PERSONAL_CARE
-perfume,Perfume,PERSONAL_CARE
-colonia,Colônia,PERSONAL_CARE
 agua de colonia,Água de Colônia,PERSONAL_CARE
 maquiagem,Maquiagem,PERSONAL_CARE
 batom,Batom,PERSONAL_CARE
@@ -546,56 +515,35 @@ hidratante corporal,Hidratante Corporal,PERSONAL_CARE
 oleo corporal,Óleo Corporal,PERSONAL_CARE
 
 # ── HEALTH: Medicines and supplements (stress-test gaps) ─────────────────────
-dipirona,Dipirona,HEALTH
-paracetamol,Paracetamol,HEALTH
-ibuprofeno,Ibuprofeno,HEALTH
-amoxicilina,Amoxicilina,HEALTH
 cefalexina,Cefalexina,HEALTH
-omeprazol,Omeprazol,HEALTH
 atenolol,Atenolol,HEALTH
 losartana,Losartana,HEALTH
 metformina,Metformina,HEALTH
 anticoncepcional,Anticoncepcional,HEALTH
 antibiotico,Antibiótico,HEALTH
 antiinflamatorio,Anti-inflamatório,HEALTH
-pomada,Pomada,HEALTH
 pomada cicatrizante,Pomada Cicatrizante,HEALTH
 gel cicatrizante,Gel Cicatrizante,HEALTH
 spray nasal,Spray Nasal,HEALTH
 colirio,Colírio,HEALTH
-soro fisiologico,Soro Fisiológico,HEALTH
 solucao salina,Solução Salina,HEALTH
 multivitaminico,Multivitamínico,HEALTH
-suplemento,Suplemento,HEALTH
 whey protein,Whey Protein,HEALTH
 albumina,Albumina,HEALTH
-creatina,Creatina,HEALTH
 bcaa,BCAA,HEALTH
-colageno,Colágeno,HEALTH
 omega 3,Ômega 3,HEALTH
 probiotico,Probiótico,HEALTH
-melatonina,Melatonina,HEALTH
 proteico,Proteico,HEALTH
 energetico termogenico,Termogênico,HEALTH
 band aid,Curativo,HEALTH
 
 # ── BEVERAGES: Additions (alcohol + functional) ───────────────────────────────
-energetico,Energético,BEVERAGES
 isotônico,Isotônico,BEVERAGES
-isotonico,Isotônico,BEVERAGES
-vinho,Vinho,BEVERAGES
 vinho tinto,Vinho Tinto,BEVERAGES
 vinho branco,Vinho Branco,BEVERAGES
 vinho rose,Vinho Rosé,BEVERAGES
-espumante,Espumante,BEVERAGES
 sake,Saquê,BEVERAGES
-whisky,Whisky,BEVERAGES
-vodka,Vodka,BEVERAGES
-gin,Gin,BEVERAGES
-rum,Rum,BEVERAGES
-cachaca,Cachaça,BEVERAGES
 pinga,Cachaça,BEVERAGES
-licor,Licor,BEVERAGES
 kombucha,Kombucha,BEVERAGES
 kefir bebida,Kefir,BEVERAGES
 cha gelado,Chá Gelado,BEVERAGES
@@ -610,43 +558,21 @@ leite de amendoa,Leite de Amêndoa,BEVERAGES
 leite de coco bebida,Leite de Coco,BEVERAGES
 
 # ── GROCERIES: Snacks, frozen foods & pantry gaps ────────────────────────────
-pipoca,Pipoca,GROCERIES
 pipoca microondas,Pipoca de Micro-ondas,GROCERIES
-salgadinho,Salgadinho,GROCERIES
 batata chips,Batata Chips,GROCERIES
-amendoim,Amendoim,GROCERIES
-castanha,Castanha,GROCERIES
 castanha de caju,Castanha de Caju,GROCERIES
 mix nuts,Mix de Castanhas,GROCERIES
-nozes,Nozes,GROCERIES
-azeitona,Azeitona,GROCERIES
-palmito,Palmito,GROCERIES
-atum,Atum,GROCERIES
-sardinha,Sardinha,GROCERIES
-bacalhau,Bacalhau,GROCERIES
-creme de leite,Creme de Leite,GROCERIES
-leite de coco,Leite de Coco,GROCERIES
 polpa tomate,Polpa de Tomate,GROCERIES
 tomate pelado,Tomate Pelado,GROCERIES
-grao de bico,Grão-de-Bico,GROCERIES
-lentilha,Lentilha,GROCERIES
-ervilha,Ervilha,GROCERIES
-milho verde,Milho Verde,GROCERIES
-palmito,Palmito,GROCERIES
-tempero,Tempero,GROCERIES
 mistura tempero,Tempero,GROCERIES
-caldo,Caldo,GROCERIES
 caldo de galinha,Caldo de Galinha,GROCERIES
 sopa,Sopa,GROCERIES
 sopao,Sopão,GROCERIES
 maionese light,Maionese Light,GROCERIES
-gelatina,Gelatina,GROCERIES
-pudim,Pudim,GROCERIES
 nescau,Achocolatado,GROCERIES
 achocolatado po,Achocolatado,GROCERIES
 cappuccino,Cappuccino,GROCERIES
 cafe soluvel,Café Solúvel,GROCERIES
-cha,Chá,GROCERIES
 cha preto,Chá Preto,GROCERIES
 cha verde,Chá Verde,GROCERIES
 cha camomila,Chá de Camomila,GROCERIES
@@ -667,91 +593,124 @@ waffel,Waffel,BAKERY
 muffin,Muffin,BAKERY
 chipa,Chipa,BAKERY
 bisnagas,Bisnaguinha,BAKERY
-baguete,Baguete,BAKERY
 bolo cenoura,Bolo de Cenoura,BAKERY
 bolo chocolate,Bolo de Chocolate,BAKERY
 bolo milho,Bolo de Milho,BAKERY
 
 # ── MEAT_DAIRY: Additional cuts & dairy ──────────────────────────────────────
-linguica,Linguiça,MEAT_DAIRY
 linguica calabresa,Linguiça Calabresa,MEAT_DAIRY
-salsicha,Salsicha,MEAT_DAIRY
-mortadela,Mortadela,MEAT_DAIRY
-presunto,Presunto,MEAT_DAIRY
 copa,Copa,MEAT_DAIRY
-salame,Salame,MEAT_DAIRY
 pepperoni,Pepperoni,MEAT_DAIRY
 frango assado,Frango Assado,MEAT_DAIRY
-peito frango,Peito de Frango,MEAT_DAIRY
-coxa frango,Coxa de Frango,MEAT_DAIRY
-sobrecoxa,Sobrecoxa,MEAT_DAIRY
 filé frango,Filé de Frango,MEAT_DAIRY
-peixe,Peixe,MEAT_DAIRY
-tilapia,Tilápia,MEAT_DAIRY
-salmao,Salmão,MEAT_DAIRY
 carne suina,Carne Suína,MEAT_DAIRY
 costelinha,Costelinha,MEAT_DAIRY
 bisteca,Bisteca,MEAT_DAIRY
-picanha,Picanha,MEAT_DAIRY
-alcatra,Alcatra,MEAT_DAIRY
 contrafile,Contrafilé,MEAT_DAIRY
-maminha,Maminha,MEAT_DAIRY
-patinho,Patinho,MEAT_DAIRY
-manteiga,Manteiga,MEAT_DAIRY
-margarina,Margarina,MEAT_DAIRY
-nata,Nata,MEAT_DAIRY
-requeijao,Requeijão,MEAT_DAIRY
-cream cheese,Cream Cheese,MEAT_DAIRY
-iogurte,Iogurte,MEAT_DAIRY
 queijo coalho,Queijo Coalho,MEAT_DAIRY
-queijo prato,Queijo Prato,MEAT_DAIRY
 queijo parmesao,Queijo Parmesão,MEAT_DAIRY
 queijo provolone,Queijo Provolone,MEAT_DAIRY
-ovo,Ovo,MEAT_DAIRY
-ovos,Ovo,MEAT_DAIRY
 ovo de galinha,Ovo de Galinha,MEAT_DAIRY
 
 # ── PRODUCE: Additional fruits, vegetables & fresh items ─────────────────────
-abacate,Abacate,PRODUCE
-manga,Manga,PRODUCE
-mamao,Mamão,PRODUCE
-melancia,Melancia,PRODUCE
-melao,Melão,PRODUCE
-abacaxi,Abacaxi,PRODUCE
-uva,Uva,PRODUCE
-morango,Morango,PRODUCE
-kiwi,Kiwi,PRODUCE
-pera,Pera,PRODUCE
-laranja,Laranja,PRODUCE
-limao,Limão,PRODUCE
 limonada fruta,Limão,PRODUCE
-tangerina,Tangerina,PRODUCE
-mexerica,Mexerica,PRODUCE
-caqui,Caqui,PRODUCE
-cebola,Cebola,PRODUCE
-alho,Alho,PRODUCE
-batata doce,Batata Doce,PRODUCE
-mandioca,Mandioca,PRODUCE
 aipim,Aipim,PRODUCE
 macaxeira,Macaxeira,PRODUCE
-chuchu,Chuchu,PRODUCE
-abobrinha,Abobrinha,PRODUCE
-berinjela,Berinjela,PRODUCE
-pimentao,Pimentão,PRODUCE
-brocolis,Brócolis,PRODUCE
-couve,Couve,PRODUCE
-repolho,Repolho,PRODUCE
-cenoura,Cenoura,PRODUCE
-beterraba,Beterraba,PRODUCE
-pepino,Pepino,PRODUCE
-vagem,Vagem,PRODUCE
 milho espiga,Milho,PRODUCE
-espinafre,Espinafre,PRODUCE
-rucula,Rúcula,PRODUCE
-agriao,Agrião,PRODUCE
-salsa,Salsa,PRODUCE
-coentro,Coentro,PRODUCE
-cebolinha,Cebolinha,PRODUCE
-gengibre,Gengibre,PRODUCE
 cogumelo,Cogumelo,PRODUCE
 champignon,Champignon,PRODUCE
+
+# ── GROCERIES: Frozen foods & common missing items ────────────────────────────
+sorvete,Sorvete,GROCERIES
+picole,Picolé,GROCERIES
+massa fresca,Massa Fresca,GROCERIES
+polenta,Polenta,GROCERIES
+balas,Balas,GROCERIES
+chiclete,Chiclete,GROCERIES
+extrato tomate,Extrato de Tomate,GROCERIES
+melado,Melado,GROCERIES
+tahine,Tahine,GROCERIES
+pasta amendoim,Pasta de Amendoim,GROCERIES
+biscoito recheado,Biscoito Recheado,GROCERIES
+biscoito agua sal,Biscoito Água e Sal,GROCERIES
+biscoito cream cracker,Biscoito Cream Cracker,GROCERIES
+macarrao instantaneo,Macarrão Instantâneo,GROCERIES
+sazon,Sazonador,GROCERIES
+caldo de carne,Caldo de Carne,GROCERIES
+caldo de legumes,Caldo de Legumes,GROCERIES
+extrato soja,Extrato de Soja,GROCERIES
+creme milho,Creme de Milho,GROCERIES
+seleta legumes,Seleta de Legumes,GROCERIES
+
+# ── GROCERIES: Spices & seasonings ───────────────────────────────────────────
+curcuma,Cúrcuma,GROCERIES
+curry,Curry,GROCERIES
+alecrim,Alecrim,GROCERIES
+tomilho,Tomilho,GROCERIES
+noz moscada,Noz-Moscada,GROCERIES
+cravo,Cravo,GROCERIES
+louro,Louro,GROCERIES
+pimenta do reino,Pimenta-do-Reino,GROCERIES
+quinoa,Quinoa,GROCERIES
+linhaca,Linhaça,GROCERIES
+
+# ── BEVERAGES: Additional ────────────────────────────────────────────────────
+gelo,Gelo,BEVERAGES
+
+# ── HEALTH: Missing supplements & pharmacy ───────────────────────────────────
+proteina,Proteína,HEALTH
+collagen,Colágeno,HEALTH
+colageno hidrolisado,Colágeno Hidrolisado,HEALTH
+fibra,Fibra Alimentar,HEALTH
+prebiotico,Prebiótico,HEALTH
+vitamina d,Vitamina D,HEALTH
+vitamina c,Vitamina C,HEALTH
+vitamina b12,Vitamina B12,HEALTH
+zinco,Zinco,HEALTH
+magnesio,Magnésio,HEALTH
+ferro,Suplemento de Ferro,HEALTH
+acido folico,Ácido Fólico,HEALTH
+lanceta,Lanceta,HEALTH
+fita glicemia,Fita de Glicemia,HEALTH
+alcool 70,Álcool 70%,HEALTH
+alcool gel,Álcool em Gel,HEALTH
+
+# ── CLEANING: Missing household items ────────────────────────────────────────
+palha aco,Palha de Aço,CLEANING
+balde,Balde,CLEANING
+mop,Mop,CLEANING
+flanela,Flanela,CLEANING
+desincrustante,Desincrustante,CLEANING
+limpa forno,Limpa Forno,CLEANING
+limpa pedra,Limpa Pedra,CLEANING
+limpa banheiro,Limpa Banheiro,CLEANING
+perfumador,Perfumador de Ambiente,CLEANING
+aromatizador,Aromatizador,CLEANING
+repelente ambiente,Repelente de Ambiente,CLEANING
+rodo mop,Rodo Mop,CLEANING
+
+# ── PERSONAL_CARE: Missing items ─────────────────────────────────────────────
+creme facial,Creme Facial,PERSONAL_CARE
+mascara facial,Máscara Facial,PERSONAL_CARE
+tonico facial,Tônico Facial,PERSONAL_CARE
+demaquilante,Demaquilante,PERSONAL_CARE
+esfoliante,Esfoliante,PERSONAL_CARE
+primer,Primer,PERSONAL_CARE
+sombra,Sombra,PERSONAL_CARE
+delineador,Delineador,PERSONAL_CARE
+escova cabelo,Escova de Cabelo,PERSONAL_CARE
+boticario,Produto O Boticário,PERSONAL_CARE
+nivea,Nivea,PERSONAL_CARE
+
+# ── OTHER: Home misc ─────────────────────────────────────────────────────────
+lenco descartavel,Lenço Descartável,OTHER
+toalha papel,Toalha de Papel,OTHER
+garrafa termica,Garrafa Térmica,OTHER
+sacola plastica,Sacola Plástica,OTHER
+papel filme,Papel Filme,OTHER
+fita adesiva,Fita Adesiva,OTHER
+pilha aa,Pilha AA,OTHER
+pilha aaa,Pilha AAA,OTHER
+bateria,Bateria,OTHER
+isqueiro,Isqueiro,OTHER
+vela decorativa,Vela Decorativa,OTHER
