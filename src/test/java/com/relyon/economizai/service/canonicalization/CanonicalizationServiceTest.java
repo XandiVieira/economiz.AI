@@ -10,9 +10,13 @@ import com.relyon.economizai.model.enums.CategorizationSource;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.repository.ProductAliasRepository;
 import com.relyon.economizai.repository.ProductRepository;
+import com.relyon.economizai.model.EanCatalogEntry;
+import com.relyon.economizai.model.enums.EanCatalogSource;
 import com.relyon.economizai.service.HouseholdProductAliasService;
+import com.relyon.economizai.service.extraction.EanCatalogService;
 import com.relyon.economizai.service.extraction.ProductExtraction;
 import com.relyon.economizai.service.extraction.ProductExtractor;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -30,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -42,8 +47,14 @@ class CanonicalizationServiceTest {
     @Mock private ProductExtractor productExtractor;
     @Mock private HouseholdProductAliasService householdProductAliasService;
     @Mock private MerchantClassifier merchantClassifier;
+    @Mock private EanCatalogService eanCatalogService;
 
     @InjectMocks private CanonicalizationService service;
+
+    @BeforeEach
+    void defaultStubs() {
+        lenient().when(eanCatalogService.lookup(anyString())).thenReturn(Optional.empty());
+    }
 
     private Receipt buildReceipt(ReceiptItem... items) {
         var household = Household.builder().id(UUID.randomUUID()).inviteCode("ABC123").build();
@@ -310,6 +321,59 @@ class CanonicalizationServiceTest {
         service.canonicalize(receipt);
 
         verify(aliasRepository, never()).save(any(ProductAlias.class));
+    }
+
+    @Test
+    void catalogHit_enrichesProductCategoryAndGenericName() {
+        var catalogEntry = EanCatalogEntry.builder()
+                .ean("7894900010015")
+                .genericName("Coca-Cola")
+                .brand("Coca-Cola")
+                .category(ProductCategory.BEVERAGES)
+                .source(EanCatalogSource.OPEN_FOOD_FACTS)
+                .build();
+        // Extractor returns no category (dictionary missed this EAN)
+        when(productExtractor.extract(any())).thenReturn(
+                new ProductExtraction(null, "Coca-Cola", new BigDecimal("350"), "ML",
+                        null, CategorizationSource.NONE));
+        when(productRepository.findByEan("7894900010015")).thenReturn(Optional.empty());
+        when(eanCatalogService.lookup("7894900010015")).thenReturn(Optional.of(catalogEntry));
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> {
+            var product = inv.<Product>getArgument(0);
+            product.setId(UUID.randomUUID());
+            return product;
+        });
+        when(aliasRepository.existsByNormalizedDescription(anyString())).thenReturn(false);
+
+        var receipt = buildReceipt(item("REFRIGERANTE COCA COLA 350ML", "7894900010015"));
+        var outcome = service.canonicalize(receipt);
+
+        assertEquals(1, outcome.created());
+        var product = receipt.getItems().get(0).getProduct();
+        assertEquals(ProductCategory.BEVERAGES, product.getCategory(), "category filled from EAN catalog");
+        assertEquals("Coca-Cola", product.getGenericName(), "genericName filled from EAN catalog");
+    }
+
+    @Test
+    void catalogMiss_fallsThroughToExtractor() {
+        when(productExtractor.extract(any())).thenReturn(
+                new ProductExtraction("Refrigerante", "Coca-Cola", new BigDecimal("2"), "L",
+                        ProductCategory.BEVERAGES, CategorizationSource.DICTIONARY));
+        when(productRepository.findByEan("9999")).thenReturn(Optional.empty());
+        // eanCatalogService.lookup already stubbed to Optional.empty() in @BeforeEach
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> {
+            var product = inv.<Product>getArgument(0);
+            product.setId(UUID.randomUUID());
+            return product;
+        });
+        when(aliasRepository.existsByNormalizedDescription(anyString())).thenReturn(false);
+
+        var receipt = buildReceipt(item("COCA COLA 2L", "9999"));
+        var outcome = service.canonicalize(receipt);
+
+        assertEquals(1, outcome.created());
+        var product = receipt.getItems().get(0).getProduct();
+        assertEquals(ProductCategory.BEVERAGES, product.getCategory(), "falls through to extractor when catalog misses");
     }
 
     @Test

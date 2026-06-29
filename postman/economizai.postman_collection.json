@@ -2840,6 +2840,42 @@
             "description": "[ADMIN] Upserts a batch of token → (genericName, category) entries directly into the learned dictionary (sampleCount defaults to 999 if omitted). Immediately swaps the in-memory dictionary. Use to seed large volumes of known mappings without re-parsing receipts. Returns { imported, skipped }."
           },
           "response": []
+        },
+        {
+          "name": "Bulk import EAN catalog (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  {\n    \"ean\": \"7894900010015\",\n    \"genericName\": \"Coca-Cola 350ml\",\n    \"brand\": \"Coca-Cola\",\n    \"category\": \"BEVERAGES\",\n    \"source\": \"OPEN_FOOD_FACTS\"\n  },\n  {\n    \"ean\": \"7891000455296\",\n    \"genericName\": \"KitKat\",\n    \"brand\": \"Nestl\\u00e9\",\n    \"category\": \"GROCERIES\",\n    \"source\": \"OPEN_FOOD_FACTS\"\n  }\n]",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categorizer/ean-catalog/import",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "categorizer",
+                "ean-catalog",
+                "import"
+              ]
+            },
+            "description": "Bulk-seeds the EAN catalog (step A2 in the canonicalization cascade). Upserts by EAN. source: OPEN_FOOD_FACTS | CURATED_IMPORT | USER_CONFIRMED. Returns { imported, skipped }."
+          },
+          "response": []
         }
       ]
     },

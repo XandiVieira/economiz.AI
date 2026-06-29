@@ -12,6 +12,7 @@ import com.relyon.economizai.service.extraction.CategorizationDebugService;
 import com.relyon.economizai.service.extraction.CategorizationQualityService;
 import com.relyon.economizai.service.extraction.CategorizerAdminService;
 import com.relyon.economizai.service.extraction.ConsensusPromotionService;
+import com.relyon.economizai.service.extraction.EanCatalogService;
 import com.relyon.economizai.service.extraction.ml.MlClassifierService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -49,6 +50,7 @@ class CategorizerControllerTest {
     @MockitoBean private CategorizationQualityService categorizationQualityService;
     @MockitoBean private ConsensusPromotionService consensusPromotionService;
     @MockitoBean private CategorizerAdminService categorizerAdminService;
+    @MockitoBean private EanCatalogService eanCatalogService;
     @MockitoBean private JwtService jwtService;
     @MockitoBean private UserDetailsService userDetailsService;
     @MockitoBean private LocalizedMessageService localizedMessageService;

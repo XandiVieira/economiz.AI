@@ -11,6 +11,7 @@ import com.relyon.economizai.service.extraction.CategorizerAdminService;
 import com.relyon.economizai.service.extraction.ConsensusPromotionService;
 import com.relyon.economizai.service.extraction.CategorizationDebugService;
 import com.relyon.economizai.service.extraction.CategorizationQualityService;
+import com.relyon.economizai.service.extraction.EanCatalogService;
 import com.relyon.economizai.service.extraction.ml.MlClassifierService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +46,7 @@ public class CategorizerController {
     private final CategorizationQualityService categorizationQualityService;
     private final ConsensusPromotionService consensusPromotionService;
     private final CategorizerAdminService categorizerAdminService;
+    private final EanCatalogService eanCatalogService;
 
     /**
      * Promote user-correction consensus into deterministic knowledge: products
@@ -114,6 +116,18 @@ public class CategorizerController {
     @PostMapping("/auto-promote")
     public ResponseEntity<AutoPromotionService.PromotionOutcome> autoPromote() {
         return ResponseEntity.ok(autoPromotionService.promote());
+    }
+
+    /**
+     * Bulk-seeds the EAN catalog (step A2 in the canonicalization cascade).
+     * Each entry maps a GTIN/EAN to a category, generic name, and brand.
+     * Use {@code source=OPEN_FOOD_FACTS} for OPF imports, {@code CURATED_IMPORT}
+     * for manually verified data. ADMIN-only once RBAC lands.
+     */
+    @PostMapping("/ean-catalog/import")
+    public ResponseEntity<EanCatalogService.BulkImportOutcome> importEanCatalog(
+            @RequestBody List<EanCatalogService.EanImportRequest> entries) {
+        return ResponseEntity.ok(eanCatalogService.bulkImport(entries));
     }
 
     /**

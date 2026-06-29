@@ -14,6 +14,30 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-29 — EAN catalog: step A2 no cascade de canonicalização
+
+Nova camada entre o lookup interno de EAN (A1) e o dicionário de keywords (A3):
+
+```
+POST /api/v1/categorizer/ean-catalog/import
+  body: [{"ean":"7894900010015","genericName":"Coca-Cola","brand":"Coca-Cola",
+          "category":"BEVERAGES","source":"OPEN_FOOD_FACTS"}, ...]
+  → { imported: N, skipped: M }
+  Bulk-upsert de EANs na tabela ean_catalog. source aceita:
+  OPEN_FOOD_FACTS | CURATED_IMPORT | USER_CONFIRMED
+```
+
+- Quando um novo EAN aparece num NFC-e, o sistema agora verifica a tabela
+  `ean_catalog` antes de cair no dicionário de keywords — lookup O(1) por EAN.
+- Se encontrado, a categoria e o nome genérico do catálogo enriquecem o produto
+  criado (categoria do catálogo tem precedência sobre o dicionário de keywords
+  para itens com EAN real).
+- Tabela seed-ável via Open Food Facts: baixar o dump Brasil e importar via
+  o endpoint acima. Nenhuma dependência externa em runtime.
+- Requer `Role.ADMIN`.
+
+---
+
 ## 2026-06-28 — Categorizer: CONSENSUS source, admin reset/import endpoints, expanded dictionary
 
 ### New `CONSENSUS` categorization source

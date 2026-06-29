@@ -1,6 +1,7 @@
 package com.relyon.economizai.service.canonicalization;
 
 import com.relyon.economizai.config.MdcContextFilter;
+import com.relyon.economizai.model.EanCatalogEntry;
 import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.ProductAlias;
 import com.relyon.economizai.model.Receipt;
@@ -10,6 +11,7 @@ import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.repository.ProductAliasRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.service.HouseholdProductAliasService;
+import com.relyon.economizai.service.extraction.EanCatalogService;
 import com.relyon.economizai.service.extraction.ProductExtraction;
 import com.relyon.economizai.service.extraction.ProductExtractor;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +43,7 @@ public class CanonicalizationService {
     private final ProductExtractor productExtractor;
     private final HouseholdProductAliasService householdProductAliasService;
     private final MerchantClassifier merchantClassifier;
+    private final EanCatalogService eanCatalogService;
 
     @Transactional
     public CanonicalizationOutcome canonicalize(Receipt receipt) {
@@ -112,12 +115,19 @@ public class CanonicalizationService {
      * never unmatched.
      */
     private ItemResult canonicalizeByEan(ReceiptItem item, String normalized, boolean pharmacyMerchant) {
+        // A1 — produto já existe na nossa base (EAN já foi visto antes)
         var byEan = productRepository.findByEan(item.getEan());
         if (byEan.isPresent()) {
             item.setProduct(byEan.get());
             ensureAlias(byEan.get(), item.getRawDescription(), normalized);
             log.info("item.matched_by_ean ean={} product={}", item.getEan(), abbrev(byEan.get().getId()));
             return ItemResult.MATCHED;
+        }
+        // A2 — EAN no catálogo externo (Open Food Facts / import admin)
+        var catalogEntry = eanCatalogService.lookup(item.getEan()).orElse(null);
+        if (catalogEntry != null) {
+            log.info("item.catalog_hit ean={} category={} source={}",
+                    item.getEan(), catalogEntry.getCategory(), catalogEntry.getSource());
         }
         var extraction = productExtractor.extract(item.getRawDescription());
         var dedup = tryMetadataDedup(extraction);
@@ -129,12 +139,15 @@ public class CanonicalizationService {
                     extraction.packSize(), extraction.packUnit());
             return ItemResult.MATCHED;
         }
-        return createProductFromEan(item, normalized, extraction, pharmacyMerchant);
+        return createProductFromEan(item, normalized, extraction, catalogEntry, pharmacyMerchant);
     }
 
     private ItemResult createProductFromEan(ReceiptItem item, String normalized,
-                                            ProductExtraction extraction, boolean pharmacyMerchant) {
+                                            ProductExtraction extraction,
+                                            EanCatalogEntry catalogEntry,
+                                            boolean pharmacyMerchant) {
         var newProduct = buildEnrichedProduct(item, extraction);
+        applyCatalogEnrichment(newProduct, catalogEntry);
         applyPharmacyMerchantFallback(newProduct, pharmacyMerchant);
         var created = productRepository.save(newProduct);
         item.setProduct(created);
@@ -237,6 +250,27 @@ public class CanonicalizationService {
 
     private boolean hasEan(ReceiptItem item) {
         return item.getEan() != null && !item.getEan().isBlank();
+    }
+
+    /**
+     * Enriches a newly built product with data from the EAN catalog (Open Food
+     * Facts or admin import).  Only fills NULL fields — extraction results from
+     * the description text (brand registry, pack-size regex) are kept when
+     * present.  Category from the catalog wins over the keyword dictionary
+     * because it is EAN-specific, not description-based.
+     */
+    private void applyCatalogEnrichment(Product product, EanCatalogEntry entry) {
+        if (entry == null) return;
+        if (entry.getCategory() != null) {
+            product.setCategory(entry.getCategory());
+            product.setCategorizationSource(CategorizationSource.DICTIONARY); // catalog is curated data
+        }
+        if (product.getGenericName() == null && entry.getGenericName() != null) {
+            product.setGenericName(entry.getGenericName());
+        }
+        if (product.getBrand() == null && entry.getBrand() != null) {
+            product.setBrand(entry.getBrand());
+        }
     }
 
     /**
