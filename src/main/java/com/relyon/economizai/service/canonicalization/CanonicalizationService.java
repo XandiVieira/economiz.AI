@@ -71,6 +71,56 @@ public class CanonicalizationService {
         return new CanonicalizationOutcome(matched, created, unmatched);
     }
 
+    /**
+     * Resolve a single item to a canonical {@link Product}, linking it in place
+     * and returning the product. Runs the same matching cascade as
+     * {@link #canonicalize} (EAN → exact alias → fuzzy alias) but, unlike the
+     * batch path, NEVER leaves the item unmatched: when no EAN-less item matches
+     * an alias, it creates a product from the item's description rather than
+     * returning UNMATCHED.
+     *
+     * <p>Used when a user explicitly categorizes an unrecognized item on the
+     * review screen — the correction needs a product to anchor the household
+     * override, and forcing creation lets that correction propagate to future
+     * purchases of the same item (matched by the alias created here).
+     */
+    @Transactional
+    public Product linkOrCreateProduct(Receipt receipt, ReceiptItem item) {
+        if (item.getProduct() != null) {
+            return item.getProduct();
+        }
+        MDC.put(MdcContextFilter.ITEM_ID, abbrev(item.getId()));
+        try {
+            var pharmacyMerchant = merchantClassifier.isPharmacy(receipt.getCnpjEmitente(), receipt.getMarketName());
+            var normalized = DescriptionNormalizer.normalize(item.getRawDescription());
+            if (hasEan(item)) {
+                canonicalizeByEan(item, normalized, pharmacyMerchant);
+            } else if (canonicalizeByAlias(item, normalized) == ItemResult.UNMATCHED) {
+                createProductFromDescription(item, normalized, pharmacyMerchant);
+            }
+            applyHouseholdFriendlyName(receipt, item);
+            return item.getProduct();
+        } finally {
+            MDC.remove(MdcContextFilter.ITEM_ID);
+        }
+    }
+
+    /**
+     * Create a product for an EAN-less item the alias cascade couldn't place.
+     * Mirrors {@link #createProductFromEan} but the source description is the
+     * only signal, so there's no EAN to enrich from.
+     */
+    private void createProductFromDescription(ReceiptItem item, String normalized, boolean pharmacyMerchant) {
+        var extraction = productExtractor.extract(item.getRawDescription());
+        var newProduct = buildEnrichedProduct(item, extraction);
+        applyPharmacyMerchantFallback(newProduct, pharmacyMerchant);
+        var created = productRepository.save(newProduct);
+        item.setProduct(created);
+        ensureAlias(created, item.getRawDescription(), normalized);
+        log.info("item.created_from_description product={} description='{}'",
+                abbrev(created.getId()), item.getRawDescription());
+    }
+
     private void applyHouseholdFriendlyName(Receipt receipt, ReceiptItem item) {
         // Skip if user already typed a name on this item, or item didn't get
         // linked to a Product, or there's no household memory for this product.

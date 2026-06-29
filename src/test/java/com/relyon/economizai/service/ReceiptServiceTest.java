@@ -89,17 +89,19 @@ class ReceiptServiceTest {
     }
 
     @Test
-    void updateItemCategory_unlinkedItem_throws() {
+    void updateItemCategory_unlinkedItem_linksOrCreatesProductThenOverrides() {
         var user = buildUser();
         var receipt = persistedReceipt(user, ReceiptStatus.CONFIRMED); // item has no product
         var item = receipt.getItems().get(0);
+        var created = Product.builder().id(UUID.randomUUID()).normalizedName("ARROZ TIO J 5KG").build();
         when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
-        var receiptId = receipt.getId();
-        var itemId = item.getId();
+        // Canonicalizer creates/links the product for the unrecognized item.
+        when(canonicalizationService.linkOrCreateProduct(receipt, item)).thenReturn(created);
 
-        assertThrows(ReceiptNotEditableException.class,
-                () -> receiptService.updateItemCategory(user, receiptId, itemId, ProductCategory.GROCERIES));
-        verify(categoryOverrideService, never()).setOverride(any(), any(), any());
+        receiptService.updateItemCategory(user, receipt.getId(), item.getId(), ProductCategory.GROCERIES);
+
+        verify(canonicalizationService).linkOrCreateProduct(receipt, item);
+        verify(categoryOverrideService).setOverride(user, created, ProductCategory.GROCERIES);
     }
 
     @Test

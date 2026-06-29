@@ -240,6 +240,42 @@ class CanonicalizationServiceTest {
     }
 
     @Test
+    void linkOrCreateProduct_forcesCreationForUnmatchedEanlessItem() {
+        // Same input the batch path would leave UNMATCHED (no EAN, no alias) —
+        // but the explicit single-item path must create a product to anchor a
+        // user category correction.
+        var receipt = buildReceipt(item("ITEM DESCONHECIDO", null));
+        var item = receipt.getItems().get(0);
+        when(aliasRepository.findByNormalizedDescription(anyString())).thenReturn(Optional.empty());
+        when(productExtractor.extract(any())).thenReturn(ProductExtraction.EMPTY);
+        when(aliasRepository.existsByNormalizedDescription(anyString())).thenReturn(false);
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> {
+            var p = inv.<Product>getArgument(0);
+            p.setId(UUID.randomUUID());
+            return p;
+        });
+
+        var product = service.linkOrCreateProduct(receipt, item);
+
+        assertNotNull(product);
+        assertEquals(product, item.getProduct());
+        verify(productRepository).save(any(Product.class));
+    }
+
+    @Test
+    void linkOrCreateProduct_returnsExistingWhenAlreadyLinked() {
+        var existing = Product.builder().id(UUID.randomUUID()).normalizedName("Arroz").build();
+        var receipt = buildReceipt(item("ARROZ", null));
+        var item = receipt.getItems().get(0);
+        item.setProduct(existing);
+
+        var product = service.linkOrCreateProduct(receipt, item);
+
+        assertEquals(existing, product);
+        verify(productRepository, never()).save(any(Product.class));
+    }
+
+    @Test
     void fuzzyMatchesByAliasSimilarityWhenExactAliasMisses() {
         // Existing product cataloged via "ARROZ TIO JOAO 5KG"
         var product = Product.builder().id(UUID.randomUUID())

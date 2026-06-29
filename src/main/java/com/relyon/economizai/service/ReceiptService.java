@@ -198,7 +198,12 @@ public class ReceiptService {
     /**
      * The household's manual category correction for a receipt item's product —
      * "evidence, not truth": it overrides only this household's view (the global
-     * product is untouched). Item must be linked to a product.
+     * product is untouched).
+     *
+     * <p>The override is anchored to a {@link Product}. If the item isn't linked to
+     * one yet (an unrecognized line the canonicalizer left unmatched), we
+     * link-or-create the product on the spot so the correction has somewhere to
+     * live AND propagates to future purchases of the same item.
      */
     @Transactional
     public ReceiptResponse updateItemCategory(User user, UUID receiptId, UUID itemId, ProductCategory category) {
@@ -209,11 +214,11 @@ public class ReceiptService {
                 .filter(i -> i.getId().equals(itemId))
                 .findFirst()
                 .orElseThrow(ReceiptItemNotFoundException::new);
-        if (item.getProduct() == null) {
-            throw new ReceiptNotEditableException("ITEM_NOT_LINKED_TO_PRODUCT");
-        }
-        categoryOverrideService.setOverride(user, item.getProduct(), category);
-        log.info("item.category.override product={} category={}", item.getProduct().getId(), category);
+        var product = item.getProduct() != null
+                ? item.getProduct()
+                : canonicalizationService.linkOrCreateProduct(receipt, item);
+        categoryOverrideService.setOverride(user, product, category);
+        log.info("item.category.override product={} category={}", product.getId(), category);
         return toResponse(user, receipt);
     }
 
