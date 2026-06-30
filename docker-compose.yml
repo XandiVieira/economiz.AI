@@ -64,6 +64,11 @@ services:
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       EMAIL_FROM: ${EMAIL_FROM:-noreply@economiz.ai}
+      # Captcha solver for SEFAZ NFC-e states that gate behind reCAPTCHA.
+      # provider=none (default) → captcha states return 503. Set provider +
+      # api-key in .env to enable (capsolver implemented).
+      CAPTCHA_PROVIDER: ${CAPTCHA_PROVIDER:-none}
+      CAPTCHA_API_KEY: ${CAPTCHA_API_KEY:-}
       # profile pics live on a named volume (below) so they survive container
       # rebuilds — /tmp is wiped on every --build redeploy, which silently
       # orphaned the DB key and made avatars "disappear".
