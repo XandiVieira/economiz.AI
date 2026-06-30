@@ -5,6 +5,7 @@ import com.relyon.economizai.model.enums.UnidadeFederativa;
 import com.relyon.economizai.service.sefaz.captcha.CaptchaSolver;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
@@ -65,7 +66,7 @@ class MsDfePortalAdapterTest {
     void fetchHtml_noSolverConfigured_failsFastWithCaptchaUnavailable() throws Exception {
         var captcha = captchaPage();
         var adapter = new MsDfePortalAdapter(RestClient.builder(), solver(false, null), "MS", 5000, "test") {
-            @Override protected String httpGet(String url) { return captcha; }
+            @Override protected ResponseEntity<String> httpGetResponse(String url) { return ResponseEntity.ok(captcha); }
         };
 
         assertThrows(CaptchaUnavailableException.class, () -> adapter.fetchHtml(MS_CHAVE));
@@ -78,8 +79,9 @@ class MsDfePortalAdapterTest {
         var solveCalls = new AtomicInteger();
         var adapter = new MsDfePortalAdapter(RestClient.builder(),
                 solver(true, "the-token"), "MS", 5000, "test") {
-            @Override protected String httpGet(String url) { return captcha; }
-            @Override protected String fetchAuthorizedDanfe(String chave, String recaptchaToken) {
+            @Override protected ResponseEntity<String> httpGetResponse(String url) { return ResponseEntity.ok(captcha); }
+            @Override protected String fetchAuthorizedDanfe(String chave, String captchaPageHtml,
+                                                            String recaptchaToken, String cookieHeader) {
                 solveCalls.incrementAndGet();
                 assertEquals("the-token", recaptchaToken);
                 assertEquals(MS_CHAVE, chave);
@@ -100,8 +102,9 @@ class MsDfePortalAdapterTest {
     void fetchHtml_noCaptchaOnPage_returnsItDirectly() throws Exception {
         var danfe = rsDanfe();
         var adapter = new MsDfePortalAdapter(RestClient.builder(), solver(true, "tok"), "MS", 5000, "test") {
-            @Override protected String httpGet(String url) { return danfe; }
-            @Override protected String fetchAuthorizedDanfe(String chave, String token) {
+            @Override protected ResponseEntity<String> httpGetResponse(String url) { return ResponseEntity.ok(danfe); }
+            @Override protected String fetchAuthorizedDanfe(String chave, String captchaPageHtml,
+                                                            String recaptchaToken, String cookieHeader) {
                 throw new AssertionError("should not resubmit when no captcha present");
             }
         };

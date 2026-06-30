@@ -1,5 +1,6 @@
 package com.relyon.economizai.service.sefaz;
 
+import com.relyon.economizai.service.sefaz.captcha.CaptchaSolver;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.web.client.RestClient;
@@ -30,8 +31,15 @@ class RealParanaFixtureTest {
 
     private static final String CHAVE = "41260361585865261893650030000564031777660148";
 
+    private static final CaptchaSolver NO_CAPTCHA = new CaptchaSolver() {
+        @Override public boolean isConfigured() { return false; }
+        @Override public String solveRecaptchaV2(String siteKey, String pageUrl) {
+            throw new UnsupportedOperationException("no captcha in tests");
+        }
+    };
+
     private final SvrsSharedPortalAdapter adapter = new SvrsSharedPortalAdapter(
-            RestClient.builder(), 5000, "test-agent", "RS,PR", 5, 0L,
+            RestClient.builder(), NO_CAPTCHA, 5000, "test-agent", "RS,PR", 5, 0L,
             "svrs.rs.gov.br,sefaz.rs.gov.br,fazenda.pr.gov.br");
 
     @Test

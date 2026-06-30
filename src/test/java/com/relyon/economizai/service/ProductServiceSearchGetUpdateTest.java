@@ -1,14 +1,11 @@
 package com.relyon.economizai.service;
 
-import com.relyon.economizai.config.CollaborativeProperties;
 import com.relyon.economizai.dto.request.CreateProductRequest;
 import com.relyon.economizai.dto.request.UpdateProductRequest;
 import com.relyon.economizai.exception.ProductNotFoundException;
 import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.enums.CategorizationSource;
 import com.relyon.economizai.model.enums.ProductCategory;
-import com.relyon.economizai.repository.PriceObservationAuditRepository;
-import com.relyon.economizai.repository.PriceObservationAuditRepository.ProductHouseholdCount;
 import com.relyon.economizai.repository.ProductAliasRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.repository.ReceiptItemRepository;
@@ -27,9 +24,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -49,18 +46,14 @@ class ProductServiceSearchGetUpdateTest {
     @Mock private ProductAliasRepository aliasRepository;
     @Mock private ReceiptItemRepository receiptItemRepository;
     @Mock private ProductExtractor productExtractor;
-    @Mock private PriceObservationAuditRepository priceObservationAuditRepository;
-
-    // Real properties (defaults: minHouseholdsForPublic=3, lookbackDays=90) so the
-    // k-anon threshold in search() matches production without brittle stubbing.
-    private final CollaborativeProperties collaborativeProperties = new CollaborativeProperties();
 
     private ProductService productService;
 
+    private static final UUID HOUSEHOLD_ID = UUID.randomUUID();
+
     @BeforeEach
     void setUp() {
-        productService = new ProductService(productRepository, aliasRepository, receiptItemRepository,
-                productExtractor, priceObservationAuditRepository, collaborativeProperties);
+        productService = new ProductService(productRepository, aliasRepository, receiptItemRepository, productExtractor);
     }
 
     private Product buildProduct(UUID id) {
@@ -84,11 +77,10 @@ class ProductServiceSearchGetUpdateTest {
         var product = buildProduct(UUID.randomUUID());
         Page<Product> page = new PageImpl<>(List.of(product));
         when(productRepository.search("arroz", pageable)).thenReturn(page);
-        // No audit rows back → below k-anon → hasPriceHistory false.
-        when(priceObservationAuditRepository.countDistinctHouseholdsByProductIn(anyList(), any()))
+        when(receiptItemRepository.findProductIdsWithHistoryForHousehold(anyList(), eq(HOUSEHOLD_ID)))
                 .thenReturn(List.of());
 
-        var result = productService.search("  arroz  ", pageable);
+        var result = productService.search("  arroz  ", HOUSEHOLD_ID, pageable);
 
         assertEquals(1, result.getTotalElements());
         assertEquals("Arroz Tio Joao 5kg", result.getContent().get(0).normalizedName());
@@ -97,48 +89,41 @@ class ProductServiceSearchGetUpdateTest {
     }
 
     @Test
-    void search_marksHasPriceHistoryWhenAboveKAnon() {
+    void search_marksHasPriceHistoryWhenHouseholdHasBoughtIt() {
         var pageable = PageRequest.of(0, 20);
         var id = UUID.randomUUID();
         var product = buildProduct(id);
         when(productRepository.search("arroz", pageable)).thenReturn(new PageImpl<>(List.of(product)));
-        // 3 distinct households == default minHouseholdsForPublic → displayable.
-        when(priceObservationAuditRepository.countDistinctHouseholdsByProductIn(anyList(), any()))
-                .thenReturn(List.of(householdCount(id, 3)));
+        when(receiptItemRepository.findProductIdsWithHistoryForHousehold(anyList(), eq(HOUSEHOLD_ID)))
+                .thenReturn(List.of(id));
 
-        var result = productService.search("arroz", pageable);
+        var result = productService.search("arroz", HOUSEHOLD_ID, pageable);
 
         assertTrue(result.getContent().get(0).hasPriceHistory());
     }
 
     @Test
-    void search_belowKAnonStaysFalse() {
+    void search_noHistoryForHouseholdStaysFalse() {
         var pageable = PageRequest.of(0, 20);
         var id = UUID.randomUUID();
         var product = buildProduct(id);
         when(productRepository.search("arroz", pageable)).thenReturn(new PageImpl<>(List.of(product)));
-        // Only 2 households < 3 → still hidden.
-        when(priceObservationAuditRepository.countDistinctHouseholdsByProductIn(anyList(), any()))
-                .thenReturn(List.of(householdCount(id, 2)));
+        when(receiptItemRepository.findProductIdsWithHistoryForHousehold(anyList(), eq(HOUSEHOLD_ID)))
+                .thenReturn(List.of());
 
-        var result = productService.search("arroz", pageable);
+        var result = productService.search("arroz", HOUSEHOLD_ID, pageable);
 
         assertFalse(result.getContent().get(0).hasPriceHistory());
-    }
-
-    private ProductHouseholdCount householdCount(UUID productId, long households) {
-        return new ProductHouseholdCount() {
-            @Override public UUID getProductId() { return productId; }
-            @Override public long getHouseholds() { return households; }
-        };
     }
 
     @Test
     void search_blankQueryBecomesNull() {
         var pageable = PageRequest.of(0, 20);
         when(productRepository.search(isNull(), eq(pageable))).thenReturn(new PageImpl<>(List.of()));
+        when(receiptItemRepository.findProductIdsWithHistoryForHousehold(anyList(), eq(HOUSEHOLD_ID)))
+                .thenReturn(List.of());
 
-        var result = productService.search("   ", pageable);
+        var result = productService.search("   ", HOUSEHOLD_ID, pageable);
 
         assertEquals(0, result.getTotalElements());
         verify(productRepository).search(isNull(), eq(pageable));
@@ -148,8 +133,10 @@ class ProductServiceSearchGetUpdateTest {
     void search_nullQueryBecomesNull() {
         var pageable = PageRequest.of(0, 20);
         when(productRepository.search(isNull(), eq(pageable))).thenReturn(new PageImpl<>(List.of()));
+        when(receiptItemRepository.findProductIdsWithHistoryForHousehold(anyList(), eq(HOUSEHOLD_ID)))
+                .thenReturn(List.of());
 
-        productService.search(null, pageable);
+        productService.search(null, HOUSEHOLD_ID, pageable);
 
         verify(productRepository).search(isNull(), eq(pageable));
     }

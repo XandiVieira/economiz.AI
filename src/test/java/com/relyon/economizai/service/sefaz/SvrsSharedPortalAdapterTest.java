@@ -4,6 +4,7 @@ import com.relyon.economizai.exception.InvalidQrPayloadException;
 import com.relyon.economizai.exception.ReceiptParseException;
 import com.relyon.economizai.exception.SefazFetchException;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
+import com.relyon.economizai.service.sefaz.captcha.CaptchaSolver;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpStatus;
@@ -27,8 +28,15 @@ class SvrsSharedPortalAdapterTest {
 
     private static final String CHAVE_RS = "43260412345678000190650010000123451123456780";
 
+    private static final CaptchaSolver NO_CAPTCHA = new CaptchaSolver() {
+        @Override public boolean isConfigured() { return false; }
+        @Override public String solveRecaptchaV2(String siteKey, String pageUrl) {
+            throw new UnsupportedOperationException("no captcha in tests");
+        }
+    };
+
     private final SvrsSharedPortalAdapter adapter = new SvrsSharedPortalAdapter(
-            RestClient.builder(), 5000, "test-agent", "RS", 5, 0L, "svrs.rs.gov.br,sefaz.rs.gov.br");
+            RestClient.builder(), NO_CAPTCHA, 5000, "test-agent", "RS", 5, 0L, "svrs.rs.gov.br,sefaz.rs.gov.br");
 
     private String loadFixture() throws Exception {
         return loadFixture("nfce-sample.html");
@@ -48,7 +56,7 @@ class SvrsSharedPortalAdapterTest {
 
     @Test
     void supportedStates_acceptsCsvOfMultipleUfs() {
-        var multi = new SvrsSharedPortalAdapter(RestClient.builder(), 5000, "test", "RS, SC, RJ", 5, 0L, "svrs.rs.gov.br,sefaz.rs.gov.br");
+        var multi = new SvrsSharedPortalAdapter(RestClient.builder(), NO_CAPTCHA, 5000, "test", "RS, SC, RJ", 5, 0L, "svrs.rs.gov.br,sefaz.rs.gov.br");
         assertEquals(3, multi.supportedStates().size());
         assertTrue(multi.supportedStates().contains(UnidadeFederativa.SC));
         assertTrue(multi.supportedStates().contains(UnidadeFederativa.RJ));
@@ -56,7 +64,7 @@ class SvrsSharedPortalAdapterTest {
 
     @Test
     void supportedStates_ignoresUnknownUfTokens() {
-        var partial = new SvrsSharedPortalAdapter(RestClient.builder(), 5000, "test", "RS,XX,SC", 5, 0L, "svrs.rs.gov.br,sefaz.rs.gov.br");
+        var partial = new SvrsSharedPortalAdapter(RestClient.builder(), NO_CAPTCHA, 5000, "test", "RS,XX,SC", 5, 0L, "svrs.rs.gov.br,sefaz.rs.gov.br");
         assertEquals(2, partial.supportedStates().size());
         assertTrue(partial.supportedStates().contains(UnidadeFederativa.RS));
         assertTrue(partial.supportedStates().contains(UnidadeFederativa.SC));
@@ -64,7 +72,7 @@ class SvrsSharedPortalAdapterTest {
 
     @Test
     void supportedStates_blankConfigFallsBackToRs() {
-        var fallback = new SvrsSharedPortalAdapter(RestClient.builder(), 5000, "test", "", 5, 0L, "svrs.rs.gov.br,sefaz.rs.gov.br");
+        var fallback = new SvrsSharedPortalAdapter(RestClient.builder(), NO_CAPTCHA, 5000, "test", "", 5, 0L, "svrs.rs.gov.br,sefaz.rs.gov.br");
         assertEquals(1, fallback.supportedStates().size());
         assertTrue(fallback.supportedStates().contains(UnidadeFederativa.RS));
     }
@@ -226,7 +234,7 @@ class SvrsSharedPortalAdapterTest {
     /** Builds an adapter whose HTTP layer is driven by {@code behavior(callNumber)}. */
     private SvrsSharedPortalAdapter adapterWithHttp(int maxAttempts, AtomicInteger calls,
                                                     IntFunction<String> behavior) {
-        return new SvrsSharedPortalAdapter(RestClient.builder(), 5000, "test", "RS", maxAttempts, 0L, "svrs.rs.gov.br,sefaz.rs.gov.br") {
+        return new SvrsSharedPortalAdapter(RestClient.builder(), NO_CAPTCHA, 5000, "test", "RS", maxAttempts, 0L, "svrs.rs.gov.br,sefaz.rs.gov.br") {
             @Override
             protected String httpGet(String url) {
                 return behavior.apply(calls.incrementAndGet());

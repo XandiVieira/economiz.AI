@@ -1,5 +1,6 @@
 package com.relyon.economizai.service.sefaz;
 
+import com.relyon.economizai.service.sefaz.captcha.CaptchaSolver;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.web.client.RestClient;
@@ -20,8 +21,15 @@ class RealBistekFixtureTest {
 
     private static final String CHAVE = "43260583261420003255656140000288561445164522";
 
+    private static final CaptchaSolver NO_CAPTCHA = new CaptchaSolver() {
+        @Override public boolean isConfigured() { return false; }
+        @Override public String solveRecaptchaV2(String siteKey, String pageUrl) {
+            throw new UnsupportedOperationException("no captcha in tests");
+        }
+    };
+
     private final SvrsSharedPortalAdapter adapter = new SvrsSharedPortalAdapter(
-            RestClient.builder(), 5000, "test-agent", "RS", 5, 0L, "svrs.rs.gov.br,sefaz.rs.gov.br");
+            RestClient.builder(), NO_CAPTCHA, 5000, "test-agent", "RS", 5, 0L, "svrs.rs.gov.br,sefaz.rs.gov.br");
 
     @Test
     void parseRealBistekReceipt() throws Exception {

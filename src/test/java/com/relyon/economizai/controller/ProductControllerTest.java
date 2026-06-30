@@ -75,7 +75,7 @@ class ProductControllerTest {
         var user = buildUser();
         var id = UUID.randomUUID();
         Page<ProductResponse> page = new PageImpl<>(List.of(sampleProduct(id)));
-        when(productService.search(eq("arroz"), any(Pageable.class))).thenReturn(page);
+        when(productService.search(eq("arroz"), any(UUID.class), any(Pageable.class))).thenReturn(page);
 
         mockMvc.perform(get("/api/v1/products?query=arroz")
                         .with(SecurityMockMvcRequestPostProcessors.user(user)))
