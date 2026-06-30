@@ -36,7 +36,10 @@ $ctxOut = (& cmd /c "docker context use desktop-linux 2>&1")
 Write-Host "context: $ctxOut"
 # Load env explicitly from the trusted .env (the same file copied in step 1) so the
 # build never relies on cwd-relative .env discovery — keeps SMTP/JWT/etc. config in.
-$buildOut = (& cmd /c "docker compose --env-file `"$src`" --profile server up -d --build 2>&1")
+# --force-recreate so a change to an EXISTING env value (e.g. CORS_ORIGINS) actually
+# reaches the container — without it Compose reuses the running container's old env
+# when only the .env value changed (not the image or the compose service definition).
+$buildOut = (& cmd /c "docker compose --env-file `"$src`" --profile server up -d --build --force-recreate 2>&1")
 $buildOut | ForEach-Object { Write-Host $_ }
 if ($LASTEXITCODE -ne 0) { Write-Host "::error::docker compose up failed (exit $LASTEXITCODE)"; exit 1 }
 
