@@ -57,7 +57,7 @@ public class HouseholdProductService {
     private final MarketNameService marketNameService;
 
     @Transactional(readOnly = true)
-    public List<HouseholdProductResponse> listHouseholdProducts(User user) {
+    public List<HouseholdProductResponse> listHouseholdProducts(User user, String query) {
         var householdId = user.getHousehold().getId();
         var byProduct = aggregatePurchaseHistory(householdId);
         if (byProduct.isEmpty()) return List.of();
@@ -67,9 +67,17 @@ public class HouseholdProductService {
 
         return byProduct.values().stream()
                 .map(aggregate -> aggregate.toResponse(overrides))
+                .filter(resp -> matchesQuery(resp, query))
                 .sorted(Comparator.comparing(HouseholdProductResponse::lastBoughtAt,
                         Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
+    }
+
+    private boolean matchesQuery(HouseholdProductResponse resp, String query) {
+        if (query == null || query.isBlank()) return true;
+        var lower = query.strip().toLowerCase();
+        return (resp.name() != null && resp.name().toLowerCase().contains(lower))
+                || (resp.brand() != null && resp.brand().toLowerCase().contains(lower));
     }
 
     /** Collapse the household's confirmed history into one Aggregate per product

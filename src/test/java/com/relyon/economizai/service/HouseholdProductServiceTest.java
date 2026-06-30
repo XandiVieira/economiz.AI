@@ -91,7 +91,7 @@ class HouseholdProductServiceTest {
         when(receiptItemRepository.findConfirmedHistoryForHousehold(HOUSEHOLD_ID))
                 .thenReturn(List.of(older, newer));
 
-        var result = service.listHouseholdProducts(user);
+        var result = service.listHouseholdProducts(user, null);
 
         assertEquals(1, result.size());
         var row = result.get(0);
@@ -112,7 +112,7 @@ class HouseholdProductServiceTest {
         when(marketNameService.resolveNames(eq(HOUSEHOLD_ID), any()))
                 .thenReturn(Map.of(CNPJ_ZAFFARI, "Zaffari de casa"));
 
-        var result = service.listHouseholdProducts(user);
+        var result = service.listHouseholdProducts(user, null);
 
         var row = result.get(0);
         assertEquals("Zaffari", row.lastMarketName());
@@ -123,7 +123,7 @@ class HouseholdProductServiceTest {
     void listHouseholdProducts_emptyWhenNoHistory() {
         when(receiptItemRepository.findConfirmedHistoryForHousehold(HOUSEHOLD_ID)).thenReturn(List.of());
 
-        assertEquals(List.of(), service.listHouseholdProducts(user));
+        assertEquals(List.of(), service.listHouseholdProducts(user, null));
     }
 
     @Test
@@ -136,7 +136,7 @@ class HouseholdProductServiceTest {
         when(receiptItemRepository.findConfirmedHistoryForHousehold(HOUSEHOLD_ID))
                 .thenReturn(List.of(matched, unmatched));
 
-        var result = service.listHouseholdProducts(user);
+        var result = service.listHouseholdProducts(user, null);
 
         assertEquals(1, result.size());
         assertEquals(product.getId(), result.get(0).productId());
@@ -152,7 +152,7 @@ class HouseholdProductServiceTest {
         when(receiptItemRepository.findConfirmedHistoryForHousehold(HOUSEHOLD_ID))
                 .thenReturn(List.of(item));
 
-        var result = service.listHouseholdProducts(user);
+        var result = service.listHouseholdProducts(user, null);
 
         assertEquals(confirmedAt, result.get(0).lastBoughtAt());
     }
@@ -168,12 +168,39 @@ class HouseholdProductServiceTest {
                 item(newer, "4.50", CNPJ_NACIONAL, "Nacional", LocalDateTime.of(2026, Month.FEBRUARY, 1, 10, 0)),
                 undatedItem));
 
-        var result = service.listHouseholdProducts(user);
+        var result = service.listHouseholdProducts(user, null);
 
         assertEquals(3, result.size());
         assertEquals(newer.getId(), result.get(0).productId());
         assertEquals(older.getId(), result.get(1).productId());
         assertEquals(undated.getId(), result.get(2).productId(), "no purchase date sorts last");
+    }
+
+    @Test
+    void listHouseholdProducts_queryFiltersByNameCaseInsensitive() {
+        var arroz = product("ARROZ BRANCO");
+        var leite = product("Leite Integral");
+        when(receiptItemRepository.findConfirmedHistoryForHousehold(HOUSEHOLD_ID)).thenReturn(List.of(
+                item(arroz, "5.00", CNPJ_ZAFFARI, "Zaffari", LocalDateTime.of(2026, Month.JANUARY, 1, 10, 0)),
+                item(leite, "4.50", CNPJ_NACIONAL, "Nacional", LocalDateTime.of(2026, Month.FEBRUARY, 1, 10, 0))));
+
+        var result = service.listHouseholdProducts(user, "arroz");
+
+        assertEquals(1, result.size());
+        assertEquals(arroz.getId(), result.get(0).productId());
+    }
+
+    @Test
+    void listHouseholdProducts_nullQueryReturnsAll() {
+        var arroz = product("Arroz");
+        var leite = product("Leite");
+        when(receiptItemRepository.findConfirmedHistoryForHousehold(HOUSEHOLD_ID)).thenReturn(List.of(
+                item(arroz, "5.00", CNPJ_ZAFFARI, "Zaffari", LocalDateTime.of(2026, Month.JANUARY, 1, 10, 0)),
+                item(leite, "4.50", CNPJ_NACIONAL, "Nacional", LocalDateTime.of(2026, Month.FEBRUARY, 1, 10, 0))));
+
+        var result = service.listHouseholdProducts(user, null);
+
+        assertEquals(2, result.size());
     }
 
     // ---------------------------------------------------------- productMarkets
