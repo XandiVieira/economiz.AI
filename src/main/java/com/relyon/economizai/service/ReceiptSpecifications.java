@@ -3,6 +3,7 @@ package com.relyon.economizai.service;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.model.enums.ReceiptStatus;
+import com.relyon.economizai.model.enums.UnidadeFederativa;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
@@ -35,11 +36,15 @@ public final class ReceiptSpecifications {
                                                    List<ProductCategory> categories,
                                                    ReceiptStatus status,
                                                    String search,
-                                                   boolean hideFailedParse) {
+                                                   boolean hideFailedParse,
+                                                   UnidadeFederativa uf) {
         return (root, query, cb) -> {
             var predicates = new ArrayList<Predicate>();
             if (householdId != null) {
                 predicates.add(cb.equal(root.get("household").get("id"), householdId));
+            }
+            if (uf != null) {
+                predicates.add(cb.equal(root.get("uf"), uf));
             }
             // FAILED_PARSE rows are kept for ops review (PRO-43) but hidden from
             // the user history — the user didn't actually buy anything from a

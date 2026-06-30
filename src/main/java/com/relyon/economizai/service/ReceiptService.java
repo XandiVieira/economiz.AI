@@ -176,7 +176,7 @@ public class ReceiptService {
                         Sort.by(Sort.Direction.DESC, "issuedAt"))
                 : pageable;
         var spec = ReceiptSpecifications.forSearch(
-                user.getHousehold().getId(), from, to, cnpj, categories, status, trimmedSearch, true);
+                user.getHousehold().getId(), from, to, cnpj, categories, status, trimmedSearch, true, null);
         var page = receiptRepository.findAll(spec, sortedPageable);
         var householdId = user.getHousehold().getId();
         var cnpjs = page.getContent().stream()

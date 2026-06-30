@@ -4,6 +4,7 @@ import com.relyon.economizai.dto.response.ReceiptResponse;
 import com.relyon.economizai.dto.response.ReceiptSummaryResponse;
 import com.relyon.economizai.exception.ReceiptNotFoundException;
 import com.relyon.economizai.model.enums.ProductCategory;
+import com.relyon.economizai.model.enums.UnidadeFederativa;
 import com.relyon.economizai.repository.ReceiptRepository;
 import com.relyon.economizai.service.ReceiptSpecifications;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +45,7 @@ public class AdminReceiptService {
                                              List<ProductCategory> categories,
                                              String search,
                                              UUID householdId,
+                                             UnidadeFederativa uf,
                                              Pageable pageable) {
         var trimmedCnpj = Optional.ofNullable(marketCnpj).map(String::trim).filter(s -> !s.isBlank()).orElse(null);
         var trimmedSearch = Optional.ofNullable(search).map(String::trim).filter(s -> !s.isBlank()).orElse(null);
@@ -52,7 +54,7 @@ public class AdminReceiptService {
                 : pageable;
         // Admin sees FAILED_PARSE rows too — useful for parser triage.
         var spec = ReceiptSpecifications.forSearch(
-                householdId, from, to, trimmedCnpj, categories, null, trimmedSearch, false);
+                householdId, from, to, trimmedCnpj, categories, null, trimmedSearch, false, uf);
         return receiptRepository.findAll(spec, sortedPageable).map(ReceiptSummaryResponse::from);
     }
 
