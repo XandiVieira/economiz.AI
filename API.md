@@ -894,6 +894,7 @@ For one-shot ad-hoc optimization, see §9. For build-edit-shop workflows, use th
 
 ```
 GET    /api/v1/shopping-lists                                          → list (newest first)
+GET    /api/v1/shopping-lists/sole                                     → 200 + list if exactly 1 exists; 404 otherwise
 POST   /api/v1/shopping-lists                                          → create
        { "name": "...", "items"?: [ { "productId"? | "freeText"?, "quantity"? } ] }
 GET    /api/v1/shopping-lists/{id}                                     → detail with items

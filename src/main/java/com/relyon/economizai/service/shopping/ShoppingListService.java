@@ -45,6 +45,14 @@ public class ShoppingListService {
                 .toList();
     }
 
+    /** Returns the household's single shopping list; throws {@link ShoppingListNotFoundException} when count ≠ 1. */
+    @Transactional(readOnly = true)
+    public ShoppingListResponse getSole(User user) {
+        var lists = listRepository.findAllByHouseholdId(user.getHousehold().getId());
+        if (lists.size() != 1) throw new ShoppingListNotFoundException();
+        return ShoppingListResponse.from(lists.get(0));
+    }
+
     @Transactional(readOnly = true)
     public ShoppingListResponse get(User user, UUID listId) {
         return ShoppingListResponse.from(loadOwned(user, listId));

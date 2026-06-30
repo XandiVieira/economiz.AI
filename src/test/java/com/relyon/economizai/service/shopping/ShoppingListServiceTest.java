@@ -71,6 +71,33 @@ class ShoppingListServiceTest {
     }
 
     @Test
+    void getSole_returnsSingleList() {
+        var list = list("Semana", List.of());
+        when(listRepository.findAllByHouseholdId(household.getId())).thenReturn(List.of(list));
+
+        var response = service.getSole(user);
+
+        assertEquals(list.getId(), response.id());
+        assertEquals("Semana", response.name());
+    }
+
+    @Test
+    void getSole_throwsWhenNoLists() {
+        when(listRepository.findAllByHouseholdId(household.getId())).thenReturn(List.of());
+
+        assertThrows(ShoppingListNotFoundException.class, () -> service.getSole(user));
+    }
+
+    @Test
+    void getSole_throwsWhenMultipleLists() {
+        var listOne = list("Semana", List.of());
+        var listTwo = list("Festa", List.of());
+        when(listRepository.findAllByHouseholdId(household.getId())).thenReturn(List.of(listOne, listTwo));
+
+        assertThrows(ShoppingListNotFoundException.class, () -> service.getSole(user));
+    }
+
+    @Test
     void get_returnsOwnedList() {
         var list = list("Semana", List.of());
         when(listRepository.findById(list.getId())).thenReturn(Optional.of(list));

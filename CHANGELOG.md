@@ -14,6 +14,23 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-30 — Shopping list sole-check + household product search
+
+### GET /api/v1/shopping-lists/sole
+
+New endpoint: returns the household's single shopping list (full response) if exactly
+one exists, or **404** when there are 0 or 2+ lists. Lets the FE skip the list-picker
+screen entirely on the happy path without an extra round-trip.
+
+### GET /api/v1/products/mine?query=
+
+`GET /api/v1/products/mine` now accepts an optional `query` param
+(case-insensitive substring match on name or brand). Replaces the need to filter
+the global `/products` endpoint — this one is scoped to products the household has
+actually bought.
+
+---
+
 ## 2026-06-30 — Chave de acesso manual + suporte a CAPTCHA (MS)
 
 ### Input manual da chave de acesso

@@ -4079,6 +4079,31 @@
           "response": []
         },
         {
+          "name": "Get sole shopping list (skip picker)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/shopping-lists/sole",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "shopping-lists",
+                "sole"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
           "name": "Create a shopping list",
           "request": {
             "method": "POST",

@@ -38,6 +38,12 @@ public class ShoppingListsController {
         return ResponseEntity.ok(service.listForHousehold(user));
     }
 
+    /** Returns the household's single list (200) or 404 when there are 0 or 2+ lists. */
+    @GetMapping("/sole")
+    public ResponseEntity<ShoppingListResponse> sole(@AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(service.getSole(user));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<ShoppingListResponse> get(@AuthenticationPrincipal User user, @PathVariable UUID id) {
         return ResponseEntity.ok(service.get(user, id));
