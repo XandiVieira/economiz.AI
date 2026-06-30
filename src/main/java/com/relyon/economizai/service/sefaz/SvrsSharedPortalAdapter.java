@@ -1,8 +1,11 @@
 package com.relyon.economizai.service.sefaz;
 
+import com.relyon.economizai.exception.CaptchaUnavailableException;
 import com.relyon.economizai.exception.InvalidQrPayloadException;
+import com.relyon.economizai.exception.ReceiptParseException;
 import com.relyon.economizai.exception.SefazFetchException;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
+import com.relyon.economizai.service.sefaz.captcha.CaptchaSolver;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -40,7 +43,10 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
 
     private static final String PORTAL_URL = "https://dfe-portal.svrs.rs.gov.br/Dfe/QrCodeNFce";
     private static final String PR_PORTAL_URL = "https://www.fazenda.pr.gov.br/nfce/qrcode";
+    private static final Pattern CAPTCHA_MARKER = Pattern.compile("g-recaptcha|recaptcha/api\\.js", Pattern.CASE_INSENSITIVE);
+    private static final Pattern SITE_KEY = Pattern.compile("data-sitekey=\"([^\"]+)\"", Pattern.CASE_INSENSITIVE);
 
+    private final CaptchaSolver captchaSolver;
     private final RestClient restClient;
     private final Set<UnidadeFederativa> supportedStates;
     private final int maxAttempts;
@@ -48,6 +54,7 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
     private final Set<String> allowedUrlHosts;
 
     public SvrsSharedPortalAdapter(RestClient.Builder builder,
+                                   CaptchaSolver captchaSolver,
                                    @Value("${economizai.ingestion.sefaz.timeout-ms:30000}") int timeoutMs,
                                    @Value("${economizai.ingestion.sefaz.user-agent:economizai}") String userAgent,
                                    @Value("${economizai.ingestion.sefaz.svrs.states:RS,PR}") String svrsStates,
@@ -62,12 +69,13 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
                 .defaultHeader("Accept", "text/html,application/xhtml+xml")
                 .requestFactory(requestFactory)
                 .build();
+        this.captchaSolver = captchaSolver;
         this.supportedStates = parseStates(svrsStates);
         this.maxAttempts = Math.max(1, maxAttempts);
         this.retryDelayMs = Math.max(0, retryDelayMs);
         this.allowedUrlHosts = parseAllowedHosts(allowedUrlHosts);
-        log.info("SvrsSharedPortalAdapter active for UFs: {} (retry maxAttempts={} delayMs={} allowedUrlHosts={})",
-                this.supportedStates, this.maxAttempts, this.retryDelayMs, this.allowedUrlHosts);
+        log.info("SvrsSharedPortalAdapter active for UFs: {} (retry maxAttempts={} delayMs={} allowedUrlHosts={} captchaSolver configured={})",
+                this.supportedStates, this.maxAttempts, this.retryDelayMs, this.allowedUrlHosts, captchaSolver.isConfigured());
     }
 
     private Set<UnidadeFederativa> parseStates(String csv) {
@@ -124,6 +132,9 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
             if (html == null || html.isBlank()) {
                 throw new TransientSefazFetchException("empty-body");
             }
+            if (CAPTCHA_MARKER.matcher(html).find()) {
+                return handleCaptcha(html, url);
+            }
             log.info("sefaz.fetch.ok bytes={} attempt={}", html.length(), attempt);
             return html;
         } catch (HttpClientErrorException ex) {
@@ -139,6 +150,41 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
     /** Raw HTTP GET — isolated as a seam so the retry loop is unit-testable. */
     protected String httpGet(String url) {
         return restClient.get().uri(url).retrieve().body(String.class);
+    }
+
+    private String handleCaptcha(String captchaPageHtml, String url) {
+        var uf = supportedStates.iterator().next().name();
+        if (!captchaSolver.isConfigured()) {
+            log.warn("sefaz.fetch.captcha_wall uf={} solver not configured", uf);
+            throw new CaptchaUnavailableException(uf);
+        }
+        var siteKey = extractSiteKey(captchaPageHtml);
+        if (siteKey == null) {
+            log.warn("sefaz.fetch.captcha_no_sitekey uf={}", uf);
+            throw new ReceiptParseException("captcha-sitekey-missing");
+        }
+        log.info("sefaz.fetch.captcha_solving uf={}", uf);
+        var token = captchaSolver.solveRecaptchaV2(siteKey, url);
+        return fetchWithToken(url, token);
+    }
+
+    static String extractSiteKey(String html) {
+        var matcher = SITE_KEY.matcher(html);
+        return matcher.find() ? matcher.group(1) : null;
+    }
+
+    /**
+     * Resubmits the request with the solved captcha token. The exact form shape
+     * for SVRS portals is UNVERIFIED — they don't currently use captcha. Adjust
+     * if a real captcha wall is observed: check the portal's form action and
+     * field names, then update this method.
+     */
+    protected String fetchWithToken(String originalUrl, String token) {
+        var separator = originalUrl.contains("?") ? "&" : "?";
+        return restClient.get()
+                .uri(originalUrl + separator + "g-recaptcha-response=" + token)
+                .retrieve()
+                .body(String.class);
     }
 
     private void sleep(long ms) {

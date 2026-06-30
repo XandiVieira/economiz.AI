@@ -10,9 +10,15 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import org.springframework.http.ResponseEntity;
+
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * NFC-e adapter for Mato Grosso do Sul, whose consult portal
@@ -42,6 +48,9 @@ public class MsDfePortalAdapter implements SefazAdapter {
     private static final String CONSULT_URL = "https://www.dfe.ms.gov.br/nfce/consulta/";
     private static final Pattern SITE_KEY = Pattern.compile("data-sitekey=\"([^\"]+)\"", Pattern.CASE_INSENSITIVE);
     private static final Pattern CAPTCHA_MARKER = Pattern.compile("g-recaptcha|recaptcha/api\\.js", Pattern.CASE_INSENSITIVE);
+    private static final Pattern SESSION_ID = Pattern.compile(";jsessionid=([a-zA-Z0-9]+)");
+    private static final Pattern VIEW_STATE = Pattern.compile(
+            "name=\"javax\\.faces\\.ViewState\"[^>]*value=\"([^\"]+)\"", Pattern.CASE_INSENSITIVE);
 
     private final CaptchaSolver captchaSolver;
     private final RestClient restClient;
@@ -90,7 +99,8 @@ public class MsDfePortalAdapter implements SefazAdapter {
     public String fetchHtml(String qrPayload) {
         var chave = ChaveAcessoParser.extractChave(qrPayload);
         var pageUrl = consultUrl(chave);
-        var html = httpGet(pageUrl);
+        var response = httpGetResponse(pageUrl);
+        var html = response.getBody();
         if (html == null || !looksLikeCaptcha(html)) {
             // Portal already served the DANFE (no captcha this time) — parse as-is.
             return html;
@@ -106,7 +116,8 @@ public class MsDfePortalAdapter implements SefazAdapter {
         }
         log.info("ms.captcha.solving chave={} siteKey={}", chave, siteKey);
         var token = captchaSolver.solveRecaptchaV2(siteKey, pageUrl);
-        return fetchAuthorizedDanfe(chave, token);
+        var cookieHeader = extractCookies(response.getHeaders().get("Set-Cookie"));
+        return fetchAuthorizedDanfe(chave, html, token, cookieHeader);
     }
 
     @Override
@@ -127,23 +138,61 @@ public class MsDfePortalAdapter implements SefazAdapter {
         return matcher.find() ? matcher.group(1) : null;
     }
 
-    /** GET seam — isolated so the captcha orchestration is unit-testable. */
-    protected String httpGet(String url) {
-        return restClient.get().uri(url).retrieve().body(String.class);
+    /** GET seam — returns the full response so cookies can be forwarded to the POST. */
+    protected ResponseEntity<String> httpGetResponse(String url) {
+        return restClient.get().uri(url).retrieve().toEntity(String.class);
     }
 
     /**
-     * Resubmits the consult with the solved token to retrieve the DANFE. The
-     * exact request shape (the consult posts {@code chNFe} + the
-     * {@code g-recaptcha-response} token) is UNVERIFIED until the first real
-     * solve — isolated here so it's a quick fix when we can see a live page.
+     * Resubmits the JSF consult form with the solved captcha token to retrieve
+     * the DANFE. The portal uses JSF (Mojarra) — the POST must carry the
+     * session-scoped ViewState and jsessionid from the captcha page, all visible
+     * form fields, and the JSESSIONID cookie from the original GET (JSF validates
+     * the ViewState against the server-side session).
      */
-    protected String fetchAuthorizedDanfe(String chave, String recaptchaToken) {
-        return restClient.post()
-                .uri(CONSULT_URL)
-                .header("Content-Type", "application/x-www-form-urlencoded")
-                .body("tpAmb=1&chNFe=" + chave + "&g-recaptcha-response=" + recaptchaToken)
-                .retrieve()
-                .body(String.class);
+    protected String fetchAuthorizedDanfe(String chave, String captchaPageHtml,
+                                          String recaptchaToken, String cookieHeader) {
+        var sessionId = extractSessionId(captchaPageHtml);
+        var viewState = extractViewState(captchaPageHtml);
+        if (viewState == null) {
+            log.warn("ms.captcha.no_viewstate chave={}", chave);
+            throw new ReceiptParseException("captcha-viewstate-missing");
+        }
+        var postUrl = CONSULT_URL + (sessionId != null ? ";jsessionid=" + sessionId : "");
+        var body = "formListar=formListar"
+                + "&javax.faces.ViewState=" + enc(viewState)
+                + "&" + enc("formListar:j_idt23") + "=1"
+                + "&" + enc("formListar:j_idt27") + "=" + enc(chave)
+                + "&g-recaptcha-response=" + enc(recaptchaToken)
+                + "&" + enc("formListar:enter") + "=" + enc("formListar:enter");
+        log.info("ms.captcha.submitting chave={} sessionId={}", chave, sessionId);
+        var post = restClient.post()
+                .uri(postUrl)
+                .header("Content-Type", "application/x-www-form-urlencoded");
+        if (cookieHeader != null && !cookieHeader.isBlank()) {
+            post = post.header("Cookie", cookieHeader);
+        }
+        return post.body(body).retrieve().body(String.class);
+    }
+
+    private static String extractCookies(List<String> setCookieHeaders) {
+        if (setCookieHeaders == null || setCookieHeaders.isEmpty()) return null;
+        return setCookieHeaders.stream()
+                .map(cookie -> cookie.split(";")[0])
+                .collect(Collectors.joining("; "));
+    }
+
+    static String extractSessionId(String html) {
+        var matcher = SESSION_ID.matcher(html);
+        return matcher.find() ? matcher.group(1) : null;
+    }
+
+    static String extractViewState(String html) {
+        var matcher = VIEW_STATE.matcher(html);
+        return matcher.find() ? matcher.group(1) : null;
+    }
+
+    private static String enc(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 }

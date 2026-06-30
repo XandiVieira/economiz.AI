@@ -97,7 +97,7 @@ economizai:
   # Pick a provider + key when ready; twocaptcha is implemented and its API is
   # shared by compatible services (set base-url). See DEV_NOTES "Captcha solver".
   captcha:
-    provider: ${CAPTCHA_PROVIDER:none}          # none | twocaptcha
+    provider: ${CAPTCHA_PROVIDER:none}          # none | capsolver
     api-key: ${CAPTCHA_API_KEY:}
     base-url: ${CAPTCHA_BASE_URL:https://2captcha.com}
     timeout-ms: ${CAPTCHA_TIMEOUT_MS:120000}
