@@ -204,23 +204,37 @@ POST /api/v1/receipts
 → 201 ReceiptResponse with status="PENDING_CONFIRMATION"
 ```
 
-**`qrPayload` accepts four shapes** — they're all parsed into the 44-digit chave
-de acesso server-side. Pass exactly what the QR scanner returned:
+**`qrPayload` accepts five shapes** — they're all parsed into the 44-digit chave
+de acesso server-side. Pass exactly what the QR scanner returned, or the chave
+typed/pasted manually:
 
 1. SVRS landing URL: `https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx?p=<chave>|3|1`
 2. Direct portal URL: `https://dfe-portal.svrs.rs.gov.br/Dfe/QrCodeNFce?p=<chave>|3|1`
 3. Bare pipe payload: `<44-digit-chave>|3|1`
-4. Bare 44-digit chave
+4. Bare 44-digit chave (no spaces): `50260677863223012709650190004048511190344086`
+5. Bare chave with spaces (printed format): `5026 0677 8632 2301 2709 6501 9000 4048 5111 9034 4086`
+
+Shapes 4 and 5 support the **"enter manually" fallback** when the QR code can't
+be scanned. The 44-digit code is always printed on the receipt under "CHAVE DE
+ACESSO" in groups of 4. Spaces are stripped server-side — send whatever the user
+typed or pasted.
+
+**Suggested UX for manual entry:** a single text field that accepts paste, strips
+spaces/hyphens on submit, and validates length = 44 digits before sending. A
+grouped input (11 × 4-digit fields with auto-advance) reduces transcription
+errors but is optional — the backend handles both.
 
 ### Error paths
 
 | Response | When |
 |---|---|
 | 400 `receipt.qr.invalid` | Couldn't extract a 44-digit chave from the input |
-| 400 `receipt.state.unsupported` | Chave is from a state we don't have a SEFAZ adapter for (only RS today) |
-| 502 `receipt.sefaz.fetch.failed` | SVRS portal didn't respond / 5xx'd — **only after the server already retried** (the SVRS portal is flaky; the backend retries transient failures up to 5 attempts: immediate, then 5s/5s/5s, before surfacing this). 4xx is not retried. The call can therefore take up to ~15s+ when the portal is down. |
+| 400 `receipt.state.unsupported` | Chave is from a state we don't have a SEFAZ adapter for |
+| 503 `receipt.captcha.unavailable` | State requires CAPTCHA but solver isn't enabled (shouldn't happen in prod) |
+| 502 `receipt.captcha.failed` | CAPTCHA solver ran but failed after retries (e.g. balance exhausted) |
+| 502 `receipt.sefaz.fetch.failed` | SEFAZ portal didn't respond / 5xx'd — **only after the server already retried** (up to 5 attempts: immediate, then 5s/5s/5s). Call can take up to ~15s+ when the portal is down. |
 | 400 `receipt.parse.failed` | We fetched HTML but the parser couldn't extract items. **The receipt is still saved with `status=FAILED_PARSE` + `rawHtml`** so ops can patch the parser without you re-scanning. |
-| 409 `receipt.already.ingested` | This chave is already in **your household's** history. Other households can still import the same chave; this only blocks double-import within yours. Delete it via `DELETE /receipts/{id}` to free the slot. |
+| 409 `receipt.already.ingested` | This chave is already in **your household's** history. Delete it via `DELETE /receipts/{id}` to free the slot. |
 
 ### Review + confirm
 

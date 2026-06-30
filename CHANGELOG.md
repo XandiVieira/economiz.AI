@@ -14,6 +14,33 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-30 — Chave de acesso manual + suporte a CAPTCHA (MS)
+
+### Input manual da chave de acesso
+
+`POST /api/v1/receipts` agora aceita dois formatos no campo `qrPayload`:
+
+- **QR code URL** — como antes (ex: `https://dfe-portal.svrs.rs.gov.br/...`)
+- **Chave de acesso bare** — os 44 dígitos numéricos impressos na nota, com ou sem espaços
+
+```json
+{ "qrPayload": "50260677863223012709650190004048511190344086" }
+// ou com espaços (stripped automaticamente pelo backend):
+{ "qrPayload": "5026 0677 8632 2301 2709 6501 9000 4048 5111 9034 4086" }
+```
+
+Útil quando o QR code não consegue ser lido (nota amassada, mal impressa, etc.). O código de 44 dígitos está sempre impresso abaixo do QR na seção "CHAVE DE ACESSO".
+
+### Suporte a CAPTCHA (MS e futuros estados)
+
+O backend agora resolve automaticamente o reCAPTCHA v2 do portal SEFAZ-MS via CapSolver antes de buscar o DANFE. Transparente para o FE — o fluxo de submit/polling não muda. Estados que ainda não usam CAPTCHA não são afetados.
+
+Novo código de erro possível ao submeter uma nota de estado com CAPTCHA não configurado (improvável em prod, mas útil saber):
+- `503` com `messageKey: receipt.captcha.unavailable` — solver não habilitado para esse estado
+- `502` com `messageKey: receipt.captcha.failed` — solver falhou após retries (saldo CapSolver esgotado, por ex.)
+
+---
+
 ## 2026-06-29 — EAN catalog: step A2 no cascade de canonicalização
 
 Nova camada entre o lookup interno de EAN (A1) e o dicionário de keywords (A3):
