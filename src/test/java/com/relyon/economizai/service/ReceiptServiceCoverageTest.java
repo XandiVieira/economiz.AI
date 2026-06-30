@@ -7,7 +7,6 @@ import com.relyon.economizai.dto.request.UpdateReceiptItemRequest;
 import com.relyon.economizai.exception.ReceiptItemNotFoundException;
 import com.relyon.economizai.exception.ReceiptNotEditableException;
 import com.relyon.economizai.exception.ReceiptNotFoundException;
-import com.relyon.economizai.exception.ReceiptParseException;
 import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.Receipt;
@@ -29,7 +28,7 @@ import com.relyon.economizai.service.notifications.NotificationService;
 import com.relyon.economizai.service.notifications.SavingsAttributionService;
 import com.relyon.economizai.service.priceindex.PriceIndexService;
 import com.relyon.economizai.service.priceindex.PromoDetector;
-import com.relyon.economizai.service.sefaz.FailedParseRecorder;
+import com.relyon.economizai.service.sefaz.ReceiptIngestionService;
 import com.relyon.economizai.service.sefaz.ParsedReceipt;
 import com.relyon.economizai.service.sefaz.ParsedReceiptItem;
 import com.relyon.economizai.service.sefaz.SefazIngestionService;
@@ -86,7 +85,7 @@ class ReceiptServiceCoverageTest {
     @Mock private ReceiptRepository receiptRepository;
     @Mock private ReceiptItemRepository receiptItemRepository;
     @Mock private SefazIngestionService sefazIngestionService;
-    @Mock private FailedParseRecorder failedParseRecorder;
+    @Mock private ReceiptIngestionService receiptIngestionService;
     @Mock private CanonicalizationService canonicalizationService;
     @Mock private PriceIndexService priceIndexService;
     @Mock private PromoDetector promoDetector;
@@ -116,35 +115,11 @@ class ReceiptServiceCoverageTest {
     // ---------------------------------------------------------------- submit
 
     @Test
-    void submit_recordsFailedParseInSeparateTxnAndRethrows() {
-        var user = buildUser();
-        when(receiptRepository.findByHouseholdIdAndChaveAcesso(any(), eq(CHAVE_RS)))
-                .thenReturn(Optional.empty());
-        var fetched = new SefazIngestionService.FetchedDocument(null, "<html/>", CHAVE_RS,
-                UnidadeFederativa.RS, null);
-        var parseException = new ReceiptParseException("no items found");
-        when(sefazIngestionService.fetch(CHAVE_RS)).thenReturn(fetched);
-        when(sefazIngestionService.parse(fetched)).thenThrow(parseException);
-
-        var request = new SubmitReceiptRequest(CHAVE_RS);
-        var thrown = assertThrows(ReceiptParseException.class,
-                () -> receiptService.submit(user, request));
-
-        assertSame(parseException, thrown);
-        verify(failedParseRecorder).record(user, CHAVE_RS, fetched, parseException);
-        verify(receiptRepository, never()).save(any(Receipt.class));
-    }
-
-    @Test
-    void submit_replacesStaleFailedParseRowThenPersistsFresh() {
+    void submit_replacesStaleFailedParseRowThenPersistsProcessing() {
         var user = buildUser();
         var stale = persistedReceipt(user, ReceiptStatus.FAILED_PARSE);
         when(receiptRepository.findByHouseholdIdAndChaveAcesso(any(), eq(CHAVE_RS)))
                 .thenReturn(Optional.of(stale));
-        var fetched = new SefazIngestionService.FetchedDocument(null, "<html/>", CHAVE_RS,
-                UnidadeFederativa.RS, null);
-        when(sefazIngestionService.fetch(CHAVE_RS)).thenReturn(fetched);
-        when(sefazIngestionService.parse(fetched)).thenReturn(sampleParsed());
         when(receiptRepository.save(any(Receipt.class))).thenAnswer(invocation -> {
             var persisted = invocation.<Receipt>getArgument(0);
             persisted.setId(UUID.randomUUID());
@@ -157,8 +132,8 @@ class ReceiptServiceCoverageTest {
         verify(receiptRepository).delete(deletedCaptor.capture());
         assertEquals(stale.getId(), deletedCaptor.getValue().getId());
         verify(receiptRepository).flush();
-        assertEquals(ReceiptStatus.PENDING_CONFIRMATION, response.status());
-        assertEquals("Mercado X", response.marketName());
+        assertEquals(ReceiptStatus.PROCESSING, response.status());
+        verify(receiptIngestionService).ingest(eq(response.id()), eq(CHAVE_RS));
     }
 
     // ------------------------------------------------------------------ list

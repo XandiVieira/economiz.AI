@@ -12,7 +12,6 @@ import com.relyon.economizai.exception.ReceiptAlreadyIngestedException;
 import com.relyon.economizai.exception.ReceiptItemNotFoundException;
 import com.relyon.economizai.exception.ReceiptNotEditableException;
 import com.relyon.economizai.exception.ReceiptNotFoundException;
-import com.relyon.economizai.exception.ReceiptParseException;
 import com.relyon.economizai.config.MdcContextFilter;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.ReceiptItem;
@@ -34,9 +33,9 @@ import com.relyon.economizai.service.priceindex.PriceIndexService;
 import com.relyon.economizai.service.privacy.LogMasker;
 import com.relyon.economizai.service.priceindex.PromoDetector;
 import com.relyon.economizai.service.sefaz.ChaveAcessoParser;
-import com.relyon.economizai.service.sefaz.FailedParseRecorder;
 import com.relyon.economizai.service.sefaz.ParsedReceipt;
 import com.relyon.economizai.service.sefaz.ParsedReceiptItem;
+import com.relyon.economizai.service.sefaz.ReceiptIngestionService;
 import com.relyon.economizai.service.sefaz.SefazIngestionService;
 import com.relyon.economizai.service.subscription.Feature;
 import com.relyon.economizai.service.subscription.SubscriptionGateService;
@@ -49,6 +48,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.time.YearMonth;
@@ -66,7 +67,6 @@ public class ReceiptService {
     private final ReceiptRepository receiptRepository;
     private final ReceiptItemRepository receiptItemRepository;
     private final SefazIngestionService sefazIngestionService;
-    private final FailedParseRecorder failedParseRecorder;
     private final CanonicalizationService canonicalizationService;
     private final PriceIndexService priceIndexService;
     private final PromoDetector promoDetector;
@@ -79,11 +79,17 @@ public class ReceiptService {
     private final MarketNameService marketNameService;
     private final SubscriptionGateService subscriptionGate;
     private final SavingsAttributionService savingsAttributionService;
+    private final ReceiptIngestionService receiptIngestionService;
 
     /**
-     * Ingest a receipt from a scanned QR code. Reads top-to-bottom as the business
-     * flow: enforce the plan's monthly cap, enforce per-household uniqueness,
-     * fetch+parse from SEFAZ, then persist as PENDING_CONFIRMATION for review.
+     * Ingest a receipt from a scanned QR code. Returns IMMEDIATELY with a
+     * PROCESSING receipt: the slow part (SEFAZ fetch + captcha solve + parse,
+     * up to a couple of minutes) runs in the background so the FE's HTTP call
+     * never times out. The FE polls {@code GET /receipts/{id}} until the status
+     * leaves PROCESSING — PENDING_CONFIRMATION (ready to review) or FAILED_PARSE.
+     *
+     * <p>Validation (monthly cap, per-household uniqueness) still happens
+     * synchronously here so the caller gets those errors up front.
      */
     @Transactional
     public ReceiptResponse submit(User user, SubmitReceiptRequest request) {
@@ -93,13 +99,44 @@ public class ReceiptService {
 
         enforceMonthlyReceiptCap(user);
         replaceStalePriorOrRejectConfirmedDuplicate(user, chave);
-        var parsed = fetchAndParseOrRecordFailure(user, qrPayload);
 
-        var receipt = persistParsed(user, qrPayload, parsed);
-        MDC.put(MdcContextFilter.RECEIPT_ID, abbrev(receipt.getId()));
-        log.info("submit ok status=PENDING_CONFIRMATION items={} total={} market='{}'",
-                receipt.getItems().size(), receipt.getTotalAmount(), receipt.getMarketName());
+        var receipt = persistProcessing(user, qrPayload, chave);
+        var receiptId = receipt.getId();
+        MDC.put(MdcContextFilter.RECEIPT_ID, abbrev(receiptId));
+        log.info("submit ok status=PROCESSING (ingestion dispatched)");
+
+        // Dispatch the slow SEFAZ work only AFTER this transaction commits, so the
+        // background thread reads a committed PROCESSING row (no read-before-commit race).
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    receiptIngestionService.ingest(receiptId, qrPayload);
+                }
+            });
+        } else {
+            receiptIngestionService.ingest(receiptId, qrPayload);
+        }
+
         return withFriendlyName(user.getHousehold().getId(), receipt, ReceiptResponse.from(receipt));
+    }
+
+    /**
+     * Persist the receipt as PROCESSING before the SEFAZ fetch. chave + uf are
+     * derivable from the QR payload up front (both are NOT NULL columns); the
+     * rest of the fields + items are filled in by the async ingestion once the
+     * DANFE is parsed.
+     */
+    private Receipt persistProcessing(User user, String qrPayload, String chave) {
+        var receipt = Receipt.builder()
+                .user(user)
+                .household(user.getHousehold())
+                .chaveAcesso(chave)
+                .uf(ChaveAcessoParser.extractUf(chave))
+                .qrPayload(qrPayload)
+                .status(ReceiptStatus.PROCESSING)
+                .build();
+        return receiptRepository.save(receipt);
     }
 
     /**
@@ -143,21 +180,6 @@ public class ReceiptService {
                     receiptRepository.delete(existing);
                     receiptRepository.flush();
                 });
-    }
-
-    /**
-     * Fetch the document from SEFAZ and parse it. On a parse failure, record the
-     * failure in a SEPARATE transaction (REQUIRES_NEW on the recorder bean) so the
-     * row survives this method's @Transactional rollback when we rethrow.
-     */
-    private ParsedReceipt fetchAndParseOrRecordFailure(User user, String qrPayload) {
-        var fetched = sefazIngestionService.fetch(qrPayload);
-        try {
-            return sefazIngestionService.parse(fetched);
-        } catch (ReceiptParseException ex) {
-            failedParseRecorder.record(user, qrPayload, fetched, ex);
-            throw ex;
-        }
     }
 
     @Transactional(readOnly = true)
@@ -480,30 +502,7 @@ public class ReceiptService {
         }
     }
 
-    private Receipt persistParsed(User user, String qrPayload, ParsedReceipt parsed) {
-        var receipt = Receipt.builder()
-                .user(user)
-                .household(user.getHousehold())
-                .chaveAcesso(parsed.chaveAcesso())
-                .uf(ChaveAcessoParser.extractUf(parsed.chaveAcesso()))
-                .cnpjEmitente(parsed.cnpjEmitente())
-                .marketName(parsed.marketName())
-                .marketAddress(parsed.marketAddress())
-                .issuedAt(parsed.issuedAt())
-                .totalAmount(parsed.totalAmount())
-                .discountTotal(parsed.discountTotal())
-                .approxTaxFederal(parsed.approxTaxFederal())
-                .approxTaxEstadual(parsed.approxTaxEstadual())
-                .qrPayload(qrPayload)
-                .sourceUrl(parsed.sourceUrl())
-                .rawHtml(parsed.rawHtml())
-                .status(ReceiptStatus.PENDING_CONFIRMATION)
-                .build();
-        parsed.items().forEach(parsedItem -> receipt.addItem(toReceiptItem(parsedItem)));
-        return receiptRepository.save(receipt);
-    }
-
-    /** Single mapping from a SEFAZ-parsed line to a persisted item (submit + reparse). */
+    /** Single mapping from a SEFAZ-parsed line to a persisted item (reparse). */
     private static ReceiptItem toReceiptItem(ParsedReceiptItem parsedItem) {
         return ReceiptItem.builder()
                 .lineNumber(parsedItem.lineNumber())

@@ -5,6 +5,7 @@ import com.relyon.economizai.repository.PriceObservationAuditRepository;
 import com.relyon.economizai.repository.PriceObservationRepository;
 import com.relyon.economizai.service.sefaz.ParsedReceipt;
 import com.relyon.economizai.service.sefaz.ParsedReceiptItem;
+import com.relyon.economizai.service.sefaz.ReceiptIngestionService;
 import com.relyon.economizai.service.sefaz.SefazIngestionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -57,8 +59,31 @@ class ReceiptToPriceIndexIntegrationTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
     @Autowired private PriceObservationRepository observationRepository;
     @Autowired private PriceObservationAuditRepository auditRepository;
+    @Autowired private ReceiptIngestionService receiptIngestionService;
 
     @MockitoBean private SefazIngestionService sefazIngestionService;
+
+    /**
+     * Submit returns immediately as PROCESSING; the SEFAZ fetch+parse runs
+     * asynchronously after commit in production. The test runs in a single
+     * transaction (no commit, no real async thread), so we drive the background
+     * step explicitly: submit, then invoke the ingestion service directly so the
+     * receipt reaches PENDING_CONFIRMATION before we confirm. Returns the id.
+     */
+    private String submitAndIngest(String token) throws Exception {
+        var submitResult = mockMvc.perform(post("/api/v1/receipts")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"qrPayload\":\"" + CHAVE + "\"}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        var submitJson = objectMapper.readTree(submitResult.getResponse().getContentAsString());
+        assertEquals("PROCESSING", submitJson.get("status").asText(),
+                "submit returns immediately as PROCESSING");
+        var receiptId = submitJson.get("id").asText();
+        receiptIngestionService.ingest(UUID.fromString(receiptId), CHAVE);
+        return receiptId;
+    }
 
     private String registerAndLogin(String email) throws Exception {
         var body = """
@@ -98,17 +123,8 @@ class ReceiptToPriceIndexIntegrationTest {
         when(sefazIngestionService.fetch(any())).thenReturn(fetched);
         when(sefazIngestionService.parse(any())).thenReturn(fakeParsedReceipt(new BigDecimal("28.00")));
 
-        // submit
-        var submitResult = mockMvc.perform(post("/api/v1/receipts")
-                        .header("Authorization", "Bearer " + token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"qrPayload\":\"" + CHAVE + "\"}"))
-                .andExpect(status().isCreated())
-                .andReturn();
-        var submitJson = objectMapper.readTree(submitResult.getResponse().getContentAsString());
-        var receiptId = submitJson.get("id").asText();
-        assertEquals("PENDING_CONFIRMATION", submitJson.get("status").asText());
-        assertEquals(1, submitJson.get("items").size());
+        // submit (PROCESSING) + drive the async ingestion to PENDING_CONFIRMATION
+        var receiptId = submitAndIngest(token);
 
         // confirm — triggers canonicalization + observation write + personal promo check
         var confirmResult = mockMvc.perform(post("/api/v1/receipts/" + receiptId + "/confirm")
@@ -150,7 +166,7 @@ class ReceiptToPriceIndexIntegrationTest {
         when(sefazIngestionService.fetch(any())).thenReturn(fetched);
         when(sefazIngestionService.parse(any())).thenReturn(fakeParsedReceipt(new BigDecimal("28.00")));
 
-        // First submit — leaves a PENDING_CONFIRMATION row.
+        // First submit — leaves a non-CONFIRMED (PROCESSING) row.
         var first = mockMvc.perform(post("/api/v1/receipts")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -160,13 +176,7 @@ class ReceiptToPriceIndexIntegrationTest {
         var firstId = objectMapper.readTree(first.getResponse().getContentAsString()).get("id").asText();
 
         // Re-submit the same chave — must succeed (201) with a new id, NOT 409.
-        var second = mockMvc.perform(post("/api/v1/receipts")
-                        .header("Authorization", "Bearer " + token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"qrPayload\":\"" + CHAVE + "\"}"))
-                .andExpect(status().isCreated())
-                .andReturn();
-        var secondId = objectMapper.readTree(second.getResponse().getContentAsString()).get("id").asText();
+        var secondId = submitAndIngest(token);
         assertNotEquals(firstId, secondId, "re-submit should produce a fresh receipt id");
 
         // Confirm the second one — first must be gone.
@@ -197,12 +207,7 @@ class ReceiptToPriceIndexIntegrationTest {
                         .content("{\"contributionOptIn\":false}"))
                 .andExpect(status().isOk());
 
-        var submitResult = mockMvc.perform(post("/api/v1/receipts")
-                        .header("Authorization", "Bearer " + token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"qrPayload\":\"" + CHAVE + "\"}"))
-                .andExpect(status().isCreated()).andReturn();
-        var receiptId = objectMapper.readTree(submitResult.getResponse().getContentAsString()).get("id").asText();
+        var receiptId = submitAndIngest(token);
 
         mockMvc.perform(post("/api/v1/receipts/" + receiptId + "/confirm")
                         .header("Authorization", "Bearer " + token))

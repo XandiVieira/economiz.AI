@@ -27,6 +27,7 @@ import com.relyon.economizai.service.priceindex.PriceIndexService;
 import com.relyon.economizai.service.priceindex.PromoDetector;
 import com.relyon.economizai.service.sefaz.ParsedReceipt;
 import com.relyon.economizai.service.sefaz.ParsedReceiptItem;
+import com.relyon.economizai.service.sefaz.ReceiptIngestionService;
 import com.relyon.economizai.service.sefaz.SefazIngestionService;
 import com.relyon.economizai.service.subscription.SubscriptionGateService;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,6 +65,7 @@ class ReceiptServiceTest {
     @Mock private ReceiptRepository receiptRepository;
     @Mock private ReceiptItemRepository receiptItemRepository;
     @Mock private SefazIngestionService sefazIngestionService;
+    @Mock private ReceiptIngestionService receiptIngestionService;
     @Mock private CanonicalizationService canonicalizationService;
     @Mock private PriceIndexService priceIndexService;
     @Mock private PromoDetector promoDetector;
@@ -182,13 +184,9 @@ class ReceiptServiceTest {
     }
 
     @Test
-    void submit_persistsParsedReceiptInPendingStatus() {
+    void submit_persistsProcessingAndDispatchesIngestion() {
         var user = buildUser();
         when(receiptRepository.findByHouseholdIdAndChaveAcesso(any(), eq(CHAVE_RS))).thenReturn(Optional.empty());
-        var fetched = new SefazIngestionService.FetchedDocument(null, "<html/>", CHAVE_RS,
-                UnidadeFederativa.RS, null);
-        when(sefazIngestionService.fetch(CHAVE_RS)).thenReturn(fetched);
-        when(sefazIngestionService.parse(fetched)).thenReturn(sampleParsed());
         when(receiptRepository.save(any(Receipt.class))).thenAnswer(inv -> {
             var r = inv.<Receipt>getArgument(0);
             r.setId(UUID.randomUUID());
@@ -197,10 +195,12 @@ class ReceiptServiceTest {
 
         var response = receiptService.submit(user, new SubmitReceiptRequest(CHAVE_RS));
 
+        // submit returns immediately as PROCESSING (no SEFAZ work on the request thread)
         assertNotNull(response.id());
-        assertEquals(ReceiptStatus.PENDING_CONFIRMATION, response.status());
-        assertEquals(1, response.items().size());
-        assertEquals("ARROZ TIO J 5KG", response.items().get(0).rawDescription());
+        assertEquals(ReceiptStatus.PROCESSING, response.status());
+        verify(sefazIngestionService, never()).fetch(any());
+        // the slow ingestion is handed off to the background service
+        verify(receiptIngestionService).ingest(eq(response.id()), eq(CHAVE_RS));
     }
 
     @Test
@@ -214,7 +214,7 @@ class ReceiptServiceTest {
         assertThrows(PaywallException.class,
                 () -> receiptService.submit(user, request));
 
-        verify(sefazIngestionService, never()).fetch(any());
+        verify(receiptIngestionService, never()).ingest(any(), any());
         verify(receiptRepository, never()).save(any());
     }
 
@@ -225,10 +225,6 @@ class ReceiptServiceTest {
         when(receiptRepository.countByUserIdAndCreatedAtGreaterThanEqual(eq(user.getId()), any()))
                 .thenReturn(2L);
         when(receiptRepository.findByHouseholdIdAndChaveAcesso(any(), eq(CHAVE_RS))).thenReturn(Optional.empty());
-        var fetched = new SefazIngestionService.FetchedDocument(null, "<html/>", CHAVE_RS,
-                UnidadeFederativa.RS, null);
-        when(sefazIngestionService.fetch(CHAVE_RS)).thenReturn(fetched);
-        when(sefazIngestionService.parse(fetched)).thenReturn(sampleParsed());
         when(receiptRepository.save(any(Receipt.class))).thenAnswer(inv -> {
             var r = inv.<Receipt>getArgument(0);
             r.setId(UUID.randomUUID());
@@ -237,7 +233,8 @@ class ReceiptServiceTest {
 
         var response = receiptService.submit(user, new SubmitReceiptRequest(CHAVE_RS));
 
-        assertEquals(ReceiptStatus.PENDING_CONFIRMATION, response.status());
+        assertEquals(ReceiptStatus.PROCESSING, response.status());
+        verify(receiptIngestionService).ingest(eq(response.id()), eq(CHAVE_RS));
     }
 
     @Test
@@ -263,10 +260,6 @@ class ReceiptServiceTest {
         var stale = persistedReceipt(user, ReceiptStatus.PENDING_CONFIRMATION);
         when(receiptRepository.findByHouseholdIdAndChaveAcesso(any(), eq(CHAVE_RS)))
                 .thenReturn(Optional.of(stale));
-        var fetched = new SefazIngestionService.FetchedDocument(null, "<html/>", CHAVE_RS,
-                UnidadeFederativa.RS, null);
-        when(sefazIngestionService.fetch(CHAVE_RS)).thenReturn(fetched);
-        when(sefazIngestionService.parse(fetched)).thenReturn(sampleParsed());
         when(receiptRepository.save(any(Receipt.class))).thenAnswer(inv -> {
             var r = inv.<Receipt>getArgument(0);
             r.setId(UUID.randomUUID());
@@ -280,7 +273,7 @@ class ReceiptServiceTest {
         var captor = ArgumentCaptor.forClass(Receipt.class);
         verify(receiptRepository).delete(captor.capture());
         assertEquals(stale.getId(), captor.getValue().getId());
-        assertEquals(ReceiptStatus.PENDING_CONFIRMATION, response.status());
+        assertEquals(ReceiptStatus.PROCESSING, response.status());
     }
 
     @Test

@@ -14,6 +14,32 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-06-30 — Receipt submit is now ASYNC (status PROCESSING + polling)
+
+### ⚠️ Contract change: `POST /api/v1/receipts`
+
+`POST /receipts` no longer blocks until SEFAZ is fetched + parsed. It now returns
+**immediately** with the receipt in a new status **`PROCESSING`** and an empty
+`items` list. The slow work (SEFAZ fetch + captcha solve, which can take tens of
+seconds) runs in the background.
+
+**Why:** the captcha solve could push the request past the FE's HTTP timeout. The
+async flow removes the timeout entirely.
+
+**New status value:** `ReceiptStatus.PROCESSING` (added ahead of
+`PENDING_CONFIRMATION` in the enum).
+
+**FE flow now:**
+1. `POST /receipts` → `201` with `{ id, status: "PROCESSING", items: [] }`.
+2. Poll `GET /receipts/{id}` until `status` leaves `PROCESSING`:
+   - `PENDING_CONFIRMATION` → go to the review screen (items now populated).
+   - `FAILED_PARSE` → show the error (`parseErrorReason` carries the reason key).
+3. Suggested polling: every ~2.5s, give up after ~90s and show "demorou demais,
+   tente de novo" (the background job also caps the captcha solve internally).
+
+Validation errors (monthly cap → `402`, duplicate confirmed chave → `409`) are
+still returned **synchronously** on the `POST`, before PROCESSING is created.
+
 ## 2026-06-30 — Shopping list sole-check + household product search
 
 ### GET /api/v1/shopping-lists/sole
