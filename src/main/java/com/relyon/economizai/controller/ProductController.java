@@ -51,13 +51,17 @@ public class ProductController {
         if (lastProducts != null && user != null) {
             return ResponseEntity.ok(new PageImpl<>(recentViewService.listRecent(user, lastProducts)));
         }
-        return ResponseEntity.ok(productService.search(query, pageable));
+        return ResponseEntity.ok(productService.search(query, user.getHousehold().getId(), pageable));
     }
 
-    /** Products this household has actually bought (not the global catalog), newest purchase first. */
+    /**
+     * Products this household has actually bought (not the global catalog), newest purchase first.
+     * Optional {@code query} filters by product name or brand (case-insensitive substring).
+     */
     @GetMapping("/mine")
-    public ResponseEntity<List<HouseholdProductResponse>> mine(@AuthenticationPrincipal User user) {
-        return ResponseEntity.ok(householdProductService.listHouseholdProducts(user));
+    public ResponseEntity<List<HouseholdProductResponse>> mine(@AuthenticationPrincipal User user,
+                                                               @RequestParam(required = false) String query) {
+        return ResponseEntity.ok(householdProductService.listHouseholdProducts(user, query));
     }
 
     /**
