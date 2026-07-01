@@ -203,13 +203,31 @@ public class MsDfePortalAdapter implements SefazAdapter {
             var location = postResponse.getHeaders().getLocation();
             if (location == null) throw new ReceiptParseException("captcha-redirect-missing-location");
             log.info("ms.captcha.redirect chave={} location={}", chave, location);
-            var get = restClient.get().uri(location);
-            if (cookieHeader != null && !cookieHeader.isBlank()) {
-                get = get.header("Cookie", cookieHeader);
-            }
-            return get.retrieve().body(String.class);
+            return getWithCookies(location.toString(), cookieHeader, chave);
         }
         return postResponse.getBody();
+    }
+
+    /**
+     * GET the given URL with cookies preserved across protocol-upgrade redirects
+     * (HTTP → HTTPS). HttpURLConnection never auto-follows those, so we detect a
+     * 3xx and follow once more manually before reading the body.
+     */
+    private String getWithCookies(String url, String cookieHeader, String chave) {
+        var getResp = noRedirectClient.get().uri(url)
+                .headers(httpHeaders -> { if (cookieHeader != null && !cookieHeader.isBlank()) httpHeaders.set("Cookie", cookieHeader); })
+                .retrieve()
+                .toEntity(String.class);
+        if (getResp.getStatusCode().is3xxRedirection()) {
+            var next = getResp.getHeaders().getLocation();
+            if (next == null) throw new ReceiptParseException("captcha-result-redirect-missing-location");
+            log.info("ms.captcha.result.redirect chave={} location={}", chave, next);
+            return noRedirectClient.get().uri(next)
+                    .headers(httpHeaders -> { if (cookieHeader != null && !cookieHeader.isBlank()) httpHeaders.set("Cookie", cookieHeader); })
+                    .retrieve()
+                    .body(String.class);
+        }
+        return getResp.getBody();
     }
 
     private static String extractCookies(List<String> setCookieHeaders) {
