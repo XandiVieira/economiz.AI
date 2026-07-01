@@ -136,7 +136,13 @@ public class MsDfePortalAdapter implements SefazAdapter {
         }
         log.info("ms.captcha.solving chave={} siteKey={}", chave, siteKey);
         var token = captchaSolver.solveRecaptchaV2(siteKey, pageUrl);
+        // Prefer Set-Cookie headers; fall back to sessionId from HTML if headers are unavailable
+        // (HttpURLConnection may suppress Set-Cookie exposure when a CookieHandler is active).
         var cookieHeader = extractCookies(response.getHeaders().get("Set-Cookie"));
+        if (cookieHeader == null) {
+            var sessionId = extractSessionId(html);
+            if (sessionId != null) cookieHeader = "JSESSIONID=" + sessionId;
+        }
         return fetchAuthorizedDanfe(chave, html, token, cookieHeader);
     }
 
