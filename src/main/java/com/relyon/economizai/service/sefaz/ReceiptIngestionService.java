@@ -92,7 +92,7 @@ public class ReceiptIngestionService {
         } catch (RuntimeException inner) {
             log.error("ingest failed AND could not mark FAILED_PARSE for receipt {}", abbrev(receiptId), inner);
         }
-        log.warn("ingest fetch/solve failed status=FAILED_PARSE reason={}", ex.getMessage());
+        log.warn("ingest fetch/solve failed status=FAILED_PARSE reason={}", ex.getMessage(), ex);
     }
 
     private void applyParsed(Receipt receipt, ParsedReceipt parsed) {
