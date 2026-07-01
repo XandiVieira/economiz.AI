@@ -54,6 +54,7 @@ public class MsDfePortalAdapter implements SefazAdapter {
 
     private final CaptchaSolver captchaSolver;
     private final RestClient restClient;
+    private final RestClient noRedirectClient;
     private final Set<UnidadeFederativa> supportedStates;
 
     public MsDfePortalAdapter(RestClient.Builder builder,
@@ -69,6 +70,25 @@ public class MsDfePortalAdapter implements SefazAdapter {
                 .defaultHeader("User-Agent", userAgent)
                 .defaultHeader("Accept", "text/html,application/xhtml+xml")
                 .requestFactory(requestFactory)
+                .build();
+        // The MS portal responds to the captcha POST with a 302 redirect to /resultadoconsulta.
+        // HttpURLConnection follows redirects automatically but strips the Cookie header,
+        // so the result page comes back session-less (no items). We disable redirect-following
+        // on this factory so we can manually follow with the session cookie.
+        var noRedirectFactory = new SimpleClientHttpRequestFactory() {
+            @Override
+            protected void prepareConnection(java.net.HttpURLConnection connection, String httpMethod)
+                    throws java.io.IOException {
+                super.prepareConnection(connection, httpMethod);
+                connection.setInstanceFollowRedirects(false);
+            }
+        };
+        noRedirectFactory.setConnectTimeout(Math.min(timeoutMs, 10000));
+        noRedirectFactory.setReadTimeout(timeoutMs);
+        this.noRedirectClient = builder
+                .defaultHeader("User-Agent", userAgent)
+                .defaultHeader("Accept", "text/html,application/xhtml+xml")
+                .requestFactory(noRedirectFactory)
                 .build();
         this.supportedStates = parseStates(captchaStates);
         log.info("MsDfePortalAdapter active for UFs: {} (captchaSolver configured={})",
@@ -166,13 +186,24 @@ public class MsDfePortalAdapter implements SefazAdapter {
                 + "&g-recaptcha-response=" + enc(recaptchaToken)
                 + "&" + enc("formListar:enter") + "=" + enc("formListar:enter");
         log.info("ms.captcha.submitting chave={} sessionId={}", chave, sessionId);
-        var post = restClient.post()
+        var post = noRedirectClient.post()
                 .uri(postUrl)
                 .header("Content-Type", "application/x-www-form-urlencoded");
         if (cookieHeader != null && !cookieHeader.isBlank()) {
             post = post.header("Cookie", cookieHeader);
         }
-        return post.body(body).retrieve().body(String.class);
+        var postResponse = post.body(body).retrieve().toEntity(String.class);
+        if (postResponse.getStatusCode().is3xxRedirection()) {
+            var location = postResponse.getHeaders().getLocation();
+            if (location == null) throw new ReceiptParseException("captcha-redirect-missing-location");
+            log.info("ms.captcha.redirect chave={} location={}", chave, location);
+            var get = restClient.get().uri(location);
+            if (cookieHeader != null && !cookieHeader.isBlank()) {
+                get = get.header("Cookie", cookieHeader);
+            }
+            return get.retrieve().body(String.class);
+        }
+        return postResponse.getBody();
     }
 
     private static String extractCookies(List<String> setCookieHeaders) {
