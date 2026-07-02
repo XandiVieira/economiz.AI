@@ -69,6 +69,7 @@ class SantaCatarinaNfcePortalAdapterTest {
                 .body(securityHtml()));
         adapter.postResponse = ResponseEntity.status(302)
                 .header("Location", FINAL_URL)
+                .header("Set-Cookie", "SAT_AUTH=ok; path=/")
                 .build();
         adapter.getResponses.put(FINAL_URL, ResponseEntity.ok(scDanfeHtml()));
 
@@ -82,6 +83,7 @@ class SantaCatarinaNfcePortalAdapterTest {
         assertEquals("_ctl0$_ctl0$Body$Main$ButtonValidar", adapter.postedBody.getFirst("__EVENTTARGET"));
         assertEquals("turnstile-token", adapter.postedBody.getFirst("_ctl0:_ctl0:Body:Main:cf-turnstile-response"));
         assertEquals("turnstile-token", adapter.postedBody.getFirst("cf-turnstile-response"));
+        assertEquals("ASP.NET_SessionId=session-1; SAT_AUTH=ok", adapter.redirectCookie);
     }
 
     @Test
@@ -258,6 +260,7 @@ class SantaCatarinaNfcePortalAdapterTest {
         private ResponseEntity<String> postResponse;
         private String postedUrl;
         private String postedCookie;
+        private String redirectCookie;
         private MultiValueMap<String, String> postedBody;
 
         private TestScAdapter(CaptchaSolver solver) {
@@ -273,6 +276,7 @@ class SantaCatarinaNfcePortalAdapterTest {
         @Override
         protected ResponseEntity<String> httpGetResponse(String url, String cookieHeader) {
             assertTrue(getResponses.containsKey(url), "unexpected GET " + url);
+            this.redirectCookie = cookieHeader;
             return getResponses.get(url);
         }
 

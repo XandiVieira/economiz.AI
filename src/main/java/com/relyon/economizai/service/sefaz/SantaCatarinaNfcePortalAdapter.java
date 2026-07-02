@@ -22,6 +22,7 @@ import org.springframework.web.client.RestClientException;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.EnumSet;
 import java.util.List;
@@ -149,7 +150,7 @@ public class SantaCatarinaNfcePortalAdapter implements SefazAdapter {
         var token = captchaSolver.solveCloudflareTurnstile(siteKey, securityUrl);
         var cookieHeader = extractCookies(response.getHeaders().get("Set-Cookie"));
         var postResponse = submitSecurityForm(securityHtml, securityUrl, token, cookieHeader);
-        var danfe = followIfRedirect(postResponse, cookieHeader);
+        var danfe = followIfRedirect(postResponse, mergeCookies(cookieHeader, postResponse.getHeaders().get("Set-Cookie")));
         if (danfe == null || danfe.isBlank()) {
             throw new SefazFetchException(UnidadeFederativa.SC.name());
         }
@@ -224,6 +225,8 @@ public class SantaCatarinaNfcePortalAdapter implements SefazAdapter {
                     if (cookieHeader != null && !cookieHeader.isBlank()) {
                         headers.set("Cookie", cookieHeader);
                     }
+                    headers.set("Origin", BASE_URL);
+                    headers.set("Referer", url);
                 })
                 .body(body)
                 .retrieve()
@@ -289,5 +292,19 @@ public class SantaCatarinaNfcePortalAdapter implements SefazAdapter {
         return setCookieHeaders.stream()
                 .map(cookie -> cookie.split(";")[0])
                 .collect(Collectors.joining("; "));
+    }
+
+    private static String mergeCookies(String existingCookieHeader, List<String> setCookieHeaders) {
+        var cookies = new ArrayList<String>();
+        if (existingCookieHeader != null && !existingCookieHeader.isBlank()) {
+            cookies.addAll(List.of(existingCookieHeader.split(";\\s*")));
+        }
+        if (setCookieHeaders != null && !setCookieHeaders.isEmpty()) {
+            setCookieHeaders.stream()
+                    .map(cookie -> cookie.split(";")[0])
+                    .filter(cookie -> !cookie.isBlank())
+                    .forEach(cookies::add);
+        }
+        return cookies.isEmpty() ? null : String.join("; ", cookies);
     }
 }
