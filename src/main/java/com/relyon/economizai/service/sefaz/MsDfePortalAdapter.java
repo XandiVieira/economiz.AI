@@ -182,7 +182,12 @@ public class MsDfePortalAdapter implements SefazAdapter {
             var sessionId = extractSessionId(html);
             if (sessionId != null) cookieHeader = "JSESSIONID=" + sessionId;
         }
-        return fetchAuthorizedDanfe(chave, html, token, cookieHeader);
+        var danfe = fetchAuthorizedDanfe(chave, html, token, cookieHeader);
+        if (danfe != null && looksLikeCaptcha(danfe)) {
+            log.warn("ms.captcha.rejected chave={}", chave);
+            throw new RestClientException("captcha-rejected-by-portal");
+        }
+        return danfe;
     }
 
     private void sleep(long ms) {

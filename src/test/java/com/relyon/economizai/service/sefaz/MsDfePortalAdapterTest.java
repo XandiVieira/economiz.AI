@@ -143,6 +143,45 @@ class MsDfePortalAdapterTest {
     }
 
     @Test
+    void fetchHtml_captchaRejectedByPortal_retriesThenSucceeds() throws Exception {
+        var captchaHtml = captchaPage();
+        var danfe = rsDanfe();
+        var solveCalls = new AtomicInteger();
+        // maxAttempts=3: first fetchAuthorizedDanfe returns captcha (rejection), second returns DANFE.
+        var adapter = new MsDfePortalAdapter(RestClient.builder(), solver(true, "tok"), "MS", 5000, 3, 0L, "test") {
+            @Override protected ResponseEntity<String> httpGetResponse(String url) {
+                return ResponseEntity.ok(captchaHtml);
+            }
+            @Override protected String fetchAuthorizedDanfe(String chave, String captchaPageHtml,
+                                                            String recaptchaToken, String cookieHeader) {
+                return solveCalls.incrementAndGet() == 1 ? captchaHtml : danfe;
+            }
+        };
+
+        var html = adapter.fetchHtml(MS_CHAVE);
+
+        assertEquals(danfe, html);
+        assertEquals(2, solveCalls.get(), "should retry once after captcha was rejected");
+    }
+
+    @Test
+    void fetchHtml_captchaRejectedByPortal_exhaustsRetriesThenThrowsSefazFetch() throws Exception {
+        var captchaHtml = captchaPage();
+        // Always returns captcha HTML (portal always rejects) — should exhaust maxAttempts.
+        var adapter = new MsDfePortalAdapter(RestClient.builder(), solver(true, "tok"), "MS", 5000, 3, 0L, "test") {
+            @Override protected ResponseEntity<String> httpGetResponse(String url) {
+                return ResponseEntity.ok(captchaHtml);
+            }
+            @Override protected String fetchAuthorizedDanfe(String chave, String captchaPageHtml,
+                                                            String recaptchaToken, String cookieHeader) {
+                return captchaHtml; // portal keeps rejecting
+            }
+        };
+
+        assertThrows(SefazFetchException.class, () -> adapter.fetchHtml(MS_CHAVE));
+    }
+
+    @Test
     void fetchHtml_exhaustsRetriesThenThrowsSefazFetch() throws Exception {
         var getCalls = new AtomicInteger();
         var adapter = new MsDfePortalAdapter(RestClient.builder(), solver(true, "tok"), "MS", 5000, 3, 0L, "test") {
