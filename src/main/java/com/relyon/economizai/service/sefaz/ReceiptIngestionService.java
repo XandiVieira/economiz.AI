@@ -7,13 +7,12 @@ import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.repository.ReceiptRepository;
-import com.relyon.economizai.service.privacy.LogMasker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.UUID;
 
@@ -27,9 +26,17 @@ import java.util.UUID;
  * FAILED_PARSE with the reason. The FE polls {@code GET /receipts/{id}} until
  * the status leaves PROCESSING.
  *
+ * <p>Deliberately NOT {@code @Transactional} at the method level: the SEFAZ
+ * fetch can hold for minutes and a transaction spanning it would pin a Hikari
+ * connection per in-flight receipt, starving the rest of the app. Instead the
+ * DB work brackets the HTTP work in short {@link TransactionTemplate} blocks —
+ * and because the template commits inside the try, commit-time failures
+ * (constraint violations at flush) land in the catch and mark the receipt
+ * FAILED_PARSE instead of stranding it in PROCESSING.
+ *
  * <p>Separate bean (not a method on ReceiptService) because Spring AOP only
- * applies {@code @Async}/{@code @Transactional} across bean boundaries — a
- * self-invocation would run inline on the request thread.
+ * applies {@code @Async} across bean boundaries — a self-invocation would run
+ * inline on the request thread.
  */
 @Slf4j
 @Service
@@ -38,6 +45,7 @@ public class ReceiptIngestionService {
 
     private final ReceiptRepository receiptRepository;
     private final SefazIngestionService sefazIngestionService;
+    private final TransactionTemplate transactionTemplate;
 
     /**
      * Fetch + parse the PROCESSING receipt, then transition it. Runs on the
@@ -45,34 +53,22 @@ public class ReceiptIngestionService {
      * FAILED_PARSE) — nothing useful can propagate off an async thread.
      */
     @Async(AsyncConfig.RECEIPT_INGEST_EXECUTOR)
-    @Transactional
     public void ingest(UUID receiptId, String qrPayload) {
         MDC.put(MdcContextFilter.RECEIPT_ID, abbrev(receiptId));
         try {
-            var receipt = receiptRepository.findById(receiptId).orElse(null);
-            if (receipt == null || receipt.getStatus() != ReceiptStatus.PROCESSING) {
+            if (!isStillProcessing(receiptId)) {
                 log.warn("ingest skipped: receipt {} missing or no longer PROCESSING", abbrev(receiptId));
                 return;
             }
             var fetched = sefazIngestionService.fetch(qrPayload);
             try {
                 var parsed = sefazIngestionService.parse(fetched);
-                applyParsed(receipt, parsed);
-                receipt.setStatus(ReceiptStatus.PENDING_CONFIRMATION);
-                receiptRepository.save(receipt);
-                log.info("ingest ok status=PENDING_CONFIRMATION items={} total={} market='{}'",
-                        receipt.getItems().size(), receipt.getTotalAmount(), receipt.getMarketName());
+                persistParsed(receiptId, parsed);
             } catch (ReceiptParseException ex) {
-                receipt.setRawHtml(fetched.html());
-                receipt.setSourceUrl(fetched.sourceUrl());
-                receipt.setParseErrorReason(ex.getMessageKey() + ":" + String.join(",", ex.getArguments()));
-                receipt.setStatus(ReceiptStatus.FAILED_PARSE);
-                receiptRepository.save(receipt);
-                log.warn("ingest parse-failed status=FAILED_PARSE reason={} (raw HTML kept for review)",
-                        ex.getMessageKey());
+                persistParseFailure(receiptId, fetched, ex);
             }
         } catch (RuntimeException ex) {
-            // SEFAZ fetch / captcha / unexpected failure — mark FAILED_PARSE so the
+            // SEFAZ fetch / captcha / commit-time failure — mark FAILED_PARSE so the
             // FE stops polling and shows an error instead of spinning forever.
             markFailed(receiptId, ex);
         } finally {
@@ -80,15 +76,63 @@ public class ReceiptIngestionService {
         }
     }
 
-    private void markFailed(UUID receiptId, RuntimeException ex) {
+    private boolean isStillProcessing(UUID receiptId) {
+        return receiptRepository.findById(receiptId)
+                .map(receipt -> receipt.getStatus() == ReceiptStatus.PROCESSING)
+                .orElse(false);
+    }
+
+    private void persistParsed(UUID receiptId, ParsedReceipt parsed) {
+        transactionTemplate.executeWithoutResult(txStatus -> {
+            var receipt = loadIfProcessing(receiptId);
+            if (receipt == null) return;
+            applyParsed(receipt, parsed);
+            receipt.setStatus(ReceiptStatus.PENDING_CONFIRMATION);
+            receiptRepository.save(receipt);
+            log.info("ingest ok status=PENDING_CONFIRMATION items={} total={} market='{}'",
+                    receipt.getItems().size(), receipt.getTotalAmount(), receipt.getMarketName());
+        });
+    }
+
+    private void persistParseFailure(UUID receiptId, SefazIngestionService.FetchedDocument fetched,
+                                     ReceiptParseException ex) {
+        transactionTemplate.executeWithoutResult(txStatus -> {
+            var receipt = loadIfProcessing(receiptId);
+            if (receipt == null) return;
+            receipt.setRawHtml(fetched.html());
+            receipt.setSourceUrl(fetched.sourceUrl());
+            receipt.setParseErrorReason(ex.getMessageKey() + ":" + String.join(",", ex.getArguments()));
+            receipt.setStatus(ReceiptStatus.FAILED_PARSE);
+            receiptRepository.save(receipt);
+            log.warn("ingest parse-failed status=FAILED_PARSE reason={} (raw HTML kept for review)",
+                    ex.getMessageKey());
+        });
+    }
+
+    private Receipt loadIfProcessing(UUID receiptId) {
+        var receipt = receiptRepository.findById(receiptId).orElse(null);
+        if (receipt == null || receipt.getStatus() != ReceiptStatus.PROCESSING) {
+            log.warn("ingest result discarded: receipt {} missing or no longer PROCESSING", abbrev(receiptId));
+            return null;
+        }
+        return receipt;
+    }
+
+    /**
+     * Marks the receipt FAILED_PARSE with the exception as the reason. Public so
+     * the submit path can also invoke it when the ingest pool rejects the task —
+     * otherwise the committed PROCESSING row would never leave that status.
+     */
+    public void markFailed(UUID receiptId, RuntimeException ex) {
         try {
-            receiptRepository.findById(receiptId).ifPresent(r -> {
-                if (r.getStatus() == ReceiptStatus.PROCESSING) {
-                    r.setParseErrorReason("receipt.sefaz.fetch.failed:" + ex.getClass().getSimpleName());
-                    r.setStatus(ReceiptStatus.FAILED_PARSE);
-                    receiptRepository.save(r);
-                }
-            });
+            transactionTemplate.executeWithoutResult(txStatus ->
+                    receiptRepository.findById(receiptId).ifPresent(receipt -> {
+                        if (receipt.getStatus() == ReceiptStatus.PROCESSING) {
+                            receipt.setParseErrorReason("receipt.sefaz.fetch.failed:" + ex.getClass().getSimpleName());
+                            receipt.setStatus(ReceiptStatus.FAILED_PARSE);
+                            receiptRepository.save(receipt);
+                        }
+                    }));
         } catch (RuntimeException inner) {
             log.error("ingest failed AND could not mark FAILED_PARSE for receipt {}", abbrev(receiptId), inner);
         }

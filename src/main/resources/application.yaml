@@ -16,6 +16,13 @@ spring:
     username: ${DB_USERNAME:economizai}
     password: ${DB_PASSWORD:economizai}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      # Sized for Tomcat request threads + the 8-thread receipt-ingest pool +
+      # scheduled jobs. Ingest holds NO connection during the slow SEFAZ fetch
+      # (see ReceiptIngestionService), so 20 is headroom, not a requirement.
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:20}
+      # Log a leak trace if a connection is held >60s — nothing legitimate should.
+      leak-detection-threshold: ${DB_LEAK_DETECTION_MS:60000}
   jpa:
     hibernate:
       ddl-auto: none
@@ -59,6 +66,11 @@ economizai:
   privacy:
     k-anonymity: 3
   ingestion:
+    # Async-ingest safety net: PROCESSING receipts older than this are failed by
+    # the sweeper so the FE never polls forever. Must exceed the worst-case
+    # legitimate ingest (MS captcha wall-clock cap 3 min + fallback).
+    processing-timeout-minutes: ${INGEST_PROCESSING_TIMEOUT_MINUTES:10}
+    sweeper-delay-ms: ${INGEST_SWEEPER_DELAY_MS:60000}
     sefaz:
       timeout-ms: 30000
       user-agent: "economizai/0.1 (+https://github.com/XandiVieira/economiz.AI)"

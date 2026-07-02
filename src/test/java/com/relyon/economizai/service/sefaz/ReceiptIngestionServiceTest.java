@@ -7,12 +7,15 @@ import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
 import com.relyon.economizai.repository.ReceiptRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -20,9 +23,14 @@ import java.time.Month;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -35,8 +43,18 @@ class ReceiptIngestionServiceTest {
 
     @Mock private ReceiptRepository receiptRepository;
     @Mock private SefazIngestionService sefazIngestionService;
+    @Mock private TransactionTemplate transactionTemplate;
 
     @InjectMocks private ReceiptIngestionService service;
+
+    @BeforeEach
+    void runTransactionCallbacksInline() {
+        lenient().doAnswer(invocation -> {
+            Consumer<TransactionStatus> callback = invocation.getArgument(0);
+            callback.accept(mock(TransactionStatus.class));
+            return null;
+        }).when(transactionTemplate).executeWithoutResult(any());
+    }
 
     private Receipt processingReceipt() {
         var household = Household.builder().id(UUID.randomUUID()).inviteCode("ABC123").build();
@@ -127,6 +145,49 @@ class ReceiptIngestionServiceTest {
         service.ingest(receipt.getId(), QR);
 
         verify(sefazIngestionService, never()).fetch(any());
+        verify(receiptRepository, never()).save(any());
+    }
+
+    @Test
+    void ingest_discardsResultWhenStatusChangedDuringFetch() {
+        var receipt = processingReceipt();
+        var fetched = new SefazIngestionService.FetchedDocument(null, "<html/>", CHAVE_RS, UnidadeFederativa.RS, null);
+        // First read (pre-fetch guard) sees PROCESSING; second read (persist) sees CONFIRMED —
+        // the user deleted/resubmitted while the fetch was in flight.
+        var confirmed = processingReceipt();
+        confirmed.setStatus(ReceiptStatus.CONFIRMED);
+        when(receiptRepository.findById(receipt.getId()))
+                .thenReturn(Optional.of(receipt))
+                .thenReturn(Optional.of(confirmed));
+        when(sefazIngestionService.fetch(QR)).thenReturn(fetched);
+        when(sefazIngestionService.parse(fetched)).thenReturn(sampleParsed());
+
+        service.ingest(receipt.getId(), QR);
+
+        verify(receiptRepository, never()).save(any());
+    }
+
+    @Test
+    void markFailed_transitionsProcessingReceipt() {
+        var receipt = processingReceipt();
+        when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+
+        service.markFailed(receipt.getId(), new RuntimeException("pool rejected"));
+
+        assertEquals(ReceiptStatus.FAILED_PARSE, receipt.getStatus());
+        assertTrue(receipt.getParseErrorReason().contains("RuntimeException"));
+        verify(receiptRepository).save(receipt);
+    }
+
+    @Test
+    void markFailed_leavesNonProcessingReceiptAlone() {
+        var receipt = processingReceipt();
+        receipt.setStatus(ReceiptStatus.PENDING_CONFIRMATION);
+        when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+
+        service.markFailed(receipt.getId(), new RuntimeException("late failure"));
+
+        assertEquals(ReceiptStatus.PENDING_CONFIRMATION, receipt.getStatus());
         verify(receiptRepository, never()).save(any());
     }
 }
