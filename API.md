@@ -236,6 +236,12 @@ errors but is optional — the backend handles both.
 | 400 `receipt.parse.failed` | We fetched HTML but the parser couldn't extract items. **The receipt is still saved with `status=FAILED_PARSE` + `rawHtml`** so ops can patch the parser without you re-scanning. |
 | 409 `receipt.already.ingested` | This chave is already in **your household's** history. Delete it via `DELETE /receipts/{id}` to free the slot. |
 
+Since the async submit flow, most of these surface via polling rather than as
+HTTP errors: the receipt lands in `status=FAILED_PARSE` and the new
+**`parseErrorReason`** field on `ReceiptResponse` carries the machine key
+(e.g. `receipt.parse.failed:no-items-found`). It's `null` for non-failed
+receipts and is intended for debugging/support — don't render it raw to users.
+
 ### Review + confirm
 
 After submit, the user sees `status=PENDING_CONFIRMATION` with parsed items.

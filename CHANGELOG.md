@@ -14,6 +14,28 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-07-02 — SEFAZ-MS receipts now work end-to-end + `parseErrorReason` field
+
+### MS (Mato Grosso do Sul) NFC-e scanning is live
+The captcha-gated MS portal flow was broken in several ways (session cookie
+lost across redirects, HTTP→HTTPS redirect not followed, rejected captcha
+tokens silently parsed as "no items"). All fixed and verified with a real
+receipt: submit → `PROCESSING` → `PENDING_CONFIRMATION` with all items.
+Expect the parse to take **up to ~3 minutes** (captcha solving) — keep polling.
+
+### New field: `parseErrorReason` on `ReceiptResponse`
+All receipt responses now carry `parseErrorReason` (string, null unless
+`status == FAILED_PARSE`). It's a machine key (e.g.
+`receipt.parse.failed:no-items-found`) meant for debugging/support — don't
+show it raw to users.
+
+### Infosimples fallback (backend-only, no contract change)
+When the primary SEFAZ scraper exhausts retries, the backend can fall back to
+a paid API covering all UFs (off by default, toggled server-side). No FE
+change needed — the receipt just resolves normally.
+
+---
+
 ## 2026-06-30 — Receipt submit is now ASYNC (status PROCESSING + polling)
 
 ### ⚠️ Contract change: `POST /api/v1/receipts`

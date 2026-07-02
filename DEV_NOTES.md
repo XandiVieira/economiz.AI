@@ -44,8 +44,6 @@ mirror entries here.
   - **Rotate the SMTP password** — it was shared in plaintext over chat during setup.
   - Consider a dedicated transactional provider (SES/SendGrid/Resend) for volume +
     bounce handling if auth-email traffic grows.
-  - **Rate-limit** `forgot-password` (per email + per IP) before prod — currently
-    unthrottled, so it can be used to spam an inbox. ~1 hr.
 
 ---
 
@@ -157,7 +155,7 @@ The report works identically in SHADOW and ON (computed purely from
 
 ## Captcha solver — seam ready, dormant (MS wired, 2026-06-12)
 - **Now**: captcha-gated states have a full ingestion path that's switched OFF until a solver provider is configured. `MsDfePortalAdapter` claims MS (`www.dfe.ms.gov.br`, reCAPTCHA v2): GET consult page → detect captcha + extract sitekey → `CaptchaSolver.solveRecaptchaV2` → resubmit → parse with the shared `ResponsiveDanfeParser`. With the default `provider=none` (`NoopCaptchaSolver`), an MS receipt fails fast with **503 `receipt.captcha.unavailable`** ("coming soon"), not a confusing parse error.
-- **To turn MS on when you pick a provider**: set `CAPTCHA_PROVIDER=twocaptcha` + `CAPTCHA_API_KEY=<key>` (+ `CAPTCHA_BASE_URL` if using a 2Captcha-compatible service like CapMonster). `TwoCaptchaSolver` is already implemented (submit→poll flow, unit-tested). A provider with a different HTTP API = one new class implementing `CaptchaSolver` with `@ConditionalOnProperty(...havingValue="<name>")`; nothing else changes.
+- **MS is ON via CapSolver**: `CAPTCHA_PROVIDER=capsolver` + `CAPTCHA_API_KEY=<key>` on the server (verified live 2026-07-02). `TwoCaptchaSolver` also exists as an alternative (`CAPTCHA_PROVIDER=twocaptcha`; `CAPTCHA_BASE_URL` applies only to it — CapSolver's URL is fixed). A provider with a different HTTP API = one new class implementing `CaptchaSolver` with `@ConditionalOnProperty(...havingValue="<name>")`; nothing else changes.
 - **Post-captcha layout VERIFIED (2026-06-12)**: a real MS DANFE (C.VALE/Caarapó, saved from a browser after the user solved the captcha) parses correctly — `RealMsFixtureTest` locks all 9 items + R$61,79 total. MS uses `span.txtTit` (not `txtTit2`), 7-digit internal codes (→ ean null), single IBPT total (→ tax null); all handled by the shared parser. So the only thing still **VERIFY ON FIRST REAL SOLVE** is the HTTP transport that exchanges a solved token for the DANFE: `MsDfePortalAdapter.consultUrl` params + `fetchAuthorizedDanfe`'s resubmit shape (isolated for a quick fix — the page is reached via a form POST from the captcha page; capture it in DevTools Network during the first real solve). Cost when live: ~US$1-3 / 1000 solves.
 - **Other captcha states**: each has its own portal, so they need their own adapter (reusing `CaptchaSolver` + `ResponsiveDanfeParser`); `economizai.ingestion.sefaz.captcha.states` lists which UFs the MS adapter claims (MS only for now).
 
@@ -385,8 +383,7 @@ Helper scripts at repo root (run each in an **Administrator** PowerShell once):
 
 ### No payment provider wired — PRO is granted manually / via webhook only
 - **Now**: the PRO tier is fully **enforced** (gates in `SubscriptionGateService`, 402 on block), and a user can be made PRO two ways: (a) admin `PUT /api/v1/admin/users/{id}/subscription-tier {"tier":"PRO"}`, or (b) the provider-agnostic webhook `POST /api/v1/webhooks/subscription`. There is **no actual payment collection** — no Stripe/Mercado Pago/Pix integration, no checkout, no self-serve upgrade page.
-- **Webhook secret is empty in dev**: `economizai.billing.webhook-secret` defaults to empty → the `X-Webhook-Secret` check is **skipped**, so anyone who can reach the route can grant/revoke PRO. Fine locally; **a hole in prod if left empty**.
-- **Why OK for dev**: lets us test the entire gated experience (and demo PRO) without a payment processor or merchant account.
+- **Why OK for dev**: lets us test the entire gated experience (and demo PRO) without a payment processor or merchant account. The webhook **fails closed** when its secret is blank (constant-time compare), so an unset `BILLING_WEBHOOK_SECRET` means the route just rejects everything.
 - **Before prod — to enable paid subscriptions**:
   1. **Pick a provider** (Stripe Brasil, Mercado Pago, or Pagar.me + Pix).
   2. **Get API keys** (publishable + secret) and create the product/price (R$9.90/mo per MONETIZATION §1).
