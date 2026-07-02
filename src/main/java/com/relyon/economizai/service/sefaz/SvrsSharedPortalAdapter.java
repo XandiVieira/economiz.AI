@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
  * that delegate to SVRS), but other states' own portals serve the exact same
  * markup — PR ({@code www.fazenda.pr.gov.br/nfce/qrcode}) verified with a real
  * fixture on 2026-06-12. The set of UFs this adapter claims is driven by config
- * ({@code economizai.ingestion.sefaz.svrs.states}, default {@code RS,PR,SC}) so a
+ * ({@code economizai.ingestion.sefaz.svrs.states}, default {@code RS,PR}) so a
  * curator can opt-in additional states empirically — submit a real chave,
  * verify the parser extracts fields correctly, then add the UF to the env var
  * (and the portal host to {@code allowed-url-hosts}).
@@ -57,7 +57,7 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
                                    CaptchaSolver captchaSolver,
                                    @Value("${economizai.ingestion.sefaz.timeout-ms:30000}") int timeoutMs,
                                    @Value("${economizai.ingestion.sefaz.user-agent:economizai}") String userAgent,
-                                   @Value("${economizai.ingestion.sefaz.svrs.states:RS,PR,SC}") String svrsStates,
+                                   @Value("${economizai.ingestion.sefaz.svrs.states:RS,PR}") String svrsStates,
                                    @Value("${economizai.ingestion.sefaz.retry.max-attempts:5}") int maxAttempts,
                                    @Value("${economizai.ingestion.sefaz.retry.delay-ms:5000}") long retryDelayMs,
                                    @Value("${economizai.ingestion.sefaz.allowed-url-hosts:svrs.rs.gov.br,sefaz.rs.gov.br,fazenda.pr.gov.br,sef.sc.gov.br}") String allowedUrlHosts) {
@@ -109,8 +109,11 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
      */
     @Override
     public String fetchHtml(String qrPayload) {
-        var uf = ChaveAcessoParser.extractUf(ChaveAcessoParser.extractChave(qrPayload));
         var url = resolveUrl(qrPayload);
+        if (ScSecurityChallengeDetector.looksLikeUrl(url)) {
+            throw new CaptchaUnavailableException(UnidadeFederativa.SC.name());
+        }
+        var uf = ChaveAcessoParser.extractUf(ChaveAcessoParser.extractChave(qrPayload));
         for (var attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
                 return fetchOnce(url, attempt, uf);
@@ -132,6 +135,9 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
             var html = httpGet(url);
             if (html == null || html.isBlank()) {
                 throw new TransientSefazFetchException("empty-body");
+            }
+            if (uf == UnidadeFederativa.SC && ScSecurityChallengeDetector.looksLikeHtml(html)) {
+                throw new CaptchaUnavailableException(uf.name());
             }
             if (CAPTCHA_MARKER.matcher(html).find()) {
                 return handleCaptcha(html, url, uf);

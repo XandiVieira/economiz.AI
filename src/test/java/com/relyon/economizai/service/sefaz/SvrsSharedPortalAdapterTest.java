@@ -1,5 +1,6 @@
 package com.relyon.economizai.service.sefaz;
 
+import com.relyon.economizai.exception.CaptchaUnavailableException;
 import com.relyon.economizai.exception.InvalidQrPayloadException;
 import com.relyon.economizai.exception.ReceiptParseException;
 import com.relyon.economizai.exception.SefazFetchException;
@@ -27,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class SvrsSharedPortalAdapterTest {
 
     private static final String CHAVE_RS = "43260412345678000190650010000123451123456780";
+    private static final String CHAVE_SC = "42260412345678000190650010000123451123456780";
 
     private static final CaptchaSolver NO_CAPTCHA = new CaptchaSolver() {
         @Override public boolean isConfigured() { return false; }
@@ -87,6 +89,14 @@ class SvrsSharedPortalAdapterTest {
     void resolveUrl_acceptsAllowlistedSubdomain() {
         var url = "https://dfe-portal.svrs.rs.gov.br/Dfe/QrCodeNFce?p=" + CHAVE_RS;
         assertEquals(url, adapter.resolveUrl(url));
+    }
+
+    @Test
+    void resolveUrl_acceptsSantaCatarinaSecurityVerifyUrl() {
+        var scAdapter = new SvrsSharedPortalAdapter(RestClient.builder(), NO_CAPTCHA,
+                5000, "test", "SC", 5, 0L, "sef.sc.gov.br");
+        var url = "https://sat.sef.sc.gov.br/tax.NET/SecurityVerify.aspx?rq=encrypted-token";
+        assertEquals(url, scAdapter.resolveUrl(url));
     }
 
     @Test
@@ -270,6 +280,41 @@ class SvrsSharedPortalAdapterTest {
         var stub = adapterWithHttp(5, calls, call -> call == 1 ? "" : "<html>ok</html>");
         assertEquals("<html>ok</html>", stub.fetchHtml(CHAVE_RS));
         assertEquals(2, calls.get());
+    }
+
+    @Test
+    void fetchHtml_scSecurityVerifyUrlThrowsCaptchaUnavailableBeforeChaveExtraction() {
+        var scAdapter = new SvrsSharedPortalAdapter(RestClient.builder(), NO_CAPTCHA,
+                5000, "test", "SC", 5, 0L, "sef.sc.gov.br");
+        var url = "https://sat.sef.sc.gov.br/tax.NET/SecurityVerify.aspx?rq=encrypted-token";
+
+        assertThrows(CaptchaUnavailableException.class, () -> scAdapter.fetchHtml(url));
+    }
+
+    @Test
+    void fetchHtml_scSecurityVerifyHtmlThrowsCaptchaUnavailable() {
+        var calls = new AtomicInteger();
+        var stub = new SvrsSharedPortalAdapter(RestClient.builder(), NO_CAPTCHA,
+                5000, "test", "SC", 5, 0L, "svrs.rs.gov.br") {
+            @Override
+            protected String httpGet(String url) {
+                calls.incrementAndGet();
+                return """
+                        <html>
+                          <body>
+                            <form action="/tax.NET/SecurityVerify.aspx">
+                              <div>Validação de segurança</div>
+                              <div>Cloudflare</div>
+                              <button>Validar</button>
+                            </form>
+                          </body>
+                        </html>
+                        """;
+            }
+        };
+
+        assertThrows(CaptchaUnavailableException.class, () -> stub.fetchHtml(CHAVE_SC));
+        assertEquals(1, calls.get());
     }
 
     @Test

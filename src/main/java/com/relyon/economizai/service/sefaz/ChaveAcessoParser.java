@@ -1,5 +1,6 @@
 package com.relyon.economizai.service.sefaz;
 
+import com.relyon.economizai.exception.CaptchaUnavailableException;
 import com.relyon.economizai.exception.InvalidQrPayloadException;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
 
@@ -17,6 +18,9 @@ public final class ChaveAcessoParser {
             throw new InvalidQrPayloadException();
         }
         var trimmed = qrPayload.trim();
+        if (ScSecurityChallengeDetector.looksLikeUrl(trimmed)) {
+            throw new CaptchaUnavailableException(UnidadeFederativa.SC.name());
+        }
 
         var pMatcher = P_PARAM_PATTERN.matcher(trimmed);
         if (pMatcher.find()) {

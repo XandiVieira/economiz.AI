@@ -1,5 +1,6 @@
 package com.relyon.economizai.service.sefaz;
 
+import com.relyon.economizai.exception.CaptchaUnavailableException;
 import com.relyon.economizai.exception.InvalidQrPayloadException;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
 import org.junit.jupiter.api.Test;
@@ -36,6 +37,12 @@ class ChaveAcessoParserTest {
     @Test
     void extractChave_rejectsNonNumeric() {
         assertThrows(InvalidQrPayloadException.class, () -> ChaveAcessoParser.extractChave("not-a-chave"));
+    }
+
+    @Test
+    void extractChave_reportsScSecurityVerifyAsCaptchaUnavailable() {
+        var url = "https://sat.sef.sc.gov.br/tax.NET/SecurityVerify.aspx?rq=encrypted-token";
+        assertThrows(CaptchaUnavailableException.class, () -> ChaveAcessoParser.extractChave(url));
     }
 
     @Test
