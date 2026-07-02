@@ -105,6 +105,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE,
                                 "/api/v1/categorizer/learned",
                                 "/api/v1/categorizer/consensus").hasRole("ADMIN")
+                        // Canonical products are GLOBAL — one tester's edit would
+                        // change the product for every household.
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/products/*").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex
