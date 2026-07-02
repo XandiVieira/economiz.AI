@@ -3,11 +3,14 @@ package com.relyon.economizai.service;
 import com.relyon.economizai.dto.request.CreateProductRequest;
 import com.relyon.economizai.dto.request.UpdateProductRequest;
 import com.relyon.economizai.exception.ProductNotFoundException;
+import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.Product;
+import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.CategorizationSource;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.repository.ProductAliasRepository;
 import com.relyon.economizai.repository.ProductRepository;
+import com.relyon.economizai.repository.PriceObservationRepository;
 import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.service.extraction.ProductExtraction;
 import com.relyon.economizai.service.extraction.ProductExtractor;
@@ -35,8 +38,6 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
 @ExtendWith(MockitoExtension.class)
@@ -45,6 +46,7 @@ class ProductServiceSearchGetUpdateTest {
     @Mock private ProductRepository productRepository;
     @Mock private ProductAliasRepository aliasRepository;
     @Mock private ReceiptItemRepository receiptItemRepository;
+    @Mock private PriceObservationRepository priceObservationRepository;
     @Mock private ProductExtractor productExtractor;
 
     private ProductService productService;
@@ -53,14 +55,31 @@ class ProductServiceSearchGetUpdateTest {
 
     @BeforeEach
     void setUp() {
-        productService = new ProductService(productRepository, aliasRepository, receiptItemRepository, productExtractor);
+        productService = new ProductService(productRepository, aliasRepository,
+                receiptItemRepository, priceObservationRepository, productExtractor);
+    }
+
+    private User user() {
+        var household = Household.builder().id(HOUSEHOLD_ID).inviteCode("SEARCH").build();
+        return User.builder().id(UUID.randomUUID()).email("search@test.com").household(household).build();
+    }
+
+    private User userWithHome() {
+        var user = user();
+        user.setHomeLatitude(new BigDecimal("-30.0000000"));
+        user.setHomeLongitude(new BigDecimal("-51.0000000"));
+        return user;
     }
 
     private Product buildProduct(UUID id) {
+        return buildProduct(id, "Arroz Tio Joao 5kg");
+    }
+
+    private Product buildProduct(UUID id, String name) {
         return Product.builder()
                 .id(id)
                 .ean("7891234567890")
-                .normalizedName("Arroz Tio Joao 5kg")
+                .normalizedName(name)
                 .genericName("Arroz")
                 .brand("Tio Joao")
                 .category(ProductCategory.GROCERIES)
@@ -75,17 +94,20 @@ class ProductServiceSearchGetUpdateTest {
     void search_trimsQueryAndMapsResults() {
         var pageable = PageRequest.of(0, 20);
         var product = buildProduct(UUID.randomUUID());
-        Page<Product> page = new PageImpl<>(List.of(product));
-        when(productRepository.search("arroz", pageable)).thenReturn(page);
+        when(productRepository.searchAll("arroz")).thenReturn(List.of(product));
         when(receiptItemRepository.findProductIdsWithHistoryForHousehold(anyList(), eq(HOUSEHOLD_ID)))
                 .thenReturn(List.of());
+        when(priceObservationRepository.findProductIdsObservedAtVisitedMarkets(anyList(), eq(HOUSEHOLD_ID)))
+                .thenReturn(List.of());
+        when(priceObservationRepository.findProductIdsObservedInHouseholdCities(anyList(), eq(HOUSEHOLD_ID)))
+                .thenReturn(List.of());
 
-        var result = productService.search("  arroz  ", HOUSEHOLD_ID, pageable);
+        var result = productService.search("  arroz  ", user(), pageable);
 
         assertEquals(1, result.getTotalElements());
         assertEquals("Arroz Tio Joao 5kg", result.getContent().get(0).normalizedName());
         assertFalse(result.getContent().get(0).hasPriceHistory());
-        verify(productRepository).search("arroz", pageable);
+        verify(productRepository).searchAll("arroz");
     }
 
     @Test
@@ -93,11 +115,15 @@ class ProductServiceSearchGetUpdateTest {
         var pageable = PageRequest.of(0, 20);
         var id = UUID.randomUUID();
         var product = buildProduct(id);
-        when(productRepository.search("arroz", pageable)).thenReturn(new PageImpl<>(List.of(product)));
+        when(productRepository.searchAll("arroz")).thenReturn(List.of(product));
         when(receiptItemRepository.findProductIdsWithHistoryForHousehold(anyList(), eq(HOUSEHOLD_ID)))
                 .thenReturn(List.of(id));
+        when(priceObservationRepository.findProductIdsObservedAtVisitedMarkets(anyList(), eq(HOUSEHOLD_ID)))
+                .thenReturn(List.of());
+        when(priceObservationRepository.findProductIdsObservedInHouseholdCities(anyList(), eq(HOUSEHOLD_ID)))
+                .thenReturn(List.of());
 
-        var result = productService.search("arroz", HOUSEHOLD_ID, pageable);
+        var result = productService.search("arroz", user(), pageable);
 
         assertTrue(result.getContent().get(0).hasPriceHistory());
     }
@@ -107,11 +133,15 @@ class ProductServiceSearchGetUpdateTest {
         var pageable = PageRequest.of(0, 20);
         var id = UUID.randomUUID();
         var product = buildProduct(id);
-        when(productRepository.search("arroz", pageable)).thenReturn(new PageImpl<>(List.of(product)));
+        when(productRepository.searchAll("arroz")).thenReturn(List.of(product));
         when(receiptItemRepository.findProductIdsWithHistoryForHousehold(anyList(), eq(HOUSEHOLD_ID)))
                 .thenReturn(List.of());
+        when(priceObservationRepository.findProductIdsObservedAtVisitedMarkets(anyList(), eq(HOUSEHOLD_ID)))
+                .thenReturn(List.of());
+        when(priceObservationRepository.findProductIdsObservedInHouseholdCities(anyList(), eq(HOUSEHOLD_ID)))
+                .thenReturn(List.of());
 
-        var result = productService.search("arroz", HOUSEHOLD_ID, pageable);
+        var result = productService.search("arroz", user(), pageable);
 
         assertFalse(result.getContent().get(0).hasPriceHistory());
     }
@@ -119,26 +149,50 @@ class ProductServiceSearchGetUpdateTest {
     @Test
     void search_blankQueryBecomesNull() {
         var pageable = PageRequest.of(0, 20);
-        when(productRepository.search(isNull(), eq(pageable))).thenReturn(new PageImpl<>(List.of()));
-        when(receiptItemRepository.findProductIdsWithHistoryForHousehold(anyList(), eq(HOUSEHOLD_ID)))
-                .thenReturn(List.of());
+        when(productRepository.searchAll(isNull())).thenReturn(List.of());
 
-        var result = productService.search("   ", HOUSEHOLD_ID, pageable);
+        var result = productService.search("   ", user(), pageable);
 
         assertEquals(0, result.getTotalElements());
-        verify(productRepository).search(isNull(), eq(pageable));
+        verify(productRepository).searchAll(isNull());
+    }
+
+    @Test
+    void search_ordersByLocalRelevanceBeforeName() {
+        var pageable = PageRequest.of(0, 20);
+        var city = buildProduct(UUID.randomUUID(), "Arroz Cidade");
+        var bought = buildProduct(UUID.randomUUID(), "Arroz Comprado");
+        var nearby = buildProduct(UUID.randomUUID(), "Arroz Proximo");
+        var visitedMarket = buildProduct(UUID.randomUUID(), "Arroz Mercado Visitado");
+        var unrelated = buildProduct(UUID.randomUUID(), "Arroz Zzz");
+        when(productRepository.searchAll("arroz")).thenReturn(List.of(city, unrelated, nearby, visitedMarket, bought));
+        when(receiptItemRepository.findProductIdsWithHistoryForHousehold(anyList(), eq(HOUSEHOLD_ID)))
+                .thenReturn(List.of(bought.getId()));
+        when(priceObservationRepository.findProductIdsObservedAtVisitedMarkets(anyList(), eq(HOUSEHOLD_ID)))
+                .thenReturn(List.of(visitedMarket.getId()));
+        when(priceObservationRepository.findProductIdsObservedInHouseholdCities(anyList(), eq(HOUSEHOLD_ID)))
+                .thenReturn(List.of(city.getId()));
+        var row = org.mockito.Mockito.mock(PriceObservationRepository.ProductMarketCoordinates.class);
+        when(row.getProductId()).thenReturn(nearby.getId());
+        when(row.getLatitude()).thenReturn(new BigDecimal("-30.0100000"));
+        when(row.getLongitude()).thenReturn(new BigDecimal("-51.0100000"));
+        when(priceObservationRepository.findProductMarketCoordinates(anyList())).thenReturn(List.of(row));
+
+        var result = productService.search("arroz", userWithHome(), pageable);
+
+        assertEquals(List.of("Arroz Comprado", "Arroz Mercado Visitado", "Arroz Proximo",
+                        "Arroz Cidade", "Arroz Zzz"),
+                result.getContent().stream().map(product -> product.normalizedName()).toList());
     }
 
     @Test
     void search_nullQueryBecomesNull() {
         var pageable = PageRequest.of(0, 20);
-        when(productRepository.search(isNull(), eq(pageable))).thenReturn(new PageImpl<>(List.of()));
-        when(receiptItemRepository.findProductIdsWithHistoryForHousehold(anyList(), eq(HOUSEHOLD_ID)))
-                .thenReturn(List.of());
+        when(productRepository.searchAll(isNull())).thenReturn(List.of());
 
-        productService.search(null, HOUSEHOLD_ID, pageable);
+        productService.search(null, user(), pageable);
 
-        verify(productRepository).search(isNull(), eq(pageable));
+        verify(productRepository).searchAll(isNull());
     }
 
     @Test

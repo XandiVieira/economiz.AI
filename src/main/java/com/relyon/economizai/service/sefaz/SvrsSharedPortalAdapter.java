@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
  * that delegate to SVRS), but other states' own portals serve the exact same
  * markup — PR ({@code www.fazenda.pr.gov.br/nfce/qrcode}) verified with a real
  * fixture on 2026-06-12. The set of UFs this adapter claims is driven by config
- * ({@code economizai.ingestion.sefaz.svrs.states}, default {@code RS,PR}) so a
+ * ({@code economizai.ingestion.sefaz.svrs.states}, default {@code RS,PR,SC}) so a
  * curator can opt-in additional states empirically — submit a real chave,
  * verify the parser extracts fields correctly, then add the UF to the env var
  * (and the portal host to {@code allowed-url-hosts}).
@@ -57,10 +57,10 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
                                    CaptchaSolver captchaSolver,
                                    @Value("${economizai.ingestion.sefaz.timeout-ms:30000}") int timeoutMs,
                                    @Value("${economizai.ingestion.sefaz.user-agent:economizai}") String userAgent,
-                                   @Value("${economizai.ingestion.sefaz.svrs.states:RS,PR}") String svrsStates,
+                                   @Value("${economizai.ingestion.sefaz.svrs.states:RS,PR,SC}") String svrsStates,
                                    @Value("${economizai.ingestion.sefaz.retry.max-attempts:5}") int maxAttempts,
                                    @Value("${economizai.ingestion.sefaz.retry.delay-ms:5000}") long retryDelayMs,
-                                   @Value("${economizai.ingestion.sefaz.allowed-url-hosts:svrs.rs.gov.br,sefaz.rs.gov.br,fazenda.pr.gov.br}") String allowedUrlHosts) {
+                                   @Value("${economizai.ingestion.sefaz.allowed-url-hosts:svrs.rs.gov.br,sefaz.rs.gov.br,fazenda.pr.gov.br,sef.sc.gov.br}") String allowedUrlHosts) {
         var requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Math.min(timeoutMs, 10000));
         requestFactory.setReadTimeout(timeoutMs);
@@ -109,23 +109,24 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
      */
     @Override
     public String fetchHtml(String qrPayload) {
+        var uf = ChaveAcessoParser.extractUf(ChaveAcessoParser.extractChave(qrPayload));
         var url = resolveUrl(qrPayload);
         for (var attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
-                return fetchOnce(url, attempt);
+                return fetchOnce(url, attempt, uf);
             } catch (TransientSefazFetchException ex) {
                 if (attempt >= maxAttempts) break;
                 var delay = attempt == 1 ? 0 : retryDelayMs;
                 log.warn("sefaz.fetch.retry attempt={}/{} reason={} nextDelayMs={}",
                         attempt, maxAttempts, ex.getMessage(), delay);
-                sleep(delay);
+                sleep(delay, uf);
             }
         }
         log.warn("sefaz.fetch.exhausted attempts={} url={}", maxAttempts, url);
-        throw new SefazFetchException(supportedStates.iterator().next().name());
+        throw new SefazFetchException(uf.name());
     }
 
-    private String fetchOnce(String url, int attempt) {
+    private String fetchOnce(String url, int attempt, UnidadeFederativa uf) {
         log.info("sefaz.fetch attempt={}/{} url={}", attempt, maxAttempts, url);
         try {
             var html = httpGet(url);
@@ -133,14 +134,14 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
                 throw new TransientSefazFetchException("empty-body");
             }
             if (CAPTCHA_MARKER.matcher(html).find()) {
-                return handleCaptcha(html, url);
+                return handleCaptcha(html, url, uf);
             }
             log.info("sefaz.fetch.ok bytes={} attempt={}", html.length(), attempt);
             return html;
         } catch (HttpClientErrorException ex) {
             // 4xx — deterministic (bad/unknown chave): retrying won't help.
             log.warn("sefaz.fetch.client_error status={} url={}", ex.getStatusCode(), url);
-            throw new SefazFetchException(supportedStates.iterator().next().name());
+            throw new SefazFetchException(uf.name());
         } catch (RestClientException ex) {
             // 5xx, read/connect timeouts, IO errors — transient, worth retrying.
             throw new TransientSefazFetchException(ex.getClass().getSimpleName());
@@ -152,18 +153,18 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
         return restClient.get().uri(url).retrieve().body(String.class);
     }
 
-    private String handleCaptcha(String captchaPageHtml, String url) {
-        var uf = supportedStates.iterator().next().name();
+    private String handleCaptcha(String captchaPageHtml, String url, UnidadeFederativa uf) {
+        var ufName = uf.name();
         if (!captchaSolver.isConfigured()) {
-            log.warn("sefaz.fetch.captcha_wall uf={} solver not configured", uf);
-            throw new CaptchaUnavailableException(uf);
+            log.warn("sefaz.fetch.captcha_wall uf={} solver not configured", ufName);
+            throw new CaptchaUnavailableException(ufName);
         }
         var siteKey = extractSiteKey(captchaPageHtml);
         if (siteKey == null) {
-            log.warn("sefaz.fetch.captcha_no_sitekey uf={}", uf);
+            log.warn("sefaz.fetch.captcha_no_sitekey uf={}", ufName);
             throw new ReceiptParseException("captcha-sitekey-missing");
         }
-        log.info("sefaz.fetch.captcha_solving uf={}", uf);
+        log.info("sefaz.fetch.captcha_solving uf={}", ufName);
         var token = captchaSolver.solveRecaptchaV2(siteKey, url);
         return fetchWithToken(url, token);
     }
@@ -187,13 +188,13 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
                 .body(String.class);
     }
 
-    private void sleep(long ms) {
+    private void sleep(long ms, UnidadeFederativa uf) {
         if (ms <= 0) return;
         try {
             Thread.sleep(ms);
         } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
-            throw new SefazFetchException(supportedStates.iterator().next().name());
+            throw new SefazFetchException(uf.name());
         }
     }
 

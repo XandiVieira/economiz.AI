@@ -15,16 +15,20 @@ import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.CategorizationSource;
 import com.relyon.economizai.repository.ProductAliasRepository;
 import com.relyon.economizai.repository.ProductRepository;
+import com.relyon.economizai.repository.PriceObservationRepository;
 import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.service.canonicalization.DescriptionNormalizer;
 import com.relyon.economizai.service.extraction.ProductExtractor;
+import com.relyon.economizai.service.geo.DistanceCalculator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -34,19 +38,31 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ProductService {
 
+    private static final double PRODUCT_SEARCH_NEARBY_RADIUS_KM = 20.0;
+
     private final ProductRepository productRepository;
     private final ProductAliasRepository aliasRepository;
     private final ReceiptItemRepository receiptItemRepository;
+    private final PriceObservationRepository priceObservationRepository;
     private final ProductExtractor productExtractor;
 
     @Transactional(readOnly = true)
-    public Page<ProductResponse> search(String query, UUID householdId, Pageable pageable) {
+    public Page<ProductResponse> search(String query, User user, Pageable pageable) {
         var trimmedQuery = (query == null || query.isBlank()) ? null : query.trim();
-        var page = productRepository.search(trimmedQuery, pageable);
-        var productIds = page.map(Product::getId).getContent();
-        var withHistory = Set.copyOf(
-                receiptItemRepository.findProductIdsWithHistoryForHousehold(productIds, householdId));
-        return page.map(product -> ProductResponse.from(product, withHistory.contains(product.getId())));
+        var products = productRepository.searchAll(trimmedQuery);
+        if (products.isEmpty()) {
+            return new PageImpl<>(List.of(), pageable, 0);
+        }
+
+        var householdId = user.getHousehold().getId();
+        var productIds = products.stream().map(Product::getId).toList();
+        var ranking = ProductSearchRanking.from(productIds, householdId, user,
+                receiptItemRepository, priceObservationRepository);
+        var sorted = products.stream()
+                .sorted(ranking.comparator())
+                .map(product -> ProductResponse.from(product, ranking.wasBought(product.getId())))
+                .toList();
+        return page(sorted, pageable);
     }
 
     @Transactional(readOnly = true)
@@ -148,6 +164,15 @@ public class ProductService {
         return productRepository.findById(id).orElseThrow(ProductNotFoundException::new);
     }
 
+    private Page<ProductResponse> page(List<ProductResponse> sorted, Pageable pageable) {
+        if (pageable == null || pageable.isUnpaged()) {
+            return new PageImpl<>(sorted);
+        }
+        var start = (int) Math.min(pageable.getOffset(), sorted.size());
+        var end = Math.min(start + pageable.getPageSize(), sorted.size());
+        return new PageImpl<>(sorted.subList(start, end), pageable, sorted.size());
+    }
+
     private UnmatchedItemResponse toUnmatchedResponse(ReceiptItem item) {
         var receipt = item.getReceipt();
         return new UnmatchedItemResponse(
@@ -170,5 +195,50 @@ public class ProductService {
     private static String firstNonBlank(String preferred, String fallback) {
         var preferredValue = blankToNull(preferred);
         return preferredValue != null ? preferredValue : blankToNull(fallback);
+    }
+
+    private record ProductSearchRanking(Set<UUID> bought,
+                                        Set<UUID> observedAtVisitedMarkets,
+                                        Set<UUID> observedNearby,
+                                        Set<UUID> observedInHouseholdCities) {
+
+        private static ProductSearchRanking from(List<UUID> productIds, UUID householdId, User user,
+                                                 ReceiptItemRepository receiptItemRepository,
+                                                 PriceObservationRepository priceObservationRepository) {
+            var bought = Set.copyOf(
+                    receiptItemRepository.findProductIdsWithHistoryForHousehold(productIds, householdId));
+            var visitedMarkets = Set.copyOf(
+                    priceObservationRepository.findProductIdsObservedAtVisitedMarkets(productIds, householdId));
+            var householdCities = Set.copyOf(
+                    priceObservationRepository.findProductIdsObservedInHouseholdCities(productIds, householdId));
+            var nearby = nearbyProductIds(productIds, user, priceObservationRepository);
+            return new ProductSearchRanking(bought, visitedMarkets, nearby, householdCities);
+        }
+
+        private static Set<UUID> nearbyProductIds(List<UUID> productIds, User user,
+                                                  PriceObservationRepository priceObservationRepository) {
+            if (user.getHomeLatitude() == null || user.getHomeLongitude() == null) {
+                return Set.of();
+            }
+            return priceObservationRepository.findProductMarketCoordinates(productIds).stream()
+                    .filter(row -> DistanceCalculator.kmBetween(
+                            user.getHomeLatitude(), user.getHomeLongitude(),
+                            row.getLatitude(), row.getLongitude()) <= PRODUCT_SEARCH_NEARBY_RADIUS_KM)
+                    .map(PriceObservationRepository.ProductMarketCoordinates::getProductId)
+                    .collect(java.util.stream.Collectors.toSet());
+        }
+
+        private Comparator<Product> comparator() {
+            return Comparator
+                    .comparingInt((Product product) -> bought.contains(product.getId()) ? 0 : 1)
+                    .thenComparingInt(product -> observedAtVisitedMarkets.contains(product.getId()) ? 0 : 1)
+                    .thenComparingInt(product -> observedNearby.contains(product.getId()) ? 0 : 1)
+                    .thenComparingInt(product -> observedInHouseholdCities.contains(product.getId()) ? 0 : 1)
+                    .thenComparing(Product::getNormalizedName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
+        }
+
+        private boolean wasBought(UUID productId) {
+            return bought.contains(productId);
+        }
     }
 }

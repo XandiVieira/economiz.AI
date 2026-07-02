@@ -15,6 +15,7 @@ import com.relyon.economizai.model.enums.CategorizationSource;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.repository.ProductAliasRepository;
 import com.relyon.economizai.repository.ProductRepository;
+import com.relyon.economizai.repository.PriceObservationRepository;
 import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.service.extraction.ProductExtraction;
 import com.relyon.economizai.service.extraction.ProductExtractor;
@@ -45,6 +46,7 @@ class ProductServiceTest {
     @Mock private ProductRepository productRepository;
     @Mock private ProductAliasRepository aliasRepository;
     @Mock private ReceiptItemRepository receiptItemRepository;
+    @Mock private PriceObservationRepository priceObservationRepository;
     @Mock private ProductExtractor productExtractor;
 
     @InjectMocks private ProductService productService;

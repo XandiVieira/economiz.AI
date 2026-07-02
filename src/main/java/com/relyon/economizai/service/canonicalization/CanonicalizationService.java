@@ -95,8 +95,9 @@ public class CanonicalizationService {
             var normalized = DescriptionNormalizer.normalize(item.getRawDescription());
             if (hasEan(item)) {
                 canonicalizeByEan(item, normalized, pharmacyMerchant);
-            } else if (canonicalizeByAlias(item, normalized) == ItemResult.UNMATCHED) {
-                createProductFromDescription(item, normalized, pharmacyMerchant);
+            } else if (canonicalizeByAlias(item, normalized, pharmacyMerchant) == ItemResult.UNMATCHED) {
+                createProductFromDescription(item, normalized,
+                        productExtractor.extract(item.getRawDescription()), pharmacyMerchant);
             }
             applyHouseholdFriendlyName(receipt, item);
             return item.getProduct();
@@ -110,8 +111,9 @@ public class CanonicalizationService {
      * Mirrors {@link #createProductFromEan} but the source description is the
      * only signal, so there's no EAN to enrich from.
      */
-    private void createProductFromDescription(ReceiptItem item, String normalized, boolean pharmacyMerchant) {
-        var extraction = productExtractor.extract(item.getRawDescription());
+    private ItemResult createProductFromDescription(ReceiptItem item, String normalized,
+                                                    ProductExtraction extraction,
+                                                    boolean pharmacyMerchant) {
         var newProduct = buildEnrichedProduct(item, extraction);
         applyPharmacyMerchantFallback(newProduct, pharmacyMerchant);
         var created = productRepository.save(newProduct);
@@ -119,6 +121,7 @@ public class CanonicalizationService {
         ensureAlias(created, item.getRawDescription(), normalized);
         log.info("item.created_from_description product={} description='{}'",
                 abbrev(created.getId()), item.getRawDescription());
+        return ItemResult.CREATED;
     }
 
     private void applyHouseholdFriendlyName(Receipt receipt, ReceiptItem item) {
@@ -141,9 +144,11 @@ public class CanonicalizationService {
      *   <li>already linked → nothing to do;</li>
      *   <li>has EAN → exact code, metadata dedup, or create-new (the EAN path
      *       always resolves, hence its own terminal branch);</li>
-     *   <li>no EAN → exact-alias then fuzzy-alias on the normalized description.</li>
+     *   <li>no EAN → exact-alias, fuzzy-alias, then create only when the
+     *       description extractor produced a usable category/generic signal.</li>
      * </ol>
-     * Falls through to UNMATCHED only when an EAN-less item matches no alias.
+     * Falls through to UNMATCHED only when an EAN-less item matches no alias
+     * and the description is too weak to seed a product automatically.
      */
     private ItemResult canonicalizeItem(ReceiptItem item, boolean pharmacyMerchant) {
         if (item.getProduct() != null) {
@@ -156,7 +161,7 @@ public class CanonicalizationService {
         if (hasEan(item)) {
             return canonicalizeByEan(item, normalized, pharmacyMerchant);
         }
-        return canonicalizeByAlias(item, normalized);
+        return canonicalizeByAlias(item, normalized, pharmacyMerchant);
     }
 
     /**
@@ -208,11 +213,11 @@ public class CanonicalizationService {
     }
 
     /**
-     * No-EAN path: exact-alias match → fuzzy-alias match. Unlike the EAN path
-     * this never creates a product — an EAN-less item we can't place is left
-     * UNMATCHED for manual review rather than spawning a low-confidence row.
+     * No-EAN path: exact-alias match → fuzzy-alias match → create from
+     * dictionary-backed extraction. Unlike the EAN path, a no-signal item is
+     * left UNMATCHED for manual review rather than spawning a low-confidence row.
      */
-    private ItemResult canonicalizeByAlias(ReceiptItem item, String normalized) {
+    private ItemResult canonicalizeByAlias(ReceiptItem item, String normalized, boolean pharmacyMerchant) {
         var byAlias = aliasRepository.findByNormalizedDescription(normalized);
         if (byAlias.isPresent()) {
             item.setProduct(byAlias.get().getProduct());
@@ -226,8 +231,16 @@ public class CanonicalizationService {
             ensureAlias(fuzzy.getProduct(), item.getRawDescription(), normalized);
             return ItemResult.MATCHED;
         }
+        var extraction = productExtractor.extract(item.getRawDescription());
+        if (canCreateFromDescription(extraction, pharmacyMerchant)) {
+            return createProductFromDescription(item, normalized, extraction, pharmacyMerchant);
+        }
         log.info("item.unmatched description='{}' (no EAN, no alias) — needs review", item.getRawDescription());
         return ItemResult.UNMATCHED;
+    }
+
+    private boolean canCreateFromDescription(ProductExtraction extraction, boolean pharmacyMerchant) {
+        return extraction.genericName() != null || extraction.category() != null || pharmacyMerchant;
     }
 
     /**

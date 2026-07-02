@@ -47,6 +47,13 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
     """)
     Page<Product> search(@Param("query") String query, Pageable pageable);
 
+    @Query("""
+        SELECT p FROM Product p
+        WHERE (:query IS NULL OR LOWER(p.normalizedName) LIKE LOWER(CONCAT('%', :query, '%')) OR p.ean = :query)
+        ORDER BY p.normalizedName ASC
+    """)
+    List<Product> searchAll(@Param("query") String query);
+
     /**
      * Products matching all four metadata dimensions. Used by
      * {@code CanonicalizationService} to dedup against an existing product

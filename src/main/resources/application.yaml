@@ -90,7 +90,7 @@ economizai:
       # SSRF guard: when a QR payload carries a full URL, we only fetch it if
       # the host matches one of these suffixes (e.g. svrs.rs.gov.br admits
       # dfe-portal.svrs.rs.gov.br). Extend when onboarding new state portals.
-      allowed-url-hosts: ${SEFAZ_ALLOWED_URL_HOSTS:svrs.rs.gov.br,sefaz.rs.gov.br,fazenda.pr.gov.br}
+      allowed-url-hosts: ${SEFAZ_ALLOWED_URL_HOSTS:svrs.rs.gov.br,sefaz.rs.gov.br,fazenda.pr.gov.br,sef.sc.gov.br}
       svrs:
         # UFs whose NFC-e consult page renders the shared responsive-DANFE
         # layout the adapter parses. RS proven since day one; PR verified
@@ -99,10 +99,12 @@ economizai:
         # (AC, AL, AP, CE, ES, MA, PA, PB, PI, RJ, RN, RO, RR, SC, SE, TO)
         # are worth testing one at a time: submit a real chave, verify the
         # parser extracts items correctly, then add the UF code here (and
-        # the portal host to allowed-url-hosts if it's a new domain).
+        # the portal host to allowed-url-hosts if it's a new domain). SC is
+        # enabled now so we can exercise its live captcha/security challenge
+        # with real notes and capture the success-path HTML.
         # States whose portal renders a DIFFERENT layout (SP, MG, BA, PE, …)
         # need a dedicated adapter.
-        states: ${SEFAZ_SVRS_STATES:RS,PR}
+        states: ${SEFAZ_SVRS_STATES:RS,PR,SC}
       captcha:
         # UFs whose consult portal gates the DANFE behind a captcha and is
         # handled by MsDfePortalAdapter (currently MS — www.dfe.ms.gov.br with

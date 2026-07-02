@@ -240,6 +240,30 @@ class CanonicalizationServiceTest {
     }
 
     @Test
+    void createsCategorizedProductWhenNoEanNoAliasButDictionaryRecognizesItem() {
+        var receipt = buildReceipt(item("ABOBORA CABOTIA PICADA KG", null));
+        when(aliasRepository.findByNormalizedDescription(anyString())).thenReturn(Optional.empty());
+        when(productExtractor.extract("ABOBORA CABOTIA PICADA KG")).thenReturn(
+                new ProductExtraction("Abóbora", null, null, null,
+                        ProductCategory.PRODUCE, CategorizationSource.DICTIONARY));
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> {
+            var p = inv.<Product>getArgument(0);
+            p.setId(UUID.randomUUID());
+            return p;
+        });
+        when(aliasRepository.existsByNormalizedDescription(anyString())).thenReturn(false);
+
+        var outcome = service.canonicalize(receipt);
+
+        assertEquals(1, outcome.created());
+        var product = receipt.getItems().get(0).getProduct();
+        assertNotNull(product);
+        assertEquals(ProductCategory.PRODUCE, product.getCategory());
+        assertEquals("Abóbora", product.getGenericName());
+        verify(aliasRepository).save(any(ProductAlias.class));
+    }
+
+    @Test
     void linkOrCreateProduct_forcesCreationForUnmatchedEanlessItem() {
         // Same input the batch path would leave UNMATCHED (no EAN, no alias) —
         // but the explicit single-item path must create a product to anchor a
@@ -306,7 +330,7 @@ class CanonicalizationServiceTest {
     }
 
     @Test
-    void fuzzyDoesNotMatchWhenScoreBelowThreshold() {
+    void createsCategorizedProductWhenFuzzyScoreBelowThreshold() {
         var product = Product.builder().id(UUID.randomUUID())
                 .normalizedName("Arroz")
                 .genericName("Arroz")
@@ -324,26 +348,39 @@ class CanonicalizationServiceTest {
                         ProductCategory.GROCERIES, CategorizationSource.DICTIONARY));
         when(aliasRepository.findCandidatesByProductMetadata("Arroz", new BigDecimal("5"), "KG"))
                 .thenReturn(List.of(existingAlias));
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> {
+            var p = inv.<Product>getArgument(0);
+            p.setId(UUID.randomUUID());
+            return p;
+        });
+        when(aliasRepository.existsByNormalizedDescription("feijao preto 5kg")).thenReturn(false);
 
         var outcome = service.canonicalize(receipt);
 
-        assertEquals(1, outcome.unmatched());
-        assertNull(receipt.getItems().get(0).getProduct());
-        verify(aliasRepository, never()).save(any(ProductAlias.class));
+        assertEquals(1, outcome.created());
+        assertEquals(ProductCategory.GROCERIES, receipt.getItems().get(0).getProduct().getCategory());
+        verify(aliasRepository).save(any(ProductAlias.class));
     }
 
     @Test
-    void fuzzySkippedWhenMetadataIncomplete() {
+    void createsProductWhenFuzzySkippedButDescriptionIsCategorized() {
         // No packSize extracted — fuzzy is skipped to avoid wide-net false positives
         var receipt = buildReceipt(item("BANANA PRATA KG", null));
         when(aliasRepository.findByNormalizedDescription("banana prata kg")).thenReturn(Optional.empty());
         when(productExtractor.extract("BANANA PRATA KG")).thenReturn(
                 new ProductExtraction("Banana Prata", null, null, null,
                         ProductCategory.PRODUCE, CategorizationSource.DICTIONARY));
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> {
+            var p = inv.<Product>getArgument(0);
+            p.setId(UUID.randomUUID());
+            return p;
+        });
+        when(aliasRepository.existsByNormalizedDescription(anyString())).thenReturn(false);
 
         var outcome = service.canonicalize(receipt);
 
-        assertEquals(1, outcome.unmatched());
+        assertEquals(1, outcome.created());
+        assertEquals(ProductCategory.PRODUCE, receipt.getItems().get(0).getProduct().getCategory());
         verify(aliasRepository, never()).findCandidatesByProductMetadata(any(), any(), any());
     }
 

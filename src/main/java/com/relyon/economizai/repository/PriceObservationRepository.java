@@ -7,11 +7,18 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
 public interface PriceObservationRepository extends JpaRepository<PriceObservation, UUID> {
+
+    interface ProductMarketCoordinates {
+        UUID getProductId();
+        BigDecimal getLatitude();
+        BigDecimal getLongitude();
+    }
 
     long countByProduct(Product product);
 
@@ -47,4 +54,57 @@ public interface PriceObservationRepository extends JpaRepository<PriceObservati
           AND po.outlier = false
     """)
     List<PriceObservation> findRecent(@Param("since") LocalDateTime since);
+
+    @Query("""
+        SELECT DISTINCT po.product.id FROM PriceObservation po
+        WHERE po.product.id IN :productIds
+          AND po.outlier = false
+          AND po.marketCnpj IN (
+              SELECT DISTINCT r.cnpjEmitente FROM Receipt r
+              WHERE r.household.id = :householdId
+                AND r.status = 'CONFIRMED'
+                AND r.cnpjEmitente IS NOT NULL
+          )
+    """)
+    List<UUID> findProductIdsObservedAtVisitedMarkets(@Param("productIds") List<UUID> productIds,
+                                                      @Param("householdId") UUID householdId);
+
+    @Query("""
+        SELECT DISTINCT po.product.id FROM PriceObservation po
+        WHERE po.product.id IN :productIds
+          AND po.outlier = false
+          AND EXISTS (
+              SELECT 1 FROM MarketLocation ml
+              WHERE ml.cnpj IN (
+                  SELECT DISTINCT r.cnpjEmitente FROM Receipt r
+                  WHERE r.household.id = :householdId
+                    AND r.status = 'CONFIRMED'
+                    AND r.cnpjEmitente IS NOT NULL
+              )
+              AND (
+                  (po.ibgeCityCode IS NOT NULL AND po.ibgeCityCode = ml.ibgeCityCode)
+                  OR (
+                      po.ibgeCityCode IS NULL
+                      AND ml.ibgeCityCode IS NULL
+                      AND po.city IS NOT NULL
+                      AND ml.city IS NOT NULL
+                      AND LOWER(po.city) = LOWER(ml.city)
+                      AND po.state = ml.state
+                  )
+              )
+          )
+    """)
+    List<UUID> findProductIdsObservedInHouseholdCities(@Param("productIds") List<UUID> productIds,
+                                                       @Param("householdId") UUID householdId);
+
+    @Query("""
+        SELECT DISTINCT po.product.id AS productId, ml.latitude AS latitude, ml.longitude AS longitude
+        FROM PriceObservation po
+        JOIN MarketLocation ml ON ml.cnpj = po.marketCnpj
+        WHERE po.product.id IN :productIds
+          AND po.outlier = false
+          AND ml.latitude IS NOT NULL
+          AND ml.longitude IS NOT NULL
+    """)
+    List<ProductMarketCoordinates> findProductMarketCoordinates(@Param("productIds") List<UUID> productIds);
 }

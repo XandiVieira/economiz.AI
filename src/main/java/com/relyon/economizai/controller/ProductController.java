@@ -51,7 +51,7 @@ public class ProductController {
         if (lastProducts != null && user != null) {
             return ResponseEntity.ok(new PageImpl<>(recentViewService.listRecent(user, lastProducts)));
         }
-        return ResponseEntity.ok(productService.search(query, user.getHousehold().getId(), pageable));
+        return ResponseEntity.ok(productService.search(query, user, pageable));
     }
 
     /**
