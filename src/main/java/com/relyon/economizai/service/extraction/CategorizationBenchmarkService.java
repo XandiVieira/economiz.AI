@@ -3,49 +3,48 @@ package com.relyon.economizai.service.extraction;
 import com.relyon.economizai.dto.response.CategorizationBenchmarkResponse;
 import com.relyon.economizai.dto.response.CategorizationBenchmarkResponse.Failure;
 import com.relyon.economizai.model.enums.ProductCategory;
+import com.relyon.economizai.repository.CategorizationBenchmarkEntryRepository;
 import com.relyon.economizai.service.canonicalization.DescriptionNormalizer;
 import com.relyon.economizai.service.extraction.ml.MlClassifierService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Measures extraction quality against a curated golden set
- * ({@code seed/categorization-benchmark.csv}: description → true
- * category/brand/quantity). Runs the same cascade as ingestion and reports
- * per-field accuracy, plus a SHADOW measurement of the ML model alone (so we
- * keep validating it even while it's gated out of the live cascade).
+ * Measures extraction quality against the golden set in the
+ * categorization_benchmark_entries table (description → true
+ * category/brand/quantity, grown at runtime via the admin import endpoint).
+ * Runs the same cascade as ingestion and reports per-field accuracy, plus a
+ * SHADOW measurement of the ML model alone (so we keep validating it even
+ * while it's gated out of the live cascade).
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class CategorizationBenchmarkService {
 
-    private static final String BENCHMARK_CSV = "seed/categorization-benchmark.csv";
-
     private final ProductExtractor productExtractor;
     private final MlClassifierService mlClassifier;
+    private final CategorizationBenchmarkEntryRepository benchmarkRepository;
 
     public CategorizationBenchmarkResponse run() {
-        var rows = loadBenchmark();
+        var rows = benchmarkRepository.findAll();
         var total = rows.size();
         var tally = new Tally();
         var threshold = mlClassifier.getConfidenceThreshold();
 
         for (var row : rows) {
-            var description = row[0].trim();
-            var expectedCategory = ProductCategory.valueOf(row[1].trim());
+            var description = row.getDescription();
+            var expectedCategory = row.getExpectedCategory();
             var extraction = productExtractor.extract(description);
 
             scoreCategory(tally, description, expectedCategory, extraction);
-            scoreBrand(tally, description, column(row, 2), extraction);
-            scoreQuantity(tally, description, column(row, 3), column(row, 4), extraction);
+            scoreBrand(tally, description, row.getExpectedBrand(), extraction);
+            scoreQuantity(tally, description, row.getExpectedPackSize(), row.getExpectedPackUnit(), extraction);
             scoreMlShadow(tally, description, expectedCategory, threshold);
         }
 
@@ -76,7 +75,7 @@ public class CategorizationBenchmarkService {
 
     /** Brand — only when the golden row declares one. */
     private void scoreBrand(Tally tally, String description, String expectedBrand, ProductExtraction extraction) {
-        if (expectedBrand.isEmpty()) return;
+        if (expectedBrand == null || expectedBrand.isEmpty()) return;
         tally.brandChecked++;
         if (sameBrand(expectedBrand, extraction.brand())) {
             tally.brandCorrect++;
@@ -86,9 +85,9 @@ public class CategorizationBenchmarkService {
     }
 
     /** Quantity (pack size + unit) — only when the golden row declares one. */
-    private void scoreQuantity(Tally tally, String description, String expectedPackSize, String expectedPackUnit,
+    private void scoreQuantity(Tally tally, String description, BigDecimal expectedPackSize, String expectedPackUnit,
                                ProductExtraction extraction) {
-        if (expectedPackSize.isEmpty()) return;
+        if (expectedPackSize == null) return;
         tally.quantityChecked++;
         if (sameQuantity(expectedPackSize, expectedPackUnit, extraction.packSize(), extraction.packUnit())) {
             tally.quantityCorrect++;
@@ -117,30 +116,18 @@ public class CategorizationBenchmarkService {
         private final List<Failure> failures = new ArrayList<>();
     }
 
-    private static String column(String[] row, int index) {
-        return row.length > index ? row[index].trim() : "";
-    }
-
     private static boolean sameBrand(String expected, String actual) {
         if (actual == null) return false;
         return DescriptionNormalizer.normalize(expected).equals(DescriptionNormalizer.normalize(actual));
     }
 
-    private static boolean sameQuantity(String expectedSize, String expectedUnit, BigDecimal actualSize, String actualUnit) {
+    private static boolean sameQuantity(BigDecimal expectedSize, String expectedUnit, BigDecimal actualSize, String actualUnit) {
         if (actualSize == null) return false;
-        if (new BigDecimal(expectedSize).compareTo(actualSize) != 0) return false;
-        return actualUnit != null && expectedUnit.equalsIgnoreCase(actualUnit);
+        if (expectedSize.compareTo(actualSize) != 0) return false;
+        return actualUnit != null && expectedUnit != null && expectedUnit.equalsIgnoreCase(actualUnit);
     }
 
     private static double pct(int correct, int total) {
         return total == 0 ? 0.0 : Math.round(correct * 1000.0 / total) / 10.0;
-    }
-
-    private List<String[]> loadBenchmark() {
-        try {
-            return CsvSeedLoader.load(BENCHMARK_CSV);
-        } catch (IOException exception) {
-            throw new UncheckedIOException("failed to load " + BENCHMARK_CSV, exception);
-        }
     }
 }

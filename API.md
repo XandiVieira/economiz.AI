@@ -1061,16 +1061,21 @@ GET    /api/v1/categorizer/consensus         → list all CONSENSUS-graduated pr
 DELETE /api/v1/categorizer/learned           → clear all auto-promoted learned entries + reset in-memory dict [ADMIN only]
 DELETE /api/v1/categorizer/consensus         → revert all CONSENSUS-graduated products to NONE  [ADMIN only]
 POST   /api/v1/categorizer/dictionary/import  → bulk-upsert token mappings into learned dict       [ADMIN only]
+POST   /api/v1/categorizer/dictionary/curated/import → bulk-upsert CURATED entries (highest tier), hot-reloaded [ADMIN only]
+POST   /api/v1/categorizer/brands/import      → bulk-upsert brand-registry entries, hot-reloaded   [ADMIN only]
+POST   /api/v1/categorizer/benchmark/import   → bulk-upsert golden-set rows for the benchmark      [ADMIN only]
 POST   /api/v1/categorizer/ean-catalog/import → bulk-seed EAN→category catalog (Open Food Facts)  [ADMIN only]
 ```
 
-> The **model-training / catalog-mutating** endpoints (`retrain`, `auto-promote`, `promote-consensus`, `learned`, `consensus`, `dictionary/import`, `ean-catalog/import`) require `Role.ADMIN` — a normal user gets `403`. The read/debug GETs (`classify`, `ml/predict`, `benchmark`, `quality/history`, `status`) remain open to any authenticated user.
+> The **model-training / catalog-mutating** endpoints (`retrain`, `auto-promote`, `promote-consensus`, `learned`, `consensus`, the four `*/import`s) require `Role.ADMIN` — a normal user gets `403`. The read/debug GETs (`classify`, `ml/predict`, `benchmark`, `quality/history`, `status`) remain open to any authenticated user.
+
+> Since 2026-07-02 the curated dictionary, brand registry and benchmark golden set live in **DB tables** (formerly classpath CSVs) — the three new imports make them editable at runtime, no deploy needed. Bodies: curated `[{keyword, genericName, category}]`, brands `[{key, displayName}]`, benchmark `[{description, expectedCategory, expectedBrand?, expectedPackSize?, expectedPackUnit?}]`. All are upserts returning `{imported, skipped}`.
 
 **`/promote-consensus`** — turns user category corrections into deterministic knowledge: products corrected by ≥N distinct households (consensus) get their global category set (source `CONSENSUS`), and recurring agreed tokens enter the learned dictionary. Returns `{ productsGraduated, tokensLearned, learnedTotal }`. Runs daily automatically; this is the manual trigger.
 
 **`GET /consensus`** — returns all products the consensus job graduated: `[{ id, ean, normalizedName, genericName, brand, category }]`. Use to review what was auto-approved before deciding to keep or revert. Read-only.
 
-**`DELETE /learned`** — wipes every auto-promoted entry from the `learned_dictionary_entry` table and resets the in-memory dictionary to just the curated CSV seed. Returns `{ removedEntries }`. Use to restore a clean baseline if the learned dict drifts or is corrupted.
+**`DELETE /learned`** — wipes every auto-promoted entry from the `learned_dictionary_entry` table and resets the in-memory dictionary to just the curated tier. Returns `{ removedEntries }`. Use to restore a clean baseline if the learned dict drifts or is corrupted.
 
 **`DELETE /consensus`** — reverts all products whose category was set by consensus promotion (source `CONSENSUS`) back to `NONE` / null category, so they re-enter the classification cascade on the next request. Returns `{ revertedProducts }`. Does **not** touch the learned dictionary — run `DELETE /learned` too if you want a full reset.
 

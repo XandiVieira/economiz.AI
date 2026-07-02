@@ -176,4 +176,36 @@ public class CategorizerController {
             @RequestBody List<CategorizerAdminService.DictionaryImportRequest> entries) {
         return ResponseEntity.ok(categorizerAdminService.bulkImport(entries));
     }
+
+    /**
+     * ADMIN. Upsert curated dictionary entries (highest-priority tier) —
+     * hot-reloaded, no deploy. Body:
+     * <pre>[{"keyword":"arroz","genericName":"Arroz","category":"GROCERIES"}, ...]</pre>
+     */
+    @PostMapping("/dictionary/curated/import")
+    public ResponseEntity<CategorizerAdminService.BulkImportOutcome> bulkImportCurated(
+            @RequestBody List<CategorizerAdminService.CuratedImportRequest> entries) {
+        return ResponseEntity.ok(categorizerAdminService.importCuratedEntries(entries));
+    }
+
+    /**
+     * ADMIN. Upsert brand-registry entries — hot-reloaded, no deploy. Body:
+     * <pre>[{"key":"tio joao","displayName":"Tio João"}, ...]</pre>
+     */
+    @PostMapping("/brands/import")
+    public ResponseEntity<CategorizerAdminService.BulkImportOutcome> bulkImportBrands(
+            @RequestBody List<CategorizerAdminService.BrandImportRequest> entries) {
+        return ResponseEntity.ok(categorizerAdminService.importBrands(entries));
+    }
+
+    /**
+     * ADMIN. Upsert golden-set rows for the benchmark. Body:
+     * <pre>[{"description":"ARROZ TIO J 5KG","expectedCategory":"GROCERIES",
+     *   "expectedBrand":"Tio João","expectedPackSize":5,"expectedPackUnit":"KG"}, ...]</pre>
+     */
+    @PostMapping("/benchmark/import")
+    public ResponseEntity<CategorizerAdminService.BulkImportOutcome> bulkImportBenchmark(
+            @RequestBody List<CategorizerAdminService.BenchmarkImportRequest> entries) {
+        return ResponseEntity.ok(categorizerAdminService.importBenchmarkEntries(entries));
+    }
 }

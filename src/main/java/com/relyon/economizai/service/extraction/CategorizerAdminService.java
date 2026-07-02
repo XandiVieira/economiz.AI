@@ -1,8 +1,14 @@
 package com.relyon.economizai.service.extraction;
 
+import com.relyon.economizai.model.BrandRegistryEntry;
+import com.relyon.economizai.model.CategorizationBenchmarkEntry;
+import com.relyon.economizai.model.CuratedDictionaryEntry;
 import com.relyon.economizai.model.LearnedDictionaryEntry;
 import com.relyon.economizai.model.enums.CategorizationSource;
 import com.relyon.economizai.model.enums.ProductCategory;
+import com.relyon.economizai.repository.BrandRegistryEntryRepository;
+import com.relyon.economizai.repository.CategorizationBenchmarkEntryRepository;
+import com.relyon.economizai.repository.CuratedDictionaryEntryRepository;
 import com.relyon.economizai.repository.LearnedDictionaryRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
@@ -10,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -25,8 +32,8 @@ import java.util.stream.Collectors;
  * and bulk-seed the learned dictionary without a redeployment.
  *
  * <p><b>Reset-learned</b> wipes every auto-promoted/consensus-learned token
- * from the in-memory and DB layers, restoring the dictionary to the curated CSV
- * baseline. Safe to run at any time — the curated CSV is the authoritative
+ * from the in-memory and DB layers, restoring the dictionary to the curated
+ * baseline. Safe to run at any time — the curated table is the authoritative
  * "factory defaults" and is never touched by this operation.</p>
  *
  * <p><b>Reset-consensus</b> reverts all products that were globally graduated
@@ -50,6 +57,10 @@ public class CategorizerAdminService {
     private final LearnedDictionaryRepository learnedRepository;
     private final ProductRepository productRepository;
     private final DictionaryClassifier dictionaryClassifier;
+    private final BrandExtractor brandExtractor;
+    private final CuratedDictionaryEntryRepository curatedRepository;
+    private final BrandRegistryEntryRepository brandRepository;
+    private final CategorizationBenchmarkEntryRepository benchmarkRepository;
 
     @Transactional
     public ResetLearnedOutcome resetLearned() {
@@ -132,7 +143,92 @@ public class CategorizerAdminService {
                 .toList();
     }
 
+    /**
+     * Upserts curated dictionary entries (the highest-priority tier) and
+     * hot-reloads the in-memory snapshot — no deploy needed to grow it.
+     */
+    @Transactional
+    public BulkImportOutcome importCuratedEntries(List<CuratedImportRequest> entries) {
+        if (entries == null || entries.isEmpty()) return new BulkImportOutcome(0, 0);
+        var imported = 0;
+        var skipped = 0;
+        for (var request : entries) {
+            if (request.keyword() == null || request.keyword().isBlank() || request.category() == null) {
+                skipped++;
+                continue;
+            }
+            var keyword = request.keyword().trim().toLowerCase();
+            var entry = curatedRepository.findByKeyword(keyword)
+                    .orElseGet(() -> CuratedDictionaryEntry.builder().keyword(keyword).build());
+            entry.setGenericName(request.genericName());
+            entry.setCategory(request.category());
+            curatedRepository.save(entry);
+            imported++;
+        }
+        dictionaryClassifier.reloadCuratedEntries();
+        log.info("categorizer.curated_import imported={} skipped={}", imported, skipped);
+        return new BulkImportOutcome(imported, skipped);
+    }
+
+    /** Upserts brand-registry entries and hot-reloads the in-memory snapshot. */
+    @Transactional
+    public BulkImportOutcome importBrands(List<BrandImportRequest> entries) {
+        if (entries == null || entries.isEmpty()) return new BulkImportOutcome(0, 0);
+        var imported = 0;
+        var skipped = 0;
+        for (var request : entries) {
+            if (request.key() == null || request.key().isBlank()
+                    || request.displayName() == null || request.displayName().isBlank()) {
+                skipped++;
+                continue;
+            }
+            var normalizedKey = request.key().trim().toLowerCase();
+            var entry = brandRepository.findByNormalizedKey(normalizedKey)
+                    .orElseGet(() -> BrandRegistryEntry.builder().normalizedKey(normalizedKey).build());
+            entry.setDisplayName(request.displayName().trim());
+            brandRepository.save(entry);
+            imported++;
+        }
+        brandExtractor.reload();
+        log.info("categorizer.brand_import imported={} skipped={}", imported, skipped);
+        return new BulkImportOutcome(imported, skipped);
+    }
+
+    /** Upserts golden-set rows so the benchmark can grow without a deploy. */
+    @Transactional
+    public BulkImportOutcome importBenchmarkEntries(List<BenchmarkImportRequest> entries) {
+        if (entries == null || entries.isEmpty()) return new BulkImportOutcome(0, 0);
+        var imported = 0;
+        var skipped = 0;
+        for (var request : entries) {
+            if (request.description() == null || request.description().isBlank()
+                    || request.expectedCategory() == null) {
+                skipped++;
+                continue;
+            }
+            var description = request.description().trim();
+            var entry = benchmarkRepository.findByDescription(description)
+                    .orElseGet(() -> CategorizationBenchmarkEntry.builder().description(description).build());
+            entry.setExpectedCategory(request.expectedCategory());
+            entry.setExpectedBrand(request.expectedBrand());
+            entry.setExpectedPackSize(request.expectedPackSize());
+            entry.setExpectedPackUnit(request.expectedPackUnit());
+            benchmarkRepository.save(entry);
+            imported++;
+        }
+        log.info("categorizer.benchmark_import imported={} skipped={}", imported, skipped);
+        return new BulkImportOutcome(imported, skipped);
+    }
+
     public record DictionaryImportRequest(String token, String genericName, ProductCategory category, int sampleCount) {}
+
+    public record CuratedImportRequest(String keyword, String genericName, ProductCategory category) {}
+
+    public record BrandImportRequest(String key, String displayName) {}
+
+    public record BenchmarkImportRequest(String description, ProductCategory expectedCategory,
+                                         String expectedBrand, BigDecimal expectedPackSize,
+                                         String expectedPackUnit) {}
 
     public record ResetLearnedOutcome(int removedEntries) {}
 

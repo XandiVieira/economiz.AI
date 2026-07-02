@@ -1,7 +1,6 @@
 package com.relyon.economizai.service.extraction;
 
 import com.relyon.economizai.model.enums.ProductCategory;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -9,12 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 class DictionaryClassifierTest {
 
-    private final DictionaryClassifier classifier = new DictionaryClassifier();
-
-    @BeforeEach
-    void setUp() throws Exception {
-        classifier.load();
-    }
+    private final DictionaryClassifier classifier = SeedFixtures.loadedDictionaryClassifier();
 
     @Test
     void classifiesArrozAsGroceries() {

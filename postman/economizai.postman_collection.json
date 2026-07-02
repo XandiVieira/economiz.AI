@@ -3048,6 +3048,124 @@
             "description": "Bulk-seeds the EAN catalog (step A2 in the canonicalization cascade). Upserts by EAN. source: OPEN_FOOD_FACTS | CURATED_IMPORT | USER_CONFIRMED. Returns { imported, skipped }."
           },
           "response": []
+        },
+        {
+          "name": "Import curated dictionary entries (ADMIN)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  { \"keyword\": \"arroz\", \"genericName\": \"Arroz\", \"category\": \"GROCERIES\" }\n]",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categorizer/dictionary/curated/import",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "categorizer",
+                "dictionary",
+                "curated",
+                "import"
+              ]
+            },
+            "description": "[ADMIN] Upserts a batch of token → (genericName, category) entries directly into the learned dictionary (sampleCount defaults to 999 if omitted). Immediately swaps the in-memory dictionary. Use to seed large volumes of known mappings without re-parsing receipts. Returns { imported, skipped }."
+          }
+        },
+        {
+          "name": "Import brand registry entries (ADMIN)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  { \"key\": \"tio joao\", \"displayName\": \"Tio João\" }\n]",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categorizer/brands/import",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "categorizer",
+                "brands",
+                "import"
+              ]
+            },
+            "description": "[ADMIN] Upserts a batch of token → (genericName, category) entries directly into the learned dictionary (sampleCount defaults to 999 if omitted). Immediately swaps the in-memory dictionary. Use to seed large volumes of known mappings without re-parsing receipts. Returns { imported, skipped }."
+          }
+        },
+        {
+          "name": "Import benchmark golden rows (ADMIN)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  { \"description\": \"ARROZ TIO J 5KG\", \"expectedCategory\": \"GROCERIES\", \"expectedBrand\": \"Tio João\", \"expectedPackSize\": 5, \"expectedPackUnit\": \"KG\" }\n]",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categorizer/benchmark/import",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "categorizer",
+                "benchmark",
+                "import"
+              ]
+            },
+            "description": "[ADMIN] Upserts a batch of token → (genericName, category) entries directly into the learned dictionary (sampleCount defaults to 999 if omitted). Immediately swaps the in-memory dictionary. Use to seed large volumes of known mappings without re-parsing receipts. Returns { imported, skipped }."
+          }
         }
       ]
     },

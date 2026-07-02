@@ -1,5 +1,8 @@
 package com.relyon.economizai.service.extraction;
 
+import com.relyon.economizai.repository.BrandRegistryEntryRepository;
+import com.relyon.economizai.repository.CuratedDictionaryEntryRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -29,6 +32,20 @@ class CategorizationEquivalenceTest {
 
     @Autowired private ProductExtractor productExtractor;
     @Autowired private CategorizationDebugService debugService;
+    @Autowired private CuratedDictionaryEntryRepository curatedRepository;
+    @Autowired private BrandRegistryEntryRepository brandRepository;
+    @Autowired private DictionaryClassifier dictionaryClassifier;
+    @Autowired private BrandExtractor brandExtractor;
+
+    @BeforeEach
+    void seedDictionaryAndBrands() {
+        curatedRepository.deleteAll();
+        brandRepository.deleteAll();
+        curatedRepository.saveAll(SeedFixtures.curatedEntries());
+        brandRepository.saveAll(SeedFixtures.brandEntries());
+        dictionaryClassifier.reloadCuratedEntries();
+        brandExtractor.reload();
+    }
 
     private static final List<String> DESCRIPTIONS = List.of(
             "MILHO VERDE 200G",

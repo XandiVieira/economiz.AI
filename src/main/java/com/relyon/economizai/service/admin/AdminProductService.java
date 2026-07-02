@@ -73,7 +73,7 @@ public class AdminProductService {
     /**
      * Re-run brand extraction over products that have no brand, filling it from
      * the (now larger) brand registry. Fill-only: never overwrites an existing
-     * brand. Run after adding entries to brand-registry.csv to fix already-
+     * brand. Run after importing new brand-registry entries to fix already-
      * ingested products (brand is otherwise set only once, at creation).
      */
     @Transactional

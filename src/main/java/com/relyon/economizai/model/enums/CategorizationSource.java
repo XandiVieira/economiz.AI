@@ -12,7 +12,7 @@ package com.relyon.economizai.model.enums;
  */
 public enum CategorizationSource {
     NONE,                // not categorized yet
-    DICTIONARY,          // curated CSV in src/main/resources/seed/product-dictionary.csv
+    DICTIONARY,          // curated_dictionary_entries table (admin-managed)
     LEARNED_DICTIONARY,  // auto-promoted from stable ML predictions
     ML,                  // multinomial NB inference (Phase 2.5b)
     MERCHANT,            // inferred from the merchant type (e.g. pharmacy) when otherwise OTHER

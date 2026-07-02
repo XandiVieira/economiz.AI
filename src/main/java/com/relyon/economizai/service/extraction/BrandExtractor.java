@@ -1,43 +1,56 @@
 package com.relyon.economizai.service.extraction;
 
+import com.relyon.economizai.repository.BrandRegistryEntryRepository;
 import com.relyon.economizai.service.canonicalization.DescriptionNormalizer;
 import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
+/**
+ * Brand lookup over the brand_registry_entries table (managed via the admin
+ * import endpoint). Phrase-scans the normalized description, longest phrase
+ * first, so "tio joao" beats "tio".
+ */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class BrandExtractor {
 
     private static final int MAX_PHRASE_TOKENS = 3;
-    private final Map<String, String> brandsByNormalizedKey = new LinkedHashMap<>();
+
+    private final BrandRegistryEntryRepository brandRepository;
+    private final AtomicReference<Map<String, String>> brandsRef = new AtomicReference<>(Map.of());
 
     @PostConstruct
-    void load() throws IOException {
-        for (var row : CsvSeedLoader.load("seed/brand-registry.csv")) {
-            if (row.length < 2) continue;
-            var key = row[0].trim().toLowerCase();
-            var display = row[1].trim();
-            if (!key.isEmpty() && !display.isEmpty()) {
-                brandsByNormalizedKey.put(key, display);
-            }
+    void load() {
+        reload();
+    }
+
+    /** Reloads from the database — at startup and after every admin bulk-import. */
+    public void reload() {
+        var brands = new LinkedHashMap<String, String>();
+        for (var entry : brandRepository.findAll()) {
+            brands.put(entry.getNormalizedKey(), entry.getDisplayName());
         }
-        log.info("Loaded {} brand entries", brandsByNormalizedKey.size());
+        brandsRef.set(Map.copyOf(brands));
+        log.info("Loaded {} brand entries", brands.size());
     }
 
     public String find(String rawDescription) {
         var normalized = DescriptionNormalizer.normalize(rawDescription);
         if (normalized.isBlank()) return null;
         var tokens = normalized.split("\\s+");
+        var brands = brandsRef.get();
         for (var size = MAX_PHRASE_TOKENS; size >= 1; size--) {
             for (var i = 0; i + size <= tokens.length; i++) {
                 var phrase = String.join(" ", Arrays.copyOfRange(tokens, i, i + size));
-                var match = brandsByNormalizedKey.get(phrase);
+                var match = brands.get(phrase);
                 if (match != null) return match;
             }
         }

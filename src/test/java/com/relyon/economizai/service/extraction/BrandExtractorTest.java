@@ -1,6 +1,5 @@
 package com.relyon.economizai.service.extraction;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -8,12 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 class BrandExtractorTest {
 
-    private final BrandExtractor extractor = new BrandExtractor();
-
-    @BeforeEach
-    void setUp() throws Exception {
-        extractor.load();
-    }
+    private final BrandExtractor extractor = SeedFixtures.loadedBrandExtractor();
 
     @Test
     void findsTwoWordBrandFirst() {

@@ -1,9 +1,12 @@
 package com.relyon.economizai.service.extraction;
 
+import com.relyon.economizai.model.CategorizationBenchmarkEntry;
 import com.relyon.economizai.model.enums.CategorizationSource;
 import com.relyon.economizai.model.enums.ProductCategory;
+import com.relyon.economizai.repository.CategorizationBenchmarkEntryRepository;
 import com.relyon.economizai.service.extraction.ml.MlClassifierService;
 import com.relyon.economizai.service.extraction.ml.MlPrediction;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -11,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -20,16 +24,39 @@ import static org.mockito.Mockito.when;
 
 /**
  * Branch coverage for {@link CategorizationBenchmarkService} using mocked
- * collaborators (the real golden CSV is still loaded from the classpath).
- * Drives the category-correct/wrong/uncategorized, brand check, quantity check,
- * and ML-shadow branches by controlling what the extractor and ML model return.
+ * collaborators (the golden set is a mocked repository replicating the rows
+ * formerly shipped in the seed CSV). Drives the category-correct/wrong/
+ * uncategorized, brand check, quantity check, and ML-shadow branches by
+ * controlling what the extractor and ML model return.
  */
 @ExtendWith(MockitoExtension.class)
 class CategorizationBenchmarkServiceCoverageTest {
 
     @Mock private ProductExtractor productExtractor;
     @Mock private MlClassifierService mlClassifier;
+    @Mock private CategorizationBenchmarkEntryRepository benchmarkRepository;
     @InjectMocks private CategorizationBenchmarkService service;
+
+    @BeforeEach
+    void seedGoldenSet() {
+        when(benchmarkRepository.findAll()).thenReturn(List.of(
+                goldenRow("SAL REFINADO CISNE 1KG", ProductCategory.GROCERIES, "Cisne", new BigDecimal("1"), "KG"),
+                goldenRow("ARROZ TIO JOAO 5KG", ProductCategory.GROCERIES, "Tio João", new BigDecimal("5"), "KG"),
+                goldenRow("LEITE ITAMBE 1L", ProductCategory.MEAT_DAIRY, "Itambé", new BigDecimal("1"), "L"),
+                goldenRow("PILHA ALCALINA AA", ProductCategory.OTHER, null, null, null)));
+    }
+
+    private CategorizationBenchmarkEntry goldenRow(String description, ProductCategory expectedCategory,
+                                                   String expectedBrand, BigDecimal expectedPackSize,
+                                                   String expectedPackUnit) {
+        return CategorizationBenchmarkEntry.builder()
+                .description(description)
+                .expectedCategory(expectedCategory)
+                .expectedBrand(expectedBrand)
+                .expectedPackSize(expectedPackSize)
+                .expectedPackUnit(expectedPackUnit)
+                .build();
+    }
 
     private ProductExtraction extraction(ProductCategory category, String brand,
                                          BigDecimal packSize, String packUnit) {

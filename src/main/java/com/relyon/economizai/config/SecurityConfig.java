@@ -101,7 +101,10 @@ public class SecurityConfig {
                                 "/api/v1/categorizer/auto-promote",
                                 "/api/v1/categorizer/promote-consensus",
                                 "/api/v1/categorizer/ean-catalog/import",
-                                "/api/v1/categorizer/dictionary/import").hasRole("ADMIN")
+                                "/api/v1/categorizer/dictionary/import",
+                                "/api/v1/categorizer/dictionary/curated/import",
+                                "/api/v1/categorizer/brands/import",
+                                "/api/v1/categorizer/benchmark/import").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE,
                                 "/api/v1/categorizer/learned",
                                 "/api/v1/categorizer/consensus").hasRole("ADMIN")

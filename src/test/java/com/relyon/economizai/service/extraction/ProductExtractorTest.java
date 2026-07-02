@@ -16,11 +16,9 @@ class ProductExtractorTest {
     private ProductExtractor extractor;
 
     @BeforeEach
-    void setUp() throws Exception {
-        var brandExtractor = new BrandExtractor();
-        brandExtractor.load();
-        var dictionaryClassifier = new DictionaryClassifier();
-        dictionaryClassifier.load();
+    void setUp() {
+        var brandExtractor = SeedFixtures.loadedBrandExtractor();
+        var dictionaryClassifier = SeedFixtures.loadedDictionaryClassifier();
         var mlClassifier = Mockito.mock(MlClassifierService.class);
         Mockito.when(mlClassifier.isReady()).thenReturn(false);
         extractor = new ProductExtractor(brandExtractor, dictionaryClassifier, mlClassifier);
