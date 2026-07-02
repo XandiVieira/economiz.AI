@@ -4,6 +4,7 @@ import com.relyon.economizai.exception.CaptchaUnavailableException;
 import com.relyon.economizai.exception.ReceiptParseException;
 import com.relyon.economizai.exception.SefazFetchException;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
+import com.relyon.economizai.service.privacy.LogMasker;
 import com.relyon.economizai.service.sefaz.captcha.CaptchaSolver;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -147,7 +148,7 @@ public class MsDfePortalAdapter implements SefazAdapter {
                 return fetchOnce(qrPayload, chave, attempt);
             } catch (HttpClientErrorException ex) {
                 // 4xx — deterministic (bad/unknown chave): retrying won't help.
-                log.warn("ms.fetch.client_error status={} chave={}", ex.getStatusCode(), chave);
+                log.warn("ms.fetch.client_error status={} chave={}", ex.getStatusCode(), LogMasker.chave(chave));
                 throw new SefazFetchException(UnidadeFederativa.MS.name());
             } catch (RestClientException ex) {
                 // 5xx, read/connect timeouts, IO errors, captcha-rejected — transient.
@@ -161,29 +162,33 @@ public class MsDfePortalAdapter implements SefazAdapter {
             }
         }
         log.warn("ms.fetch.exhausted attempts<={} maxTotalMs={} chave={} — giving up (fallback may apply)",
-                maxAttempts, maxTotalMs, chave);
+                maxAttempts, maxTotalMs, LogMasker.chave(chave));
         throw new SefazFetchException(UnidadeFederativa.MS.name());
     }
 
     private String fetchOnce(String qrPayload, String chave, int attempt) {
         var pageUrl = consultUrl(chave);
-        log.info("ms.fetch attempt={}/{} chave={}", attempt, maxAttempts, chave);
+        log.info("ms.fetch attempt={}/{} chave={}", attempt, maxAttempts, LogMasker.chave(chave));
         var response = httpGetResponse(pageUrl);
         var html = response.getBody();
-        if (html == null || !looksLikeCaptcha(html)) {
+        if (html == null || html.isBlank()) {
+            // Empty body from the portal — transient, let the retry loop handle it.
+            throw new RestClientException("empty-response-body");
+        }
+        if (!looksLikeCaptcha(html)) {
             // Portal already served the DANFE (no captcha this time) — parse as-is.
             return html;
         }
         var siteKey = extractSiteKey(html);
         if (siteKey == null) {
-            log.warn("ms.captcha.no_sitekey chave={}", chave);
+            log.warn("ms.captcha.no_sitekey chave={}", LogMasker.chave(chave));
             throw new ReceiptParseException("captcha-sitekey-missing");
         }
         if (!captchaSolver.isConfigured()) {
-            log.info("ms.captcha.unavailable chave={} (no solver configured)", chave);
+            log.info("ms.captcha.unavailable chave={} (no solver configured)", LogMasker.chave(chave));
             throw new CaptchaUnavailableException(UnidadeFederativa.MS.name());
         }
-        log.info("ms.captcha.solving chave={} siteKey={}", chave, siteKey);
+        log.info("ms.captcha.solving chave={}", LogMasker.chave(chave));
         var token = captchaSolver.solveRecaptchaV2(siteKey, pageUrl);
         // Prefer Set-Cookie headers; fall back to sessionId from HTML if headers are unavailable
         // (HttpURLConnection may suppress Set-Cookie exposure when a CookieHandler is active).
@@ -194,7 +199,7 @@ public class MsDfePortalAdapter implements SefazAdapter {
         }
         var danfe = fetchAuthorizedDanfe(chave, html, token, cookieHeader);
         if (danfe != null && looksLikeCaptcha(danfe)) {
-            log.warn("ms.captcha.rejected chave={}", chave);
+            log.warn("ms.captcha.rejected chave={}", LogMasker.chave(chave));
             throw new RestClientException("captcha-rejected-by-portal");
         }
         return danfe;
@@ -245,7 +250,7 @@ public class MsDfePortalAdapter implements SefazAdapter {
         var sessionId = extractSessionId(captchaPageHtml);
         var viewState = extractViewState(captchaPageHtml);
         if (viewState == null) {
-            log.warn("ms.captcha.no_viewstate chave={}", chave);
+            log.warn("ms.captcha.no_viewstate chave={}", LogMasker.chave(chave));
             throw new ReceiptParseException("captcha-viewstate-missing");
         }
         var postUrl = CONSULT_URL + (sessionId != null ? ";jsessionid=" + sessionId : "");
@@ -255,7 +260,7 @@ public class MsDfePortalAdapter implements SefazAdapter {
                 + "&" + enc("formListar:j_idt27") + "=" + enc(chave)
                 + "&g-recaptcha-response=" + enc(recaptchaToken)
                 + "&" + enc("formListar:enter") + "=" + enc("formListar:enter");
-        log.info("ms.captcha.submitting chave={} sessionId={}", chave, sessionId);
+        log.info("ms.captcha.submitting chave={} sessionId={}", LogMasker.chave(chave), sessionId);
         var post = noRedirectClient.post()
                 .uri(postUrl)
                 .header("Content-Type", "application/x-www-form-urlencoded");
@@ -266,7 +271,7 @@ public class MsDfePortalAdapter implements SefazAdapter {
         if (postResponse.getStatusCode().is3xxRedirection()) {
             var location = postResponse.getHeaders().getLocation();
             if (location == null) throw new ReceiptParseException("captcha-redirect-missing-location");
-            log.info("ms.captcha.redirect chave={} location={}", chave, location);
+            log.info("ms.captcha.redirect chave={} location={}", LogMasker.chave(chave), location);
             return getWithCookies(location.toString(), cookieHeader, chave);
         }
         return postResponse.getBody();
@@ -285,7 +290,7 @@ public class MsDfePortalAdapter implements SefazAdapter {
         if (getResp.getStatusCode().is3xxRedirection()) {
             var next = getResp.getHeaders().getLocation();
             if (next == null) throw new ReceiptParseException("captcha-result-redirect-missing-location");
-            log.info("ms.captcha.result.redirect chave={} location={}", chave, next);
+            log.info("ms.captcha.result.redirect chave={} location={}", LogMasker.chave(chave), next);
             return noRedirectClient.get().uri(next)
                     .headers(httpHeaders -> { if (cookieHeader != null && !cookieHeader.isBlank()) httpHeaders.set("Cookie", cookieHeader); })
                     .retrieve()
