@@ -18,8 +18,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.HexFormat;
 
 @Slf4j
 @Service
@@ -64,7 +66,7 @@ public class PasswordResetService {
         var code = generateCode();
         tokenRepository.save(PasswordResetToken.builder()
                 .user(user)
-                .token(code)
+                .token(sha256(code))   // only the hash is stored; the email carries the code
                 .expiresAt(LocalDateTime.now().plusMinutes(CODE_TTL_MINUTES))
                 .build());
         emailSender.sendPasswordResetCode(user.getEmail(), code, CODE_TTL_MINUTES);
@@ -109,7 +111,7 @@ public class PasswordResetService {
             throw new InvalidAuthTokenException();
         }
         if (!MessageDigest.isEqual(token.getToken().getBytes(StandardCharsets.UTF_8),
-                code == null ? new byte[0] : code.getBytes(StandardCharsets.UTF_8))) {
+                code == null ? new byte[0] : sha256(code).getBytes(StandardCharsets.UTF_8))) {
             token.setAttempts(token.getAttempts() + 1);
             tokenRepository.save(token);
             log.warn("password_reset.wrong_code user={} attempts={}/{}",
@@ -121,5 +123,15 @@ public class PasswordResetService {
 
     private String generateCode() {
         return String.format("%06d", random.nextInt(CODE_BOUND));
+    }
+
+    /** Codes are stored hashed so a DB leak doesn't expose live reset codes. */
+    private static String sha256(String value) {
+        try {
+            var digest = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 unavailable", ex);
+        }
     }
 }

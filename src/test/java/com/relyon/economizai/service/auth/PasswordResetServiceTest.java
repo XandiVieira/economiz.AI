@@ -17,7 +17,11 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -49,8 +53,17 @@ class PasswordResetServiceTest {
 
     private PasswordResetToken activeCode(User user, String code) {
         return PasswordResetToken.builder()
-                .user(user).token(code)
+                .user(user).token(sha256(code))
                 .expiresAt(LocalDateTime.now().plusMinutes(30)).build();
+    }
+
+    private static String sha256(String value) {
+        try {
+            var digest = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException(ex);
+        }
     }
 
     private void stubActiveCode(User user, PasswordResetToken token) {
@@ -96,11 +109,14 @@ class PasswordResetServiceTest {
         verify(tokenRepository).save(tokenCaptor.capture());
         var savedToken = tokenCaptor.getValue();
         assertEquals(user, savedToken.getUser());
-        assertTrue(savedToken.getToken().matches("\\d{6}"), "code must be exactly 6 digits");
         assertTrue(savedToken.getExpiresAt().isAfter(LocalDateTime.now()));
 
-        // the SAME code is emailed (no link)
-        verify(emailSender).sendPasswordResetCode(user.getEmail(), savedToken.getToken(), 60);
+        // a 6-digit code is emailed; only its hash is persisted
+        var codeCaptor = ArgumentCaptor.forClass(String.class);
+        verify(emailSender).sendPasswordResetCode(eq(user.getEmail()), codeCaptor.capture(), eq(60));
+        var emailedCode = codeCaptor.getValue();
+        assertTrue(emailedCode.matches("\\d{6}"), "emailed code must be exactly 6 digits");
+        assertEquals(sha256(emailedCode), savedToken.getToken(), "stored token must be the code's hash");
     }
 
     @Test
