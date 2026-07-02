@@ -16,6 +16,9 @@ import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Admin-only operations for the categorization pipeline: restore to safe state
@@ -78,9 +81,9 @@ public class CategorizerAdminService {
         if (entries == null || entries.isEmpty()) return new BulkImportOutcome(0, 0);
         var tokens = entries.stream().map(DictionaryImportRequest::token).toList();
         var existingByToken = learnedRepository.findByNormalizedTokenIn(tokens).stream()
-                .collect(java.util.stream.Collectors.toMap(
+                .collect(Collectors.toMap(
                         LearnedDictionaryEntry::getNormalizedToken,
-                        e -> e));
+                        Function.identity()));
         var now = LocalDateTime.now();
         var toSave = new ArrayList<LearnedDictionaryEntry>();
         var skipped = 0;
@@ -104,16 +107,21 @@ public class CategorizerAdminService {
         }
         learnedRepository.saveAll(toSave);
 
-        // Reload the in-memory snapshot immediately
-        var all = learnedRepository.findAll();
-        var map = new LinkedHashMap<String, DictionaryClassifier.DictEntry>();
-        for (var entry : all) {
-            map.put(entry.getNormalizedToken(), new DictionaryClassifier.DictEntry(
+        var learnedTotal = reloadLearnedSnapshot();
+        log.info("categorizer.bulk_import imported={} skipped={} learnedTotal={}", toSave.size(), skipped, learnedTotal);
+        return new BulkImportOutcome(toSave.size(), skipped);
+    }
+
+    /** Rebuilds the in-memory classifier snapshot from the DB immediately; returns the learned-entry total. */
+    private int reloadLearnedSnapshot() {
+        var allEntries = learnedRepository.findAll();
+        var snapshot = new LinkedHashMap<String, DictionaryClassifier.DictEntry>();
+        for (var entry : allEntries) {
+            snapshot.put(entry.getNormalizedToken(), new DictionaryClassifier.DictEntry(
                     entry.getGenericName(), entry.getCategory(), CategorizationSource.LEARNED_DICTIONARY));
         }
-        dictionaryClassifier.replaceLearnedEntries(map);
-        log.info("categorizer.bulk_import imported={} skipped={} learnedTotal={}", toSave.size(), skipped, all.size());
-        return new BulkImportOutcome(toSave.size(), skipped);
+        dictionaryClassifier.replaceLearnedEntries(snapshot);
+        return allEntries.size();
     }
 
     public List<ConsensusProductView> listConsensus() {
@@ -133,6 +141,6 @@ public class CategorizerAdminService {
     public record BulkImportOutcome(int imported, int skipped) {}
 
     public record ConsensusProductView(
-            java.util.UUID id, String ean, String normalizedName,
+            UUID id, String ean, String normalizedName,
             String genericName, String brand, ProductCategory category) {}
 }

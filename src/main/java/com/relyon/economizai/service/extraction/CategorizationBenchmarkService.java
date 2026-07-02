@@ -34,75 +34,87 @@ public class CategorizationBenchmarkService {
 
     public CategorizationBenchmarkResponse run() {
         var rows = loadBenchmark();
-        var failures = new ArrayList<Failure>();
         var total = rows.size();
-        var categoryCorrect = 0;
-        var uncategorized = 0;
-        var brandChecked = 0;
-        var brandCorrect = 0;
-        var quantityChecked = 0;
-        var quantityCorrect = 0;
-        var mlCorrect = 0;
+        var tally = new Tally();
         var threshold = mlClassifier.getConfidenceThreshold();
 
         for (var row : rows) {
             var description = row[0].trim();
             var expectedCategory = ProductCategory.valueOf(row[1].trim());
-            var expectedBrand = column(row, 2);
-            var expectedPackSize = column(row, 3);
-            var expectedPackUnit = column(row, 4);
-
             var extraction = productExtractor.extract(description);
 
-            // category (the applied cascade)
-            var actualCategory = extraction.category();
-            if (actualCategory == expectedCategory) {
-                categoryCorrect++;
-            } else {
-                if (actualCategory == null) uncategorized++;
-                failures.add(new Failure(description, "category", expectedCategory.name(),
-                        actualCategory == null ? null : actualCategory.name(),
-                        extraction.categorizationSource().name()));
-            }
-
-            // brand (only when the golden row declares one)
-            if (!expectedBrand.isEmpty()) {
-                brandChecked++;
-                if (sameBrand(expectedBrand, extraction.brand())) {
-                    brandCorrect++;
-                } else {
-                    failures.add(new Failure(description, "brand", expectedBrand, extraction.brand(), "BRAND_REGISTRY"));
-                }
-            }
-
-            // quantity (pack size + unit, only when the golden row declares one)
-            if (!expectedPackSize.isEmpty()) {
-                quantityChecked++;
-                if (sameQuantity(expectedPackSize, expectedPackUnit, extraction.packSize(), extraction.packUnit())) {
-                    quantityCorrect++;
-                } else {
-                    failures.add(new Failure(description, "quantity", expectedPackSize + " " + expectedPackUnit,
-                            extraction.packSize() + " " + extraction.packUnit(), "PACK_REGEX"));
-                }
-            }
-
-            // ML shadow — the model alone, regardless of whether it's applied live
-            var mlPrediction = mlClassifier.predictCategory(description);
-            if (mlPrediction.isConfident(threshold) && mlPrediction.label() == expectedCategory) {
-                mlCorrect++;
-            }
+            scoreCategory(tally, description, expectedCategory, extraction);
+            scoreBrand(tally, description, column(row, 2), extraction);
+            scoreQuantity(tally, description, column(row, 3), column(row, 4), extraction);
+            scoreMlShadow(tally, description, expectedCategory, threshold);
         }
 
         var response = new CategorizationBenchmarkResponse(
-                total, categoryCorrect, pct(categoryCorrect, total), total - categoryCorrect, uncategorized,
-                brandChecked, brandCorrect, pct(brandCorrect, brandChecked),
-                quantityChecked, quantityCorrect, pct(quantityCorrect, quantityChecked),
-                total, mlCorrect, pct(mlCorrect, total),
-                failures);
+                total, tally.categoryCorrect, pct(tally.categoryCorrect, total), total - tally.categoryCorrect, tally.uncategorized,
+                tally.brandChecked, tally.brandCorrect, pct(tally.brandCorrect, tally.brandChecked),
+                tally.quantityChecked, tally.quantityCorrect, pct(tally.quantityCorrect, tally.quantityChecked),
+                total, tally.mlCorrect, pct(tally.mlCorrect, total),
+                tally.failures);
         log.info("categorizer.benchmark categoryPct={} brandPct={} quantityPct={} mlShadowPct={}",
                 response.accuracyPct(), response.brandAccuracyPct(), response.quantityAccuracyPct(),
                 response.mlCategoryAccuracyPct());
         return response;
+    }
+
+    /** Category via the applied cascade. */
+    private void scoreCategory(Tally tally, String description, ProductCategory expectedCategory, ProductExtraction extraction) {
+        var actualCategory = extraction.category();
+        if (actualCategory == expectedCategory) {
+            tally.categoryCorrect++;
+            return;
+        }
+        if (actualCategory == null) tally.uncategorized++;
+        tally.failures.add(new Failure(description, "category", expectedCategory.name(),
+                actualCategory == null ? null : actualCategory.name(),
+                extraction.categorizationSource().name()));
+    }
+
+    /** Brand — only when the golden row declares one. */
+    private void scoreBrand(Tally tally, String description, String expectedBrand, ProductExtraction extraction) {
+        if (expectedBrand.isEmpty()) return;
+        tally.brandChecked++;
+        if (sameBrand(expectedBrand, extraction.brand())) {
+            tally.brandCorrect++;
+        } else {
+            tally.failures.add(new Failure(description, "brand", expectedBrand, extraction.brand(), "BRAND_REGISTRY"));
+        }
+    }
+
+    /** Quantity (pack size + unit) — only when the golden row declares one. */
+    private void scoreQuantity(Tally tally, String description, String expectedPackSize, String expectedPackUnit,
+                               ProductExtraction extraction) {
+        if (expectedPackSize.isEmpty()) return;
+        tally.quantityChecked++;
+        if (sameQuantity(expectedPackSize, expectedPackUnit, extraction.packSize(), extraction.packUnit())) {
+            tally.quantityCorrect++;
+        } else {
+            tally.failures.add(new Failure(description, "quantity", expectedPackSize + " " + expectedPackUnit,
+                    extraction.packSize() + " " + extraction.packUnit(), "PACK_REGEX"));
+        }
+    }
+
+    /** ML shadow — the model alone, regardless of whether it's applied live. */
+    private void scoreMlShadow(Tally tally, String description, ProductCategory expectedCategory, double threshold) {
+        var mlPrediction = mlClassifier.predictCategory(description);
+        if (mlPrediction.isConfident(threshold) && mlPrediction.label() == expectedCategory) {
+            tally.mlCorrect++;
+        }
+    }
+
+    private static final class Tally {
+        private int categoryCorrect;
+        private int uncategorized;
+        private int brandChecked;
+        private int brandCorrect;
+        private int quantityChecked;
+        private int quantityCorrect;
+        private int mlCorrect;
+        private final List<Failure> failures = new ArrayList<>();
     }
 
     private static String column(String[] row, int index) {

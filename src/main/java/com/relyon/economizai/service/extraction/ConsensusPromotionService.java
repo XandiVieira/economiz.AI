@@ -74,7 +74,19 @@ public class ConsensusPromotionService {
 
     @Transactional
     public synchronized ConsensusOutcome promote() {
-        // productId -> (category -> distinct households that corrected it to that category)
+        var votesByProduct = tallyHouseholdVotes();
+        var consensusByProduct = resolveConsensus(votesByProduct);
+        var graduation = graduateConsensusProducts(consensusByProduct);
+
+        var learnedTokens = promoteAgreedTokens(graduation.tokenVotes());
+        var totalLearned = reloadLearnedEntries();
+        var outcome = new ConsensusOutcome(graduation.productsGraduated(), learnedTokens, totalLearned);
+        log.info("consensus_promote.done {}", outcome);
+        return outcome;
+    }
+
+    /** productId -> (category -> distinct households that corrected it to that category). */
+    private Map<UUID, Map<ProductCategory, Integer>> tallyHouseholdVotes() {
         var votesByProduct = new HashMap<UUID, Map<ProductCategory, Integer>>();
         for (var override : overrideRepository.findAll()) {
             // Custom-category overrides are household-specific and never graduate
@@ -84,22 +96,30 @@ public class ConsensusPromotionService {
                     .computeIfAbsent(override.getProduct().getId(), key -> new HashMap<>())
                     .merge(override.getCategory(), 1, Integer::sum);
         }
+        return votesByProduct;
+    }
 
-        // Resolve consensus first, then load the winning products in one query
-        // instead of a findById per product.
+    /**
+     * Resolve consensus first, then load the winning products in one query
+     * instead of a findById per product.
+     */
+    private Map<UUID, ProductCategory> resolveConsensus(Map<UUID, Map<ProductCategory, Integer>> votesByProduct) {
         var consensusByProduct = new HashMap<UUID, ProductCategory>();
         votesByProduct.forEach((productId, votes) -> {
             var consensusCategory = categoryWithConsensus(votes);
             if (consensusCategory != null) consensusByProduct.put(productId, consensusCategory);
         });
+        return consensusByProduct;
+    }
 
+    /** Graduate winning products to global truth (source CONSENSUS) and collect token votes for generalization. */
+    private Graduation graduateConsensusProducts(Map<UUID, ProductCategory> consensusByProduct) {
         var tokenVotes = new HashMap<String, Map<ProductCategory, Integer>>();
         var toSave = new ArrayList<Product>();
 
         for (var product : productRepository.findAllById(consensusByProduct.keySet())) {
             var consensusCategory = consensusByProduct.get(product.getId());
 
-            // Graduate the exact product to global truth (source CONSENSUS).
             if (product.getCategory() != consensusCategory
                     || product.getCategorizationSource() != CategorizationSource.CONSENSUS) {
                 product.setCategory(consensusCategory);
@@ -119,12 +139,7 @@ public class ConsensusPromotionService {
         if (!toSave.isEmpty()) {
             productRepository.saveAll(toSave);
         }
-
-        var learnedTokens = promoteAgreedTokens(tokenVotes);
-        var totalLearned = reloadLearnedEntries();
-        var outcome = new ConsensusOutcome(toSave.size(), learnedTokens, totalLearned);
-        log.info("consensus_promote.done {}", outcome);
-        return outcome;
+        return new Graduation(toSave.size(), tokenVotes);
     }
 
     /** Category corrected by enough distinct households; null if no clear winner. */
@@ -167,13 +182,13 @@ public class ConsensusPromotionService {
                 .collect(Collectors.toMap(LearnedDictionaryEntry::getNormalizedToken, Function.identity()));
         var now = LocalDateTime.now();
         var toSave = new ArrayList<LearnedDictionaryEntry>();
-        for (var e : toUpsert.entrySet()) {
-            var entry = existingByToken.getOrDefault(e.getKey(),
+        for (var tokenEntry : toUpsert.entrySet()) {
+            var entry = existingByToken.getOrDefault(tokenEntry.getKey(),
                     LearnedDictionaryEntry.builder()
-                            .normalizedToken(e.getKey())
+                            .normalizedToken(tokenEntry.getKey())
                             .sampleCount(0)
                             .build());
-            entry.setCategory(e.getValue());
+            entry.setCategory(tokenEntry.getValue());
             entry.setPromotedAt(now);
             toSave.add(entry);
         }
@@ -203,6 +218,8 @@ public class ConsensusPromotionService {
         }
         return phrases;
     }
+
+    private record Graduation(int productsGraduated, Map<String, Map<ProductCategory, Integer>> tokenVotes) {}
 
     public record ConsensusOutcome(int productsGraduated, int tokensLearned, int learnedTotal) {}
 }

@@ -69,24 +69,24 @@ class DashboardCacheTest {
 
     @Test
     void core_isServedFromCacheOnRepeat() {
-        dashboardCacheService.core(user);
-        dashboardCacheService.core(user);
+        dashboardCacheService.buildCachedDashboard(user);
+        dashboardCacheService.buildCachedDashboard(user);
         verify(insightsService, times(1)).spend(eq(user), any(), any());
     }
 
     @Test
     void bumpingHouseholdGeneration_invalidatesCore() {
-        dashboardCacheService.core(user);
+        dashboardCacheService.buildCachedDashboard(user);
         householdCacheGen.bump(user.getHousehold().getId());
-        dashboardCacheService.core(user);
+        dashboardCacheService.buildCachedDashboard(user);
         verify(insightsService, times(2)).spend(eq(user), any(), any());
     }
 
     @Test
     void bumpingAnotherHousehold_keepsCoreCached() {
-        dashboardCacheService.core(user);
+        dashboardCacheService.buildCachedDashboard(user);
         householdCacheGen.bump(UUID.randomUUID());
-        dashboardCacheService.core(user);
+        dashboardCacheService.buildCachedDashboard(user);
         verify(insightsService, times(1)).spend(eq(user), any(), any());
     }
 
@@ -100,8 +100,8 @@ class DashboardCacheTest {
         when(consumptionService.suggestedList(housemate, false, 0))
                 .thenReturn(new SuggestedShoppingListResponse(List.of(), null));
 
-        dashboardCacheService.core(user);
-        dashboardCacheService.core(housemate);
+        dashboardCacheService.buildCachedDashboard(user);
+        dashboardCacheService.buildCachedDashboard(housemate);
 
         verify(insightsService, times(1)).spend(eq(user), any(), any());
         verify(insightsService, times(1)).spend(eq(housemate), any(), any());

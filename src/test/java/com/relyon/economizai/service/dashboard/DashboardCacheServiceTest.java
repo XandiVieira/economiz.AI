@@ -109,7 +109,7 @@ class DashboardCacheServiceTest {
 
     @Test
     void core_emptyHousehold_returnsZeroSnapshotAndEmptySections() {
-        var response = service.core(user);
+        var response = service.buildCachedDashboard(user);
 
         var snapshot = response.currentMonth();
         var now = YearMonth.now();
@@ -134,7 +134,7 @@ class DashboardCacheServiceTest {
                 List.of(new MarketBucket(CNPJ_ZAFFARI, "Zaffari", "Zaffari", new BigDecimal("70.00"), BigDecimal.ZERO, 2),
                         new MarketBucket(CNPJ_NACIONAL, "Nacional", "Nacional", new BigDecimal("30.00"), BigDecimal.ZERO, 1))));
 
-        var snapshot = service.core(user).currentMonth();
+        var snapshot = service.buildCachedDashboard(user).currentMonth();
 
         assertEquals(3L, snapshot.receiptCount());
         assertEquals(0, snapshot.total().compareTo(new BigDecimal("100.00")));
@@ -156,7 +156,7 @@ class DashboardCacheServiceTest {
         when(marketNameService.resolveNames(eq(HOUSEHOLD_ID), any()))
                 .thenReturn(Map.of(CNPJ_ZAFFARI, "Zaffari de casa"));
 
-        var recent = service.core(user).recentReceipts();
+        var recent = service.buildCachedDashboard(user).recentReceipts();
 
         assertEquals(2, recent.size());
         assertEquals("Zaffari", recent.get(0).marketName());
@@ -174,7 +174,7 @@ class DashboardCacheServiceTest {
         when(consumptionService.suggestedList(user, false, 0))
                 .thenReturn(new SuggestedShoppingListResponse(predictions, null));
 
-        var suggested = service.core(user).suggestedShoppingList();
+        var suggested = service.buildCachedDashboard(user).suggestedShoppingList();
 
         assertEquals(5, suggested.size());
         assertEquals("Produto 0", suggested.get(0).productName(), "priority order is preserved");
@@ -192,7 +192,7 @@ class DashboardCacheServiceTest {
         when(marketNameService.resolveNames(eq(HOUSEHOLD_ID), any()))
                 .thenReturn(Map.of(CNPJ_ZAFFARI, "Zaffari de casa"));
 
-        var nearby = service.core(user).communityPromosNearby();
+        var nearby = service.buildCachedDashboard(user).communityPromosNearby();
 
         assertEquals(5, nearby.size());
         assertTrue(nearby.stream().allMatch(row -> "Zaffari de casa".equals(row.marketFriendlyName())));
@@ -204,7 +204,7 @@ class DashboardCacheServiceTest {
         var watched = Set.of(CNPJ_NACIONAL);
         when(watchedMarketService.watchedCnpjs(user)).thenReturn(watched);
 
-        service.core(user);
+        service.buildCachedDashboard(user);
 
         verify(communityPromoService).detectAll(
                 eq(new BigDecimal("-30")), eq(new BigDecimal("-51")), isNull(), eq(watched));

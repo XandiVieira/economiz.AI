@@ -15,6 +15,7 @@ import com.relyon.economizai.service.consumption.ConsumptionIntelligenceService;
 import com.relyon.economizai.service.geo.MarketNameService;
 import com.relyon.economizai.service.geo.WatchedMarketService;
 import com.relyon.economizai.service.priceindex.CommunityPromoService;
+import com.relyon.economizai.service.priceindex.CommunityPromoService.CommunityPromo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
@@ -28,6 +29,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.util.List;
+import java.util.UUID;
 
 /**
  * The cacheable, expensive part of the dashboard: spend snapshot + recent
@@ -60,22 +63,38 @@ public class DashboardCacheService {
     @Transactional(readOnly = true)
     @Cacheable(value = CachingConfig.DASHBOARD_CACHE,
             key = "#user.id + ':' + @householdCacheGen.get(#user.household.id)")
-    public DashboardResponse core(User user) {
+    public DashboardResponse buildCachedDashboard(User user) {
+        var householdId = user.getHousehold().getId();
+        var spendSnapshot = buildSpendSnapshot(user);
+        var recent = loadRecentReceipts(user, householdId);
+        var suggested = consumptionService.suggestedList(user, false, 0).items().stream()
+                .limit(SUGGESTED_TOP_N)
+                .toList();
+        var promos = loadTopPromos(user, householdId);
+
+        log.debug("dashboard.core built household={} recent={} suggested={} promos={}",
+                householdId, recent.size(), suggested.size(), promos.size());
+        // unread is filled live by DashboardService (cheap + must stay fresh).
+        return new DashboardResponse(spendSnapshot, recent, suggested, promos, 0L, LocalDateTime.now());
+    }
+
+    private SpendSnapshot buildSpendSnapshot(User user) {
         var ym = YearMonth.now();
         var monthStart = ym.atDay(1).atStartOfDay();
         var monthEnd = ym.atEndOfMonth().atTime(23, 59, 59);
 
         var spendInsights = insightsService.spend(user, monthStart, monthEnd);
         var receiptCount = spendInsights.byMarket().stream()
-                .mapToLong(b -> b.receiptCount())
+                .mapToLong(bucket -> bucket.receiptCount())
                 .sum();
         var avgTicket = receiptCount > 0
                 ? spendInsights.total().divide(BigDecimal.valueOf(receiptCount), 2, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
-        var spendSnapshot = new SpendSnapshot(ym.getYear(), ym.getMonthValue(),
+        return new SpendSnapshot(ym.getYear(), ym.getMonthValue(),
                 spendInsights.total(), spendInsights.totalDiscount(), receiptCount, avgTicket);
+    }
 
-        var householdId = user.getHousehold().getId();
+    private List<ReceiptSummaryResponse> loadRecentReceipts(User user, UUID householdId) {
         var recentReceipts = receiptRepository
                 .findAll(recentForHousehold(user), PageRequest.of(0, RECENT_RECEIPTS,
                         Sort.by(Sort.Direction.DESC, "issuedAt")))
@@ -86,16 +105,14 @@ public class DashboardCacheService {
                 .distinct()
                 .toList();
         var recentOverrides = marketNameService.resolveNames(householdId, recentCnpjs);
-        var recent = recentReceipts.stream()
+        return recentReceipts.stream()
                 .map(receipt -> ReceiptSummaryResponse.from(receipt)
                         .withMarketFriendlyName(marketNameService.applyOverride(
                                 recentOverrides, receipt.getCnpjEmitente(), receipt.getMarketName())))
                 .toList();
+    }
 
-        var suggested = consumptionService.suggestedList(user, false, 0).items().stream()
-                .limit(SUGGESTED_TOP_N)
-                .toList();
-
+    private List<CommunityPromo> loadTopPromos(User user, UUID householdId) {
         var detectedPromos = communityPromoService.detectAll(
                         user.getHomeLatitude(), user.getHomeLongitude(),
                         null,    // FE typically wants the broad view on the home screen
@@ -107,15 +124,10 @@ public class DashboardCacheService {
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList());
-        var promos = detectedPromos.stream()
+        return detectedPromos.stream()
                 .map(promo -> promo.withMarketFriendlyName(marketNameService.applyOverride(
                         promoOverrides, promo.marketCnpj(), promo.marketName())))
                 .toList();
-
-        log.debug("dashboard.core built household={} recent={} suggested={} promos={}",
-                user.getHousehold().getId(), recent.size(), suggested.size(), promos.size());
-        // unread is filled live by DashboardService (cheap + must stay fresh).
-        return new DashboardResponse(spendSnapshot, recent, suggested, promos, 0L, LocalDateTime.now());
     }
 
     private Specification<Receipt> recentForHousehold(User user) {

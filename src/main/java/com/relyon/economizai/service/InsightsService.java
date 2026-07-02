@@ -58,13 +58,20 @@ public class InsightsService {
         var toBound = to != null ? to : EPOCH_CEIL;
         var total = insightsRepository.totalSpend(householdId, fromBound, toBound);
         var totalDiscount = toBigDecimal(insightsRepository.totalDiscount(householdId, fromBound, toBound));
+        var byMonth = buildMonthBuckets(householdId, fromBound, toBound);
+        var byWeek = buildWeekBuckets(householdId, fromBound, toBound);
+        var byMarket = buildMarketBuckets(householdId, fromBound, toBound);
+        var byCategory = buildCategoryBuckets(householdId, fromBound, toBound);
+        log.debug("Spend insights for household {} (from={}, to={}): total={} discount={}",
+                householdId, from, to, total, totalDiscount);
+        return new SpendInsightsResponse(from, to, total, totalDiscount, byMonth, byWeek, byMarket, byCategory);
+    }
+
+    private List<SpendInsightsResponse.MonthBucket> buildMonthBuckets(UUID householdId,
+                                                                      LocalDateTime fromBound, LocalDateTime toBound) {
         var discountByMonth = discountMap(insightsRepository.discountByMonth(householdId, fromBound, toBound),
                 row -> pairKey(((Number) row[0]).intValue(), ((Number) row[1]).intValue()));
-        var discountByWeek = discountMap(insightsRepository.discountByWeek(householdId, fromBound, toBound),
-                row -> pairKey(((Number) row[0]).intValue(), ((Number) row[1]).intValue()));
-        var discountByMarket = discountMap(insightsRepository.discountByMarket(householdId, fromBound, toBound),
-                row -> (String) row[0]);
-        var byMonth = insightsRepository.spendByMonth(householdId, fromBound, toBound).stream()
+        return insightsRepository.spendByMonth(householdId, fromBound, toBound).stream()
                 .map(row -> new SpendInsightsResponse.MonthBucket(
                         ((Number) row[0]).intValue(),
                         ((Number) row[1]).intValue(),
@@ -72,7 +79,13 @@ public class InsightsService {
                         discountFor(discountByMonth, pairKey(((Number) row[0]).intValue(), ((Number) row[1]).intValue())),
                         ((Number) row[3]).longValue()))
                 .toList();
-        var byWeek = insightsRepository.spendByWeek(householdId, fromBound, toBound).stream()
+    }
+
+    private List<SpendInsightsResponse.WeekBucket> buildWeekBuckets(UUID householdId,
+                                                                    LocalDateTime fromBound, LocalDateTime toBound) {
+        var discountByWeek = discountMap(insightsRepository.discountByWeek(householdId, fromBound, toBound),
+                row -> pairKey(((Number) row[0]).intValue(), ((Number) row[1]).intValue()));
+        return insightsRepository.spendByWeek(householdId, fromBound, toBound).stream()
                 .map(row -> new SpendInsightsResponse.WeekBucket(
                         ((Number) row[0]).intValue(),
                         ((Number) row[1]).intValue(),
@@ -80,6 +93,12 @@ public class InsightsService {
                         discountFor(discountByWeek, pairKey(((Number) row[0]).intValue(), ((Number) row[1]).intValue())),
                         ((Number) row[3]).longValue()))
                 .toList();
+    }
+
+    private List<SpendInsightsResponse.MarketBucket> buildMarketBuckets(UUID householdId,
+                                                                        LocalDateTime fromBound, LocalDateTime toBound) {
+        var discountByMarket = discountMap(insightsRepository.discountByMarket(householdId, fromBound, toBound),
+                row -> (String) row[0]);
         var marketBuckets = insightsRepository.spendByMarket(householdId, fromBound, toBound).stream()
                 .map(row -> new SpendInsightsResponse.MarketBucket(
                         (String) row[0],
@@ -94,19 +113,20 @@ public class InsightsService {
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList());
-        var byMarket = marketBuckets.stream()
+        return marketBuckets.stream()
                 .map(bucket -> bucket.withMarketFriendlyName(marketNameService.applyOverride(
                         marketOverrides, bucket.cnpj(), bucket.marketName())))
                 .toList();
-        var byCategory = insightsRepository.spendByCategory(householdId, fromBound, toBound).stream()
+    }
+
+    private List<CategoryBucket> buildCategoryBuckets(UUID householdId,
+                                                      LocalDateTime fromBound, LocalDateTime toBound) {
+        return insightsRepository.spendByCategory(householdId, fromBound, toBound).stream()
                 .map(row -> SpendInsightsResponse.CategoryBucket.ofEnum(
                         (ProductCategory) row[0],
                         toBigDecimal(row[1]),
                         ((Number) row[2]).longValue()))
                 .toList();
-        log.debug("Spend insights for household {} (from={}, to={}): total={} discount={}",
-                householdId, from, to, total, totalDiscount);
-        return new SpendInsightsResponse(from, to, total, totalDiscount, byMonth, byWeek, byMarket, byCategory);
     }
 
     /** Index receipt-level discount rows by a bucket key for O(1) lookup when merging into spend buckets. */

@@ -13,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
  * round-trip count from 5+ down to 1.
  *
  * <p>The expensive, household-scoped sections come from the cached
- * {@link DashboardCacheService#core(User)}; the unread-notification badge is
+ * {@link DashboardCacheService#buildCachedDashboard(User)}; the unread-notification badge is
  * fetched live here (cheap indexed COUNT) so it's always correct without
  * having to invalidate the dashboard cache on every notification read.
  */
@@ -27,7 +27,7 @@ public class DashboardService {
 
     @Transactional(readOnly = true)
     public DashboardResponse build(User user) {
-        var core = dashboardCacheService.core(user);
+        var core = dashboardCacheService.buildCachedDashboard(user);
         var unread = notificationInboxService.unreadCount(user);
         log.debug("dashboard.built household={} unread={}", user.getHousehold().getId(), unread);
         return new DashboardResponse(

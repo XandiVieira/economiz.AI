@@ -68,52 +68,63 @@ public class ItemQueryService {
         var filters = ItemFilters.normalize(clamped, user.getHousehold().getId());
         var clauses = buildClauses(filters);
 
-        var countQuery = entityManager.createQuery(
-                "SELECT COUNT(ri) FROM ReceiptItem ri JOIN ri.receipt r LEFT JOIN ri.product p"
-                        + clauses.join() + " WHERE " + clauses.where(), Long.class);
-        clauses.bind(countQuery);
-        var total = countQuery.getSingleResult();
-
+        var total = countMatching(clauses);
         List<PurchasedItemResponse> rows = List.of();
         if (total > 0) {
-            var rowQuery = entityManager.createQuery(
-                    "SELECT ri FROM ReceiptItem ri JOIN FETCH ri.receipt r LEFT JOIN FETCH ri.product p"
-                            + clauses.join() + " WHERE " + clauses.where()
-                            + " ORDER BY r.issuedAt DESC, ri.id ASC", ReceiptItem.class);
-            clauses.bind(rowQuery);
-            rowQuery.setFirstResult((int) pageable.getOffset());
-            rowQuery.setMaxResults(pageable.getPageSize());
-            var items = rowQuery.getResultList();
-            var productIds = items.stream()
-                    .filter(item -> item.getProduct() != null)
-                    .map(item -> item.getProduct().getId())
-                    .distinct()
-                    .toList();
-            var overrides = categoryOverrideService.overridesByProduct(filters.householdId(), productIds);
-            var marketCnpjs = items.stream()
-                    .map(item -> item.getReceipt().getCnpjEmitente())
-                    .filter(Objects::nonNull)
-                    .distinct()
-                    .toList();
-            var marketOverrides = marketNameService.resolveNames(filters.householdId(), marketCnpjs);
-            rows = items.stream()
-                    .map(item -> PurchasedItemResponse.from(item,
-                                    item.getProduct() == null ? null : overrides.get(item.getProduct().getId()))
-                            .withMarketFriendlyName(marketNameService.applyOverride(marketOverrides,
-                                    item.getReceipt().getCnpjEmitente(), item.getReceipt().getMarketName())))
-                    .toList();
+            var items = loadPage(clauses, pageable);
+            rows = toResponses(items, filters.householdId());
         }
         log.info("items.query household={} total={} returned={}", filters.householdId(), total, rows.size());
         return new PageImpl<>(rows, pageable, total);
     }
 
-    private static FilterClauses buildClauses(ItemFilters f) {
+    private long countMatching(FilterClauses clauses) {
+        var countQuery = entityManager.createQuery(
+                "SELECT COUNT(ri) FROM ReceiptItem ri JOIN ri.receipt r LEFT JOIN ri.product p"
+                        + clauses.join() + " WHERE " + clauses.where(), Long.class);
+        clauses.bind(countQuery);
+        return countQuery.getSingleResult();
+    }
+
+    private List<ReceiptItem> loadPage(FilterClauses clauses, Pageable pageable) {
+        var rowQuery = entityManager.createQuery(
+                "SELECT ri FROM ReceiptItem ri JOIN FETCH ri.receipt r LEFT JOIN FETCH ri.product p"
+                        + clauses.join() + " WHERE " + clauses.where()
+                        + " ORDER BY r.issuedAt DESC, ri.id ASC", ReceiptItem.class);
+        clauses.bind(rowQuery);
+        rowQuery.setFirstResult((int) pageable.getOffset());
+        rowQuery.setMaxResults(pageable.getPageSize());
+        return rowQuery.getResultList();
+    }
+
+    private List<PurchasedItemResponse> toResponses(List<ReceiptItem> items, UUID householdId) {
+        var productIds = items.stream()
+                .filter(item -> item.getProduct() != null)
+                .map(item -> item.getProduct().getId())
+                .distinct()
+                .toList();
+        var overrides = categoryOverrideService.overridesByProduct(householdId, productIds);
+        var marketCnpjs = items.stream()
+                .map(item -> item.getReceipt().getCnpjEmitente())
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        var marketOverrides = marketNameService.resolveNames(householdId, marketCnpjs);
+        return items.stream()
+                .map(item -> PurchasedItemResponse.from(item,
+                                item.getProduct() == null ? null : overrides.get(item.getProduct().getId()))
+                        .withMarketFriendlyName(marketNameService.applyOverride(marketOverrides,
+                                item.getReceipt().getCnpjEmitente(), item.getReceipt().getMarketName())))
+                .toList();
+    }
+
+    private static FilterClauses buildClauses(ItemFilters filters) {
         var clauses = new ArrayList<String>();
         var bindings = new LinkedHashMap<String, Object>();
         var join = "";
 
         clauses.add("r.household.id = :householdId");
-        bindings.put("householdId", f.householdId());
+        bindings.put("householdId", filters.householdId());
 
         clauses.add("r.status = :status");
         bindings.put("status", ReceiptStatus.CONFIRMED);
@@ -121,28 +132,28 @@ public class ItemQueryService {
         clauses.add("ri.excluded = false");
 
         clauses.add("r.issuedAt >= :from");
-        bindings.put("from", f.from());
+        bindings.put("from", filters.from());
         clauses.add("r.issuedAt <= :to");
-        bindings.put("to", f.to());
+        bindings.put("to", filters.to());
 
-        if (f.marketCnpjs() != null) {
+        if (filters.marketCnpjs() != null) {
             clauses.add("r.cnpjEmitente IN (:marketCnpjs)");
-            bindings.put("marketCnpjs", f.marketCnpjs());
+            bindings.put("marketCnpjs", filters.marketCnpjs());
         }
-        if (f.marketCnpjRoots() != null) {
+        if (filters.marketCnpjRoots() != null) {
             clauses.add("SUBSTRING(r.cnpjEmitente, 1, 8) IN (:marketCnpjRoots)");
-            bindings.put("marketCnpjRoots", f.marketCnpjRoots());
+            bindings.put("marketCnpjRoots", filters.marketCnpjRoots());
         }
-        if (f.categories() != null) {
+        if (filters.categories() != null) {
             // Unmatched items (no product) and products with no category have a null
             // p.category, which the insights breakdown buckets as OTHER. Mirror that:
             // when OTHER is filtered, also include null-category rows so ?category=OTHER
             // returns them instead of an empty page.
-            var includeUnmatched = f.categories().contains(ProductCategory.OTHER);
+            var includeUnmatched = filters.categories().contains(ProductCategory.OTHER);
             var enumMatch = includeUnmatched
                     ? "(p.category IS NULL OR p.category IN (:categories))"
                     : "p.category IN (:categories)";
-            if (f.categoryView() == CategoryView.HOUSEHOLD) {
+            if (filters.categoryView() == CategoryView.HOUSEHOLD) {
                 // Household lens: filter by EFFECTIVE category. A row matches when it has
                 // no override and its global category matches (incl. null→OTHER above), OR
                 // its override targets an enum in the list. Products migrated to a custom
@@ -153,23 +164,23 @@ public class ItemQueryService {
             } else {
                 clauses.add(enumMatch);
             }
-            bindings.put("categories", f.categories());
+            bindings.put("categories", filters.categories());
         }
-        if (f.productIds() != null) {
+        if (filters.productIds() != null) {
             clauses.add("p.id IN (:productIds)");
-            bindings.put("productIds", f.productIds());
+            bindings.put("productIds", filters.productIds());
         }
-        if (f.eans() != null) {
+        if (filters.eans() != null) {
             clauses.add("ri.ean IN (:eans)");
-            bindings.put("eans", f.eans());
+            bindings.put("eans", filters.eans());
         }
-        if (f.minReceiptTotal() != null) {
+        if (filters.minReceiptTotal() != null) {
             clauses.add("r.totalAmount >= :minReceiptTotal");
-            bindings.put("minReceiptTotal", f.minReceiptTotal());
+            bindings.put("minReceiptTotal", filters.minReceiptTotal());
         }
-        if (f.maxReceiptTotal() != null) {
+        if (filters.maxReceiptTotal() != null) {
             clauses.add("r.totalAmount <= :maxReceiptTotal");
-            bindings.put("maxReceiptTotal", f.maxReceiptTotal());
+            bindings.put("maxReceiptTotal", filters.maxReceiptTotal());
         }
         return new FilterClauses(join, String.join(" AND ", clauses), bindings);
     }
@@ -226,19 +237,19 @@ public class ItemQueryService {
                     categoryView != null ? categoryView : CategoryView.HOUSEHOLD);
         }
 
-        static ItemFilters normalize(ItemFilters f, UUID householdId) {
+        static ItemFilters normalize(ItemFilters filters, UUID householdId) {
             return new ItemFilters(
                     householdId,
-                    f.from() != null ? f.from() : EPOCH_FLOOR,
-                    f.to() != null ? f.to() : EPOCH_CEIL,
-                    nullIfEmpty(trimAll(f.marketCnpjs())),
-                    nullIfEmpty(trimAll(f.marketCnpjRoots())),
-                    nullIfEmpty(f.categories()),
-                    nullIfEmpty(f.productIds()),
-                    nullIfEmpty(trimAll(f.eans())),
-                    f.minReceiptTotal(),
-                    f.maxReceiptTotal(),
-                    f.categoryView() != null ? f.categoryView() : CategoryView.HOUSEHOLD);
+                    filters.from() != null ? filters.from() : EPOCH_FLOOR,
+                    filters.to() != null ? filters.to() : EPOCH_CEIL,
+                    nullIfEmpty(trimAll(filters.marketCnpjs())),
+                    nullIfEmpty(trimAll(filters.marketCnpjRoots())),
+                    nullIfEmpty(filters.categories()),
+                    nullIfEmpty(filters.productIds()),
+                    nullIfEmpty(trimAll(filters.eans())),
+                    filters.minReceiptTotal(),
+                    filters.maxReceiptTotal(),
+                    filters.categoryView() != null ? filters.categoryView() : CategoryView.HOUSEHOLD);
         }
 
         private static <T> List<T> nullIfEmpty(List<T> list) {
@@ -250,7 +261,7 @@ public class ItemQueryService {
             return list.stream()
                     .filter(Objects::nonNull)
                     .map(String::trim)
-                    .filter(s -> !s.isEmpty())
+                    .filter(value -> !value.isEmpty())
                     .toList();
         }
     }

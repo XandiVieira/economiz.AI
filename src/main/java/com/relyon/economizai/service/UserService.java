@@ -52,6 +52,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -115,7 +117,7 @@ public class UserService {
 
     public AuthResponse login(LoginRequest request) {
         var user = userRepository.findByEmail(request.email())
-                .filter(u -> passwordEncoder.matches(request.password(), u.getPassword()))
+                .filter(foundUser -> passwordEncoder.matches(request.password(), foundUser.getPassword()))
                 .orElseThrow(InvalidCredentialsException::new);
 
         var token = jwtService.generateToken(user);
@@ -172,12 +174,37 @@ public class UserService {
         var household = householdRepository.findById(householdId)
                 .orElseThrow(() -> new IllegalStateException("Household missing for user " + LogMasker.email(user.getEmail())));
         var members = userRepository.findAllByHouseholdId(householdId);
-        var receipts = receiptRepository
-                .findAll((root, query, cb) -> cb.equal(root.get("user").get("id"), userId)).stream()
-                .map(ReceiptResponse::from)
-                .toList();
 
-        var accountExtras = new AccountExtras(
+        var accountData = collectAccountData(user, userId);
+        var customizations = collectHouseholdCustomizations(householdId);
+        var purchaseData = collectPurchaseData(userId, householdId);
+
+        log.info("Data export for user {}: {} receipts, {} rules, {} watched, {} aliases, {} overrides, {} manual, {} lists, {} notifications",
+                LogMasker.email(user.getEmail()), purchaseData.receipts().size(), accountData.notificationRules().size(),
+                accountData.watchedMarketCnpjs().size(), customizations.marketAliases().size(),
+                customizations.categoryOverrides().size(), purchaseData.manualPurchases().size(),
+                purchaseData.shoppingLists().size(), accountData.notifications().size());
+
+        return new UserDataExportResponse(
+                UserResponse.from(user),
+                accountData.extras(),
+                HouseholdResponse.from(household, members),
+                purchaseData.receipts(),
+                accountData.notificationRules(),
+                accountData.watchedMarketCnpjs(),
+                accountData.subscription(),
+                customizations.marketAliases(),
+                customizations.customCategories(),
+                customizations.categoryOverrides(),
+                purchaseData.manualPurchases(),
+                purchaseData.shoppingLists(),
+                accountData.notifications(),
+                LocalDateTime.now()
+        );
+    }
+
+    private AccountData collectAccountData(User user, UUID userId) {
+        var extras = new AccountExtras(
                 user.getPushDeviceToken(),
                 user.isEmailVerified(),
                 user.getEmailVerifiedAt(),
@@ -196,6 +223,16 @@ public class UserService {
                         record.getProvider(), record.getStatus(), record.getCurrentPeriodEnd()))
                 .orElse(null);
 
+        var notifications = notificationRepository
+                .findAllByUserIdOrderByCreatedAtDesc(userId, PageRequest.of(0, 500))
+                .getContent().stream()
+                .map(NotificationResponse::from)
+                .toList();
+
+        return new AccountData(extras, notificationRules, watchedMarketCnpjs, subscription, notifications);
+    }
+
+    private HouseholdCustomizations collectHouseholdCustomizations(UUID householdId) {
         var marketAliases = householdMarketAliasRepository.findAllByHouseholdId(householdId).stream()
                 .map(alias -> new MarketAlias(alias.getMarketCnpj(), alias.getCustomName()))
                 .toList();
@@ -208,6 +245,15 @@ public class UserService {
                 .map(override -> new CategoryOverride(override.getProduct().getId(), override.effectiveLabel()))
                 .toList();
 
+        return new HouseholdCustomizations(marketAliases, customCategories, categoryOverrides);
+    }
+
+    private PurchaseData collectPurchaseData(UUID userId, UUID householdId) {
+        var receipts = receiptRepository
+                .findAll((root, query, builder) -> builder.equal(root.get("user").get("id"), userId)).stream()
+                .map(ReceiptResponse::from)
+                .toList();
+
         var manualPurchases = manualPurchaseRepository.findAllByHouseholdId(householdId).stream()
                 .map(purchase -> new ManualPurchaseSummary(
                         purchase.getProduct().getId(), purchase.getQuantity(), purchase.getPurchasedAt()))
@@ -217,34 +263,22 @@ public class UserService {
                 .map(list -> new ShoppingListSummary(list.getId(), list.getName()))
                 .toList();
 
-        var notifications = notificationRepository
-                .findAllByUserIdOrderByCreatedAtDesc(userId, PageRequest.of(0, 500))
-                .getContent().stream()
-                .map(NotificationResponse::from)
-                .toList();
-
-        log.info("Data export for user {}: {} receipts, {} rules, {} watched, {} aliases, {} overrides, {} manual, {} lists, {} notifications",
-                LogMasker.email(user.getEmail()), receipts.size(), notificationRules.size(),
-                watchedMarketCnpjs.size(), marketAliases.size(), categoryOverrides.size(),
-                manualPurchases.size(), shoppingLists.size(), notifications.size());
-
-        return new UserDataExportResponse(
-                UserResponse.from(user),
-                accountExtras,
-                HouseholdResponse.from(household, members),
-                receipts,
-                notificationRules,
-                watchedMarketCnpjs,
-                subscription,
-                marketAliases,
-                customCategories,
-                categoryOverrides,
-                manualPurchases,
-                shoppingLists,
-                notifications,
-                LocalDateTime.now()
-        );
+        return new PurchaseData(receipts, manualPurchases, shoppingLists);
     }
+
+    private record AccountData(AccountExtras extras,
+                               List<NotificationRuleResponse> notificationRules,
+                               List<String> watchedMarketCnpjs,
+                               SubscriptionSummary subscription,
+                               List<NotificationResponse> notifications) {}
+
+    private record HouseholdCustomizations(List<MarketAlias> marketAliases,
+                                           List<CustomCategory> customCategories,
+                                           List<CategoryOverride> categoryOverrides) {}
+
+    private record PurchaseData(List<ReceiptResponse> receipts,
+                                List<ManualPurchaseSummary> manualPurchases,
+                                List<ShoppingListSummary> shoppingLists) {}
 
     @Transactional
     public void deleteAccount(User user) {

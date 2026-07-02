@@ -18,6 +18,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -97,7 +98,7 @@ public class CommunityPromoService {
                 if (promo != null) promos.add(promo);
             }
         }
-        promos.sort((a, b) -> b.dropPct().compareTo(a.dropPct()));
+        promos.sort(Comparator.comparing(CommunityPromo::dropPct).reversed());
         return promos;
     }
 
@@ -111,44 +112,84 @@ public class CommunityPromoService {
                                                 LocalDateTime since, LocalDateTime recentCutoff,
                                                 Map<String, MarketLocation> locations, Set<String> watched,
                                                 BigDecimal userLatitude, BigDecimal userLongitude, Double radiusKm) {
-        if (rows.size() < properties.getCollaborative().getMinObservationsForCommunityPromo()) return null;
+        var distinctHouseholds = distinctHouseholdsIfSampleGatePasses(productId, marketCnpj, rows, since);
+        if (distinctHouseholds == null) return null;
 
+        var isWatched = watched.contains(marketCnpj);
+        var geoEligibility = checkGeoEligibility(marketCnpj, locations, isWatched, userLatitude, userLongitude, radiusKm);
+        if (geoEligibility == null) return null;
+
+        var priceDrop = computePriceDrop(rows, recentCutoff);
+        if (priceDrop == null) return null;
+
+        var firstRow = rows.get(0);
+        log.info("community_promo.detected product={} market={} recent={} baseline={} dropPct={} samples={} households={}",
+                productId, marketCnpj, priceDrop.recentMedian(), priceDrop.baselineMedian(), priceDrop.dropPct(),
+                priceDrop.recentSampleCount(), distinctHouseholds);
+        return new CommunityPromo(
+                productId,
+                firstRow.getProduct().getNormalizedName(),
+                marketCnpj,
+                PriceIndexService.cnpjRoot(marketCnpj),
+                firstRow.getMarketName(),
+                firstRow.getMarketName(),
+                priceDrop.recentMedian(),
+                priceDrop.baselineMedian(),
+                priceDrop.dropPct(),
+                priceDrop.recentSampleCount(),
+                distinctHouseholds,
+                geoEligibility.distanceKm(),
+                isWatched
+        );
+    }
+
+    /** K-anonymity/sample gate: distinct households when the group qualifies, null otherwise. */
+    private Long distinctHouseholdsIfSampleGatePasses(UUID productId, String marketCnpj,
+                                                      List<PriceObservation> rows, LocalDateTime since) {
+        if (rows.size() < properties.getCollaborative().getMinObservationsForCommunityPromo()) return null;
         var distinctHouseholds = auditRepository.countDistinctHouseholdsForProductMarket(productId, marketCnpj, since);
         if (distinctHouseholds < properties.getCollaborative().getMinHouseholdsForPublic()) return null;
+        return distinctHouseholds;
+    }
 
-        Double distanceKm = null;
-        var isWatched = watched.contains(marketCnpj);
-        if (userLatitude != null && userLongitude != null) {
-            var location = locations.get(marketCnpj);
-            if (location == null || !location.hasCoordinates()) {
-                if (radiusKm != null && !isWatched) return null; // user wants radius filter but no coords
-            } else {
-                distanceKm = DistanceCalculator.kmBetween(
-                        userLatitude, userLongitude, location.getLatitude(), location.getLongitude());
-                if (radiusKm != null && distanceKm > radiusKm && !isWatched) return null;
-            }
+    /** Geo-radius eligibility: distance (possibly null when not computable) when eligible, null record on rejection. */
+    private GeoEligibility checkGeoEligibility(String marketCnpj, Map<String, MarketLocation> locations,
+                                               boolean isWatched, BigDecimal userLatitude,
+                                               BigDecimal userLongitude, Double radiusKm) {
+        if (userLatitude == null || userLongitude == null) return new GeoEligibility(null);
+        var location = locations.get(marketCnpj);
+        if (location == null || !location.hasCoordinates()) {
+            // user wants radius filter but no coords
+            return (radiusKm != null && !isWatched) ? null : new GeoEligibility(null);
         }
+        var distanceKm = DistanceCalculator.kmBetween(
+                userLatitude, userLongitude, location.getLatitude(), location.getLongitude());
+        if (radiusKm != null && distanceKm > radiusKm && !isWatched) return null;
+        return new GeoEligibility(distanceKm);
+    }
 
+    /** Recent/baseline medians + drop percentage; null when the group has no qualifying price drop. */
+    private PriceDrop computePriceDrop(List<PriceObservation> rows, LocalDateTime recentCutoff) {
         // Use normalized R$/base-unit when ALL rows in the group carry it
         // (same product across time can shift pack sizes — a market that
         // moves milk from 1L to 2L bottles would otherwise look like a
         // huge price hike instead of a per-litre drop). Mixed → fall back
         // to raw unit price.
-        var allNormalized = rows.stream().allMatch(po -> po.getNormalizedUnitPrice() != null);
+        var allNormalized = rows.stream().allMatch(observation -> observation.getNormalizedUnitPrice() != null);
         var priceFn = allNormalized
                 ? (Function<PriceObservation, BigDecimal>) PriceObservation::getNormalizedUnitPrice
                 : (Function<PriceObservation, BigDecimal>) PriceObservation::getUnitPrice;
 
         var recentPrices = rows.stream()
-                .filter(po -> po.getObservedAt().isAfter(recentCutoff))
+                .filter(observation -> observation.getObservedAt().isAfter(recentCutoff))
                 .map(priceFn)
                 .toList();
         // Baseline excludes prior promo-flagged rows: comparing a current
         // promo to an old promo would silence the signal we're trying
         // to detect. Promo rows still count toward 'recent'.
         var baselinePrices = rows.stream()
-                .filter(po -> !po.getObservedAt().isAfter(recentCutoff))
-                .filter(po -> !po.isPromoFlag())
+                .filter(observation -> !observation.getObservedAt().isAfter(recentCutoff))
+                .filter(observation -> !observation.isPromoFlag())
                 .map(priceFn)
                 .toList();
         if (recentPrices.isEmpty() || baselinePrices.size() < 3) return null;
@@ -164,25 +205,13 @@ public class CommunityPromoService {
         var dropPct = baselineMedian.subtract(recentMedian)
                 .multiply(BigDecimal.valueOf(100))
                 .divide(baselineMedian, 2, RoundingMode.HALF_UP);
-        var firstRow = rows.get(0);
-        log.info("community_promo.detected product={} market={} recent={} baseline={} dropPct={} samples={} households={}",
-                productId, marketCnpj, recentMedian, baselineMedian, dropPct, recentPrices.size(), distinctHouseholds);
-        return new CommunityPromo(
-                productId,
-                firstRow.getProduct().getNormalizedName(),
-                marketCnpj,
-                PriceIndexService.cnpjRoot(marketCnpj),
-                firstRow.getMarketName(),
-                firstRow.getMarketName(),
-                recentMedian,
-                baselineMedian,
-                dropPct,
-                recentPrices.size(),
-                distinctHouseholds,
-                distanceKm,
-                isWatched
-        );
+        return new PriceDrop(recentMedian, baselineMedian, dropPct, recentPrices.size());
     }
+
+    private record GeoEligibility(Double distanceKm) {}
+
+    private record PriceDrop(BigDecimal recentMedian, BigDecimal baselineMedian,
+                             BigDecimal dropPct, int recentSampleCount) {}
 
     public record CommunityPromo(
             UUID productId,

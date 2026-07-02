@@ -99,12 +99,12 @@ public class AdminProductService {
     @Transactional(readOnly = true)
     public Page<MissingBrandProductResponse> listMissingBrand(Pageable pageable) {
         var page = productRepository.findMissingBrand(pageable);
-        if (page.isEmpty()) return page.map(p -> MissingBrandProductResponse.from(p, List.of()));
-        var productIds = page.getContent().stream().map(p -> p.getId()).toList();
+        if (page.isEmpty()) return page.map(product -> MissingBrandProductResponse.from(product, List.of()));
+        var productIds = page.getContent().stream().map(product -> product.getId()).toList();
         var aliasesByProduct = aliasRepository.findByProductIdIn(productIds).stream()
-                .collect(Collectors.groupingBy(a -> a.getProduct().getId()));
-        return page.map(p -> MissingBrandProductResponse.from(p,
-                aliasesByProduct.getOrDefault(p.getId(), List.of()).stream()
+                .collect(Collectors.groupingBy(alias -> alias.getProduct().getId()));
+        return page.map(product -> MissingBrandProductResponse.from(product,
+                aliasesByProduct.getOrDefault(product.getId(), List.of()).stream()
                         .limit(SAMPLE_DESCRIPTION_LIMIT)
                         .map(ProductAlias::getRawDescription)
                         .toList()));
@@ -243,10 +243,10 @@ public class AdminProductService {
     public List<DuplicateProductGroupResponse> listDuplicateGroups() {
         var products = productRepository.findDuplicateCandidates();
         var groups = new LinkedHashMap<String, List<Product>>();
-        for (var p : products) {
-            var key = p.getGenericName() + " " + p.getBrand() + " "
-                    + p.getPackSize() + " " + p.getPackUnit();
-            groups.computeIfAbsent(key, k -> new ArrayList<>()).add(p);
+        for (var product : products) {
+            var key = product.getGenericName() + " " + product.getBrand() + " "
+                    + product.getPackSize() + " " + product.getPackUnit();
+            groups.computeIfAbsent(key, groupKey -> new ArrayList<>()).add(product);
         }
         var result = new ArrayList<DuplicateProductGroupResponse>(groups.size());
         for (var entry : groups.values()) {
@@ -283,26 +283,34 @@ public class AdminProductService {
         var absorbed = productRepository.findById(request.absorbedId())
                 .orElseThrow(ProductNotFoundException::new);
 
-        // Pre-count what would migrate (also serves as the dry-run output).
-        var aliasCount = aliasRepository.countByProduct(absorbed);
-        var receiptItemCount = receiptItemRepository.countByProduct(absorbed);
-        var observationCount = priceObservationRepository.countByProduct(absorbed);
-        var manualPurchaseCount = manualPurchaseRepository.countByProduct(absorbed);
-        var shoppingItemCount = shoppingListItemRepository.countByProduct(absorbed);
-        var householdAliasCount = householdProductAliasRepository.countByProduct(absorbed);
-        var snoozeCount = consumptionSnoozeRepository.countByProduct(absorbed);
-
+        var counts = countMigrations(absorbed);
         if (dryRun) {
             log.info("admin.product.merge.dryrun survivor={} absorbed={} aliases={} receiptItems={} observations={} manualPurchases={} shoppingItems={} householdAliases={} snoozes={}",
                     survivorId, request.absorbedId(),
-                    aliasCount, receiptItemCount, observationCount, manualPurchaseCount,
-                    shoppingItemCount, householdAliasCount, snoozeCount);
+                    counts.aliases(), counts.receiptItems(), counts.observations(), counts.manualPurchases(),
+                    counts.shoppingItems(), counts.householdAliases(), counts.snoozes());
             return new ProductMergeResultResponse(
                     survivorId, request.absorbedId(), true, false,
-                    aliasCount, receiptItemCount, observationCount, manualPurchaseCount,
-                    shoppingItemCount, householdAliasCount, 0L, snoozeCount, 0L);
+                    counts.aliases(), counts.receiptItems(), counts.observations(), counts.manualPurchases(),
+                    counts.shoppingItems(), counts.householdAliases(), 0L, counts.snoozes(), 0L);
         }
 
+        return applyMerge(survivor, absorbed);
+    }
+
+    /** Pre-count what would migrate (also serves as the dry-run output). */
+    private MigrationCounts countMigrations(Product absorbed) {
+        return new MigrationCounts(
+                aliasRepository.countByProduct(absorbed),
+                receiptItemRepository.countByProduct(absorbed),
+                priceObservationRepository.countByProduct(absorbed),
+                manualPurchaseRepository.countByProduct(absorbed),
+                shoppingListItemRepository.countByProduct(absorbed),
+                householdProductAliasRepository.countByProduct(absorbed),
+                consumptionSnoozeRepository.countByProduct(absorbed));
+    }
+
+    private ProductMergeResultResponse applyMerge(Product survivor, Product absorbed) {
         // Apply: simple repoint for the no-conflict tables.
         var aliasesMoved = aliasRepository.repointProduct(absorbed, survivor);
         var receiptItemsMoved = receiptItemRepository.repointProduct(absorbed, survivor);
@@ -322,17 +330,27 @@ public class AdminProductService {
         productRepository.delete(absorbed);
 
         log.info("admin.product.merge.applied survivor={} absorbed={} aliases={} receiptItems={} observations={} manualPurchases={} shoppingItems={} householdAliases={}/{} snoozes={}/{}",
-                survivorId, request.absorbedId(),
+                survivor.getId(), absorbed.getId(),
                 aliasesMoved, receiptItemsMoved, observationsMoved,
                 manualPurchasesMoved, shoppingItemsMoved,
                 householdAliasesMoved, householdAliasesDropped,
                 snoozesMoved, snoozesDropped);
 
         return new ProductMergeResultResponse(
-                survivorId, request.absorbedId(), false, true,
+                survivor.getId(), absorbed.getId(), false, true,
                 aliasesMoved, receiptItemsMoved, observationsMoved, manualPurchasesMoved,
                 shoppingItemsMoved, householdAliasesMoved, householdAliasesDropped,
                 snoozesMoved, snoozesDropped);
     }
+
+    private record MigrationCounts(
+            long aliases,
+            long receiptItems,
+            long observations,
+            long manualPurchases,
+            long shoppingItems,
+            long householdAliases,
+            long snoozes
+    ) {}
 
 }
