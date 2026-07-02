@@ -1,5 +1,8 @@
 package com.relyon.economizai.service.sefaz;
 
+import com.relyon.economizai.exception.CaptchaSolveFailedException;
+import com.relyon.economizai.exception.CaptchaUnavailableException;
+import com.relyon.economizai.exception.SefazFetchException;
 import com.relyon.economizai.exception.UnsupportedStateException;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
 import lombok.extern.slf4j.Slf4j;
@@ -41,6 +44,17 @@ public class SefazIngestionService {
     }
 
     /**
+     * Throws {@link UnsupportedStateException} when no adapter covers the UF.
+     * Called synchronously at submit time so users in unsupported states get an
+     * immediate localized 400 instead of an async FAILED_PARSE with a raw key.
+     */
+    public void requireSupported(UnidadeFederativa uf) {
+        if (!adapters.containsKey(uf)) {
+            throw new UnsupportedStateException(uf.name());
+        }
+    }
+
+    /**
      * Step 1: pick the right state adapter, fetch + sanitize the HTML.
      * Split from {@link #parse} so callers (ReceiptService) can persist
      * the raw HTML even when parsing fails downstream — needed by PRO-43.
@@ -62,7 +76,11 @@ public class SefazIngestionService {
             var sanitized = CpfMasker.strip(html);
             var sourceUrl = qrPayload.trim().toLowerCase().startsWith("http") ? qrPayload.trim() : null;
             return new FetchedDocument(adapter, sanitized, chave, uf, sourceUrl, null);
-        } catch (RuntimeException primaryEx) {
+        } catch (SefazFetchException | CaptchaUnavailableException | CaptchaSolveFailedException primaryEx) {
+            // Only failures Infosimples can plausibly rescue: portal down after
+            // retries, no solver configured, or the solver itself failed. Every
+            // query costs ~R$0.24, so deterministic failures (bad chave, invalid
+            // QR, missing sitekey/viewstate) propagate without spending.
             if (infosimples.isEmpty()) throw primaryEx;
             log.warn("sefaz.fetch.primary.failed uf={} chave={} reason={} — trying infosimples fallback",
                     uf, abbrev(chave), primaryEx.getMessage());

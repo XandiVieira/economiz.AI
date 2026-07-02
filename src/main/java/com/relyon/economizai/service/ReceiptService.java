@@ -97,6 +97,9 @@ public class ReceiptService {
         var chave = ChaveAcessoParser.extractChave(qrPayload);
         log.info("submit chave={}", LogMasker.chave(chave));
 
+        // Fail unsupported UFs up front with a localized 400 — the async path
+        // would only surface a raw FAILED_PARSE key after polling.
+        sefazIngestionService.requireSupported(ChaveAcessoParser.extractUf(chave));
         enforceMonthlyReceiptCap(user);
         replaceStalePriorOrRejectConfirmedDuplicate(user, chave);
 

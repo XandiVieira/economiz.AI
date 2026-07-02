@@ -1,7 +1,9 @@
 package com.relyon.economizai.service.sefaz;
 
+import com.relyon.economizai.exception.CaptchaUnavailableException;
 import com.relyon.economizai.exception.InvalidQrPayloadException;
 import com.relyon.economizai.exception.ReceiptParseException;
+import com.relyon.economizai.exception.SefazFetchException;
 import com.relyon.economizai.exception.UnsupportedStateException;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
 import com.relyon.economizai.service.sefaz.SefazIngestionService.FetchedDocument;
@@ -216,9 +218,9 @@ class SefazIngestionServiceTest {
     // ── Infosimples fallback tests ─────────────────────────────────────────────
 
     @Test
-    void fetch_fallsBackToInfosimplesWhenPrimaryThrows() {
+    void fetch_fallsBackToInfosimplesWhenPrimaryExhaustsRetries() {
         var rsAdapter = mockAdapterFor(UnidadeFederativa.RS);
-        when(rsAdapter.fetchHtml(anyString())).thenThrow(new ReceiptParseException("sefaz.error"));
+        when(rsAdapter.fetchHtml(anyString())).thenThrow(new SefazFetchException("RS"));
         var infosimples = mock(InfosimplesService.class);
         var preParsed = sampleParsed();
         when(infosimples.fetchParsed(eq(CHAVE_RS), eq(UnidadeFederativa.RS))).thenReturn(preParsed);
@@ -231,6 +233,50 @@ class SefazIngestionServiceTest {
         assertSame(preParsed, fetched.preParsed());
         assertEquals(UnidadeFederativa.RS, fetched.uf());
         verify(infosimples).fetchParsed(CHAVE_RS, UnidadeFederativa.RS);
+    }
+
+    @Test
+    void fetch_fallsBackWhenCaptchaUnavailable() {
+        var msAdapter = mockAdapterFor(UnidadeFederativa.MS);
+        when(msAdapter.fetchHtml(anyString())).thenThrow(new CaptchaUnavailableException("MS"));
+        var infosimples = mock(InfosimplesService.class);
+        var preParsed = sampleParsed();
+        var chaveMs = "50260777863223012709650180004455861342485537";
+        when(infosimples.fetchParsed(eq(chaveMs), eq(UnidadeFederativa.MS))).thenReturn(preParsed);
+        var service = new SefazIngestionService(List.of(msAdapter), Optional.of(infosimples));
+
+        var fetched = service.fetch(chaveMs);
+
+        assertSame(preParsed, fetched.preParsed());
+    }
+
+    @Test
+    void fetch_doesNotSpendInfosimplesOnDeterministicParseFailure() {
+        var rsAdapter = mockAdapterFor(UnidadeFederativa.RS);
+        var deterministicEx = new ReceiptParseException("captcha-sitekey-missing");
+        when(rsAdapter.fetchHtml(anyString())).thenThrow(deterministicEx);
+        var infosimples = mock(InfosimplesService.class);
+        var service = new SefazIngestionService(List.of(rsAdapter), Optional.of(infosimples));
+
+        var thrown = assertThrows(ReceiptParseException.class, () -> service.fetch(CHAVE_RS));
+
+        assertSame(deterministicEx, thrown);
+        verify(infosimples, never()).fetchParsed(any(), any());
+    }
+
+    @Test
+    void requireSupported_passesForRegisteredUf() {
+        var service = new SefazIngestionService(List.of(mockAdapterFor(UnidadeFederativa.RS)), Optional.empty());
+
+        service.requireSupported(UnidadeFederativa.RS);
+    }
+
+    @Test
+    void requireSupported_throwsForUnregisteredUf() {
+        var service = new SefazIngestionService(List.of(mockAdapterFor(UnidadeFederativa.RS)), Optional.empty());
+
+        assertThrows(UnsupportedStateException.class,
+                () -> service.requireSupported(UnidadeFederativa.SP));
     }
 
     @Test
@@ -248,11 +294,11 @@ class SefazIngestionServiceTest {
     @Test
     void fetch_rethrowsPrimaryExceptionWhenInfosimplesDisabled() {
         var rsAdapter = mockAdapterFor(UnidadeFederativa.RS);
-        var primaryEx = new ReceiptParseException("sefaz.error");
+        var primaryEx = new SefazFetchException("RS");
         when(rsAdapter.fetchHtml(anyString())).thenThrow(primaryEx);
         var service = new SefazIngestionService(List.of(rsAdapter), Optional.empty());
 
-        var thrown = assertThrows(ReceiptParseException.class, () -> service.fetch(CHAVE_RS));
+        var thrown = assertThrows(SefazFetchException.class, () -> service.fetch(CHAVE_RS));
 
         assertSame(primaryEx, thrown);
     }
@@ -260,7 +306,7 @@ class SefazIngestionServiceTest {
     @Test
     void fetch_propagatesInfosimplesExceptionWhenBothFail() {
         var rsAdapter = mockAdapterFor(UnidadeFederativa.RS);
-        when(rsAdapter.fetchHtml(anyString())).thenThrow(new ReceiptParseException("sefaz.error"));
+        when(rsAdapter.fetchHtml(anyString())).thenThrow(new SefazFetchException("RS"));
         var infosimples = mock(InfosimplesService.class);
         when(infosimples.fetchParsed(any(), any())).thenThrow(new ReceiptParseException("infosimples.error"));
         var service = new SefazIngestionService(List.of(rsAdapter), Optional.of(infosimples));
@@ -300,7 +346,7 @@ class SefazIngestionServiceTest {
         // UF code 50 → MS
         var chaveMs = "50260777863223012709650180004455861342485537";
         var msAdapter = mockAdapterFor(UnidadeFederativa.MS);
-        when(msAdapter.fetchHtml(anyString())).thenThrow(new RuntimeException("portal down"));
+        when(msAdapter.fetchHtml(anyString())).thenThrow(new SefazFetchException("MS"));
         var infosimples = mock(InfosimplesService.class);
         var preParsed = sampleParsed();
         when(infosimples.fetchParsed(eq(chaveMs), eq(UnidadeFederativa.MS))).thenReturn(preParsed);
