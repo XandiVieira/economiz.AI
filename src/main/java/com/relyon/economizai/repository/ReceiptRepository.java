@@ -17,6 +17,10 @@ public interface ReceiptRepository extends JpaRepository<Receipt, UUID>, JpaSpec
 
     Optional<Receipt> findByChaveAcesso(String chaveAcesso);
 
+    // Sweeper: PROCESSING rows older than the ingest timeout are stuck (commit-time
+    // failure, app restart mid-ingest, or pool rejection) and must be failed.
+    List<Receipt> findByStatusAndCreatedAtBefore(ReceiptStatus status, LocalDateTime cutoff);
+
     boolean existsByChaveAcesso(String chaveAcesso);
 
     boolean existsByHouseholdIdAndChaveAcesso(UUID householdId, String chaveAcesso);

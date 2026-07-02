@@ -111,7 +111,13 @@ public class ReceiptService {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    receiptIngestionService.ingest(receiptId, qrPayload);
+                    try {
+                        receiptIngestionService.ingest(receiptId, qrPayload);
+                    } catch (RuntimeException ex) {
+                        // Ingest pool saturated (TaskRejectedException) — the row is already
+                        // committed as PROCESSING, so fail it or the FE polls forever.
+                        receiptIngestionService.markFailed(receiptId, ex);
+                    }
                 }
             });
         } else {
