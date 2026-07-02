@@ -52,7 +52,7 @@ class MsDfePortalAdapterTest {
 
     @Test
     void supportedStates_isMs() {
-        var adapter = new MsDfePortalAdapter(RestClient.builder(), solver(false, null), "MS", 5000, 1, 0L, "test");
+        var adapter = new MsDfePortalAdapter(RestClient.builder(), solver(false, null), "MS", 5000, 1, 0L, 60000L, "test");
         assertTrue(adapter.supportedStates().contains(UnidadeFederativa.MS));
         assertEquals(1, adapter.supportedStates().size());
     }
@@ -67,7 +67,7 @@ class MsDfePortalAdapterTest {
     @Test
     void fetchHtml_noSolverConfigured_failsFastWithCaptchaUnavailable() throws Exception {
         var captcha = captchaPage();
-        var adapter = new MsDfePortalAdapter(RestClient.builder(), solver(false, null), "MS", 5000, 1, 0L, "test") {
+        var adapter = new MsDfePortalAdapter(RestClient.builder(), solver(false, null), "MS", 5000, 1, 0L, 60000L, "test") {
             @Override protected ResponseEntity<String> httpGetResponse(String url) { return ResponseEntity.ok(captcha); }
         };
 
@@ -80,7 +80,7 @@ class MsDfePortalAdapterTest {
         var danfe = rsDanfe();
         var solveCalls = new AtomicInteger();
         var adapter = new MsDfePortalAdapter(RestClient.builder(),
-                solver(true, "the-token"), "MS", 5000, 1, 0L, "test") {
+                solver(true, "the-token"), "MS", 5000, 1, 0L, 60000L, "test") {
             @Override protected ResponseEntity<String> httpGetResponse(String url) { return ResponseEntity.ok(captcha); }
             @Override protected String fetchAuthorizedDanfe(String chave, String captchaPageHtml,
                                                             String recaptchaToken, String cookieHeader) {
@@ -103,7 +103,7 @@ class MsDfePortalAdapterTest {
     @Test
     void fetchHtml_noCaptchaOnPage_returnsItDirectly() throws Exception {
         var danfe = rsDanfe();
-        var adapter = new MsDfePortalAdapter(RestClient.builder(), solver(true, "tok"), "MS", 5000, 1, 0L, "test") {
+        var adapter = new MsDfePortalAdapter(RestClient.builder(), solver(true, "tok"), "MS", 5000, 1, 0L, 60000L, "test") {
             @Override protected ResponseEntity<String> httpGetResponse(String url) { return ResponseEntity.ok(danfe); }
             @Override protected String fetchAuthorizedDanfe(String chave, String captchaPageHtml,
                                                             String recaptchaToken, String cookieHeader) {
@@ -117,7 +117,7 @@ class MsDfePortalAdapterTest {
 
     @Test
     void parseHtml_delegatesToResponsiveDanfeParser() throws Exception {
-        var adapter = new MsDfePortalAdapter(RestClient.builder(), solver(false, null), "MS", 5000, 1, 0L, "test");
+        var adapter = new MsDfePortalAdapter(RestClient.builder(), solver(false, null), "MS", 5000, 1, 0L, 60000L, "test");
         var parsed = adapter.parseHtml(rsDanfe(), MS_CHAVE, null);
         assertTrue(parsed.marketName().contains("ZAFFARI"));
     }
@@ -127,7 +127,7 @@ class MsDfePortalAdapterTest {
         var danfe = rsDanfe();
         var getCalls = new AtomicInteger();
         // maxAttempts=3, no delay: first GET throws a transient IO error, second succeeds.
-        var adapter = new MsDfePortalAdapter(RestClient.builder(), solver(true, "tok"), "MS", 5000, 3, 0L, "test") {
+        var adapter = new MsDfePortalAdapter(RestClient.builder(), solver(true, "tok"), "MS", 5000, 3, 0L, 60000L, "test") {
             @Override protected ResponseEntity<String> httpGetResponse(String url) {
                 if (getCalls.incrementAndGet() == 1) {
                     throw new ResourceAccessException("I/O error: www.dfe.ms.gov.br");
@@ -148,7 +148,7 @@ class MsDfePortalAdapterTest {
         var danfe = rsDanfe();
         var solveCalls = new AtomicInteger();
         // maxAttempts=3: first fetchAuthorizedDanfe returns captcha (rejection), second returns DANFE.
-        var adapter = new MsDfePortalAdapter(RestClient.builder(), solver(true, "tok"), "MS", 5000, 3, 0L, "test") {
+        var adapter = new MsDfePortalAdapter(RestClient.builder(), solver(true, "tok"), "MS", 5000, 3, 0L, 60000L, "test") {
             @Override protected ResponseEntity<String> httpGetResponse(String url) {
                 return ResponseEntity.ok(captchaHtml);
             }
@@ -168,7 +168,7 @@ class MsDfePortalAdapterTest {
     void fetchHtml_captchaRejectedByPortal_exhaustsRetriesThenThrowsSefazFetch() throws Exception {
         var captchaHtml = captchaPage();
         // Always returns captcha HTML (portal always rejects) — should exhaust maxAttempts.
-        var adapter = new MsDfePortalAdapter(RestClient.builder(), solver(true, "tok"), "MS", 5000, 3, 0L, "test") {
+        var adapter = new MsDfePortalAdapter(RestClient.builder(), solver(true, "tok"), "MS", 5000, 3, 0L, 60000L, "test") {
             @Override protected ResponseEntity<String> httpGetResponse(String url) {
                 return ResponseEntity.ok(captchaHtml);
             }
@@ -184,7 +184,7 @@ class MsDfePortalAdapterTest {
     @Test
     void fetchHtml_exhaustsRetriesThenThrowsSefazFetch() throws Exception {
         var getCalls = new AtomicInteger();
-        var adapter = new MsDfePortalAdapter(RestClient.builder(), solver(true, "tok"), "MS", 5000, 3, 0L, "test") {
+        var adapter = new MsDfePortalAdapter(RestClient.builder(), solver(true, "tok"), "MS", 5000, 3, 0L, 60000L, "test") {
             @Override protected ResponseEntity<String> httpGetResponse(String url) {
                 getCalls.incrementAndGet();
                 throw new ResourceAccessException("I/O error: www.dfe.ms.gov.br");
@@ -193,5 +193,21 @@ class MsDfePortalAdapterTest {
 
         assertThrows(SefazFetchException.class, () -> adapter.fetchHtml(MS_CHAVE));
         assertEquals(3, getCalls.get(), "should try up to maxAttempts before giving up");
+    }
+
+    @Test
+    void fetchHtml_stopsAtTimeBudgetBeforeExhaustingAttempts() throws Exception {
+        var getCalls = new AtomicInteger();
+        // maxAttempts=10 but maxTotalMs=0 → the deadline is already passed after the
+        // first failed attempt, so it must give up immediately (1 call), not 10.
+        var adapter = new MsDfePortalAdapter(RestClient.builder(), solver(true, "tok"), "MS", 5000, 10, 0L, 0L, "test") {
+            @Override protected ResponseEntity<String> httpGetResponse(String url) {
+                getCalls.incrementAndGet();
+                throw new ResourceAccessException("I/O error: www.dfe.ms.gov.br");
+            }
+        };
+
+        assertThrows(SefazFetchException.class, () -> adapter.fetchHtml(MS_CHAVE));
+        assertEquals(1, getCalls.get(), "time budget must stop retries well before maxAttempts");
     }
 }

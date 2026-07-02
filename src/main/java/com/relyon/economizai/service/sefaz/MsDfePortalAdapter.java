@@ -61,17 +61,20 @@ public class MsDfePortalAdapter implements SefazAdapter {
     private final Set<UnidadeFederativa> supportedStates;
     private final int maxAttempts;
     private final long retryDelayMs;
+    private final long maxTotalMs;
 
     public MsDfePortalAdapter(RestClient.Builder builder,
                               CaptchaSolver captchaSolver,
                               @Value("${economizai.ingestion.sefaz.captcha.states:MS}") String captchaStates,
                               @Value("${economizai.ingestion.sefaz.timeout-ms:30000}") int timeoutMs,
-                              @Value("${economizai.ingestion.sefaz.retry.max-attempts:5}") int maxAttempts,
+                              @Value("${economizai.ingestion.sefaz.retry.ms-max-attempts:3}") int maxAttempts,
                               @Value("${economizai.ingestion.sefaz.retry.delay-ms:5000}") long retryDelayMs,
+                              @Value("${economizai.ingestion.sefaz.retry.ms-max-total-ms:180000}") long maxTotalMs,
                               @Value("${economizai.ingestion.sefaz.user-agent:economizai}") String userAgent) {
         this.captchaSolver = captchaSolver;
         this.maxAttempts = Math.max(1, maxAttempts);
         this.retryDelayMs = Math.max(0, retryDelayMs);
+        this.maxTotalMs = Math.max(0, maxTotalMs);
         var requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Math.min(timeoutMs, 10000));
         requestFactory.setReadTimeout(timeoutMs);
@@ -100,8 +103,8 @@ public class MsDfePortalAdapter implements SefazAdapter {
                 .requestFactory(noRedirectFactory)
                 .build();
         this.supportedStates = parseStates(captchaStates);
-        log.info("MsDfePortalAdapter active for UFs: {} (retry maxAttempts={} delayMs={} captchaSolver configured={})",
-                this.supportedStates, this.maxAttempts, this.retryDelayMs, captchaSolver.isConfigured());
+        log.info("MsDfePortalAdapter active for UFs: {} (retry maxAttempts={} delayMs={} maxTotalMs={} captchaSolver configured={})",
+                this.supportedStates, this.maxAttempts, this.retryDelayMs, this.maxTotalMs, captchaSolver.isConfigured());
     }
 
     private Set<UnidadeFederativa> parseStates(String csv) {
@@ -126,15 +129,19 @@ public class MsDfePortalAdapter implements SefazAdapter {
 
     /**
      * Fetches the DANFE, retrying transient portal failures (5xx, timeouts,
-     * connection/IO errors) so a flaky MS portal doesn't force the user to
-     * re-submit. First retry is immediate; later ones wait {@code retryDelayMs},
-     * up to {@code maxAttempts} total. Deterministic failures (4xx bad chave,
-     * missing sitekey/viewstate, captcha not configured) are NOT retried — they
-     * propagate immediately. Mirrors {@link SvrsSharedPortalAdapter}.
+     * connection/IO errors, captcha rejected by the portal) so a flaky MS portal
+     * doesn't force the user to re-submit. Bounded two ways so a hostile portal
+     * can't grind for 10+ minutes (each attempt re-solves a captcha, ~30–90s):
+     * at most {@code maxAttempts}, AND never past a {@code maxTotalMs} wall-clock
+     * deadline. Whichever hits first stops the loop with a
+     * {@link SefazFetchException} — which triggers the Infosimples fallback.
+     * Deterministic failures (4xx bad chave, missing sitekey/viewstate, captcha
+     * not configured) are NOT retried — they propagate immediately.
      */
     @Override
     public String fetchHtml(String qrPayload) {
         var chave = ChaveAcessoParser.extractChave(qrPayload);
+        var deadlineNanos = System.nanoTime() + maxTotalMs * 1_000_000L;
         for (var attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
                 return fetchOnce(qrPayload, chave, attempt);
@@ -143,15 +150,18 @@ public class MsDfePortalAdapter implements SefazAdapter {
                 log.warn("ms.fetch.client_error status={} chave={}", ex.getStatusCode(), chave);
                 throw new SefazFetchException(UnidadeFederativa.MS.name());
             } catch (RestClientException ex) {
-                // 5xx, read/connect timeouts, IO errors — transient, worth retrying.
-                if (attempt >= maxAttempts) break;
+                // 5xx, read/connect timeouts, IO errors, captcha-rejected — transient.
+                if (attempt >= maxAttempts || System.nanoTime() >= deadlineNanos) break;
                 var delay = attempt == 1 ? 0 : retryDelayMs;
+                // Don't sleep past the deadline.
+                if (System.nanoTime() + delay * 1_000_000L >= deadlineNanos) break;
                 log.warn("ms.fetch.retry attempt={}/{} reason={} nextDelayMs={}",
                         attempt, maxAttempts, ex.getClass().getSimpleName(), delay);
                 sleep(delay);
             }
         }
-        log.warn("ms.fetch.exhausted attempts={} chave={}", maxAttempts, chave);
+        log.warn("ms.fetch.exhausted attempts<={} maxTotalMs={} chave={} — giving up (fallback may apply)",
+                maxAttempts, maxTotalMs, chave);
         throw new SefazFetchException(UnidadeFederativa.MS.name());
     }
 
