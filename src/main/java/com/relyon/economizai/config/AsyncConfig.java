@@ -1,5 +1,6 @@
 package com.relyon.economizai.config;
 
+import org.slf4j.MDC;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
@@ -32,6 +33,20 @@ public class AsyncConfig {
         executor.setMaxPoolSize(8);
         executor.setQueueCapacity(50);
         executor.setThreadNamePrefix("receipt-ingest-");
+        // Propagate the request's MDC (req=, user=) onto the ingest thread so
+        // async ingestion log lines stay traceable per user — otherwise only the
+        // rcpt= tag (set inside ingest) survives.
+        executor.setTaskDecorator(runnable -> {
+            var contextMap = MDC.getCopyOfContextMap();
+            return () -> {
+                if (contextMap != null) MDC.setContextMap(contextMap);
+                try {
+                    runnable.run();
+                } finally {
+                    MDC.clear();
+                }
+            };
+        });
         executor.initialize();
         return executor;
     }
