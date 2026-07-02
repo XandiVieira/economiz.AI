@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -120,21 +121,27 @@ public class InfosimplesService {
     private static List<ParsedReceiptItem> toItems(List<InfosimplesProduto> produtos) {
         if (produtos == null) return List.of();
         var lineNumber = new int[]{1};
-        return produtos.stream().map(produto -> ParsedReceiptItem.builder()
-                .lineNumber(lineNumber[0]++)
-                .rawDescription(produto.nome())
-                .ean(null)
-                .quantity(toBigDecimal(produto.normalizadoQuantidade()))
-                .unit(produto.unidade())
-                .unitPrice(produto.normalizadoValorUnitario())
-                .totalPrice(produto.normalizadoValorTotalProduto())
-                .nfcePromoFlag(false)
-                .build()
-        ).toList();
-    }
-
-    private static BigDecimal toBigDecimal(Double value) {
-        return value == null ? null : BigDecimal.valueOf(value);
+        return produtos.stream().map(produto -> {
+            // quantity/unitPrice/totalPrice map to NOT NULL columns — a null from
+            // the API would blow up at commit time, so default defensively.
+            var quantity = produto.normalizadoQuantidade() == null
+                    ? BigDecimal.ONE : BigDecimal.valueOf(produto.normalizadoQuantidade());
+            var unitPrice = produto.normalizadoValorUnitario() == null
+                    ? BigDecimal.ZERO : produto.normalizadoValorUnitario();
+            var totalPrice = produto.normalizadoValorTotalProduto() == null
+                    ? unitPrice.multiply(quantity).setScale(2, RoundingMode.HALF_UP)
+                    : produto.normalizadoValorTotalProduto();
+            return ParsedReceiptItem.builder()
+                    .lineNumber(lineNumber[0]++)
+                    .rawDescription(produto.nome())
+                    .ean(null)
+                    .quantity(quantity)
+                    .unit(produto.unidade())
+                    .unitPrice(unitPrice)
+                    .totalPrice(totalPrice)
+                    .nfcePromoFlag(false)
+                    .build();
+        }).toList();
     }
 
     private static String abbrev(String chave) {

@@ -8,6 +8,7 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -105,7 +106,9 @@ public final class ResponsiveDanfeParser {
             var unitPrice = parseDecimalOrNull(afterColon(textOfFirst(row, "span.RvlUnit, .RvlUnit")));
             var totalPrice = parseDecimalOrNull(textOfFirst(row, "span.valor, td.valor, .valor"));
             if (totalPrice == null && unitPrice != null && qty.signum() > 0) {
-                totalPrice = unitPrice.multiply(qty);
+                // Round to the money scale so the in-memory value matches what
+                // NUMERIC(12,2) persists (0.505 kg x 9.99 carries scale 5).
+                totalPrice = unitPrice.multiply(qty).setScale(2, RoundingMode.HALF_UP);
             }
             if (totalPrice == null) continue;
 
