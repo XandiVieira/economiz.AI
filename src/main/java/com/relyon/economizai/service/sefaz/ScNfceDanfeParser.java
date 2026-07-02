@@ -24,8 +24,11 @@ public final class ScNfceDanfeParser {
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern CHAVE = Pattern.compile("(\\d[\\d ]{42,}\\d)");
     private static final Pattern DIGITS = Pattern.compile("\\d+");
-    private static final Pattern ITEM = Pattern.compile(
+    private static final Pattern ITEM_QTY_FIRST = Pattern.compile(
             "^\\s*(.+?)\\s*\\(\\s*C[oó]digo:\\s*([^)]*?)\\)\\s*Qtde\\.?\\s*:?\\s*([\\d.,]+)\\s*UN\\s*:?\\s*(\\S+).*?Vl\\.\\s*Unit\\.?\\s*:?\\s*([\\d.,]+).*?Vl\\.\\s*Total\\s*([\\d.,]+)\\s*$",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    private static final Pattern ITEM_TOTAL_FIRST = Pattern.compile(
+            "^\\s*(.+?)\\s*\\(\\s*C[oó]digo:\\s*([^)]*?)\\)\\s*Vl\\.\\s*Total\\s*([\\d.,]+).*?Qtde\\.?\\s*:?\\s*([\\d.,]+)\\s*UN\\s*:?\\s*(\\S+).*?Vl\\.\\s*Unit\\.?\\s*:?\\s*([\\d.,]+)\\s*$",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern TOTAL = Pattern.compile(
             "(?:Valor\\s+(?:total|a\\s+pagar)|Cart[aã]o\\s+de\\s+D[eé]bito|Cart[aã]o\\s+de\\s+Cr[eé]dito|Dinheiro|Pix)\\s+([\\d.,]+)",
@@ -73,21 +76,40 @@ public final class ScNfceDanfeParser {
         for (var element : document.select("tr, li, div")) {
             var text = element.text();
             if (!looksLikeItem(text) || hasItemChild(element)) continue;
-            var matcher = ITEM.matcher(text);
-            if (!matcher.find()) continue;
+            var parsed = parseItem(text, line + 1);
+            if (parsed == null) continue;
             line++;
-            items.add(ParsedReceiptItem.builder()
-                    .lineNumber(line)
-                    .rawDescription(matcher.group(1).trim())
-                    .ean(extractEan(matcher.group(2)))
-                    .quantity(parseDecimalOrZero(matcher.group(3)))
-                    .unit(matcher.group(4).trim().toUpperCase())
-                    .unitPrice(parseDecimalOrNull(matcher.group(5)))
-                    .totalPrice(parseDecimalOrNull(matcher.group(6)))
-                    .nfcePromoFlag(false)
-                    .build());
+            items.add(parsed);
         }
         return items;
+    }
+
+    private static ParsedReceiptItem parseItem(String text, int lineNumber) {
+        var qtyFirst = ITEM_QTY_FIRST.matcher(text);
+        if (qtyFirst.find()) {
+            return item(lineNumber, qtyFirst.group(1), qtyFirst.group(2), qtyFirst.group(3),
+                    qtyFirst.group(4), qtyFirst.group(5), qtyFirst.group(6));
+        }
+        var totalFirst = ITEM_TOTAL_FIRST.matcher(text);
+        if (totalFirst.find()) {
+            return item(lineNumber, totalFirst.group(1), totalFirst.group(2), totalFirst.group(4),
+                    totalFirst.group(5), totalFirst.group(6), totalFirst.group(3));
+        }
+        return null;
+    }
+
+    private static ParsedReceiptItem item(int lineNumber, String description, String code, String quantity,
+                                          String unit, String unitPrice, String totalPrice) {
+        return ParsedReceiptItem.builder()
+                .lineNumber(lineNumber)
+                .rawDescription(description.trim())
+                .ean(extractEan(code))
+                .quantity(parseDecimalOrZero(quantity))
+                .unit(unit.trim().toUpperCase())
+                .unitPrice(parseDecimalOrNull(unitPrice))
+                .totalPrice(parseDecimalOrNull(totalPrice))
+                .nfcePromoFlag(false)
+                .build();
     }
 
     private static boolean looksLikeItem(String text) {

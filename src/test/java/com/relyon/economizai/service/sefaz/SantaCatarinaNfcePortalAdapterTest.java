@@ -132,8 +132,8 @@ class SantaCatarinaNfcePortalAdapterTest {
                     CNPJ: 50.552.333/0001-00
                     AV MAXIMILIANO FUERBRINGER SC 486 , 518 , SOUZA CRUZ , BRUSQUE , SC
                   </section>
-                  <div class="item">CHOC KIT KAT 4 FNGR DARK 415GR (Código: 28941 ) Qtde.:2 UN: UNID Vl. Unit.: 4,49 Vl. Total 8,98</div>
-                  <div class="item">PAPEL HIG BOB PREMIUM FDUPLA C32 ROLO (Código: 35561 ) Qtde.:1 UN: UNID Vl. Unit.: 32,99 Vl. Total 32,99</div>
+                  <div class="item">CHOC KIT KAT 4 FNGR DARK 415GR (Código: 28941 ) Vl. Total 8,98 Qtde.:2 UN: UNID Vl. Unit.: 4,49</div>
+                  <div class="item">PAPEL HIG BOB PREMIUM FDUPLA C32 ROLO (Código: 35561 ) Vl. Total 32,99 Qtde.:1 UN: UNID Vl. Unit.: 32,99</div>
                   <div class="item">PAO FRANCES KG (Código: 37 ) Qtde.:0,39 UN: KG Vl. Unit.: 16,99 Vl. Total 6,63</div>
                   <div>Cartão de Débito 133,19</div>
                   <div>Informações gerais da Nota</div>
