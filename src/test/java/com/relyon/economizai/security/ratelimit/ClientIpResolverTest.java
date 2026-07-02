@@ -8,7 +8,17 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class ClientIpResolverTest {
 
     @Test
-    void usesXForwardedForWhenPresent() {
+    void prefersCfConnectingIpOverEverything() {
+        var request = new MockHttpServletRequest();
+        request.setRemoteAddr("10.0.0.1");
+        request.addHeader("CF-Connecting-IP", "203.0.113.10");
+        request.addHeader("X-Forwarded-For", "6.6.6.6, 198.51.100.5");
+
+        assertEquals("203.0.113.10", ClientIpResolver.resolve(request));
+    }
+
+    @Test
+    void usesXForwardedForWhenNoCloudflareHeader() {
         var request = new MockHttpServletRequest();
         request.setRemoteAddr("10.0.0.1");
         request.addHeader("X-Forwarded-For", "203.0.113.10");
@@ -17,19 +27,21 @@ class ClientIpResolverTest {
     }
 
     @Test
-    void takesFirstHopFromMultiProxyChain() {
+    void takesLastHopFromMultiProxyChainNotTheSpoofableFirst() {
         var request = new MockHttpServletRequest();
         request.setRemoteAddr("10.0.0.1");
-        request.addHeader("X-Forwarded-For", "203.0.113.10, 198.51.100.5, 10.0.0.1");
+        // First entry is client-appendable (spoofable); the last hop was added
+        // by the trusted proxy directly in front of us.
+        request.addHeader("X-Forwarded-For", "6.6.6.6, 198.51.100.5, 203.0.113.10");
 
         assertEquals("203.0.113.10", ClientIpResolver.resolve(request));
     }
 
     @Test
-    void trimsWhitespaceAroundFirstHop() {
+    void trimsWhitespaceAroundLastHop() {
         var request = new MockHttpServletRequest();
         request.setRemoteAddr("10.0.0.1");
-        request.addHeader("X-Forwarded-For", "  203.0.113.10 , 198.51.100.5");
+        request.addHeader("X-Forwarded-For", "198.51.100.5,  203.0.113.10  ");
 
         assertEquals("203.0.113.10", ClientIpResolver.resolve(request));
     }
@@ -52,10 +64,10 @@ class ClientIpResolverTest {
     }
 
     @Test
-    void fallsBackToRemoteAddrWhenFirstHopIsEmpty() {
+    void fallsBackToRemoteAddrWhenLastHopIsEmpty() {
         var request = new MockHttpServletRequest();
         request.setRemoteAddr("192.168.1.50");
-        request.addHeader("X-Forwarded-For", " , 198.51.100.5");
+        request.addHeader("X-Forwarded-For", "198.51.100.5, ");
 
         assertEquals("192.168.1.50", ClientIpResolver.resolve(request));
     }
