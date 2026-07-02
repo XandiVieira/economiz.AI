@@ -14,14 +14,28 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
-## 2026-07-02 (later) — Unsupported-state submit now fails FAST with 400
+## 2026-07-02 (later) — ⚠️ BREAKING-ish: fail-fast 400s + new `parseErrorMessage` field
 
-`POST /receipts` for a chave from a state we don't support (everything except
-RS, PR, MS today) now returns an immediate **400 `receipt.state.unsupported`**
-(localized message) instead of accepting the receipt and failing it
-asynchronously. If you were handling that case by polling until FAILED_PARSE,
-handle the 400 at submit instead. Also: stuck-in-PROCESSING receipts are now
-auto-failed after 10 min by a server sweeper, so polling always terminates.
+Three FE-visible changes from today's hardening pass:
+
+1. **Unsupported-state submit now fails FAST with 400.** `POST /receipts` for a
+   chave from a state we don't support (everything except RS, PR, MS today)
+   returns an immediate **400 `receipt.state.unsupported`** (localized message)
+   instead of accepting the receipt and failing it asynchronously. If you were
+   handling that case by polling until FAILED_PARSE, handle the 400 at submit.
+2. **New field `parseErrorMessage`** on `ReceiptResponse` (right after
+   `parseErrorReason`): a **localized, user-showable** message for FAILED_PARSE
+   receipts, resolved from `Accept-Language`. Render THIS to the user;
+   `parseErrorReason` stays the machine key for debugging. `null` unless
+   `status == FAILED_PARSE`.
+3. **Polling always terminates now.** Stuck-in-PROCESSING receipts are
+   auto-failed by a server sweeper after 10 min (reason
+   `receipt.processing.timeout`), so a poll loop never spins forever.
+
+Reminder of the 2026-06-30 contract (this is what crashed the first tester's
+app): `POST /receipts` returns `status: "PROCESSING"` with **empty items and
+null totals** — do NOT render the review screen from the POST response; poll
+`GET /receipts/{id}` until the status leaves PROCESSING.
 
 ---
 

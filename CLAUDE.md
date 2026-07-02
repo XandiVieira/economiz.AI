@@ -36,6 +36,25 @@ GitHub repo: `economiz.AI` (https://github.com/XandiVieira/economiz.AI.git)
 - **No inline fully-qualified names.** Always import the class at the top of the file and reference it by simple name. Avoid `org.foo.bar.Baz.method(...)` or `@org.foo.bar.SomeAnnotation` mid-code. The only exception is when two imported classes would collide (e.g. you're using both `java.sql.Date` and `java.util.Date` in the same file) — then qualify only the conflicting one.
   - **This applies to test code too**, including Mockito/JUnit args: write `.thenReturn(Map.of(...))` after `import java.util.Map;`, never `.thenReturn(java.util.Map.of(...))`. Same for `List.of`, `Arrays.asList`, `Stream.concat`, `Collectors.toMap`, etc.
   - **JPQL `@Query` strings:** don't bake an FQN into the query. Use a string literal for enum comparison (`r.status = 'CONFIRMED'` — the established pattern in this codebase), which Hibernate coerces to the enum. Reserve a fully-qualified enum reference only where JPQL type inference genuinely needs it (rare).
+- **Meaningful names, atomic methods.** No single-letter or cryptic-abbreviation variables anywhere, including lambda params (`receipt`, not `r`; `notificationPayload`, not `p`). A method does ONE thing at one level of abstraction — orchestration methods read as a list of named steps; detail lives in small private methods named for what they do. A method name must tell the whole truth: no hidden saves behind a `get`/`check`/`resolve` name.
+
+### Transactions & Long-Running Work
+- **Never hold a DB transaction across an outbound HTTP call** (SEFAZ fetch, captcha solve, SMTP/Expo/Twilio dispatch, geocoding). Each in-flight call pins a Hikari connection and starves the app. Pattern: do reads in a short tx (or plain repository calls), run the HTTP work untransacted, persist results in a short `TransactionTemplate` block (see `ReceiptIngestionService`).
+- `TransactionTemplate` commits inside the calling method, so commit-time failures (constraint violations at flush) land in your catch block instead of escaping the `@Transactional` proxy — prefer it over `@Transactional` whenever you need to react to persistence failures.
+- **Async state machines need a sweeper.** Any row a background job is supposed to transition (e.g. PROCESSING receipts) must have a scheduled sweeper that force-fails rows older than a timeout — restarts, pool rejections, and unrecordable failures WILL strand rows otherwise (see `ProcessingReceiptSweeper`).
+- **Async dispatch after commit must handle pool rejection** — the row is already committed; catch the rejection and mark the row failed, or the client polls forever.
+
+### Fallbacks to Paid APIs
+- Gate paid fallbacks (Infosimples, captcha solvers) on failure types they can plausibly rescue (portal down, solver unavailable). Deterministic failures (bad input, missing markup) must propagate WITHOUT spending money. Catch specific exception types, never a blanket `RuntimeException`.
+
+### Security Patterns
+- **Client IP**: always via `ClientIpResolver` — it trusts `CF-Connecting-IP` / the LAST `X-Forwarded-For` hop. Never read the first XFF hop (client-spoofable).
+- **Short verification codes** (password reset, OTP): store only a hash, compare constant-time (`MessageDigest.isEqual`), count failed attempts against the active code and lock after a small budget. Never rely on the code space alone.
+- **Endpoints that mutate GLOBAL state** (canonical products, categorizer catalogs/dictionaries) are ADMIN-only in `SecurityConfig` from day one — "any authenticated user" is only acceptable for household-scoped data.
+
+### Fail-Fast Validation
+- Validate everything decidable synchronously AT SUBMIT (unsupported UF, caps, duplicates) and return a localized 4xx. Never accept work into an async pipeline that is guaranteed to fail — the user gets a worse, slower error and the machine key leaks into the response.
+- User-facing failure fields carry BOTH the machine key (`parseErrorReason`) and a localized message (`parseErrorMessage`) — the FE never renders raw keys.
 
 ### Logging
 - Use SLF4J (`org.slf4j.Logger` / `org.slf4j.LoggerFactory`) via `@Slf4j` Lombok annotation
@@ -73,6 +92,9 @@ GitHub repo: `economiz.AI` (https://github.com/XandiVieira/economiz.AI.git)
 - Never modify existing migrations — create new ones
 - Money fields use `NUMERIC(12,2)` (R$). Quantity fields use `NUMERIC(12,3)`.
 - Timestamps in `TIMESTAMP WITH TIME ZONE`, default `now()`
+- Computed money values are `setScale(2, HALF_UP)` BEFORE persisting, so the in-memory value matches what `NUMERIC(12,2)` stores
+- Associations are `FetchType.LAZY` always; `@OneToMany` collections read by list endpoints get `@BatchSize(size = 50)` so a page never issues one item-query per row
+- Explicit Hikari sizing lives in `application.yaml` (`maximum-pool-size`, `leak-detection-threshold`) — revisit when adding thread pools
 
 ### Privacy & Anonymization (LGPD)
 - `PriceObservation` (the collaborative index atom) **must never carry user_id** in its primary table
