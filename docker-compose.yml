@@ -69,6 +69,10 @@ services:
       # api-key in .env to enable (capsolver implemented).
       CAPTCHA_PROVIDER: ${CAPTCHA_PROVIDER:-none}
       CAPTCHA_API_KEY: ${CAPTCHA_API_KEY:-}
+      # Infosimples paid SEFAZ fallback (all UFs) when the primary scraper fails.
+      # enabled=false (default) → fallback off. Set both in .env to activate.
+      INFOSIMPLES_ENABLED: ${INFOSIMPLES_ENABLED:-false}
+      INFOSIMPLES_API_KEY: ${INFOSIMPLES_API_KEY:-}
       # profile pics live on a named volume (below) so they survive container
       # rebuilds — /tmp is wiped on every --build redeploy, which silently
       # orphaned the DB key and made avatars "disappear".
