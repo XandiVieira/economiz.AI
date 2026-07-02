@@ -102,6 +102,14 @@ economizai:
     base-url: ${CAPTCHA_BASE_URL:https://2captcha.com}
     timeout-ms: ${CAPTCHA_TIMEOUT_MS:120000}
     poll-interval-ms: ${CAPTCHA_POLL_INTERVAL_MS:5000}
+  # Infosimples fallback — OFF by default. When enabled, any state whose primary
+  # SEFAZ scraper exhausts all retries falls back to the Infosimples paid API
+  # (https://api.infosimples.com) at ~R$0.24/query. Set INFOSIMPLES_ENABLED=true
+  # and INFOSIMPLES_API_KEY to activate. Covers all supported UFs.
+  infosimples:
+    enabled: ${INFOSIMPLES_ENABLED:false}
+    api-key: ${INFOSIMPLES_API_KEY:}
+    base-url: ${INFOSIMPLES_BASE_URL:https://api.infosimples.com}
   subscription:
     # Master paywall switch. OFF by default — every feature is allowed for all users
     # and the FREE caps below are dormant. Set SUBSCRIPTION_ENFORCE=true to turn paywalls on.
