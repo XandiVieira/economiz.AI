@@ -283,9 +283,9 @@ public class CanonicalizationService {
         ProductAlias best = null;
         var bestScore = 0.0;
         for (var candidate : candidates) {
-            var s = score(normalized, candidate.getNormalizedDescription());
-            if (s > bestScore) {
-                bestScore = s;
+            var similarity = score(normalized, candidate.getNormalizedDescription());
+            if (similarity > bestScore) {
+                bestScore = similarity;
                 best = candidate;
             }
         }

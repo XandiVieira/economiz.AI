@@ -41,8 +41,8 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public Page<ProductResponse> search(String query, UUID householdId, Pageable pageable) {
-        var q = (query == null || query.isBlank()) ? null : query.trim();
-        var page = productRepository.search(q, pageable);
+        var trimmedQuery = (query == null || query.isBlank()) ? null : query.trim();
+        var page = productRepository.search(trimmedQuery, pageable);
         var productIds = page.map(Product::getId).getContent();
         var withHistory = Set.copyOf(
                 receiptItemRepository.findProductIdsWithHistoryForHousehold(productIds, householdId));
@@ -168,7 +168,7 @@ public class ProductService {
     }
 
     private static String firstNonBlank(String preferred, String fallback) {
-        var p = blankToNull(preferred);
-        return p != null ? p : blankToNull(fallback);
+        var preferredValue = blankToNull(preferred);
+        return preferredValue != null ? preferredValue : blankToNull(fallback);
     }
 }

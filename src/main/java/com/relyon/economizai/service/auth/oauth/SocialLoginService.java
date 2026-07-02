@@ -54,7 +54,7 @@ public class SocialLoginService {
         if (claims.subject() == null || claims.subject().isBlank()) {
             throw new InvalidOAuthTokenException();
         }
-        var user = resolveUser(AuthProvider.GOOGLE, claims.subject(), claims.email(),
+        var user = resolveOrCreateUser(AuthProvider.GOOGLE, claims.subject(), claims.email(),
                 claims.emailVerified(), claims.name());
         return issueAuth(user);
     }
@@ -65,13 +65,13 @@ public class SocialLoginService {
         if (claims.subject() == null || claims.subject().isBlank()) {
             throw new InvalidOAuthTokenException();
         }
-        var user = resolveUser(AuthProvider.APPLE, claims.subject(), claims.email(),
+        var user = resolveOrCreateUser(AuthProvider.APPLE, claims.subject(), claims.email(),
                 claims.emailVerified(), claims.name());
         return issueAuth(user);
     }
 
-    private User resolveUser(AuthProvider provider, String subject, String email,
-                            boolean emailVerified, String name) {
+    private User resolveOrCreateUser(AuthProvider provider, String subject, String email,
+                                     boolean emailVerified, String name) {
         var bySubject = userRepository.findByAuthProviderAndProviderSubject(provider, subject);
         if (bySubject.isPresent()) {
             var user = bySubject.get();

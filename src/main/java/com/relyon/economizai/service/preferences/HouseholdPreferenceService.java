@@ -54,7 +54,8 @@ public class HouseholdPreferenceService {
 
         var householdId = user.getHousehold().getId();
         var manualOverrides = manualBrandPreferenceRepository.findAllByHouseholdId(householdId).stream()
-                .collect(Collectors.toMap(ManualBrandPreference::getGenericName, m -> m, (a, b) -> a));
+                .collect(Collectors.toMap(ManualBrandPreference::getGenericName,
+                        preference -> preference, (first, duplicate) -> first));
         var history = receiptItemRepository.findConfirmedHistoryForHousehold(householdId);
         if (history.isEmpty() && manualOverrides.isEmpty()) return List.of();
 
@@ -63,10 +64,10 @@ public class HouseholdPreferenceService {
                 .collect(Collectors.groupingBy(HouseholdPreferenceService::genericKey));
 
         var seen = new HashMap<String, HouseholdPreferenceResponse>();
-        for (var e : byGeneric.entrySet()) {
-            if (e.getValue().size() < preferences.getMinPurchasesPerGeneric()) continue;
-            var derived = derivePreference(e.getKey(), e.getValue(), preferences);
-            if (derived != null) seen.put(e.getKey(), derived);
+        for (var entry : byGeneric.entrySet()) {
+            if (entry.getValue().size() < preferences.getMinPurchasesPerGeneric()) continue;
+            var derived = derivePreference(entry.getKey(), entry.getValue(), preferences);
+            if (derived != null) seen.put(entry.getKey(), derived);
         }
 
         // Manual overrides win over derived: if the user explicitly set a brand
@@ -123,7 +124,7 @@ public class HouseholdPreferenceService {
     private static BigDecimal shareForBrand(List<BrandShare> distribution, String brand) {
         if (distribution == null || brand == null) return null;
         return distribution.stream()
-                .filter(b -> brand.equalsIgnoreCase(b.brand()))
+                .filter(share -> brand.equalsIgnoreCase(share.brand()))
                 .map(BrandShare::share)
                 .findFirst()
                 .orElse(null);
@@ -154,15 +155,15 @@ public class HouseholdPreferenceService {
     private PackSizePreference derivePackSize(List<ReceiptItem> items) {
         var sizes = items.stream()
                 .map(ReceiptItem::getProduct)
-                .filter(p -> p.getPackSize() != null && p.getPackUnit() != null)
+                .filter(product -> product.getPackSize() != null && product.getPackUnit() != null)
                 .toList();
         if (sizes.isEmpty()) return null;
 
         var byPack = sizes.stream()
-                .collect(Collectors.groupingBy(p -> p.getPackUnit(),
+                .collect(Collectors.groupingBy(product -> product.getPackUnit(),
                         Collectors.toList()));
         var dominantUnit = byPack.entrySet().stream()
-                .max(Comparator.comparingInt(e -> e.getValue().size()))
+                .max(Comparator.comparingInt(entry -> entry.getValue().size()))
                 .map(Map.Entry::getKey)
                 .orElse(null);
         if (dominantUnit == null) return null;
@@ -179,8 +180,8 @@ public class HouseholdPreferenceService {
         var brandCounts = items.stream()
                 .map(ReceiptItem::getProduct)
                 .map(Product::getBrand)
-                .filter(b -> b != null && !b.isBlank())
-                .collect(Collectors.groupingBy(b -> b, Collectors.counting()));
+                .filter(brand -> brand != null && !brand.isBlank())
+                .collect(Collectors.groupingBy(brand -> brand, Collectors.counting()));
         if (brandCounts.isEmpty()) return null;
 
         var totalWithBrand = brandCounts.values().stream().mapToLong(Long::longValue).sum();
@@ -201,11 +202,11 @@ public class HouseholdPreferenceService {
         }
 
         var distribution = sortedBrands.stream()
-                .map(e -> new BrandShare(
-                        e.getKey(),
-                        BigDecimal.valueOf(e.getValue())
+                .map(entry -> new BrandShare(
+                        entry.getKey(),
+                        BigDecimal.valueOf(entry.getValue())
                                 .divide(BigDecimal.valueOf(totalWithBrand), 4, RoundingMode.HALF_UP),
-                        e.getValue().intValue()))
+                        entry.getValue().intValue()))
                 .toList();
         return new BrandPreference(top.getKey(), strength, topShare, distribution);
     }
@@ -227,7 +228,7 @@ public class HouseholdPreferenceService {
 
     private static <T> T mostFrequent(List<T> values) {
         return values.stream()
-                .collect(Collectors.groupingBy(v -> v, Collectors.counting()))
+                .collect(Collectors.groupingBy(value -> value, Collectors.counting()))
                 .entrySet().stream()
                 .max(Map.Entry.comparingByValue())
                 .map(Map.Entry::getKey)

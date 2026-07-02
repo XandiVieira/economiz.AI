@@ -2,6 +2,7 @@ package com.relyon.economizai.service;
 
 import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.HouseholdScoped;
+import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.enums.MergeCategory;
 import com.relyon.economizai.repository.ConsumptionSnoozeRepository;
 import com.relyon.economizai.repository.HouseholdCustomCategoryRepository;
@@ -16,10 +17,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
@@ -53,7 +56,7 @@ public class HouseholdMergeService {
 
     /** Outcome counts for one category's merge, for logging + the API response. */
     public record MergeResult(int moved, int shadowed) {
-        MergeResult plus(MergeResult o) { return new MergeResult(moved + o.moved, shadowed + o.shadowed); }
+        MergeResult plus(MergeResult other) { return new MergeResult(moved + other.moved, shadowed + other.shadowed); }
         static MergeResult zero() { return new MergeResult(0, 0); }
     }
 
@@ -63,7 +66,7 @@ public class HouseholdMergeService {
     private record Binding<T extends HouseholdScoped>(
             Function<UUID, List<T>> findByHousehold,
             Function<UUID, List<T>> findByOriginHousehold,
-            java.util.function.Consumer<List<T>> saveAll) {}
+            Consumer<List<T>> saveAll) {}
 
     @SuppressWarnings("unchecked")
     private <T extends HouseholdScoped> Binding<T> binding(MergeCategory category) {
@@ -105,16 +108,16 @@ public class HouseholdMergeService {
     }
 
     private <T extends HouseholdScoped> MergeResult mergeCategory(MergeCategory category, Household origin, Household target) {
-        Binding<T> b = binding(category);
+        Binding<T> binding = binding(category);
         // Keys already present in the target — these collide (host wins).
-        Set<String> targetKeys = collectKeys(b.findByHousehold().apply(target.getId()));
+        Set<String> targetKeys = collectKeys(binding.findByHousehold().apply(target.getId()));
         // Within the joiner's own batch, the first occurrence of a key wins; later
         // dupes are shadowed too (can't insert two identical keys into the target).
         Set<String> claimed = new HashSet<>(targetKeys);
 
-        var toMove = new java.util.ArrayList<T>();
+        var toMove = new ArrayList<T>();
         int shadowed = 0;
-        for (T row : b.findByHousehold().apply(origin.getId())) {
+        for (T row : binding.findByHousehold().apply(origin.getId())) {
             String key = row.collisionKey();
             if (key != null && claimed.contains(key)) {
                 // Collision: keep target's, leave this one parked on its origin
@@ -130,7 +133,7 @@ public class HouseholdMergeService {
             toMove.add(row);
         }
         if (!toMove.isEmpty()) {
-            b.saveAll().accept(toMove);
+            binding.saveAll().accept(toMove);
         }
         return new MergeResult(toMove.size(), shadowed);
     }
@@ -150,16 +153,16 @@ public class HouseholdMergeService {
     }
 
     private <T extends HouseholdScoped> MergeResult restoreCategory(MergeCategory category, Household home) {
-        Binding<T> b = binding(category);
-        var toRestore = new java.util.ArrayList<T>();
-        for (T row : b.findByOriginHousehold().apply(home.getId())) {
+        Binding<T> binding = binding(category);
+        var toRestore = new ArrayList<T>();
+        for (T row : binding.findByOriginHousehold().apply(home.getId())) {
             if (!row.getHousehold().getId().equals(home.getId())) {
                 row.setHousehold(home);   // bring it back home
                 toRestore.add(row);
             }
         }
         if (!toRestore.isEmpty()) {
-            b.saveAll().accept(toRestore);
+            binding.saveAll().accept(toRestore);
             log.info("merge.restore category={} restored={} home={}", category, toRestore.size(), home.getId());
         }
         return new MergeResult(toRestore.size(), 0);
@@ -179,12 +182,12 @@ public class HouseholdMergeService {
             return 0;
         }
         var existingKeys = collectKeys(receiptRepository.findAllByHouseholdId(destination.getId()));
-        var copies = new java.util.ArrayList<com.relyon.economizai.model.Receipt>();
-        for (var r : source) {
-            if (existingKeys.contains(r.getChaveAcesso())) {
+        var copies = new ArrayList<Receipt>();
+        for (var receipt : source) {
+            if (existingKeys.contains(receipt.getChaveAcesso())) {
                 continue;   // destination already has this NF-e — host wins
             }
-            copies.add(copyReceiptHeader(r, destination));
+            copies.add(copyReceiptHeader(receipt, destination));
         }
         if (!copies.isEmpty()) {
             receiptRepository.saveAll(copies);
@@ -199,8 +202,8 @@ public class HouseholdMergeService {
     // and the receipt's identifying/financial fields. Items are NOT deep-copied here —
     // the consent scope is the partner's purchase HISTORY (markets, totals, dates), and
     // an item-level deep copy is out of scope for this first version (TODO(prod)).
-    private com.relyon.economizai.model.Receipt copyReceiptHeader(com.relyon.economizai.model.Receipt src, Household destination) {
-        return com.relyon.economizai.model.Receipt.builder()
+    private Receipt copyReceiptHeader(Receipt src, Household destination) {
+        return Receipt.builder()
                 .user(src.getUser())
                 .household(destination)
                 .originHousehold(destination)

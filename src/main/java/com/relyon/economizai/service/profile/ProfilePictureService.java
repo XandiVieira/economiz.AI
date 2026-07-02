@@ -145,15 +145,15 @@ public class ProfilePictureService {
                 return new ProcessedImage(original, contentType);
             }
             var scale = (double) MAX_DIMENSION_PX / maxSide;
-            var w = (int) Math.round(source.getWidth() * scale);
-            var h = (int) Math.round(source.getHeight() * scale);
-            var resized = new BufferedImage(w, h,
+            var targetWidth = (int) Math.round(source.getWidth() * scale);
+            var targetHeight = (int) Math.round(source.getHeight() * scale);
+            var resized = new BufferedImage(targetWidth, targetHeight,
                     FALLBACK_CONTENT_TYPE.equalsIgnoreCase(contentType) ? BufferedImage.TYPE_INT_ARGB : BufferedImage.TYPE_INT_RGB);
-            var g = resized.createGraphics();
-            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
-            g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-            g.drawImage(source, 0, 0, w, h, null);
-            g.dispose();
+            var graphics = resized.createGraphics();
+            graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+            graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+            graphics.drawImage(source, 0, 0, targetWidth, targetHeight, null);
+            graphics.dispose();
             var out = new ByteArrayOutputStream();
             var format = FALLBACK_CONTENT_TYPE.equalsIgnoreCase(contentType) ? "png" : "jpeg";
             ImageIO.write(resized, format, out);
@@ -167,21 +167,21 @@ public class ProfilePictureService {
 
     private byte[] generateInitialsAvatar(User user) {
         var img = new BufferedImage(FALLBACK_DIMENSION_PX, FALLBACK_DIMENSION_PX, BufferedImage.TYPE_INT_RGB);
-        var g = img.createGraphics();
-        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        var graphics = img.createGraphics();
+        graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        graphics.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         var bg = paletteFor(user);
-        g.setColor(bg);
-        g.fillRect(0, 0, FALLBACK_DIMENSION_PX, FALLBACK_DIMENSION_PX);
+        graphics.setColor(bg);
+        graphics.fillRect(0, 0, FALLBACK_DIMENSION_PX, FALLBACK_DIMENSION_PX);
 
         var initials = initialsFor(user);
-        g.setColor(Color.WHITE);
-        g.setFont(new Font("SansSerif", Font.BOLD, FALLBACK_DIMENSION_PX / 2));
-        var metrics = g.getFontMetrics();
-        var x = (FALLBACK_DIMENSION_PX - metrics.stringWidth(initials)) / 2;
-        var y = (FALLBACK_DIMENSION_PX - metrics.getHeight()) / 2 + metrics.getAscent();
-        g.drawString(initials, x, y);
-        g.dispose();
+        graphics.setColor(Color.WHITE);
+        graphics.setFont(new Font("SansSerif", Font.BOLD, FALLBACK_DIMENSION_PX / 2));
+        var metrics = graphics.getFontMetrics();
+        var textX = (FALLBACK_DIMENSION_PX - metrics.stringWidth(initials)) / 2;
+        var textY = (FALLBACK_DIMENSION_PX - metrics.getHeight()) / 2 + metrics.getAscent();
+        graphics.drawString(initials, textX, textY);
+        graphics.dispose();
 
         try (var out = new ByteArrayOutputStream()) {
             ImageIO.write(img, "png", out);

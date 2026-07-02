@@ -38,13 +38,13 @@ public class NotificationInboxService {
 
     @Transactional
     public void markRead(User user, UUID notificationId) {
-        var n = repository.findById(notificationId).orElseThrow(NotificationNotFoundException::new);
-        if (!n.getUser().getId().equals(user.getId())) {
+        var notification = repository.findById(notificationId).orElseThrow(NotificationNotFoundException::new);
+        if (!notification.getUser().getId().equals(user.getId())) {
             throw new NotificationNotFoundException();
         }
-        if (n.getReadAt() == null) {
-            n.setReadAt(LocalDateTime.now());
-            repository.save(n);
+        if (notification.getReadAt() == null) {
+            notification.setReadAt(LocalDateTime.now());
+            repository.save(notification);
         }
     }
 

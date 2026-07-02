@@ -53,7 +53,7 @@ public class PromoDetector {
             if (historical.size() < properties.getPersonalPromo().getMinPurchasesForBaseline()) continue;
 
             var median = PriceIndexService.median(historical.stream()
-                    .map(p -> p.getUnitPrice())
+                    .map(previous -> previous.getUnitPrice())
                     .toList());
             var threshold = median
                     .multiply(BigDecimal.valueOf(100L - properties.getPersonalPromo().getThresholdPct()))

@@ -104,8 +104,8 @@ public class InsightsQueryService {
                 input.maxReceiptTotal(), input.groupBy(), input.limit(), input.categoryView());
     }
 
-    private Summary computeSummary(QueryFilters f) {
-        var clauses = buildClauses(f);
+    private Summary computeSummary(QueryFilters filters) {
+        var clauses = buildClauses(filters);
         var jpql = """
                 SELECT COALESCE(SUM(ri.totalPrice), 0),
                        COUNT(DISTINCT r.id),
@@ -121,7 +121,7 @@ public class InsightsQueryService {
         var total = (BigDecimal) row[0];
         var receiptCount = ((Number) row[1]).longValue();
         var itemCount = ((Number) row[2]).longValue();
-        var totalDiscount = computeTotalDiscount(f);
+        var totalDiscount = computeTotalDiscount(filters);
         return new Summary(total, totalDiscount, receiptCount, itemCount, InsightsDimension.averageTicket(total, receiptCount));
     }
 
@@ -131,8 +131,8 @@ public class InsightsQueryService {
      * is counted exactly once (the join would otherwise multiply it by the line
      * count), then sum in code. Item prices stay gross; this is reported aside.
      */
-    private BigDecimal computeTotalDiscount(QueryFilters f) {
-        var clauses = buildClauses(f);
+    private BigDecimal computeTotalDiscount(QueryFilters filters) {
+        var clauses = buildClauses(filters);
         var jpql = """
                 SELECT DISTINCT r.id, r.discountTotal
                 FROM ReceiptItem ri
@@ -155,9 +155,9 @@ public class InsightsQueryService {
      * key. Empty for category/product (a receipt's discount can't be attributed to
      * a single category/product bucket without distribution).
      */
-    private Map<String, BigDecimal> bucketDiscounts(QueryFilters f, InsightsDimension dimension) {
+    private Map<String, BigDecimal> bucketDiscounts(QueryFilters filters, InsightsDimension dimension) {
         if (!dimension.attributesDiscount()) return Map.of();
-        var clauses = buildClauses(f);
+        var clauses = buildClauses(filters);
         var jpql = """
                 SELECT DISTINCT r.id, %s, r.discountTotal
                 FROM ReceiptItem ri
@@ -176,9 +176,9 @@ public class InsightsQueryService {
         return discounts;
     }
 
-    private List<Bucket> computeBuckets(QueryFilters f) {
-        var dimension = InsightsDimension.forGroupBy(f.groupBy());
-        var clauses = buildClauses(f);
+    private List<Bucket> computeBuckets(QueryFilters filters) {
+        var dimension = InsightsDimension.forGroupBy(filters.groupBy());
+        var clauses = buildClauses(filters);
         var jpql = """
                 SELECT %s,
                        COALESCE(SUM(ri.totalPrice), 0),
@@ -194,9 +194,9 @@ public class InsightsQueryService {
                 dimension.groupByKeys(), dimension.orderBy());
         var query = entityManager.createQuery(jpql, Object[].class);
         clauses.bind(query);
-        query.setMaxResults(f.limit());
+        query.setMaxResults(filters.limit());
 
-        var discounts = bucketDiscounts(f, dimension);
+        var discounts = bucketDiscounts(filters, dimension);
         return query.getResultList().stream()
                 .map(dimension::toBucket)
                 .map(bucket -> dimension.attributesDiscount()
@@ -213,8 +213,8 @@ public class InsightsQueryService {
      * us keep {@code receiptCount} as a correct DISTINCT count per effective
      * category (a receipt touching two products in the same bucket counts once).
      */
-    private List<Bucket> computeHouseholdCategoryBuckets(QueryFilters f) {
-        var clauses = buildClauses(f);
+    private List<Bucket> computeHouseholdCategoryBuckets(QueryFilters filters) {
+        var clauses = buildClauses(filters);
         var jpql = """
                 SELECT p.id, p.category, r.id,
                        COALESCE(SUM(ri.totalPrice), 0),
@@ -234,7 +234,7 @@ public class InsightsQueryService {
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
-        var overrides = categoryOverrideService.overrideKeysByProduct(f.householdId(), productIds);
+        var overrides = categoryOverrideService.overrideKeysByProduct(filters.householdId(), productIds);
 
         var accumulators = new LinkedHashMap<String, CategoryAccumulator>();
         for (var row : rows) {
@@ -253,7 +253,7 @@ public class InsightsQueryService {
         }
         return accumulators.values().stream()
                 .sorted(Comparator.comparing(CategoryAccumulator::total).reversed())
-                .limit(f.limit())
+                .limit(filters.limit())
                 .map(CategoryAccumulator::toBucket)
                 .toList();
     }
@@ -293,12 +293,12 @@ public class InsightsQueryService {
      * {@code IN} clause, which is what a single static query template
      * would require.
      */
-    private static FilterClauses buildClauses(QueryFilters f) {
+    private static FilterClauses buildClauses(QueryFilters filters) {
         var clauses = new ArrayList<String>();
         var bindings = new LinkedHashMap<String, Object>();
 
         clauses.add("r.household.id = :householdId");
-        bindings.put("householdId", f.householdId());
+        bindings.put("householdId", filters.householdId());
 
         clauses.add("r.status = :status");
         bindings.put("status", ReceiptStatus.CONFIRMED);
@@ -306,37 +306,37 @@ public class InsightsQueryService {
         clauses.add("ri.excluded = false");
 
         clauses.add("r.issuedAt >= :from");
-        bindings.put("from", f.from());
+        bindings.put("from", filters.from());
         clauses.add("r.issuedAt <= :to");
-        bindings.put("to", f.to());
+        bindings.put("to", filters.to());
 
-        if (f.marketCnpjs() != null) {
+        if (filters.marketCnpjs() != null) {
             clauses.add("r.cnpjEmitente IN (:marketCnpjs)");
-            bindings.put("marketCnpjs", f.marketCnpjs());
+            bindings.put("marketCnpjs", filters.marketCnpjs());
         }
-        if (f.marketCnpjRoots() != null) {
+        if (filters.marketCnpjRoots() != null) {
             clauses.add("SUBSTRING(r.cnpjEmitente, 1, 8) IN (:marketCnpjRoots)");
-            bindings.put("marketCnpjRoots", f.marketCnpjRoots());
+            bindings.put("marketCnpjRoots", filters.marketCnpjRoots());
         }
-        if (f.categories() != null) {
+        if (filters.categories() != null) {
             clauses.add("p.category IN (:categories)");
-            bindings.put("categories", f.categories());
+            bindings.put("categories", filters.categories());
         }
-        if (f.productIds() != null) {
+        if (filters.productIds() != null) {
             clauses.add("p.id IN (:productIds)");
-            bindings.put("productIds", f.productIds());
+            bindings.put("productIds", filters.productIds());
         }
-        if (f.eans() != null) {
+        if (filters.eans() != null) {
             clauses.add("ri.ean IN (:eans)");
-            bindings.put("eans", f.eans());
+            bindings.put("eans", filters.eans());
         }
-        if (f.minReceiptTotal() != null) {
+        if (filters.minReceiptTotal() != null) {
             clauses.add("r.totalAmount >= :minReceiptTotal");
-            bindings.put("minReceiptTotal", f.minReceiptTotal());
+            bindings.put("minReceiptTotal", filters.minReceiptTotal());
         }
-        if (f.maxReceiptTotal() != null) {
+        if (filters.maxReceiptTotal() != null) {
             clauses.add("r.totalAmount <= :maxReceiptTotal");
-            bindings.put("maxReceiptTotal", f.maxReceiptTotal());
+            bindings.put("maxReceiptTotal", filters.maxReceiptTotal());
         }
         return new FilterClauses(String.join(" AND ", clauses), bindings);
     }
@@ -402,21 +402,21 @@ public class InsightsQueryService {
                     categoryView != null ? categoryView : CategoryView.HOUSEHOLD);
         }
 
-        static QueryFilters normalize(QueryFilters f, UUID householdId) {
+        static QueryFilters normalize(QueryFilters filters, UUID householdId) {
             return new QueryFilters(
                     householdId,
-                    f.from() != null ? f.from() : EPOCH_FLOOR,
-                    f.to() != null ? f.to() : EPOCH_CEIL,
-                    nullIfEmpty(trimAll(f.marketCnpjs())),
-                    nullIfEmpty(trimAll(f.marketCnpjRoots())),
-                    nullIfEmpty(f.categories()),
-                    nullIfEmpty(f.productIds()),
-                    nullIfEmpty(trimAll(f.eans())),
-                    f.minReceiptTotal(),
-                    f.maxReceiptTotal(),
-                    f.groupBy(),
-                    clampLimit(f.limit()),
-                    f.categoryView() != null ? f.categoryView() : CategoryView.HOUSEHOLD
+                    filters.from() != null ? filters.from() : EPOCH_FLOOR,
+                    filters.to() != null ? filters.to() : EPOCH_CEIL,
+                    nullIfEmpty(trimAll(filters.marketCnpjs())),
+                    nullIfEmpty(trimAll(filters.marketCnpjRoots())),
+                    nullIfEmpty(filters.categories()),
+                    nullIfEmpty(filters.productIds()),
+                    nullIfEmpty(trimAll(filters.eans())),
+                    filters.minReceiptTotal(),
+                    filters.maxReceiptTotal(),
+                    filters.groupBy(),
+                    clampLimit(filters.limit()),
+                    filters.categoryView() != null ? filters.categoryView() : CategoryView.HOUSEHOLD
             );
         }
 
@@ -429,7 +429,7 @@ public class InsightsQueryService {
             return list.stream()
                     .filter(Objects::nonNull)
                     .map(String::trim)
-                    .filter(s -> !s.isEmpty())
+                    .filter(value -> !value.isEmpty())
                     .toList();
         }
 

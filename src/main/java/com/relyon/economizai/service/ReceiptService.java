@@ -201,8 +201,8 @@ public class ReceiptService {
                                              ReceiptStatus status,
                                              String search,
                                              Pageable pageable) {
-        var cnpj = Optional.ofNullable(cnpjEmitente).map(String::trim).filter(s -> !s.isBlank()).orElse(null);
-        var trimmedSearch = Optional.ofNullable(search).map(String::trim).filter(s -> !s.isBlank()).orElse(null);
+        var cnpj = Optional.ofNullable(cnpjEmitente).map(String::trim).filter(trimmed -> !trimmed.isBlank()).orElse(null);
+        var trimmedSearch = Optional.ofNullable(search).map(String::trim).filter(trimmed -> !trimmed.isBlank()).orElse(null);
         var sortedPageable = pageable.getSort().isUnsorted()
                 ? PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
                         Sort.by(Sort.Direction.DESC, "issuedAt"))
@@ -213,7 +213,7 @@ public class ReceiptService {
         var householdId = user.getHousehold().getId();
         var cnpjs = page.getContent().stream()
                 .map(Receipt::getCnpjEmitente)
-                .filter(c -> c != null)
+                .filter(receiptCnpj -> receiptCnpj != null)
                 .distinct()
                 .toList();
         var overrides = marketNameService.resolveNames(householdId, cnpjs);
@@ -243,7 +243,7 @@ public class ReceiptService {
         MDC.put(MdcContextFilter.ITEM_ID, abbrev(itemId));
         var receipt = loadOwned(user, receiptId);
         var item = receipt.getItems().stream()
-                .filter(i -> i.getId().equals(itemId))
+                .filter(candidate -> candidate.getId().equals(itemId))
                 .findFirst()
                 .orElseThrow(ReceiptItemNotFoundException::new);
         var product = item.getProduct() != null
@@ -257,8 +257,8 @@ public class ReceiptService {
     /** Build a ReceiptResponse with the household's category overrides applied. */
     private ReceiptResponse toResponse(User user, Receipt receipt) {
         var productIds = receipt.getItems().stream()
-                .filter(i -> i.getProduct() != null)
-                .map(i -> i.getProduct().getId())
+                .filter(item -> item.getProduct() != null)
+                .map(item -> item.getProduct().getId())
                 .distinct()
                 .toList();
         var overrides = categoryOverrideService.overridesByProduct(user.getHousehold().getId(), productIds);
@@ -440,7 +440,7 @@ public class ReceiptService {
         var receipt = loadOwned(user, receiptId);
         requirePending(receipt);
         var item = receipt.getItems().stream()
-                .filter(i -> i.getId().equals(itemId))
+                .filter(candidate -> candidate.getId().equals(itemId))
                 .findFirst()
                 .orElseThrow(ReceiptItemNotFoundException::new);
         applyUpdate(item, request);
@@ -466,7 +466,7 @@ public class ReceiptService {
         requirePending(receipt);
         var nextLine = receipt.getItems().stream()
                 .map(ReceiptItem::getLineNumber)
-                .filter(n -> n != null)
+                .filter(lineNumber -> lineNumber != null)
                 .max(Integer::compareTo)
                 .orElse(0) + 1;
         var item = ReceiptItem.builder()

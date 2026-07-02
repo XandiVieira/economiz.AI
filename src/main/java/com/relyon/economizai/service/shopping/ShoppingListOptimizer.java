@@ -85,7 +85,7 @@ public class ShoppingListOptimizer {
             var subtotal = cheapest.unitPrice.multiply(requested.quantity()).setScale(2, RoundingMode.HALF_UP);
             var planItem = new PlanItem(product.getId(), product.getNormalizedName(),
                     requested.quantity(), cheapest.unitPrice, subtotal, cheapest.source);
-            perMarket.computeIfAbsent(cheapest.cnpj, k -> new MarketPlanBuilder(cheapest.cnpj, cheapest.marketName))
+            perMarket.computeIfAbsent(cheapest.cnpj, cnpj -> new MarketPlanBuilder(cheapest.cnpj, cheapest.marketName))
                     .add(planItem);
             totalCost = totalCost.add(subtotal);
         }
@@ -110,7 +110,7 @@ public class ShoppingListOptimizer {
 
     private MarketCandidate findCheapestMarket(Product product, UUID householdId) {
         // Local history first — most recent purchase at each market the household has been to.
-        var localCandidates = receiptItemRepository
+        var candidatesByMarket = receiptItemRepository
                 .findHouseholdHistoryForProduct(product.getId(), householdId).stream()
                 .filter(item -> item.getReceipt().getCnpjEmitente() != null && item.getUnitPrice() != null)
                 .collect(Collectors.toMap(
@@ -125,24 +125,24 @@ public class ShoppingListOptimizer {
             var since = LocalDateTime.now().minusDays(properties.getCollaborative().getLookbackDays());
             var observations = observationRepository.findRecentByProduct(product.getId(), since);
             var byMarket = observations.stream()
-                    .collect(Collectors.groupingBy(o -> o.getMarketCnpj()));
+                    .collect(Collectors.groupingBy(observation -> observation.getMarketCnpj()));
             for (var entry : byMarket.entrySet()) {
-                if (localCandidates.containsKey(entry.getKey())) continue;
+                if (candidatesByMarket.containsKey(entry.getKey())) continue;
                 var rows = entry.getValue();
                 if (rows.size() < properties.getCollaborative().getMinObservationsPerProductMarket()) continue;
                 var distinct = auditRepository.countDistinctHouseholdsForProductMarket(
                         product.getId(), entry.getKey(), since);
                 if (distinct < properties.getCollaborative().getMinHouseholdsForPublic()) continue;
-                var prices = rows.stream().map(o -> o.getUnitPrice()).sorted().toList();
+                var prices = rows.stream().map(observation -> observation.getUnitPrice()).sorted().toList();
                 var median = prices.get(prices.size() / 2);
-                localCandidates.put(entry.getKey(),
+                candidatesByMarket.put(entry.getKey(),
                         new MarketCandidate(entry.getKey(), rows.get(0).getMarketName(), median,
                                 PlanItem.PriceSource.COMMUNITY_INDEX));
             }
         }
 
-        return localCandidates.values().stream()
-                .min(Comparator.comparing(c -> c.unitPrice))
+        return candidatesByMarket.values().stream()
+                .min(Comparator.comparing(candidate -> candidate.unitPrice))
                 .orElse(null);
     }
 
