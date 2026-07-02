@@ -36,6 +36,21 @@ class SantaCatarinaNfcePortalAdapterTest {
     }
 
     @Test
+    void resolveUrl_encodesScPipeSeparatorsForHttpClients() {
+        var adapter = new SantaCatarinaNfcePortalAdapter(RestClient.builder(), solver(true), 30000, "test");
+
+        assertEquals(
+                "https://sat.sef.sc.gov.br/tax.NET/Sat.DFe.NFCe.Web/Consultas/ConsultaPublicaNFCe.aspx?p="
+                        + CHAVE_SC + "%7C3%7C1",
+                adapter.resolveUrl(CHAVE_SC));
+        assertEquals(
+                "https://sat.sef.sc.gov.br/tax.NET/Sat.DFe.NFCe.Web/Consultas/ConsultaPublicaNFCe.aspx?p="
+                        + CHAVE_SC + "%7C3%7C1",
+                adapter.resolveUrl("https://sat.sef.sc.gov.br/tax.NET/Sat.DFe.NFCe.Web/Consultas/ConsultaPublicaNFCe.aspx?p="
+                        + CHAVE_SC + "|3|1"));
+    }
+
+    @Test
     void preflightChave_extractsOriginalChaveFromSecurityViewState() {
         var adapter = new TestScAdapter(solver(false));
         adapter.getResponses.put(SECURITY_URL, ResponseEntity.ok(securityHtml()));

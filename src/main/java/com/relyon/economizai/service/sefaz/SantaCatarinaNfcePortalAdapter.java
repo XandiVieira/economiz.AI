@@ -129,10 +129,10 @@ public class SantaCatarinaNfcePortalAdapter implements SefazAdapter {
                 log.warn("sc.url.rejected host not in allowlist");
                 throw new InvalidQrPayloadException();
             }
-            return trimmed;
+            return encodeScQuerySeparators(trimmed);
         }
         var chave = ChaveAcessoParser.extractChave(qrPayload);
-        return CONSULT_URL + "?p=" + chave + "|3|1";
+        return CONSULT_URL + "?p=" + chave + "%7C3%7C1";
     }
 
     private String solveSecurityChallenge(String securityHtml, String currentUrl, ResponseEntity<String> response) {
@@ -278,6 +278,10 @@ public class SantaCatarinaNfcePortalAdapter implements SefazAdapter {
         if (value == null || value.isBlank()) return BASE_URL;
         if (value.toLowerCase().startsWith("http")) return value;
         return value.startsWith("/") ? BASE_URL + value : BASE_URL + "/" + value;
+    }
+
+    private static String encodeScQuerySeparators(String value) {
+        return value.replace("|", "%7C");
     }
 
     private static String extractCookies(List<String> setCookieHeaders) {
