@@ -124,6 +124,19 @@ class SantaCatarinaNfcePortalAdapterTest {
     }
 
     @Test
+    void parseHtml_parsesScItemsSplitAcrossTextLines() {
+        var adapter = new SantaCatarinaNfcePortalAdapter(RestClient.builder(), solver(false), 30000, "test");
+
+        var parsed = adapter.parseHtml(scDanfeHtmlWithSplitItems(), CHAVE_SC, FINAL_URL);
+
+        assertEquals(2, parsed.items().size());
+        assertEquals("CHOC KIT KAT 4 FNGR DARK 415GR", parsed.items().get(0).rawDescription());
+        assertEquals(new BigDecimal("2"), parsed.items().get(0).quantity());
+        assertEquals(new BigDecimal("4.49"), parsed.items().get(0).unitPrice());
+        assertEquals(new BigDecimal("8.98"), parsed.items().get(0).totalPrice());
+    }
+
+    @Test
     void extractChaveFromHtml_parsesPrintedChave() {
         assertEquals(CHAVE_SC, SantaCatarinaNfcePortalAdapter.extractChaveFromHtml(scDanfeHtml()).orElseThrow());
     }
@@ -167,6 +180,23 @@ class SantaCatarinaNfcePortalAdapterTest {
                   <div>Número: 118889 Série: 8 Emissão: 30/06/2026 14:31:18 - Via Consumidor 2</div>
                   <div>Chave de acesso:</div>
                   <div>4226 0650 5523 3300 0100 6500 8000 1188 8911 0125 5904</div>
+                </body></html>
+                """;
+    }
+
+    private static String scDanfeHtmlWithSplitItems() {
+        return """
+                <html><body>
+                  <h1>DOCUMENTO AUXILIAR DA NOTA FISCAL DE CONSUMIDOR ELETRONICA</h1>
+                  <span>OTTO ATACAREJO COMERCIAL LTDA</span><br>
+                  <span>CNPJ: 50.552.333/0001-00</span><br>
+                  <span>CHOC KIT KAT 4 FNGR DARK 415GR (Código: 28941 )</span><br>
+                  <span>Vl. Total</span><span>8,98</span><br>
+                  <span>Qtde.:2</span><span>UN: UNID</span><span>Vl. Unit.: 4,49</span><br>
+                  <span>PAPEL HIG BOB PREMIUM FDUPLA C32 ROLO (Código: 35561 )</span><br>
+                  <span>Vl. Total</span><span>32,99</span><br>
+                  <span>Qtde.:1 UN: UNID Vl. Unit.: 32,99</span><br>
+                  <span>Cartão de Débito 41,97</span>
                 </body></html>
                 """;
     }

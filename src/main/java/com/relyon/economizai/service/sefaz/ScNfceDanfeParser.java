@@ -87,7 +87,32 @@ public final class ScNfceDanfeParser {
             line++;
             items.add(parsed);
         }
+        return items.isEmpty() ? parseItemsFromTextLines(document) : items;
+    }
+
+    private static List<ParsedReceiptItem> parseItemsFromTextLines(Document document) {
+        var items = new ArrayList<ParsedReceiptItem>();
+        StringBuilder current = null;
+        for (var line : lines(document)) {
+            if (looksLikeItemHeader(line)) {
+                addItemBlock(items, current);
+                current = new StringBuilder(line);
+            } else if (current != null) {
+                current.append(' ').append(line);
+            }
+        }
+        addItemBlock(items, current);
         return items;
+    }
+
+    private static void addItemBlock(List<ParsedReceiptItem> items, StringBuilder block) {
+        if (block == null) return;
+        var text = block.toString();
+        if (!looksLikeItem(text)) return;
+        var parsed = parseItem(text, items.size() + 1);
+        if (parsed != null) {
+            items.add(parsed);
+        }
     }
 
     private static ParsedReceiptItem parseItem(String text, int lineNumber) {
@@ -120,6 +145,11 @@ public final class ScNfceDanfeParser {
         if (text == null) return false;
         var lower = text.toLowerCase();
         return lower.contains("(código:") && lower.contains("qtde") && lower.contains("vl. total");
+    }
+
+    private static boolean looksLikeItemHeader(String text) {
+        if (text == null) return false;
+        return ITEM_HEADER.matcher(text).find();
     }
 
     private static boolean hasItemChild(Element element) {
