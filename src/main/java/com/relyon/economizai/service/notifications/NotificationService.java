@@ -11,7 +11,6 @@ import com.relyon.economizai.service.subscription.Feature;
 import com.relyon.economizai.service.subscription.SubscriptionGateService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.EnumMap;
@@ -52,8 +51,13 @@ public class NotificationService {
      * Persist + dispatch one notification. Returns the saved {@link Notification}
      * (with id) so callers can attach telemetry to it, or {@code null} when the
      * user has opted out of this type (NONE channel) and nothing was created.
+     *
+     * <p>Deliberately NOT {@code @Transactional}: dispatch is an outbound HTTP
+     * call (SMTP/Expo/Twilio, multi-second timeouts) and a transaction spanning
+     * it would pin a DB connection for the duration. The only write is the
+     * single save at the end, which runs in the repository's own short
+     * transaction.
      */
-    @Transactional
     public Notification notify(NotificationPayload payload) {
         var channel = resolveChannel(payload.user(), payload.type());
         if (channel == NotificationChannel.NONE) {
