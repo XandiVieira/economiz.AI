@@ -20,6 +20,10 @@ final class ScSecurityChallengeDetector {
         }
         var lower = value.toLowerCase();
         return lower.contains(SECURITY_VERIFY_PATH)
+                || lower.contains("cf-turnstile")
+                || lower.contains("efetue a validação de segurança")
+                || lower.contains("validacao de seguranca")
+                || lower.contains("validação de segurança")
                 || (lower.contains("cloudflare") && lower.contains("validar"))
                 || (lower.contains("cloudflare") && lower.contains("securityverify"));
     }

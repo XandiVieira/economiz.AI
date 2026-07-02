@@ -24,11 +24,17 @@ public final class ScNfceDanfeParser {
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern CHAVE = Pattern.compile("(\\d[\\d ]{42,}\\d)");
     private static final Pattern DIGITS = Pattern.compile("\\d+");
-    private static final Pattern ITEM_QTY_FIRST = Pattern.compile(
-            "^\\s*(.+?)\\s*\\(\\s*C[oó]digo:\\s*([^)]*?)\\)\\s*Qtde\\.?\\s*:?\\s*([\\d.,]+)\\s*UN\\s*:?\\s*(\\S+).*?Vl\\.\\s*Unit\\.?\\s*:?\\s*([\\d.,]+).*?Vl\\.\\s*Total\\s*([\\d.,]+)\\s*$",
+    private static final Pattern ITEM_HEADER = Pattern.compile(
+            "^\\s*(.+?)\\s*\\(\\s*C[oó]digo:\\s*([^)]*?)\\)",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
-    private static final Pattern ITEM_TOTAL_FIRST = Pattern.compile(
-            "^\\s*(.+?)\\s*\\(\\s*C[oó]digo:\\s*([^)]*?)\\)\\s*Vl\\.\\s*Total\\s*([\\d.,]+).*?Qtde\\.?\\s*:?\\s*([\\d.,]+)\\s*UN\\s*:?\\s*(\\S+).*?Vl\\.\\s*Unit\\.?\\s*:?\\s*([\\d.,]+)\\s*$",
+    private static final Pattern ITEM_QUANTITY_UNIT = Pattern.compile(
+            "Qtde\\.?\\s*:?\\s*([\\d.,]+)\\s*UN\\s*:?\\s*(.*?)(?=\\s*Vl\\.\\s*Unit|\\s*Vl\\.\\s*Total|$)",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    private static final Pattern ITEM_UNIT_PRICE = Pattern.compile(
+            "Vl\\.\\s*Unit\\.?\\s*:?\\s*([\\d.,]+)",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    private static final Pattern ITEM_TOTAL_PRICE = Pattern.compile(
+            "Vl\\.\\s*Total\\s*:?\\s*([\\d.,]+)",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern TOTAL = Pattern.compile(
             "(?:Valor\\s+(?:total|a\\s+pagar)|Cart[aã]o\\s+de\\s+D[eé]bito|Cart[aã]o\\s+de\\s+Cr[eé]dito|Dinheiro|Pix)\\s+([\\d.,]+)",
@@ -85,15 +91,13 @@ public final class ScNfceDanfeParser {
     }
 
     private static ParsedReceiptItem parseItem(String text, int lineNumber) {
-        var qtyFirst = ITEM_QTY_FIRST.matcher(text);
-        if (qtyFirst.find()) {
-            return item(lineNumber, qtyFirst.group(1), qtyFirst.group(2), qtyFirst.group(3),
-                    qtyFirst.group(4), qtyFirst.group(5), qtyFirst.group(6));
-        }
-        var totalFirst = ITEM_TOTAL_FIRST.matcher(text);
-        if (totalFirst.find()) {
-            return item(lineNumber, totalFirst.group(1), totalFirst.group(2), totalFirst.group(4),
-                    totalFirst.group(5), totalFirst.group(6), totalFirst.group(3));
+        var header = ITEM_HEADER.matcher(text);
+        var quantityUnit = ITEM_QUANTITY_UNIT.matcher(text);
+        var unitPrice = ITEM_UNIT_PRICE.matcher(text);
+        var totalPrice = ITEM_TOTAL_PRICE.matcher(text);
+        if (header.find() && quantityUnit.find() && unitPrice.find() && totalPrice.find()) {
+            return item(lineNumber, header.group(1), header.group(2), quantityUnit.group(1),
+                    quantityUnit.group(2), unitPrice.group(1), totalPrice.group(1));
         }
         return null;
     }

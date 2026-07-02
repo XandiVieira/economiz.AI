@@ -212,6 +212,7 @@ public class SantaCatarinaNfcePortalAdapter implements SefazAdapter {
         body.set("__EVENTTARGET", VALIDATE_EVENT_TARGET);
         body.set("__EVENTARGUMENT", "");
         body.set(turnstileFieldName(form), turnstileToken);
+        body.set("cf-turnstile-response", turnstileToken);
         return httpPostForm(action, body, cookieHeader);
     }
 

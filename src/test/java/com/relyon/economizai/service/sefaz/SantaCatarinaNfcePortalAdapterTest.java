@@ -1,5 +1,6 @@
 package com.relyon.economizai.service.sefaz;
 
+import com.relyon.economizai.exception.CaptchaSolveFailedException;
 import com.relyon.economizai.exception.CaptchaUnavailableException;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
 import com.relyon.economizai.service.sefaz.captcha.CaptchaSolver;
@@ -65,6 +66,17 @@ class SantaCatarinaNfcePortalAdapterTest {
         assertEquals("ASP.NET_SessionId=session-1", adapter.postedCookie);
         assertEquals("_ctl0$_ctl0$Body$Main$ButtonValidar", adapter.postedBody.getFirst("__EVENTTARGET"));
         assertEquals("turnstile-token", adapter.postedBody.getFirst("_ctl0:_ctl0:Body:Main:cf-turnstile-response"));
+        assertEquals("turnstile-token", adapter.postedBody.getFirst("cf-turnstile-response"));
+    }
+
+    @Test
+    void fetchHtml_whenTurnstileRejectedThrowsCaptchaSolveFailed() {
+        var solver = solver(true);
+        var adapter = new TestScAdapter(solver);
+        adapter.getResponses.put(SECURITY_URL, ResponseEntity.ok(securityHtml()));
+        adapter.postResponse = ResponseEntity.ok(securityHtml());
+
+        assertThrows(CaptchaSolveFailedException.class, () -> adapter.fetchHtml(SECURITY_URL));
     }
 
     @Test
@@ -132,7 +144,7 @@ class SantaCatarinaNfcePortalAdapterTest {
                     CNPJ: 50.552.333/0001-00
                     AV MAXIMILIANO FUERBRINGER SC 486 , 518 , SOUZA CRUZ , BRUSQUE , SC
                   </section>
-                  <div class="item">CHOC KIT KAT 4 FNGR DARK 415GR (Código: 28941 ) Vl. Total 8,98 Qtde.:2 UN: UNID Vl. Unit.: 4,49</div>
+                  <div class="item">CHOC KIT KAT 4 FNGR DARK 415GR (Código: 28941 ) Vl. Total 8,98 Qtde.:2 UN: UNIDVl. Unit.: 4,49</div>
                   <div class="item">PAPEL HIG BOB PREMIUM FDUPLA C32 ROLO (Código: 35561 ) Vl. Total 32,99 Qtde.:1 UN: UNID Vl. Unit.: 32,99</div>
                   <div class="item">PAO FRANCES KG (Código: 37 ) Qtde.:0,39 UN: KG Vl. Unit.: 16,99 Vl. Total 6,63</div>
                   <div>Cartão de Débito 133,19</div>
