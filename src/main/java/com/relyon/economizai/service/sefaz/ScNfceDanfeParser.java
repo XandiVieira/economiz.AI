@@ -25,16 +25,19 @@ public final class ScNfceDanfeParser {
     private static final Pattern CHAVE = Pattern.compile("(\\d[\\d ]{42,}\\d)");
     private static final Pattern DIGITS = Pattern.compile("\\d+");
     private static final Pattern ITEM_HEADER = Pattern.compile(
-            "^\\s*(.+?)\\s*\\(\\s*C[oó]digo:\\s*([^)]*?)\\)",
+            "^\\s*(.+?)\\s*\\(?\\s*C[oó]d(?:igo|\\.)\\s*:?\\s*([^)]*?)\\)",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    private static final Pattern ITEM_HEADER_ANYWHERE = Pattern.compile(
+            "([\\p{L}\\p{N}][\\p{L}\\p{N} ./%+\\-]{2,180}?)\\s*\\(?\\s*C[oó]d(?:igo|\\.)\\s*:?\\s*([^)]*?)\\)",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern ITEM_QUANTITY_UNIT = Pattern.compile(
-            "Qtde\\.?\\s*:?\\s*([\\d.,]+)\\s*UN\\s*:?\\s*(.*?)(?=\\s*Vl\\.\\s*Unit|\\s*Vl\\.\\s*Total|$)",
+            "(?:Qtde|Qtd|Quantidade)\\.?\\s*:?\\s*([\\d.,]+)\\s*UN\\s*:?\\s*(.*?)(?=\\s*(?:Vl\\.?\\s*Unit|Valor\\s*Unit|Vl\\.?\\s*Total|Valor\\s*Total)|$)",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern ITEM_UNIT_PRICE = Pattern.compile(
-            "Vl\\.\\s*Unit\\.?\\s*:?\\s*([\\d.,]+)",
+            "(?:Vl\\.?\\s*Unit\\.?|Valor\\s*Unit(?:[aá]rio)?)\\s*:?\\s*([\\d.,]+)",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern ITEM_TOTAL_PRICE = Pattern.compile(
-            "Vl\\.\\s*Total\\s*:?\\s*([\\d.,]+)",
+            "(?:Vl\\.?\\s*Total|Valor\\s*Total)\\s*:?\\s*([\\d.,]+)",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern TOTAL = Pattern.compile(
             "(?:Valor\\s+(?:total|a\\s+pagar)|Cart[aã]o\\s+de\\s+D[eé]bito|Cart[aã]o\\s+de\\s+Cr[eé]dito|Dinheiro|Pix)\\s+([\\d.,]+)",
@@ -77,7 +80,7 @@ public final class ScNfceDanfeParser {
     }
 
     private static List<ParsedReceiptItem> parseItems(Document document) {
-        var items = new ArrayList<ParsedReceiptItem>();
+        List<ParsedReceiptItem> items = new ArrayList<>();
         var line = 0;
         for (var element : document.select("tr, li, div")) {
             var text = element.text();
@@ -87,7 +90,9 @@ public final class ScNfceDanfeParser {
             line++;
             items.add(parsed);
         }
-        return items.isEmpty() ? parseItemsFromTextLines(document) : items;
+        if (!items.isEmpty()) return items;
+        items = parseItemsFromTextLines(document);
+        return items.isEmpty() ? parseItemsFromFlattenedText(document) : items;
     }
 
     private static List<ParsedReceiptItem> parseItemsFromTextLines(Document document) {
@@ -113,6 +118,32 @@ public final class ScNfceDanfeParser {
         if (parsed != null) {
             items.add(parsed);
         }
+    }
+
+    private static List<ParsedReceiptItem> parseItemsFromFlattenedText(Document document) {
+        var text = document.text();
+        var headers = ITEM_HEADER_ANYWHERE.matcher(text);
+        var blocks = new ArrayList<String>();
+        var blockStart = -1;
+        while (headers.find()) {
+            if (blockStart >= 0) {
+                blocks.add(text.substring(blockStart, headers.start()).trim());
+            }
+            blockStart = headers.start();
+        }
+        if (blockStart >= 0) {
+            blocks.add(text.substring(blockStart).trim());
+        }
+
+        var items = new ArrayList<ParsedReceiptItem>();
+        for (var block : blocks) {
+            if (!looksLikeItem(block)) continue;
+            var parsed = parseItem(block, items.size() + 1);
+            if (parsed != null) {
+                items.add(parsed);
+            }
+        }
+        return items;
     }
 
     private static ParsedReceiptItem parseItem(String text, int lineNumber) {
@@ -144,7 +175,9 @@ public final class ScNfceDanfeParser {
     private static boolean looksLikeItem(String text) {
         if (text == null) return false;
         var lower = text.toLowerCase();
-        return lower.contains("(código:") && lower.contains("qtde") && lower.contains("vl. total");
+        return (lower.contains("código") || lower.contains("codigo") || lower.contains("cód."))
+                && (lower.contains("qtde") || lower.contains("qtd") || lower.contains("quantidade"))
+                && (lower.contains("vl. total") || lower.contains("vl total") || lower.contains("valor total"));
     }
 
     private static boolean looksLikeItemHeader(String text) {

@@ -137,6 +137,19 @@ class SantaCatarinaNfcePortalAdapterTest {
     }
 
     @Test
+    void parseHtml_parsesScItemsFromFlattenedText() {
+        var adapter = new SantaCatarinaNfcePortalAdapter(RestClient.builder(), solver(false), 30000, "test");
+
+        var parsed = adapter.parseHtml(scDanfeHtmlWithFlattenedItems(), CHAVE_SC, FINAL_URL);
+
+        assertEquals(2, parsed.items().size());
+        assertEquals("CHOC KIT KAT 4 FNGR DARK 415GR", parsed.items().get(0).rawDescription());
+        assertEquals(new BigDecimal("2"), parsed.items().get(0).quantity());
+        assertEquals(new BigDecimal("4.49"), parsed.items().get(0).unitPrice());
+        assertEquals(new BigDecimal("8.98"), parsed.items().get(0).totalPrice());
+    }
+
+    @Test
     void extractChaveFromHtml_parsesPrintedChave() {
         assertEquals(CHAVE_SC, SantaCatarinaNfcePortalAdapter.extractChaveFromHtml(scDanfeHtml()).orElseThrow());
     }
@@ -198,6 +211,18 @@ class SantaCatarinaNfcePortalAdapterTest {
                   <span>Qtde.:1 UN: UNID Vl. Unit.: 32,99</span><br>
                   <span>Cartão de Débito 41,97</span>
                 </body></html>
+                """;
+    }
+
+    private static String scDanfeHtmlWithFlattenedItems() {
+        return """
+                <html><body><span>
+                  DOCUMENTO AUXILIAR DA NOTA FISCAL DE CONSUMIDOR ELETRONICA
+                  OTTO ATACAREJO COMERCIAL LTDA CNPJ: 50.552.333/0001-00
+                  CHOC KIT KAT 4 FNGR DARK 415GR (Código: 28941 ) Vl Total 8,98 Qtd.:2 UN: UNIDVl Unit.: 4,49
+                  PAPEL HIG BOB PREMIUM FDUPLA C32 ROLO (Código: 35561 ) Valor Total 32,99 Quantidade:1 UN: UNID Valor Unitario: 32,99
+                  Cartão de Débito 41,97
+                </span></body></html>
                 """;
     }
 
