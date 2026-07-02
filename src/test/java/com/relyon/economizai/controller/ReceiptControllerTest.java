@@ -101,6 +101,7 @@ class ReceiptControllerTest {
                 null,
                 status,
                 null,
+                null,
                 status == ReceiptStatus.CONFIRMED ? LocalDateTime.now() : null,
                 LocalDateTime.now(),
                 List.of(new ReceiptItemResponse(

@@ -28,6 +28,7 @@ public record ReceiptResponse(
         BigDecimal approxTaxTotal,
         ReceiptStatus status,
         String parseErrorReason,
+        String parseErrorMessage,
         LocalDateTime confirmedAt,
         LocalDateTime createdAt,
         List<ReceiptItemResponse> items
@@ -63,6 +64,7 @@ public record ReceiptResponse(
                 approxTaxTotal(receipt),
                 receipt.getStatus(),
                 receipt.getParseErrorReason(),
+                null,
                 receipt.getConfirmedAt(),
                 receipt.getCreatedAt(),
                 receipt.getItems().stream()
@@ -76,7 +78,15 @@ public record ReceiptResponse(
         return new ReceiptResponse(
                 id, chaveAcesso, uf, cnpjEmitente, marketName, marketFriendlyName, marketAddress,
                 issuedAt, totalAmount, householdTotalAmount, discountTotal, approxTaxFederal, approxTaxEstadual,
-                approxTaxTotal, status, parseErrorReason, confirmedAt, createdAt, items);
+                approxTaxTotal, status, parseErrorReason, parseErrorMessage, confirmedAt, createdAt, items);
+    }
+
+    /** Copy with the localized, user-showable failure message (Accept-Language resolved). */
+    public ReceiptResponse withParseErrorMessage(String parseErrorMessage) {
+        return new ReceiptResponse(
+                id, chaveAcesso, uf, cnpjEmitente, marketName, marketFriendlyName, marketAddress,
+                issuedAt, totalAmount, householdTotalAmount, discountTotal, approxTaxFederal, approxTaxEstadual,
+                approxTaxTotal, status, parseErrorReason, parseErrorMessage, confirmedAt, createdAt, items);
     }
 
     private static String overrideFor(ReceiptItem item, Map<UUID, String> categoryOverrides) {

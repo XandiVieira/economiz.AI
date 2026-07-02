@@ -18,6 +18,7 @@ import com.relyon.economizai.model.enums.UnidadeFederativa;
 import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.repository.ReceiptRepository;
 import com.relyon.economizai.service.HouseholdProductAliasService;
+import com.relyon.economizai.service.LocalizedMessageService;
 import com.relyon.economizai.service.cache.HouseholdCacheGen;
 import com.relyon.economizai.service.canonicalization.CanonicalizationService;
 import com.relyon.economizai.service.geo.MarketLocationService;
@@ -76,6 +77,7 @@ class ReceiptServiceTest {
     @Mock private MarketNameService marketNameService;
     @Mock private SubscriptionGateService subscriptionGate;
     @Mock private SavingsAttributionService savingsAttributionService;
+    @Mock private LocalizedMessageService localizedMessageService;
 
     @InjectMocks private ReceiptService receiptService;
 

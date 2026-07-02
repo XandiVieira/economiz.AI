@@ -114,7 +114,7 @@ class AdminControllerTest {
                 UUID.randomUUID(), CHAVE_RS, UnidadeFederativa.RS, "12345678000190",
                 "Mercado X", "Mercado X", "Rua Y, 123", LocalDateTime.now(),
                 new BigDecimal("57.80"), new BigDecimal("57.80"), null, null, null, null,
-                status, null, null, LocalDateTime.now(),
+                status, null, null, null, LocalDateTime.now(),
                 List.of(new ReceiptItemResponse(
                         UUID.randomUUID(), UUID.randomUUID(), 1, "ARROZ 5KG", null, "ARROZ 5KG",
                         "7891234567890", new BigDecimal("1"), "UN",

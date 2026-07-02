@@ -76,6 +76,7 @@ public class ReceiptService {
     private final HouseholdProductAliasService householdProductAliasService;
     private final HouseholdProductCategoryOverrideService categoryOverrideService;
     private final HouseholdCacheGen householdCacheGen;
+    private final LocalizedMessageService localizedMessageService;
     private final MarketNameService marketNameService;
     private final SubscriptionGateService subscriptionGate;
     private final SavingsAttributionService savingsAttributionService;
@@ -489,7 +490,28 @@ public class ReceiptService {
     /** Apply the household's custom market display name to the response (sibling field; original untouched). */
     private ReceiptResponse withFriendlyName(UUID householdId, Receipt receipt, ReceiptResponse response) {
         var friendly = marketNameService.resolve(householdId, receipt.getCnpjEmitente(), receipt.getMarketName());
-        return response.withMarketFriendlyName(friendly);
+        return response.withMarketFriendlyName(friendly)
+                .withParseErrorMessage(localizedParseError(receipt));
+    }
+
+    /**
+     * Translates the machine {@code parseErrorReason} ("key:args") into a
+     * user-showable message in the request's locale. Unknown keys fall back to
+     * the generic parse-failure message — never null for a FAILED_PARSE row.
+     */
+    private String localizedParseError(Receipt receipt) {
+        if (receipt.getStatus() != ReceiptStatus.FAILED_PARSE || receipt.getParseErrorReason() == null) {
+            return null;
+        }
+        var reason = receipt.getParseErrorReason();
+        var separatorIndex = reason.indexOf(':');
+        var key = separatorIndex < 0 ? reason : reason.substring(0, separatorIndex);
+        var argument = separatorIndex < 0 ? "" : reason.substring(separatorIndex + 1);
+        try {
+            return localizedMessageService.translate(key, argument);
+        } catch (RuntimeException ex) {
+            return localizedMessageService.translate("receipt.parse.failed", argument);
+        }
     }
 
     private static String abbrev(UUID id) {
