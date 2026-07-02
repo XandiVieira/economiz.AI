@@ -8,6 +8,7 @@ import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.repository.PriceObservationAuditRepository;
 import com.relyon.economizai.repository.PriceObservationAuditRepository.MarketHouseholdCount;
+import com.relyon.economizai.service.privacy.LogMasker;
 import com.relyon.economizai.repository.PriceObservationRepository;
 import com.relyon.economizai.service.geo.DistanceCalculator;
 import com.relyon.economizai.service.geo.MarketLocationService;
@@ -104,7 +105,7 @@ public class PriceIndexService {
                 && auditRepository.existsContributionForChaveFromOtherHousehold(
                         receipt.getChaveAcesso(), receipt.getHousehold().getId())) {
             log.warn("price_index.write.skipped reason=duplicate_chave_other_household receipt={} chave={}",
-                    receipt.getId(), receipt.getChaveAcesso());
+                    receipt.getId(), LogMasker.chave(receipt.getChaveAcesso()));
             return true;
         }
         return false;

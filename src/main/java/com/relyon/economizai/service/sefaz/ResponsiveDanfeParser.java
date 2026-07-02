@@ -1,6 +1,7 @@
 package com.relyon.economizai.service.sefaz;
 
 import com.relyon.economizai.exception.ReceiptParseException;
+import com.relyon.economizai.service.privacy.LogMasker;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -44,7 +45,7 @@ public final class ResponsiveDanfeParser {
         var document = Jsoup.parse(html);
         var items = parseItems(document);
         if (items.isEmpty()) {
-            log.warn("Parser found no items in SEFAZ HTML for chave {}", chaveAcesso);
+            log.warn("Parser found no items in SEFAZ HTML for chave {}", LogMasker.chave(chaveAcesso));
             throw new ReceiptParseException("no-items-found");
         }
         var tax = parseApproxTax(document);
