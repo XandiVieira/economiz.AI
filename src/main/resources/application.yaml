@@ -27,6 +27,12 @@ spring:
     hibernate:
       ddl-auto: none
     open-in-view: false
+  task:
+    scheduling:
+      # Default is a SINGLE thread — one slow job (geocoding/CNPJ lookups do
+      # HTTP with 8s timeouts) would delay every other @Scheduled job.
+      pool:
+        size: 4
   flyway:
     enabled: true
     locations: classpath:db/migration
