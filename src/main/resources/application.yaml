@@ -259,8 +259,6 @@ economizai:
   profile-picture:
     local-dir: ${PROFILE_PICTURE_DIR:/tmp/economizai/profile-pics}   # dev: local disk. prod: see DEV_NOTES.md
     max-size-mb: 5
-  auth:
-    frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:3000}    # used in password-reset + email-verification links
   oauth:
     # Expected audiences (aud claim) for social-login ID tokens. Comma-separated;
     # may be empty in dev (then the aud check is skipped with a WARN log). In prod

@@ -28,7 +28,9 @@ public class PasswordResetToken extends BaseEntity {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(nullable = false, unique = true, length = 255)
+    // SHA-256 hash of the 6-digit code — never the plaintext. Not unique:
+    // two users can legitimately hold the same code (lookups are user-scoped).
+    @Column(nullable = false, length = 255)
     private String token;
 
     @Column(name = "expires_at", nullable = false)

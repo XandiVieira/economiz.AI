@@ -5,14 +5,12 @@ import com.relyon.economizai.model.EmailVerificationToken;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.repository.EmailVerificationTokenRepository;
 import com.relyon.economizai.repository.UserRepository;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -24,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -34,52 +33,50 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class EmailVerificationServiceTest {
 
-    private static final String FRONTEND_BASE_URL = "https://app.economiz.ai";
-
     @Mock private UserRepository userRepository;
     @Mock private EmailVerificationTokenRepository tokenRepository;
     @Mock private AuthEmailSender emailSender;
 
     @InjectMocks private EmailVerificationService emailVerificationService;
 
-    @BeforeEach
-    void setUp() {
-        ReflectionTestUtils.setField(emailVerificationService, "frontendBaseUrl", FRONTEND_BASE_URL);
-    }
-
     private User unverifiedUser() {
         return User.builder().id(UUID.randomUUID()).email("maria@example.com").emailVerified(false).build();
     }
 
+    private EmailVerificationToken activeCode(User user, String code) {
+        return EmailVerificationToken.builder()
+                .user(user)
+                .token(CodeHasher.sha256(code))
+                .expiresAt(LocalDateTime.now().plusHours(1))
+                .build();
+    }
+
+    private void stubActiveCode(User user, EmailVerificationToken token) {
+        when(tokenRepository.findFirstByUserAndConsumedAtIsNullOrderByCreatedAtDesc(user))
+                .thenReturn(Optional.of(token));
+    }
+
     @Test
-    void sendVerificationForUnverifiedUserPersistsTokenAndSendsLink() {
+    void sendVerificationInvalidatesOldCodesPersistsHashAndEmailsCode() {
         var user = unverifiedUser();
 
         emailVerificationService.sendVerificationFor(user);
+
+        verify(tokenRepository).consumeAllActiveForUser(eq(user), any(LocalDateTime.class));
 
         var tokenCaptor = ArgumentCaptor.forClass(EmailVerificationToken.class);
         verify(tokenRepository).save(tokenCaptor.capture());
         var savedToken = tokenCaptor.getValue();
         assertEquals(user, savedToken.getUser());
-        assertNotNull(savedToken.getToken());
         assertTrue(savedToken.getExpiresAt().isAfter(LocalDateTime.now()));
 
-        var linkCaptor = ArgumentCaptor.forClass(String.class);
-        verify(emailSender).sendEmailVerification(eq(user.getEmail()), linkCaptor.capture());
-        assertTrue(linkCaptor.getValue().startsWith(FRONTEND_BASE_URL + "/verify-email?token="));
-        assertTrue(linkCaptor.getValue().contains(savedToken.getToken()));
-    }
-
-    @Test
-    void sendVerificationGeneratesUrlSafeTokenWithoutPadding() {
-        var user = unverifiedUser();
-
-        emailVerificationService.sendVerificationFor(user);
-
-        var tokenCaptor = ArgumentCaptor.forClass(EmailVerificationToken.class);
-        verify(tokenRepository).save(tokenCaptor.capture());
-        assertTrue(tokenCaptor.getValue().getToken().matches("[A-Za-z0-9_-]+"),
-                "token must be url-safe base64 without padding");
+        // a 6-digit code is emailed; only its hash is persisted
+        var codeCaptor = ArgumentCaptor.forClass(String.class);
+        verify(emailSender).sendEmailVerification(eq(user.getEmail()), codeCaptor.capture(), eq(24));
+        var emailedCode = codeCaptor.getValue();
+        assertTrue(emailedCode.matches("\\d{6}"), "emailed code must be exactly 6 digits");
+        assertEquals(CodeHasher.sha256(emailedCode), savedToken.getToken(),
+                "stored token must be the code's hash");
     }
 
     @Test
@@ -99,7 +96,7 @@ class EmailVerificationServiceTest {
         emailVerificationService.resend(user);
 
         verify(tokenRepository).save(any(EmailVerificationToken.class));
-        verify(emailSender).sendEmailVerification(eq(user.getEmail()), anyString());
+        verify(emailSender).sendEmailVerification(eq(user.getEmail()), anyString(), anyInt());
     }
 
     @Test
@@ -113,16 +110,13 @@ class EmailVerificationServiceTest {
     }
 
     @Test
-    void verifyWithValidTokenMarksUserVerifiedAndConsumesToken() {
+    void verifyWithValidCodeMarksUserVerifiedAndConsumesCode() {
         var user = unverifiedUser();
-        var token = EmailVerificationToken.builder()
-                .user(user)
-                .token("valid-token")
-                .expiresAt(LocalDateTime.now().plusHours(1))
-                .build();
-        when(tokenRepository.findByToken("valid-token")).thenReturn(Optional.of(token));
+        var token = activeCode(user, "123456");
+        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+        stubActiveCode(user, token);
 
-        emailVerificationService.verify("valid-token");
+        emailVerificationService.verify(user.getEmail(), "123456");
 
         assertTrue(user.isEmailVerified());
         assertNotNull(user.getEmailVerifiedAt());
@@ -132,42 +126,89 @@ class EmailVerificationServiceTest {
     }
 
     @Test
-    void verifyWithUnknownTokenThrowsAndChangesNothing() {
-        when(tokenRepository.findByToken("missing")).thenReturn(Optional.empty());
+    void verifyIsIdempotentForAlreadyVerifiedUser() {
+        var user = User.builder().id(UUID.randomUUID()).email("maria@example.com").emailVerified(true).build();
+        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
 
-        assertThrows(InvalidAuthTokenException.class, () -> emailVerificationService.verify("missing"));
+        emailVerificationService.verify(user.getEmail(), "000000");
+
+        verifyNoInteractions(tokenRepository);
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void verifyWithUnknownEmailThrows() {
+        when(userRepository.findByEmail("ghost@example.com")).thenReturn(Optional.empty());
+
+        assertThrows(InvalidAuthTokenException.class,
+                () -> emailVerificationService.verify("ghost@example.com", "123456"));
 
         verify(userRepository, never()).save(any());
     }
 
     @Test
-    void verifyWithConsumedTokenThrows() {
+    void verifyWithNoActiveCodeThrows() {
         var user = unverifiedUser();
-        var token = EmailVerificationToken.builder()
-                .user(user)
-                .token("consumed-token")
-                .expiresAt(LocalDateTime.now().plusHours(1))
-                .consumedAt(LocalDateTime.now().minusMinutes(5))
-                .build();
-        when(tokenRepository.findByToken("consumed-token")).thenReturn(Optional.of(token));
+        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+        when(tokenRepository.findFirstByUserAndConsumedAtIsNullOrderByCreatedAtDesc(user))
+                .thenReturn(Optional.empty());
 
-        assertThrows(InvalidAuthTokenException.class, () -> emailVerificationService.verify("consumed-token"));
+        assertThrows(InvalidAuthTokenException.class,
+                () -> emailVerificationService.verify(user.getEmail(), "123456"));
 
         assertFalse(user.isEmailVerified());
         verify(userRepository, never()).save(any());
     }
 
     @Test
-    void verifyWithExpiredTokenThrows() {
+    void verifyWithWrongCodeThrowsAndBurnsAnAttempt() {
         var user = unverifiedUser();
-        var token = EmailVerificationToken.builder()
+        var token = activeCode(user, "123456");
+        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+        stubActiveCode(user, token);
+
+        assertThrows(InvalidAuthTokenException.class,
+                () -> emailVerificationService.verify(user.getEmail(), "000000"));
+
+        assertEquals(1, token.getAttempts());
+        verify(tokenRepository).save(token);
+        assertFalse(user.isEmailVerified());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void codeLocksAfterMaxFailedAttemptsEvenIfGuessedRightAfterwards() {
+        var user = unverifiedUser();
+        var token = activeCode(user, "123456");
+        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+        stubActiveCode(user, token);
+
+        for (var attempt = 0; attempt < 5; attempt++) {
+            assertThrows(InvalidAuthTokenException.class,
+                    () -> emailVerificationService.verify(user.getEmail(), "000000"));
+        }
+        assertEquals(5, token.getAttempts());
+
+        // the CORRECT code is now rejected — the attacker exhausted the budget
+        assertThrows(InvalidAuthTokenException.class,
+                () -> emailVerificationService.verify(user.getEmail(), "123456"));
+        assertFalse(user.isEmailVerified());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void verifyWithExpiredCodeThrows() {
+        var user = unverifiedUser();
+        var expired = EmailVerificationToken.builder()
                 .user(user)
-                .token("expired-token")
+                .token(CodeHasher.sha256("123456"))
                 .expiresAt(LocalDateTime.now().minusMinutes(1))
                 .build();
-        when(tokenRepository.findByToken("expired-token")).thenReturn(Optional.of(token));
+        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+        stubActiveCode(user, expired);
 
-        assertThrows(InvalidAuthTokenException.class, () -> emailVerificationService.verify("expired-token"));
+        assertThrows(InvalidAuthTokenException.class,
+                () -> emailVerificationService.verify(user.getEmail(), "123456"));
 
         assertFalse(user.isEmailVerified());
         verify(userRepository, never()).save(any());

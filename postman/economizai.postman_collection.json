@@ -442,7 +442,7 @@
           "response": []
         },
         {
-          "name": "Verify email (consume token from email or [DEV-MODE] log)",
+          "name": "Verify email (6-digit code from email or [DEV-MODE] log)",
           "request": {
             "method": "POST",
             "header": [
@@ -472,7 +472,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"token\": \"PASTE_TOKEN_HERE\"\n}"
+              "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"code\": \"PASTE_CODE_HERE\"\n}"
             }
           },
           "response": []

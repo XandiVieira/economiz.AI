@@ -14,6 +14,17 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-07-02 (even later) — ⚠️ BREAKING: email verification is now a 6-digit CODE
+
+`POST /auth/verify-email` body changed from `{ "token" }` to
+`{ "email", "code" }`. The verification email no longer carries a link — it
+carries a **6-digit code** the user types in the app, exactly like password
+reset. Codes: single-use, 24 h TTL, locked after 5 wrong attempts (400),
+resend invalidates the previous code, idempotent for already-verified
+accounts. There is no web redirect anywhere in the auth flows anymore.
+
+---
+
 ## 2026-07-02 (later) — ⚠️ BREAKING-ish: fail-fast 400s + new `parseErrorMessage` field
 
 Three FE-visible changes from today's hardening pass:

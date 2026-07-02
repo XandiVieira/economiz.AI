@@ -279,7 +279,7 @@ workaround, use the platform feature"):
    setup) defaults to `dev` and keeps every current fallback, so the dev box
    needs no change. The `prod` profile (`application-prod.yaml`) has NO weak
    defaults — boot fails unless `DATABASE_URL`, `DB_USERNAME`, `DB_PASSWORD`,
-   `JWT_SECRET`, `CORS_ORIGINS`, `FRONTEND_BASE_URL` are set — and disables
+   `JWT_SECRET`, `CORS_ORIGINS` are set — and disables
    Swagger. The file's header is the full prod env-var checklist.
 1. **Host:** home Windows box → managed platform (Fly.io / Railway / paid Render / VPS).
    Deletes: all scheduled tasks, the self-hosted runner, the always-on scripts.

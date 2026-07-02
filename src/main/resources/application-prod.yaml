@@ -8,7 +8,6 @@
 #   DATABASE_URL, DB_USERNAME, DB_PASSWORD   — production Postgres
 #   JWT_SECRET                               — >= 256-bit random secret
 #   CORS_ORIGINS                             — real FE origins only, NO localhost
-#   FRONTEND_BASE_URL                        — public FE URL (reset/verify links)
 #
 # Strongly recommended before going live (optional at boot, fail-closed when
 # blank — the feature just stays off):
@@ -35,8 +34,6 @@ jwt:
 economizai:
   cors:
     allowed-origins: ${CORS_ORIGINS}
-  auth:
-    frontend-base-url: ${FRONTEND_BASE_URL}
 
 # No API docs in production — the surface is documented for the FE in API.md
 # and the Postman collection; swagger on a public host only helps attackers map

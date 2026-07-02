@@ -144,13 +144,13 @@ DELETE /api/v1/users/me/profile-picture
 POST /api/v1/auth/forgot-password    { "email" }                          → 204  (step 1: emails a 6-digit code)
 POST /api/v1/auth/verify-reset-code  { "email", "code" }                  → 204  (step 2: validate, doesn't consume)
 POST /api/v1/auth/reset-password     { "email", "code", "newPassword" }   → 204  (step 3: consume + set password)
-POST /api/v1/auth/verify-email       { "token": "..." }                   → 204
+POST /api/v1/auth/verify-email       { "email", "code" }                  → 204  (6-digit code from the signup email)
 POST /api/v1/users/me/email-verification/resend                           → 204
 ```
 
-**Password reset is a 3-step code flow** (mobile-friendly — no link). Step 1 emails a **6-digit code**; step 2 lets the app validate the code before showing the new-password screen (optional but recommended); step 3 sets the password. The code is **single-use**, **expires in 60 min**, and a new request **invalidates the previous** code.
+**Both flows are code-based** (mobile-friendly — no links anywhere). Password reset: step 1 emails a **6-digit code**; step 2 lets the app validate the code before showing the new-password screen (optional but recommended); step 3 sets the password. Email verification: signup (or resend) emails a 6-digit code; the app confirms it with `verify-email`. Codes are **single-use**, a new request **invalidates the previous** code, and **5 wrong attempts lock the code** (request a new one). Reset codes expire in **60 min**; verification codes in **24 h**. `verify-email` is idempotent for already-verified accounts.
 
-`forgot-password` always returns 204 — even when the email isn't registered, to avoid leaking valid addresses. `verify-reset-code`, `reset-password`, and `verify-email` return **400** on an invalid/stale/used code or token.
+`forgot-password` always returns 204 — even when the email isn't registered, to avoid leaking valid addresses. `verify-reset-code`, `reset-password`, and `verify-email` return **400** on an invalid/stale/used/locked code.
 
 **Dev mode**: when SMTP isn't configured, the email body (incl. the code) is logged with a `[DEV-MODE]` prefix instead of being sent. The endpoints still return 204, so the flow works for FE testing — grab the code from logs.
 

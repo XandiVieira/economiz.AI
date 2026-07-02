@@ -7,6 +7,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -27,7 +28,9 @@ public class EmailVerificationToken extends BaseEntity {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(nullable = false, unique = true, length = 255)
+    // SHA-256 hash of the 6-digit code — never the plaintext. Not unique:
+    // two users can legitimately hold the same code (lookups are user-scoped).
+    @Column(nullable = false, length = 255)
     private String token;
 
     @Column(name = "expires_at", nullable = false)
@@ -35,4 +38,10 @@ public class EmailVerificationToken extends BaseEntity {
 
     @Column(name = "consumed_at")
     private LocalDateTime consumedAt;
+
+    // Failed verify attempts against this code; locked once it hits the budget
+    // in EmailVerificationService (defense against 6-digit brute force).
+    @Column(nullable = false)
+    @Builder.Default
+    private int attempts = 0;
 }

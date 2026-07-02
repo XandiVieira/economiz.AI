@@ -50,16 +50,16 @@ public class AuthEmailSender {
         send(email, "Seu código de redefinição de senha — economizai", text, html, "password-reset");
     }
 
-    public void sendEmailVerification(String email, String verifyLink) {
-        var text = "Bem-vindo ao economizai! Confirme seu e-mail no link abaixo (válido por 24 horas):\n\n"
-                + verifyLink;
-        var html = linkEmailHtml(
+    public void sendEmailVerification(String email, String code, int ttlHours) {
+        var text = "Bem-vindo ao economizai! Use o código abaixo no app para confirmar seu e-mail (válido por "
+                + ttlHours + " horas):\n\n" + code;
+        var html = codeEmailHtml(
                 "Confirme seu e-mail",
-                "Bem-vindo ao economizai! Falta só confirmar seu e-mail para concluir o cadastro.",
-                "Confirmar e-mail",
-                verifyLink,
-                "Este link é válido por 24 horas.");
-        send(email, "Confirme seu e-mail — economizai", text, html, "email-verification");
+                "Bem-vindo ao economizai! Use o código abaixo no app para concluir o cadastro:",
+                code,
+                "Este código é válido por " + ttlHours + " horas e só pode ser usado uma vez.",
+                "Se você não criou esta conta, ignore este e-mail.");
+        send(email, "Seu código de confirmação — economizai", text, html, "email-verification");
     }
 
     private void send(String to, String subject, String text, String html, String purpose) {
@@ -106,19 +106,6 @@ public class AuthEmailSender {
         return shell(heading, intro, codeBlock, disclaimer);
     }
 
-    // Branded HTML for a LINK email (a button CTA).
-    private String linkEmailHtml(String heading, String intro, String buttonLabel, String url, String validity) {
-        var button = """
-                <div style="margin:28px 0;text-align:center;">
-                  <a href="%s" style="display:inline-block;background:#16a34a;color:#ffffff;text-decoration:none;
-                        padding:14px 32px;border-radius:10px;font-size:16px;font-weight:600;">%s</a>
-                </div>
-                <p style="margin:0 0 8px;color:#64748b;font-size:13px;text-align:center;">%s</p>
-                """.formatted(escape(url), escape(buttonLabel), escape(validity));
-        return shell(heading, intro, button, "Se o botão não funcionar, copie e cole este endereço no navegador:<br>"
-                + "<span style=\"color:#16a34a;word-break:break-all;\">" + escape(url) + "</span>");
-    }
-
     // Shared outer shell: header band, white card, content, footer. One green brand
     // accent (#16a34a) to match the app, neutral slate text, centered 600px card.
     private String shell(String heading, String intro, String content, String footnote) {
@@ -155,8 +142,8 @@ public class AuthEmailSender {
                 """.formatted(escape(heading), escape(intro), content, footnote);
     }
 
-    private String escape(String s) {
-        if (s == null) return "";
-        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
+    private String escape(String value) {
+        if (value == null) return "";
+        return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
     }
 }

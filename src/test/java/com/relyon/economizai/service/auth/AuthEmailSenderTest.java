@@ -26,7 +26,7 @@ class AuthEmailSenderTest {
     private static final String FROM = "noreply@economiz.ai";
     private static final String RECIPIENT = "maria@example.com";
     private static final String RESET_CODE = "123456";
-    private static final String VERIFY_LINK = "https://app.economiz.ai/verify-email?token=xyz";
+    private static final String VERIFY_CODE = "654321";
 
     // A real (empty-session) MimeMessage the mocked sender hands back, so the helper
     // can populate it and we can read the rendered subject/recipients/body back.
@@ -70,20 +70,19 @@ class AuthEmailSenderTest {
     }
 
     @Test
-    void sendsEmailVerificationWhenSmtpConfigured() throws Exception {
+    void sendsEmailVerificationCodeWhenSmtpConfigured() throws Exception {
         var mailSender = mailSenderReturningRealMime();
         var sender = new AuthEmailSender(Optional.of(mailSender), FROM, "smtp-user");
 
-        sender.sendEmailVerification(RECIPIENT, VERIFY_LINK);
+        sender.sendEmailVerification(RECIPIENT, VERIFY_CODE, 24);
 
         var captor = ArgumentCaptor.forClass(MimeMessage.class);
         verify(mailSender).send(captor.capture());
         var sent = captor.getValue();
-        assertEquals("Confirme seu e-mail — economizai", sent.getSubject());
-        // The URL is quoted-printable-encoded in the MIME body (= -> =3D etc.), so
-        // assert on the host portion, which has no QP-encoded chars.
-        assertTrue(bodyOf(sent).contains("app.economiz.ai/verify-email"),
-                "rendered email must contain the verify link");
+        assertEquals("Seu código de confirmação — economizai", sent.getSubject());
+        var body = bodyOf(sent);
+        assertTrue(body.contains(VERIFY_CODE), "rendered email must contain the code");
+        assertTrue(body.contains("24 horas"), "rendered email must state the TTL");
     }
 
     @Test
@@ -101,7 +100,7 @@ class AuthEmailSenderTest {
         var mailSender = mock(JavaMailSender.class);
         var sender = new AuthEmailSender(Optional.of(mailSender), FROM, null);
 
-        sender.sendEmailVerification(RECIPIENT, VERIFY_LINK);
+        sender.sendEmailVerification(RECIPIENT, VERIFY_CODE, 24);
 
         verify(mailSender, never()).send(any(MimeMessage.class));
     }

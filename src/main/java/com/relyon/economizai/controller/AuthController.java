@@ -89,9 +89,12 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
+    @Operation(summary = "Email verification: confirm the 6-digit code",
+            description = "Consumes the code emailed at signup/resend. Idempotent for already-verified "
+                    + "accounts. 204 = verified; 400 = invalid/expired/locked code.")
     @PostMapping("/verify-email")
     public ResponseEntity<Void> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
-        emailVerificationService.verify(request.token());
+        emailVerificationService.verify(request.email(), request.code());
         return ResponseEntity.noContent().build();
     }
 
