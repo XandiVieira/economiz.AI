@@ -47,6 +47,17 @@ class PasswordResetServiceTest {
         return User.builder().id(UUID.randomUUID()).email("maria@example.com").password("old-hash").build();
     }
 
+    private PasswordResetToken activeCode(User user, String code) {
+        return PasswordResetToken.builder()
+                .user(user).token(code)
+                .expiresAt(LocalDateTime.now().plusMinutes(30)).build();
+    }
+
+    private void stubActiveCode(User user, PasswordResetToken token) {
+        when(tokenRepository.findFirstByUserAndConsumedAtIsNullOrderByCreatedAtDesc(user))
+                .thenReturn(Optional.of(token));
+    }
+
     @Test
     void requestResetForUnknownEmailIsNoOpButStillSucceeds() {
         when(userRepository.findByEmail("ghost@example.com")).thenReturn(Optional.empty());
@@ -95,25 +106,37 @@ class PasswordResetServiceTest {
     @Test
     void verifyCodeWithValidCodeSucceedsWithoutConsuming() {
         var user = registeredUser();
-        var code = PasswordResetToken.builder()
-                .user(user).token("123456")
-                .expiresAt(LocalDateTime.now().plusMinutes(30)).build();
+        var code = activeCode(user, "123456");
         when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
-        when(tokenRepository.findFirstByUserAndTokenOrderByCreatedAtDesc(user, "123456"))
-                .thenReturn(Optional.of(code));
+        stubActiveCode(user, code);
 
         passwordResetService.verifyCode(new VerifyResetCodeRequest(user.getEmail(), "123456"));
 
-        // verify-only: nothing consumed, no password touched
+        // verify-only: nothing consumed, no password touched, no attempt burned
         verify(tokenRepository, never()).save(any());
         verify(userRepository, never()).save(any());
+        assertEquals(0, code.getAttempts());
     }
 
     @Test
-    void verifyCodeWithBadCodeThrows() {
+    void verifyCodeWithWrongCodeThrowsAndBurnsAnAttempt() {
+        var user = registeredUser();
+        var code = activeCode(user, "123456");
+        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+        stubActiveCode(user, code);
+
+        assertThrows(InvalidAuthTokenException.class, () ->
+                passwordResetService.verifyCode(new VerifyResetCodeRequest(user.getEmail(), "000000")));
+
+        assertEquals(1, code.getAttempts());
+        verify(tokenRepository).save(code);
+    }
+
+    @Test
+    void verifyCodeWithNoActiveCodeThrows() {
         var user = registeredUser();
         when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
-        when(tokenRepository.findFirstByUserAndTokenOrderByCreatedAtDesc(user, "000000"))
+        when(tokenRepository.findFirstByUserAndConsumedAtIsNullOrderByCreatedAtDesc(user))
                 .thenReturn(Optional.empty());
 
         assertThrows(InvalidAuthTokenException.class, () ->
@@ -121,14 +144,33 @@ class PasswordResetServiceTest {
     }
 
     @Test
+    void codeLocksAfterMaxFailedAttemptsEvenIfGuessedRightAfterwards() {
+        var user = registeredUser();
+        var code = activeCode(user, "123456");
+        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+        stubActiveCode(user, code);
+
+        for (var attempt = 0; attempt < 5; attempt++) {
+            assertThrows(InvalidAuthTokenException.class, () ->
+                    passwordResetService.verifyCode(new VerifyResetCodeRequest(user.getEmail(), "000000")));
+        }
+        assertEquals(5, code.getAttempts());
+
+        // the CORRECT code is now rejected — the attacker exhausted the budget
+        assertThrows(InvalidAuthTokenException.class, () ->
+                passwordResetService.verifyCode(new VerifyResetCodeRequest(user.getEmail(), "123456")));
+        assertThrows(InvalidAuthTokenException.class, () ->
+                passwordResetService.resetPassword(
+                        new ResetPasswordRequest(user.getEmail(), "123456", "brand-new-password")));
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
     void resetPasswordWithValidCodeUpdatesPasswordAndConsumesCode() {
         var user = registeredUser();
-        var code = PasswordResetToken.builder()
-                .user(user).token("654321")
-                .expiresAt(LocalDateTime.now().plusMinutes(30)).build();
+        var code = activeCode(user, "654321");
         when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
-        when(tokenRepository.findFirstByUserAndTokenOrderByCreatedAtDesc(user, "654321"))
-                .thenReturn(Optional.of(code));
+        stubActiveCode(user, code);
         when(passwordEncoder.encode("brand-new-password")).thenReturn("new-hash");
 
         passwordResetService.resetPassword(new ResetPasswordRequest(user.getEmail(), "654321", "brand-new-password"));
@@ -140,15 +182,16 @@ class PasswordResetServiceTest {
     }
 
     @Test
-    void resetPasswordWithUnknownCodeThrowsAndChangesNothing() {
+    void resetPasswordWithWrongCodeThrowsAndChangesNothing() {
         var user = registeredUser();
+        var code = activeCode(user, "654321");
         when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
-        when(tokenRepository.findFirstByUserAndTokenOrderByCreatedAtDesc(user, "999999"))
-                .thenReturn(Optional.empty());
+        stubActiveCode(user, code);
 
         assertThrows(InvalidAuthTokenException.class, () ->
                 passwordResetService.resetPassword(new ResetPasswordRequest(user.getEmail(), "999999", "brand-new-password")));
 
+        assertEquals(1, code.getAttempts());
         verify(userRepository, never()).save(any());
         verify(passwordEncoder, never()).encode(anyString());
     }
@@ -165,15 +208,11 @@ class PasswordResetServiceTest {
     }
 
     @Test
-    void resetPasswordWithAlreadyConsumedCodeThrows() {
+    void resetPasswordWithNoActiveCodeThrows() {
         var user = registeredUser();
-        var consumed = PasswordResetToken.builder()
-                .user(user).token("111111")
-                .expiresAt(LocalDateTime.now().plusMinutes(30))
-                .consumedAt(LocalDateTime.now().minusMinutes(1)).build();
         when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
-        when(tokenRepository.findFirstByUserAndTokenOrderByCreatedAtDesc(user, "111111"))
-                .thenReturn(Optional.of(consumed));
+        when(tokenRepository.findFirstByUserAndConsumedAtIsNullOrderByCreatedAtDesc(user))
+                .thenReturn(Optional.empty());
 
         assertThrows(InvalidAuthTokenException.class, () ->
                 passwordResetService.resetPassword(new ResetPasswordRequest(user.getEmail(), "111111", "brand-new-password")));
@@ -189,8 +228,7 @@ class PasswordResetServiceTest {
                 .user(user).token("222222")
                 .expiresAt(LocalDateTime.now().minusMinutes(1)).build();
         when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
-        when(tokenRepository.findFirstByUserAndTokenOrderByCreatedAtDesc(user, "222222"))
-                .thenReturn(Optional.of(expired));
+        stubActiveCode(user, expired);
 
         assertThrows(InvalidAuthTokenException.class, () ->
                 passwordResetService.resetPassword(new ResetPasswordRequest(user.getEmail(), "222222", "brand-new-password")));

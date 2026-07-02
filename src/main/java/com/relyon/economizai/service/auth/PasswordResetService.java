@@ -16,6 +16,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 
@@ -28,6 +30,9 @@ public class PasswordResetService {
     // 6-digit code: short enough to type on a phone, with a TTL + single-active-code
     // + single-use to bound brute-force (10^6 space, one live code, 60-min window).
     private static final int CODE_BOUND = 1_000_000;
+    // Wrong guesses allowed against one code before it locks — with 10^6 codes this
+    // caps the success probability per issued code at 0.0005%.
+    private static final int MAX_VERIFY_ATTEMPTS = 5;
 
     private final UserRepository userRepository;
     private final PasswordResetTokenRepository tokenRepository;
@@ -70,9 +75,10 @@ public class PasswordResetService {
     /**
      * Validate a code WITHOUT consuming it, so the app can gate the new-password
      * screen on a correct code before the user types anything. Throws on a bad /
-     * expired / consumed code; returns quietly on success.
+     * expired / consumed code; returns quietly on success. Not readOnly: failed
+     * guesses increment the attempt counter.
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public void verifyCode(VerifyResetCodeRequest request) {
         var user = userRepository.findByEmail(request.email()).orElseThrow(InvalidAuthTokenException::new);
         findValidCode(user, request.code());   // throws if invalid
@@ -90,10 +96,24 @@ public class PasswordResetService {
         log.info("password_reset.completed user={}", LogMasker.email(user.getEmail()));
     }
 
+    /**
+     * Loads the user's ACTIVE code and compares against the typed one, counting
+     * every wrong guess. After {@link #MAX_VERIFY_ATTEMPTS} failures the code is
+     * dead even if subsequently guessed right — the user must request a new one.
+     * Comparison is constant-time so response timing leaks nothing.
+     */
     private PasswordResetToken findValidCode(User user, String code) {
-        var token = tokenRepository.findFirstByUserAndTokenOrderByCreatedAtDesc(user, code)
+        var token = tokenRepository.findFirstByUserAndConsumedAtIsNullOrderByCreatedAtDesc(user)
                 .orElseThrow(InvalidAuthTokenException::new);
-        if (token.getConsumedAt() != null || token.getExpiresAt().isBefore(LocalDateTime.now())) {
+        if (token.getExpiresAt().isBefore(LocalDateTime.now()) || token.getAttempts() >= MAX_VERIFY_ATTEMPTS) {
+            throw new InvalidAuthTokenException();
+        }
+        if (!MessageDigest.isEqual(token.getToken().getBytes(StandardCharsets.UTF_8),
+                code == null ? new byte[0] : code.getBytes(StandardCharsets.UTF_8))) {
+            token.setAttempts(token.getAttempts() + 1);
+            tokenRepository.save(token);
+            log.warn("password_reset.wrong_code user={} attempts={}/{}",
+                    LogMasker.email(user.getEmail()), token.getAttempts(), MAX_VERIFY_ATTEMPTS);
             throw new InvalidAuthTokenException();
         }
         return token;

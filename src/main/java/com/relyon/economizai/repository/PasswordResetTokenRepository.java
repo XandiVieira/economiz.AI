@@ -19,6 +19,11 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
     // user. Newest first so a re-request supersedes an older still-valid code.
     Optional<PasswordResetToken> findFirstByUserAndTokenOrderByCreatedAtDesc(User user, String token);
 
+    // Brute-force guard: load the user's single ACTIVE code regardless of what code
+    // the caller typed, so failed attempts can be counted against it (a lookup by
+    // the typed code would never find the row to increment on a wrong guess).
+    Optional<PasswordResetToken> findFirstByUserAndConsumedAtIsNullOrderByCreatedAtDesc(User user);
+
     // Invalidate any still-open codes for a user before issuing a new one, so only the
     // most recent code works (standard OTP hygiene — a leaked older code is dead).
     @Modifying
