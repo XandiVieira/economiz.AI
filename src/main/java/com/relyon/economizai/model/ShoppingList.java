@@ -16,6 +16,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
+import org.hibernate.annotations.BatchSize;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -47,8 +48,11 @@ public class ShoppingList extends BaseEntity implements HouseholdScoped {
     @Column(nullable = false, length = 120)
     private String name;
 
+    // BatchSize: the list endpoint reads items per row — batching turns that
+    // page-sized N+1 into one IN query.
     @OneToMany(mappedBy = "shoppingList", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("position ASC")
+    @BatchSize(size = 50)
     @Builder.Default
     private List<ShoppingListItem> items = new ArrayList<>();
 

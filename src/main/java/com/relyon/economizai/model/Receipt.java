@@ -20,6 +20,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
+import org.hibernate.annotations.BatchSize;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -100,8 +101,11 @@ public class Receipt extends BaseEntity implements HouseholdScoped {
     @Column(name = "parse_error_reason", columnDefinition = "TEXT")
     private String parseErrorReason;
 
+    // BatchSize: list endpoints (GET /receipts, dashboard) read items per row —
+    // batching turns that page-sized N+1 into one IN query.
     @OneToMany(mappedBy = "receipt", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("lineNumber ASC")
+    @BatchSize(size = 50)
     @Builder.Default
     private List<ReceiptItem> items = new ArrayList<>();
 
