@@ -190,6 +190,22 @@ regenerates and shares the new one.
 When the last member leaves a household, the household row is deleted
 automatically.
 
+### Data-share consents (household split)
+
+When a member leaves and wants to take a **copy of another member's data** with
+them, the other member must consent first. The grantor sees pending requests
+and approves or denies:
+
+```
+GET  /api/v1/households/consents/pending              → List<ConsentResponse> where I am the grantor
+POST /api/v1/households/consents/{consentId}/approve  → 200 ConsentResponse (requester gets the copy)
+POST /api/v1/households/consents/{consentId}/deny     → 200 ConsentResponse (no data is copied)
+```
+
+`ConsentResponse`: `{ id, requesterId, requesterName, grantorId, grantorName,
+scope, status, expiresAt }`. Approve/deny return 400 when the request isn't
+mine, was already resolved, or expired.
+
 ---
 
 ## 3. Receipts (the core flow)
@@ -559,7 +575,14 @@ POST  /api/v1/products                               → create canonical produc
 PATCH /api/v1/products/{id}                          → set category/brand/etc
 POST  /api/v1/products/{id}/aliases                  { "rawDescription": "<raw NFC-e text>" }
 GET   /api/v1/products/unmatched                     → review queue: receipt items the system couldn't match
+POST  /api/v1/products/{id}/view                     → 204; records "user opened this product's detail screen"
+GET   /api/v1/products/recently-viewed?limit=10      → List<ProductResponse>, newest first
 ```
+
+**Recently viewed:** fire `POST /products/{id}/view` whenever the detail screen
+opens; `GET /products/recently-viewed` powers a "vistos recentemente" shelf
+(per user, not household). `GET /products?lastProducts=N` returns the same list
+wrapped in the paged search shape, if that's more convenient.
 
 `GET /products` stays the **global** catalog (for autocomplete when creating alerts/rules etc.). For "the products I buy", use the two household-scoped endpoints:
 
@@ -930,6 +953,7 @@ GET    /api/v1/admin/receipts?from=&to=&marketCnpj=&category=&q=&householdId=&pa
 GET    /api/v1/admin/receipts/{id}            → ReceiptResponse
 POST   /api/v1/admin/receipts/{id}/reparse    → 200 ReceiptResponse
 POST   /api/v1/admin/notifications/test       → 202 Accepted
+GET    /api/v1/admin/products?page=&size=      → Page<ProductResponse> (full canonical catalog)
 GET    /api/v1/admin/products/missing-brand    → Page<MissingBrandProductResponse>
 PATCH  /api/v1/admin/products/{id}/brand       → 200 ProductResponse
 GET    /api/v1/admin/products/duplicates       → List<DuplicateProductGroupResponse>
@@ -1135,6 +1159,22 @@ payment provider (Stripe / Mercado Pago) maps its webhook event onto:
 `X-Webhook-Secret` header against `economizai.billing.webhook-secret`
 (empty in dev → check skipped; set + wrong/missing → **401**). FE doesn't call
 this — it's server-to-server from the provider.
+
+**RevenueCat webhook (mobile IAP — Apple StoreKit + Google Play):**
+`POST /api/v1/webhooks/revenuecat` — public route, server-to-server from
+RevenueCat. Authenticated by a fixed `Authorization` header configured in the
+RevenueCat dashboard, checked against
+`economizai.billing.revenuecat.auth-header` (**fail-closed**: config unset →
+every call 401). Body is the standard RevenueCat event envelope; we read only:
+```json
+{ "event": { "type": "INITIAL_PURCHASE", "app_user_id": "<our user UUID or email>",
+  "expiration_at_ms": 1798761600000, "product_id": "economizai_pro_monthly", "id": "evt_..." } }
+```
+Purchase/renewal-type events grant PRO until `expiration_at_ms`;
+`EXPIRATION`/`SUBSCRIPTION_PAUSED` drop to FREE. A bare `CANCELLATION`
+(auto-renew off) is a no-op — access lasts until the period ends. Always 200
+for accepted calls (unknown users are a logged no-op) so RevenueCat doesn't
+retry. FE never calls this.
 
 ---
 

@@ -14,6 +14,17 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-07-02 (later) — Unsupported-state submit now fails FAST with 400
+
+`POST /receipts` for a chave from a state we don't support (everything except
+RS, PR, MS today) now returns an immediate **400 `receipt.state.unsupported`**
+(localized message) instead of accepting the receipt and failing it
+asynchronously. If you were handling that case by polling until FAILED_PARSE,
+handle the 400 at submit instead. Also: stuck-in-PROCESSING receipts are now
+auto-failed after 10 min by a server sweeper, so polling always terminates.
+
+---
+
 ## 2026-07-02 — SEFAZ-MS receipts now work end-to-end + `parseErrorReason` field
 
 ### MS (Mato Grosso do Sul) NFC-e scanning is live

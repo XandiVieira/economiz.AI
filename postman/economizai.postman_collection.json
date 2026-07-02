@@ -78,6 +78,10 @@
       "description": "economizai.billing.webhook-secret value; empty in dev (check skipped)."
     },
     {
+      "key": "revenuecatWebhookAuth",
+      "value": ""
+    },
+    {
       "key": "adminEmail",
       "value": "",
       "type": "string"
@@ -1281,6 +1285,89 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "List consent requests awaiting my decision",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/households/consents/pending",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "households",
+                "consents",
+                "pending"
+              ]
+            },
+            "description": "Data-share requests where I am the grantor — another member wants to take a copy of my data on household split. Returns List<ConsentResponse>."
+          },
+          "response": []
+        },
+        {
+          "name": "Approve a data-share consent",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/households/consents/{{consentId}}/approve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "households",
+                "consents",
+                "{{consentId}}",
+                "approve"
+              ]
+            },
+            "description": "Lets the requester take a copy of my data into their household. 200 ConsentResponse; 400 = not mine / already resolved / expired."
+          },
+          "response": []
+        },
+        {
+          "name": "Deny a data-share consent",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/households/consents/{{consentId}}/deny",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "households",
+                "consents",
+                "{{consentId}}",
+                "deny"
+              ]
+            },
+            "description": "Refuses the request; no data is copied. 200 ConsentResponse; 400 = not mine / already resolved."
+          },
+          "response": []
         }
       ]
     },
@@ -1751,6 +1838,91 @@
                 }
               ]
             }
+          },
+          "response": []
+        },
+        {
+          "name": "Get product by id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/{{e2eProductId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "{{e2eProductId}}"
+              ]
+            },
+            "description": "Single canonical product. 200 ProductResponse."
+          },
+          "response": []
+        },
+        {
+          "name": "Recently viewed products",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/recently-viewed?limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "recently-viewed"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Products whose detail screen the user opened, newest first. 200 List<ProductResponse>."
+          },
+          "response": []
+        },
+        {
+          "name": "Record product view (detail screen opened)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/{{e2eProductId}}/view",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "{{e2eProductId}}",
+                "view"
+              ]
+            },
+            "description": "Records that the user opened this product’s detail screen (feeds recently-viewed). 204 No Content."
           },
           "response": []
         },
@@ -5012,9 +5184,67 @@
                   "}",
                   "pm.test('Returns 201', function () { pm.response.to.have.status(201); });",
                   "var d = pm.response.json();",
+                  "pm.test('Status is PROCESSING', function () { pm.expect(d.status).to.eql('PROCESSING'); });",
+                  "pm.collectionVariables.set('e2eReceiptId', d.id);",
+                  "pm.collectionVariables.set('e2ePollAttempts', '0');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "9b. Poll receipt until parsed",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/receipts/{{e2eReceiptId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "receipts",
+                "{{e2eReceiptId}}"
+              ]
+            },
+            "description": "Parsing is async: submit returns 201 PROCESSING with empty items. Re-runs itself every ~2.5s (max 36 tries = 90s) until the receipt leaves PROCESSING, then asserts PENDING_CONFIRMATION with items."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('e2eReceiptId')) { pm.test.skip('No receipt id — skipping'); return; }",
+                  "pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
+                  "var d = pm.response.json();",
+                  "if (d.status === 'PROCESSING') {",
+                  "    var attempts = parseInt(pm.collectionVariables.get('e2ePollAttempts') || '0', 10);",
+                  "    if (attempts >= 36) {",
+                  "        pm.collectionVariables.unset('e2ePollAttempts');",
+                  "        pm.test('Receipt parsed within 90s', function () { pm.expect.fail('Still PROCESSING after ' + attempts + ' polls'); });",
+                  "        return;",
+                  "    }",
+                  "    pm.collectionVariables.set('e2ePollAttempts', String(attempts + 1));",
+                  "    setTimeout(function () {}, 2500);",
+                  "    postman.setNextRequest('9b. Poll receipt until parsed');",
+                  "    return;",
+                  "}",
+                  "pm.collectionVariables.unset('e2ePollAttempts');",
+                  "if (d.status === 'FAILED_PARSE') {",
+                  "    pm.test('Receipt parsed', function () { pm.expect.fail('FAILED_PARSE: ' + d.parseErrorReason); });",
+                  "    return;",
+                  "}",
                   "pm.test('Status is PENDING_CONFIRMATION', function () { pm.expect(d.status).to.eql('PENDING_CONFIRMATION'); });",
                   "pm.test('Has at least one item', function () { pm.expect(d.items.length).to.be.at.least(1); });",
-                  "pm.collectionVariables.set('e2eReceiptId', d.id);",
                   "pm.collectionVariables.set('e2eReceiptItemId', d.items[0].id);"
                 ]
               }
@@ -7880,6 +8110,40 @@
             "description": "Provider-agnostic billing webhook. Cancels the subscription and drops the user to FREE. See ACTIVATE for secret handling."
           },
           "response": []
+        },
+        {
+          "name": "RevenueCat webhook (Apple/Google IAP)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{revenuecatWebhookAuth}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": {\n    \"type\": \"INITIAL_PURCHASE\",\n    \"id\": \"evt_00000000-0000-0000-0000-000000000000\",\n    \"app_user_id\": \"{{e2eUserId}}\",\n    \"product_id\": \"economizai_pro_monthly\",\n    \"expiration_at_ms\": 1798761600000\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/webhooks/revenuecat",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "webhooks",
+                "revenuecat"
+              ]
+            },
+            "description": "RevenueCat billing webhook (Apple StoreKit + Google Play unified). Public route; authenticated by the fixed Authorization header configured in the RevenueCat dashboard, checked against economizai.billing.revenuecat.auth-header (fail-closed: unset config = every call 401). app_user_id is our user UUID (or email). Always 200 for accepted calls."
+          },
+          "response": []
         }
       ],
       "description": "Server-to-server billing webhook seam. Not called by the FE — a payment provider posts here on subscription lifecycle events."
@@ -8190,6 +8454,42 @@
               ]
             },
             "description": "Validation report for the DISMISSED/MUTED relevance filter (SHADOW -> ON decision). engagement = volume + tapThroughRate/dismissalRate; suppression.regretEngagements = taps/adds/conversions the filter would have prevented (near-zero = safe to turn ON). regretSavings = R$ of conversions it would have blocked."
+          },
+          "response": []
+        },
+        {
+          "name": "List products (admin, paginated)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/products?page=0&size=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": "Full canonical catalog, paginated. Page<ProductResponse>. ADMIN-only."
           },
           "response": []
         },
