@@ -26,6 +26,7 @@ import com.relyon.economizai.service.geo.MarketNameService;
 import com.relyon.economizai.service.notifications.SavingsAttributionService;
 import com.relyon.economizai.service.priceindex.PriceIndexService;
 import com.relyon.economizai.service.priceindex.PromoDetector;
+import com.relyon.economizai.service.sefaz.ChaveAcessoParser;
 import com.relyon.economizai.service.sefaz.ParsedReceipt;
 import com.relyon.economizai.service.sefaz.ParsedReceiptItem;
 import com.relyon.economizai.service.sefaz.ReceiptIngestionService;
@@ -90,6 +91,8 @@ class ReceiptServiceTest {
                 .thenAnswer(invocation -> invocation.getArgument(2));
         // Default: PRO (unlimited) so the monthly cap is bypassed in existing tests.
         lenient().when(subscriptionGate.monthlyReceiptLimit(any())).thenReturn(Integer.MAX_VALUE);
+        lenient().when(sefazIngestionService.resolveChave(any()))
+                .thenAnswer(invocation -> ChaveAcessoParser.extractChave(invocation.getArgument(0)));
     }
 
     @Test

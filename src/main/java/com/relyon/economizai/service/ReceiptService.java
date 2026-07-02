@@ -95,7 +95,7 @@ public class ReceiptService {
     @Transactional
     public ReceiptResponse submit(User user, SubmitReceiptRequest request) {
         var qrPayload = request.qrPayload();
-        var chave = ChaveAcessoParser.extractChave(qrPayload);
+        var chave = sefazIngestionService.resolveChave(qrPayload);
         log.info("submit chave={}", LogMasker.chave(chave));
 
         // Fail unsupported UFs up front with a localized 400 — the async path

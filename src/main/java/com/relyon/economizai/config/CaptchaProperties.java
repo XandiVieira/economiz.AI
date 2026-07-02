@@ -5,17 +5,17 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * Captcha-solver config. Default {@code provider=none} → no solver active →
- * captcha-gated states (MS) fail fast with a clear "not enabled" error. Pick a
+ * captcha-gated states (MS/SC) fail fast with a clear "not enabled" error. Pick a
  * provider by setting {@code economizai.captcha.provider} + {@code api-key};
- * {@code twocaptcha} is implemented and also covers the 2Captcha-compatible
- * endpoints of Anti-Captcha-clone services via {@code base-url}. See DEV_NOTES
+ * {@code capsolver} supports reCAPTCHA v2 and Turnstile; {@code twocaptcha}
+ * supports the MS reCAPTCHA-v2 flow. See DEV_NOTES
  * "Captcha solver".
  */
 @Configuration
 @ConfigurationProperties(prefix = "economizai.captcha")
 public class CaptchaProperties {
 
-    /** none | twocaptcha (add more by implementing CaptchaSolver with its own @ConditionalOnProperty). */
+    /** none | twocaptcha | capsolver (add more by implementing CaptchaSolver with its own @ConditionalOnProperty). */
     private String provider = "none";
     private String apiKey = "";
     /** Optional endpoint override for 2Captcha-compatible providers (CapMonster, etc). */

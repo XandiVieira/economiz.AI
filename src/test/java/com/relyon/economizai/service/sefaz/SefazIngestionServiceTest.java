@@ -36,6 +36,8 @@ class SefazIngestionServiceTest {
 
     // UF code 43 → RS.
     private static final String CHAVE_RS = "43260412345678000190650010000123451123456780";
+    // UF code 42 → SC.
+    private static final String CHAVE_SC = "42260650552333000100650080001188891101255904";
     // UF code 35 → SP.
     private static final String CHAVE_SP = "35260412345678000190650010000123451123456780";
 
@@ -145,6 +147,22 @@ class SefazIngestionServiceTest {
         var fetched = service.fetch(CHAVE_RS);
 
         assertNull(fetched.sourceUrl());
+    }
+
+    @Test
+    void fetch_usesAdapterPreflightWhenSecurityUrlDoesNotExposeChave() {
+        var scAdapter = mockAdapterFor(UnidadeFederativa.SC);
+        var securityUrl = "https://sat.sef.sc.gov.br/tax.NET/SecurityVerify.aspx?rq=abc";
+        when(scAdapter.preflightChave(securityUrl)).thenReturn(Optional.of(CHAVE_SC));
+        when(scAdapter.fetchHtml(securityUrl)).thenReturn("<html>sc</html>");
+        var service = new SefazIngestionService(List.of(scAdapter), Optional.empty());
+
+        var fetched = service.fetch(securityUrl);
+
+        assertSame(scAdapter, fetched.adapter());
+        assertEquals(CHAVE_SC, fetched.chave());
+        assertEquals(UnidadeFederativa.SC, fetched.uf());
+        assertEquals(securityUrl, fetched.sourceUrl());
     }
 
     @Test

@@ -99,24 +99,25 @@ economizai:
         # (AC, AL, AP, CE, ES, MA, PA, PB, PI, RJ, RN, RO, RR, SE, TO)
         # are worth testing one at a time: submit a real chave, verify the
         # parser extracts items correctly, then add the UF code here (and
-        # the portal host to allowed-url-hosts if it's a new domain). SC was
-        # tested on 2026-07-02 and redirects through sat.sef.sc.gov.br/tax.NET/
-        # SecurityVerify.aspx before a different details page, so it needs a
-        # dedicated adapter or interactive/browser-assisted flow.
+        # the portal host to allowed-url-hosts if it's a new domain). SC is
+        # handled by SantaCatarinaNfcePortalAdapter because it redirects through
+        # sat.sef.sc.gov.br/tax.NET/SecurityVerify.aspx and renders a different
+        # details page after Cloudflare Turnstile.
         # States whose portal renders a DIFFERENT layout (SP, MG, BA, PE, …)
         # need a dedicated adapter.
         states: ${SEFAZ_SVRS_STATES:RS,PR}
       captcha:
         # UFs whose consult portal gates the DANFE behind a captcha and is
         # handled by a dedicated adapter (currently MS — www.dfe.ms.gov.br with
-        # reCAPTCHA v2). Solving needs a provider configured under
+        # reCAPTCHA v2; SC uses Cloudflare Turnstile in its own adapter).
+        # Solving needs a provider configured under
         # economizai.captcha below; until then these states fail fast with a
         # clear 503 "coming soon". Each captcha state has its own portal, so
         # adding one usually means a dedicated adapter, not just this list.
         states: ${SEFAZ_CAPTCHA_STATES:MS}
   # Captcha solver — OFF by default (provider=none → captcha states 503).
-  # Pick a provider + key when ready; twocaptcha is implemented and its API is
-  # shared by compatible services (set base-url). See DEV_NOTES "Captcha solver".
+  # CapSolver supports both MS reCAPTCHA v2 and SC Turnstile. 2Captcha remains
+  # available for MS reCAPTCHA-v2 only.
   captcha:
     provider: ${CAPTCHA_PROVIDER:none}          # none | capsolver
     api-key: ${CAPTCHA_API_KEY:}

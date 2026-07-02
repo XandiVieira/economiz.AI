@@ -13,8 +13,8 @@ import java.util.Map;
 
 /**
  * {@link CaptchaSolver} backed by CapSolver (https://capsolver.com).
- * Submits a {@code ReCaptchaV2TaskProxyless} task, polls until ready, and
- * returns the {@code g-recaptcha-response} token.
+ * Submits a CapSolver task, polls until ready, and returns the captcha token
+ * required by the SEFAZ form.
  *
  * <p>Charged only on success — failed/timeout tasks cost nothing. We retry
  * up to {@value #MAX_RETRIES} times before giving up and throwing
@@ -54,12 +54,21 @@ public class CapSolverCaptchaSolver implements CaptchaSolver {
 
     @Override
     public String solveRecaptchaV2(String siteKey, String pageUrl) {
+        return solve("ReCaptchaV2TaskProxyless", "gRecaptchaResponse", siteKey, pageUrl);
+    }
+
+    @Override
+    public String solveCloudflareTurnstile(String siteKey, String pageUrl) {
+        return solve("AntiTurnstileTaskProxyLess", "token", siteKey, pageUrl);
+    }
+
+    private String solve(String taskType, String solutionField, String siteKey, String pageUrl) {
         for (var attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
-                var taskId = createTask(siteKey, pageUrl);
-                log.info("captcha.task.created attempt={}/{} taskId={}", attempt, MAX_RETRIES, taskId);
-                var token = pollForToken(taskId);
-                log.info("captcha.task.solved attempt={}/{}", attempt, MAX_RETRIES);
+                var taskId = createTask(taskType, siteKey, pageUrl);
+                log.info("captcha.task.created type={} attempt={}/{} taskId={}", taskType, attempt, MAX_RETRIES, taskId);
+                var token = pollForToken(taskId, solutionField);
+                log.info("captcha.task.solved type={} attempt={}/{}", taskType, attempt, MAX_RETRIES);
                 return token;
             } catch (CaptchaSolveFailedException ex) {
                 if (attempt >= MAX_RETRIES) throw ex;
@@ -69,11 +78,11 @@ public class CapSolverCaptchaSolver implements CaptchaSolver {
         throw new CaptchaSolveFailedException("all-retries-exhausted");
     }
 
-    private String createTask(String siteKey, String pageUrl) {
+    private String createTask(String taskType, String siteKey, String pageUrl) {
         var body = Map.of(
                 "clientKey", apiKey,
                 "task", Map.of(
-                        "type", "ReCaptchaV2TaskProxyless",
+                        "type", taskType,
                         "websiteURL", pageUrl,
                         "websiteKey", siteKey
                 )
@@ -83,7 +92,7 @@ public class CapSolverCaptchaSolver implements CaptchaSolver {
         return (String) response.get("taskId");
     }
 
-    private String pollForToken(String taskId) {
+    private String pollForToken(String taskId, String solutionField) {
         var body = Map.of("clientKey", apiKey, "taskId", taskId);
         for (var poll = 1; poll <= MAX_POLL_ATTEMPTS; poll++) {
             sleep(POLL_INTERVAL_MS);
@@ -93,7 +102,11 @@ public class CapSolverCaptchaSolver implements CaptchaSolver {
             if ("ready".equals(status)) {
                 @SuppressWarnings("unchecked")
                 var solution = (Map<String, Object>) response.get("solution");
-                return (String) solution.get("gRecaptchaResponse");
+                var token = (String) solution.get(solutionField);
+                if (token == null || token.isBlank()) {
+                    throw new CaptchaSolveFailedException("solution-token-missing");
+                }
+                return token;
             }
             if (!"processing".equals(status)) {
                 throw new CaptchaSolveFailedException("unexpected-status=" + status);
@@ -102,7 +115,7 @@ public class CapSolverCaptchaSolver implements CaptchaSolver {
         throw new CaptchaSolveFailedException("poll-timeout");
     }
 
-    private Map<String, Object> post(String path, Object body) {
+    protected Map<String, Object> post(String path, Object body) {
         return restClient.post()
                 .uri(path)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -119,7 +132,7 @@ public class CapSolverCaptchaSolver implements CaptchaSolver {
         }
     }
 
-    private void sleep(int ms) {
+    protected void sleep(int ms) {
         try {
             Thread.sleep(ms);
         } catch (InterruptedException ie) {

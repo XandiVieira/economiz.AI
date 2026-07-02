@@ -2,6 +2,7 @@ package com.relyon.economizai.service.sefaz;
 
 import com.relyon.economizai.model.enums.UnidadeFederativa;
 
+import java.util.Optional;
 import java.util.Set;
 
 public interface SefazAdapter {
@@ -13,6 +14,16 @@ public interface SefazAdapter {
      * a single SVRS adapter can claim all of them.
      */
     Set<UnidadeFederativa> supportedStates();
+
+    /**
+     * Some portals wrap the original QR payload in a security URL before the
+     * 44-digit chave is visible. Adapters can do a cheap portal-specific fetch
+     * to recover it so submit can still persist a PROCESSING receipt with chave
+     * and UF populated.
+     */
+    default Optional<String> preflightChave(String qrPayload) {
+        return Optional.empty();
+    }
 
     String fetchHtml(String qrPayload);
 

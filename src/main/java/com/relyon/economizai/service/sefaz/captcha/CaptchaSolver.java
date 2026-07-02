@@ -1,9 +1,11 @@
 package com.relyon.economizai.service.sefaz.captcha;
 
+import com.relyon.economizai.exception.CaptchaUnavailableException;
+
 /**
  * Provider-agnostic captcha-solving seam. Implementations call a solver service
  * (2Captcha, Anti-Captcha, CapMonster, …) which returns the token a page's
- * reCAPTCHA expects. Exactly one implementation is active, chosen by
+ * captcha widget expects. Exactly one implementation is active, chosen by
  * {@code economizai.captcha.provider} (default {@code none} → {@link NoopCaptchaSolver}).
  *
  * <p>To onboard a new provider whose HTTP API differs from 2Captcha's: add a
@@ -24,4 +26,12 @@ public interface CaptchaSolver {
      * @throws com.relyon.economizai.exception.CaptchaSolveFailedException solver ran but failed
      */
     String solveRecaptchaV2(String siteKey, String pageUrl);
+
+    /**
+     * Solves a Cloudflare Turnstile challenge and returns the
+     * {@code cf-turnstile-response} token to submit back to the page.
+     */
+    default String solveCloudflareTurnstile(String siteKey, String pageUrl) {
+        throw new CaptchaUnavailableException("captcha");
+    }
 }

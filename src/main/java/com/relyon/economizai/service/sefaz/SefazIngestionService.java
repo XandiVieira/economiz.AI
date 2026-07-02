@@ -2,6 +2,7 @@ package com.relyon.economizai.service.sefaz;
 
 import com.relyon.economizai.exception.CaptchaSolveFailedException;
 import com.relyon.economizai.exception.CaptchaUnavailableException;
+import com.relyon.economizai.exception.InvalidQrPayloadException;
 import com.relyon.economizai.exception.SefazFetchException;
 import com.relyon.economizai.exception.UnsupportedStateException;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
@@ -55,6 +56,25 @@ public class SefazIngestionService {
     }
 
     /**
+     * Resolve a QR payload to the 44-digit chave. Most payloads contain it
+     * directly; captcha/security wrappers such as SC's SecurityVerify URL need
+     * a portal-specific preflight fetch before submit can route by UF.
+     */
+    public String resolveChave(String qrPayload) {
+        try {
+            return ChaveAcessoParser.extractChave(qrPayload);
+        } catch (InvalidQrPayloadException | CaptchaUnavailableException ex) {
+            for (var adapter : adapters.values().stream().distinct().toList()) {
+                var resolved = adapter.preflightChave(qrPayload);
+                if (resolved.isPresent()) {
+                    return resolved.get();
+                }
+            }
+            throw ex;
+        }
+    }
+
+    /**
      * Step 1: pick the right state adapter, fetch + sanitize the HTML.
      * Split from {@link #parse} so callers (ReceiptService) can persist
      * the raw HTML even when parsing fails downstream — needed by PRO-43.
@@ -65,7 +85,7 @@ public class SefazIngestionService {
      * {@link ParsedReceipt} so {@link #parse} returns it directly.
      */
     public FetchedDocument fetch(String qrPayload) {
-        var chave = ChaveAcessoParser.extractChave(qrPayload);
+        var chave = resolveChave(qrPayload);
         var uf = ChaveAcessoParser.extractUf(chave);
         var adapter = adapters.get(uf);
         if (adapter == null) {

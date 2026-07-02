@@ -7,6 +7,7 @@ import com.relyon.economizai.service.sefaz.ParsedReceipt;
 import com.relyon.economizai.service.sefaz.ParsedReceiptItem;
 import com.relyon.economizai.service.sefaz.ReceiptIngestionService;
 import com.relyon.economizai.service.sefaz.SefazIngestionService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -62,6 +63,11 @@ class ReceiptToPriceIndexIntegrationTest {
     @Autowired private ReceiptIngestionService receiptIngestionService;
 
     @MockitoBean private SefazIngestionService sefazIngestionService;
+
+    @BeforeEach
+    void stubChaveResolution() {
+        when(sefazIngestionService.resolveChave(any())).thenReturn(CHAVE);
+    }
 
     /**
      * Submit returns immediately as PROCESSING; the SEFAZ fetch+parse runs
