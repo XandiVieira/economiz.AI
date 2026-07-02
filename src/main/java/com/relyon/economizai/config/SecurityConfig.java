@@ -99,7 +99,12 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST,
                                 "/api/v1/categorizer/retrain",
                                 "/api/v1/categorizer/auto-promote",
-                                "/api/v1/categorizer/promote-consensus").hasRole("ADMIN")
+                                "/api/v1/categorizer/promote-consensus",
+                                "/api/v1/categorizer/ean-catalog/import",
+                                "/api/v1/categorizer/dictionary/import").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE,
+                                "/api/v1/categorizer/learned",
+                                "/api/v1/categorizer/consensus").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex
