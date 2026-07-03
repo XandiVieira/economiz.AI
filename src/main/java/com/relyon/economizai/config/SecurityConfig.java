@@ -104,6 +104,7 @@ public class SecurityConfig {
                                 "/api/v1/categorizer/dictionary/import",
                                 "/api/v1/categorizer/dictionary/curated/import",
                                 "/api/v1/categorizer/brands/import",
+                                "/api/v1/categorizer/brands/derive-from-catalog",
                                 "/api/v1/categorizer/benchmark/import").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE,
                                 "/api/v1/categorizer/learned",

@@ -3166,6 +3166,42 @@
             },
             "description": "[ADMIN] Upserts a batch of token → (genericName, category) entries directly into the learned dictionary (sampleCount defaults to 999 if omitted). Immediately swaps the in-memory dictionary. Use to seed large volumes of known mappings without re-parsing receipts. Returns { imported, skipped }."
           }
+        },
+        {
+          "name": "Derive brands from EAN catalog (ADMIN)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categorizer/brands/derive-from-catalog?minProducts=2",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "categorizer",
+                "brands",
+                "derive-from-catalog"
+              ],
+              "query": [
+                {
+                  "key": "minProducts",
+                  "value": "2"
+                }
+              ]
+            },
+            "description": "[ADMIN] Upserts a batch of token → (genericName, category) entries directly into the learned dictionary (sampleCount defaults to 999 if omitted). Immediately swaps the in-memory dictionary. Use to seed large volumes of known mappings without re-parsing receipts. Returns { imported, skipped }."
+          }
         }
       ]
     },

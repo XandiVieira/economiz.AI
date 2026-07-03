@@ -1063,6 +1063,7 @@ DELETE /api/v1/categorizer/consensus         → revert all CONSENSUS-graduated 
 POST   /api/v1/categorizer/dictionary/import  → bulk-upsert token mappings into learned dict       [ADMIN only]
 POST   /api/v1/categorizer/dictionary/curated/import → bulk-upsert CURATED entries (highest tier), hot-reloaded [ADMIN only]
 POST   /api/v1/categorizer/brands/import      → bulk-upsert brand-registry entries, hot-reloaded   [ADMIN only]
+POST   /api/v1/categorizer/brands/derive-from-catalog?minProducts=2 → grow registry from EAN-catalog brands (no external calls) [ADMIN only]
 POST   /api/v1/categorizer/benchmark/import   → bulk-upsert golden-set rows for the benchmark      [ADMIN only]
 POST   /api/v1/categorizer/ean-catalog/import → bulk-seed EAN→category catalog (Open Food Facts)  [ADMIN only]
 ```

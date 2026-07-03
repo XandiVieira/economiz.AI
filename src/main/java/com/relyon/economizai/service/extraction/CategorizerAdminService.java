@@ -9,8 +9,10 @@ import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.repository.BrandRegistryEntryRepository;
 import com.relyon.economizai.repository.CategorizationBenchmarkEntryRepository;
 import com.relyon.economizai.repository.CuratedDictionaryEntryRepository;
+import com.relyon.economizai.repository.EanCatalogRepository;
 import com.relyon.economizai.repository.LearnedDictionaryRepository;
 import com.relyon.economizai.repository.ProductRepository;
+import com.relyon.economizai.service.canonicalization.DescriptionNormalizer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -19,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -61,6 +64,7 @@ public class CategorizerAdminService {
     private final CuratedDictionaryEntryRepository curatedRepository;
     private final BrandRegistryEntryRepository brandRepository;
     private final CategorizationBenchmarkEntryRepository benchmarkRepository;
+    private final EanCatalogRepository eanCatalogRepository;
 
     @Transactional
     public ResetLearnedOutcome resetLearned() {
@@ -194,6 +198,53 @@ public class CategorizerAdminService {
         return new BulkImportOutcome(imported, skipped);
     }
 
+    /**
+     * Grows the brand registry from the brand strings already sitting in the
+     * EAN catalog (Open Food Facts imports) — zero external calls. Crowd-sourced
+     * data is messy, so raw variants ("Nestlé"/"NESTLE") are grouped by their
+     * normalized key, the most frequent variant wins as display name, and keys
+     * below {@code minProducts} catalog occurrences are dropped as noise.
+     * Fill-only: never overwrites an existing registry entry (curation wins).
+     */
+    @Transactional
+    public BrandDerivationOutcome deriveBrandsFromEanCatalog(int minProducts) {
+        var threshold = Math.max(1, minProducts);
+        var variantsByKey = new LinkedHashMap<String, List<EanCatalogRepository.BrandOccurrence>>();
+        for (var occurrence : eanCatalogRepository.countByBrand()) {
+            var key = DescriptionNormalizer.normalize(occurrence.getBrand());
+            if (key.length() < 2 || key.chars().allMatch(Character::isDigit)) continue;
+            variantsByKey.computeIfAbsent(key, ignored -> new ArrayList<>()).add(occurrence);
+        }
+        var created = 0;
+        var skippedExisting = 0;
+        var belowThreshold = 0;
+        for (var entry : variantsByKey.entrySet()) {
+            var totalOccurrences = entry.getValue().stream()
+                    .mapToLong(EanCatalogRepository.BrandOccurrence::getOccurrences).sum();
+            if (totalOccurrences < threshold) {
+                belowThreshold++;
+                continue;
+            }
+            if (brandRepository.findByNormalizedKey(entry.getKey()).isPresent()) {
+                skippedExisting++;
+                continue;
+            }
+            var displayName = entry.getValue().stream()
+                    .max(Comparator.comparingLong(EanCatalogRepository.BrandOccurrence::getOccurrences))
+                    .map(EanCatalogRepository.BrandOccurrence::getBrand)
+                    .orElseThrow();
+            brandRepository.save(BrandRegistryEntry.builder()
+                    .normalizedKey(entry.getKey())
+                    .displayName(displayName.trim())
+                    .build());
+            created++;
+        }
+        if (created > 0) brandExtractor.reload();
+        log.info("categorizer.brand_derivation created={} skippedExisting={} belowThreshold={} minProducts={}",
+                created, skippedExisting, belowThreshold, threshold);
+        return new BrandDerivationOutcome(created, skippedExisting, belowThreshold);
+    }
+
     /** Upserts golden-set rows so the benchmark can grow without a deploy. */
     @Transactional
     public BulkImportOutcome importBenchmarkEntries(List<BenchmarkImportRequest> entries) {
@@ -225,6 +276,8 @@ public class CategorizerAdminService {
     public record CuratedImportRequest(String keyword, String genericName, ProductCategory category) {}
 
     public record BrandImportRequest(String key, String displayName) {}
+
+    public record BrandDerivationOutcome(int created, int skippedExisting, int belowThreshold) {}
 
     public record BenchmarkImportRequest(String description, ProductCategory expectedCategory,
                                          String expectedBrand, BigDecimal expectedPackSize,

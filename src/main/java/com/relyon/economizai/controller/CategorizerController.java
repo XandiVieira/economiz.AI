@@ -199,6 +199,19 @@ public class CategorizerController {
     }
 
     /**
+     * ADMIN. Grow the brand registry from brand strings already in the EAN
+     * catalog (Open Food Facts) — zero external calls. Variants are grouped by
+     * normalized key (most frequent wins as display name); keys with fewer than
+     * {@code minProducts} catalog occurrences are dropped as crowd-sourced
+     * noise. Fill-only: existing registry entries are never overwritten.
+     */
+    @PostMapping("/brands/derive-from-catalog")
+    public ResponseEntity<CategorizerAdminService.BrandDerivationOutcome> deriveBrandsFromCatalog(
+            @RequestParam(defaultValue = "2") int minProducts) {
+        return ResponseEntity.ok(categorizerAdminService.deriveBrandsFromEanCatalog(minProducts));
+    }
+
+    /**
      * ADMIN. Upsert golden-set rows for the benchmark. Body:
      * <pre>[{"description":"ARROZ TIO J 5KG","expectedCategory":"GROCERIES",
      *   "expectedBrand":"Tio João","expectedPackSize":5,"expectedPackUnit":"KG"}, ...]</pre>
