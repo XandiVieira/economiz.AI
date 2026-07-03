@@ -112,6 +112,58 @@ class EanCatalogServiceTest {
     }
 
     @Test
+    void bulkImportOpenFoodFacts_truncatesOversizedNameAndBrand() {
+        when(eanCatalogRepository.findByEanIn(anyCollection())).thenReturn(List.of());
+        when(eanCatalogRepository.count()).thenReturn(1L);
+        var longName = "X".repeat(250);
+        var longBrand = "Y".repeat(150);
+
+        service.bulkImportOpenFoodFacts(List.of(
+                new EanCatalogService.OpenFoodFactsRow("7891234567890", longName, longBrand, "en:beverages")));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<EanCatalogEntry>> captor = ArgumentCaptor.captor();
+        verify(eanCatalogRepository).saveAll(captor.capture());
+        var saved = captor.getValue().get(0);
+        assertEquals(100, saved.getGenericName().length(), "name truncated to column limit");
+        assertEquals(100, saved.getBrand().length(), "brand truncated to column limit");
+    }
+
+    @Test
+    void bulkImport_skipsEanLongerThan14Digits() {
+        when(eanCatalogRepository.findByEanIn(anyCollection())).thenReturn(List.of());
+        when(eanCatalogRepository.count()).thenReturn(1L);
+
+        var outcome = service.bulkImport(List.of(
+                new EanCatalogService.EanImportRequest("123456789012345678", "Junk", null,
+                        ProductCategory.GROCERIES, EanCatalogSource.OPEN_FOOD_FACTS),
+                new EanCatalogService.EanImportRequest("7891234567890", "Valid", null,
+                        ProductCategory.GROCERIES, EanCatalogSource.OPEN_FOOD_FACTS)));
+
+        assertEquals(1, outcome.imported());
+        assertEquals(1, outcome.skipped());
+    }
+
+    @Test
+    void bulkImport_dedupesDuplicateEanWithinBatch() {
+        when(eanCatalogRepository.findByEanIn(anyCollection())).thenReturn(List.of());
+        when(eanCatalogRepository.count()).thenReturn(1L);
+
+        var outcome = service.bulkImport(List.of(
+                new EanCatalogService.EanImportRequest("7891234567890", "First", null,
+                        ProductCategory.GROCERIES, EanCatalogSource.OPEN_FOOD_FACTS),
+                new EanCatalogService.EanImportRequest("7891234567890", "Second", "Nestlé",
+                        ProductCategory.BEVERAGES, EanCatalogSource.OPEN_FOOD_FACTS)));
+
+        assertEquals(1, outcome.imported(), "same EAN collapses to one entry");
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<EanCatalogEntry>> captor = ArgumentCaptor.captor();
+        verify(eanCatalogRepository).saveAll(captor.capture());
+        assertEquals(1, captor.getValue().size());
+        assertEquals("Second", captor.getValue().get(0).getGenericName(), "last write wins");
+    }
+
+    @Test
     void bulkImport_skipsEntriesWithNullOrBlankEan() {
         when(eanCatalogRepository.findByEanIn(any())).thenReturn(List.of());
         when(eanCatalogRepository.count()).thenReturn(0L);

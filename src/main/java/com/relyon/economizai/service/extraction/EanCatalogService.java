@@ -62,22 +62,30 @@ public class EanCatalogService {
         var existingByEan = eanCatalogRepository.findByEanIn(eans).stream()
                 .collect(java.util.stream.Collectors.toMap(EanCatalogEntry::getEan, entry -> entry));
 
-        var toSave = new ArrayList<EanCatalogEntry>();
+        // Keyed by EAN so a duplicate code within the same batch (OFF repeats them)
+        // updates the same entry instead of inserting a second row → no unique violation.
+        var toSaveByEan = new java.util.LinkedHashMap<String, EanCatalogEntry>();
         var skipped = 0;
 
         for (var req : entries) {
+<<<<<<< Updated upstream
             if (!isImportableEan(req.ean())) {
+=======
+            // GTIN is at most 14 digits; longer "codes" in OFF are junk and would
+            // overflow the ean column. Skip rather than fail the batch.
+            if (req.ean() == null || req.ean().isBlank() || req.ean().length() > 14) {
+>>>>>>> Stashed changes
                 skipped++;
                 continue;
             }
-            var entry = existingByEan.getOrDefault(req.ean(),
-                    EanCatalogEntry.builder().ean(req.ean()).build());
+            var entry = toSaveByEan.computeIfAbsent(req.ean(), ean ->
+                    existingByEan.getOrDefault(ean, EanCatalogEntry.builder().ean(ean).build()));
             if (req.genericName() != null) entry.setGenericName(req.genericName());
             if (req.brand() != null) entry.setBrand(req.brand());
             if (req.category() != null) entry.setCategory(req.category());
             entry.setSource(req.source() != null ? req.source() : EanCatalogSource.CURATED_IMPORT);
-            toSave.add(entry);
         }
+        var toSave = new ArrayList<>(toSaveByEan.values());
 
         eanCatalogRepository.saveAll(toSave);
         log.info("ean_catalog.bulk_import imported={} skipped={} total={}",
@@ -106,16 +114,34 @@ public class EanCatalogService {
      * Intended for batch use — caller collects rows and calls
      * {@link #bulkImport} with the full list for performance.
      */
+    // Column limits (see EanCatalogEntry): free-form OFF text routinely exceeds
+    // them, so truncate here rather than let the whole batch fail on a constraint.
+    private static final int NAME_MAX = 100;
+    private static final int BRAND_MAX = 100;
+
     public static EanImportRequest parseOpenFoodFactsRow(String ean, String productName,
                                                           String brands, String categoryTags) {
         var category = OpenFoodFactsCategoryMapper.map(categoryTags);
         return new EanImportRequest(
                 ean,
-                productName != null && !productName.isBlank() ? productName.trim() : null,
-                brands != null && !brands.isBlank() ? brands.split(",")[0].trim() : null,
+                truncate(clean(productName), NAME_MAX),
+                truncate(firstBrand(brands), BRAND_MAX),
                 category == ProductCategory.OTHER ? null : category,  // null = unknown, not forced OTHER
                 EanCatalogSource.OPEN_FOOD_FACTS
         );
+    }
+
+    private static String clean(String value) {
+        return value != null && !value.isBlank() ? value.trim() : null;
+    }
+
+    private static String firstBrand(String brands) {
+        return brands != null && !brands.isBlank() ? brands.split(",")[0].trim() : null;
+    }
+
+    private static String truncate(String value, int max) {
+        if (value == null) return null;
+        return value.length() <= max ? value : value.substring(0, max);
     }
 
     /** Raw Open Food Facts row as returned by its search API. */
