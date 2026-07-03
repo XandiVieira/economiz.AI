@@ -85,6 +85,46 @@ class AdminProductServiceTest {
     }
 
     @Test
+    void brandCoverageReport_measuresWithoutPersisting() {
+        var missing = Product.builder().id(UUID.randomUUID()).normalizedName("AZ ARG D'AGUIRRE EV").build();
+        var hasBrand = Product.builder().id(UUID.randomUUID()).normalizedName("ARROZ TIO J").brand("Tio João").build();
+        var noMatch = Product.builder().id(UUID.randomUUID()).normalizedName("XYZ GENERICO").build();
+        when(productRepository.findAll()).thenReturn(List.of(missing, hasBrand, noMatch));
+        when(brandExtractor.find("AZ ARG D'AGUIRRE EV")).thenReturn("D'Aguirre");
+        when(brandExtractor.find("XYZ GENERICO")).thenReturn(null);
+
+        var report = service.brandCoverageReport();
+
+        assertEquals(3, report.totalProducts());
+        assertEquals(1, report.alreadyHaveBrand());
+        assertEquals(1, report.wouldFillNow());
+        assertEquals(1, report.stillNoBrand());
+        assertEquals(66.7, report.coveragePctAfter());
+        assertEquals(1, report.sampleWouldFill().size());
+        assertEquals("D'Aguirre", report.sampleWouldFill().get(0).brand());
+        // dry-run: nothing written
+        assertFalse(missing.getBrand() != null);
+    }
+
+    @Test
+    void unmatchedReport_computesRateAndTopOffenders() {
+        when(receiptItemRepository.countMatched()).thenReturn(80L);
+        when(receiptItemRepository.countUnmatched()).thenReturn(20L);
+        when(receiptItemRepository.topUnmatchedDescriptions(any()))
+                .thenReturn(List.of(
+                        new Object[]{"cebolinha mac", 7L},
+                        new Object[]{"tempero verde", 4L}));
+
+        var report = service.unmatchedReport(30);
+
+        assertEquals(80, report.matchedItems());
+        assertEquals(20, report.unmatchedItems());
+        assertEquals(20.0, report.unmatchedPct());
+        assertEquals("cebolinha mac", report.topUnmatched().get(0).description());
+        assertEquals(7, report.topUnmatched().get(0).occurrences());
+    }
+
+    @Test
     void listAll_pagesThroughCatalog() {
         var product = product("ARROZ", ProductCategory.GROCERIES, CategorizationSource.DICTIONARY);
         when(productRepository.findAll(PageRequest.of(0, 50)))

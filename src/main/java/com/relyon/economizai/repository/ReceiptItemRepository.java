@@ -36,6 +36,35 @@ public interface ReceiptItemRepository extends JpaRepository<ReceiptItem, UUID> 
 
     long countByProduct(Product product);
 
+    // ── Matching diagnostics (admin) ──
+    // How many confirmed, non-excluded items are linked to a product vs orphaned.
+    // UNMATCHED rate = unmatched / (matched + unmatched) — the core matching KPI.
+    @Query("""
+        SELECT COUNT(ri) FROM ReceiptItem ri
+        JOIN ri.receipt r
+        WHERE r.status = 'CONFIRMED' AND ri.excluded = false AND ri.product IS NOT NULL
+    """)
+    long countMatched();
+
+    @Query("""
+        SELECT COUNT(ri) FROM ReceiptItem ri
+        JOIN ri.receipt r
+        WHERE r.status = 'CONFIRMED' AND ri.excluded = false AND ri.product IS NULL
+    """)
+    long countUnmatched();
+
+    // The most frequent orphan descriptions (normalized), so curators know which
+    // dictionary/alias entries would recover the most items. Ordered by frequency.
+    @Query("""
+        SELECT LOWER(TRIM(ri.rawDescription)) AS description, COUNT(ri) AS occurrences
+        FROM ReceiptItem ri
+        JOIN ri.receipt r
+        WHERE r.status = 'CONFIRMED' AND ri.excluded = false AND ri.product IS NULL
+        GROUP BY LOWER(TRIM(ri.rawDescription))
+        ORDER BY COUNT(ri) DESC
+    """)
+    List<Object[]> topUnmatchedDescriptions(org.springframework.data.domain.Pageable pageable);
+
     List<ReceiptItem> findAllByProductIdOrderByReceiptIssuedAtAsc(UUID productId);
 
     /** Same intent as the method above but fetches receipt + household up front,

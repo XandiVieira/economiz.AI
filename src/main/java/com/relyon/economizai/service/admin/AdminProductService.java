@@ -5,6 +5,8 @@ import com.relyon.economizai.dto.request.SetProductBrandRequest;
 import com.relyon.economizai.dto.response.DuplicateProductGroupResponse;
 import com.relyon.economizai.dto.response.MissingBrandProductResponse;
 import com.relyon.economizai.dto.response.BrandBackfillResponse;
+import com.relyon.economizai.dto.response.BrandCoverageReportResponse;
+import com.relyon.economizai.dto.response.UnmatchedReportResponse;
 import com.relyon.economizai.dto.response.ProductDeletionResponse;
 import com.relyon.economizai.dto.response.ProductMergeResultResponse;
 import com.relyon.economizai.dto.response.ProductResponse;
@@ -29,6 +31,7 @@ import com.relyon.economizai.repository.ShoppingListItemRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -94,6 +97,64 @@ public class AdminProductService {
         log.info("admin.product.backfill_brands total={} filled={} stillMissing={}",
                 products.size(), filled, stillMissing);
         return new BrandBackfillResponse(products.size(), filled, stillMissing);
+    }
+
+    /**
+     * Dry-run brand coverage: runs the registry over every product's description
+     * WITHOUT persisting, reporting how many already have a brand, how many the
+     * registry would fill now, and how many stay brandless. Measures how well we
+     * can determine brands from the base we already have.
+     */
+    @Transactional(readOnly = true)
+    public BrandCoverageReportResponse brandCoverageReport() {
+        var products = productRepository.findAll();
+        var alreadyHaveBrand = 0L;
+        var wouldFillNow = 0L;
+        var stillNoBrand = 0L;
+        var samples = new ArrayList<BrandCoverageReportResponse.SampleFill>();
+        for (var product : products) {
+            if (product.getBrand() != null) {
+                alreadyHaveBrand++;
+                continue;
+            }
+            var brand = brandExtractor.find(product.getNormalizedName());
+            if (brand != null) {
+                wouldFillNow++;
+                if (samples.size() < SAMPLE_DESCRIPTION_LIMIT) {
+                    samples.add(new BrandCoverageReportResponse.SampleFill(product.getNormalizedName(), brand));
+                }
+            } else {
+                stillNoBrand++;
+            }
+        }
+        var total = products.size();
+        var coverageAfter = total == 0 ? 0.0
+                : Math.round((alreadyHaveBrand + wouldFillNow) * 1000.0 / total) / 10.0;
+        log.info("admin.product.brand_coverage total={} have={} wouldFill={} stillMissing={} coverageAfterPct={}",
+                total, alreadyHaveBrand, wouldFillNow, stillNoBrand, coverageAfter);
+        return new BrandCoverageReportResponse(
+                total, alreadyHaveBrand, wouldFillNow, stillNoBrand, coverageAfter, samples);
+    }
+
+    /**
+     * Item→product matching diagnostics: the UNMATCHED rate (confirmed items
+     * that never linked to a canonical product, hence out of the price index)
+     * plus the most frequent orphan descriptions to guide curation.
+     */
+    @Transactional(readOnly = true)
+    public UnmatchedReportResponse unmatchedReport(int topN) {
+        var matched = receiptItemRepository.countMatched();
+        var unmatched = receiptItemRepository.countUnmatched();
+        var totalItems = matched + unmatched;
+        var unmatchedPct = totalItems == 0 ? 0.0
+                : Math.round(unmatched * 1000.0 / totalItems) / 10.0;
+        var top = receiptItemRepository.topUnmatchedDescriptions(PageRequest.of(0, Math.max(1, topN))).stream()
+                .map(row -> new UnmatchedReportResponse.UnmatchedDescription(
+                        (String) row[0], ((Number) row[1]).longValue()))
+                .toList();
+        log.info("admin.product.unmatched_report matched={} unmatched={} unmatchedPct={}",
+                matched, unmatched, unmatchedPct);
+        return new UnmatchedReportResponse(matched, unmatched, unmatchedPct, top);
     }
 
     @Transactional(readOnly = true)

@@ -6,6 +6,8 @@ import com.relyon.economizai.dto.request.SetProductBrandRequest;
 import com.relyon.economizai.dto.request.UpdateSubscriptionTierRequest;
 import com.relyon.economizai.dto.response.AdminUserDetailResponse;
 import com.relyon.economizai.dto.response.BrandBackfillResponse;
+import com.relyon.economizai.dto.response.BrandCoverageReportResponse;
+import com.relyon.economizai.dto.response.UnmatchedReportResponse;
 import com.relyon.economizai.dto.response.AdminUserSummaryResponse;
 import com.relyon.economizai.dto.response.DuplicateProductGroupResponse;
 import com.relyon.economizai.dto.response.MissingBrandProductResponse;
@@ -147,6 +149,19 @@ public class AdminController {
     @PostMapping("/products/refresh-brands")
     public ResponseEntity<BrandBackfillResponse> refreshBrands() {
         return ResponseEntity.ok(adminProductService.backfillBrands());
+    }
+
+    /** Dry-run: measure how well the brand registry covers the product base (no writes). */
+    @GetMapping("/products/brand-coverage")
+    public ResponseEntity<BrandCoverageReportResponse> brandCoverage() {
+        return ResponseEntity.ok(adminProductService.brandCoverageReport());
+    }
+
+    /** Matching KPI: UNMATCHED rate + the most frequent orphan descriptions. */
+    @GetMapping("/products/unmatched-report")
+    public ResponseEntity<UnmatchedReportResponse> unmatchedReport(
+            @RequestParam(defaultValue = "30") int topN) {
+        return ResponseEntity.ok(adminProductService.unmatchedReport(topN));
     }
 
     @GetMapping("/products/missing-brand")
