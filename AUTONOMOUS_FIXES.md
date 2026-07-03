@@ -68,6 +68,19 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-07-03 15:10:32] FIX 2de14d2 - org.postgresql.util.PSQLException: FATAL: terminating connec
+- **Error snippet:**
+```r
+org.postgresql.util.PSQLException: FATAL: terminating connection due to administrator command
+```
+- **Reproduced by:** `com.relyon.economizai.service.sefaz.ReceiptIngestionServiceTest#ingest_transientDbTermination_leavesReceiptProcessingForRetry` (failed before fix, passes after)
+- **Root cause + fix:** All related suites pass (35 tests, 0 failures). The fix is minimal and correct: transient DB failures now leave the receipt `PROCESSING` (recovered by the existing sweeper), while genuine fetch/captcha/parse failures still mark `FAILED_PARSE` as before.
+
+FIXED com.relyon.economizai.service.sefaz.ReceiptIngestionServiceTest#ingest_transientDbTermination_leavesReceiptProcessingForRetry | ReceiptIngestionService.ingest's blanket `catch (RuntimeException)` treated a transient DB drop (PSQLException 57P01, "terminating connection due to administrator command") as a permanent parse failure, poisoning a valid receipt to FAILED_PARSE and forcing a needless rescan; added a preceding `catch (TransientDataAccessException | RecoverableDataAccessException)` that logs and leaves the row PROCESSING so the existing sweeper/retry recovers it.
+- **Build:** PASS (mvnw test, full suite)
+- **Deploy:** pushed 2de14d2 -> auto-deploy, health **UP**
+- **Outcome:** RESOLVED
+
 ### [2026-06-28 12:15:09] [NEEDS-HUMAN] BUILD-FAIL (attempt 1x) - ERROR [req=    o.s.boot.SpringApplication - Application run 
 - **Error snippet:**
 ```r
@@ -468,6 +481,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
