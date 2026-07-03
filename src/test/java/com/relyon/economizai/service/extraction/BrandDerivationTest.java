@@ -64,6 +64,26 @@ class BrandDerivationTest {
     }
 
     @Test
+    void derive_skipsKeysThatAreKnownProductWords() {
+        // "tomate" is a curated dictionary keyword (a generic product term), so it
+        // must never become a brand even if OFF lists it as one.
+        when(curatedRepository.findAll()).thenReturn(List.of(
+                com.relyon.economizai.model.CuratedDictionaryEntry.builder()
+                        .keyword("tomate").category(com.relyon.economizai.model.enums.ProductCategory.PRODUCE).build()));
+        when(eanCatalogRepository.countByBrand()).thenReturn(List.of(
+                occurrence("Tomate", 12),
+                occurrence("Piraquê", 8)));
+        when(brandRepository.findByNormalizedKey("piraque")).thenReturn(Optional.empty());
+
+        var outcome = categorizerAdminService.deriveBrandsFromEanCatalog(3);
+
+        assertEquals(1, outcome.created(), "only the real brand (Piraquê) is created, not 'tomate'");
+        var captor = ArgumentCaptor.forClass(BrandRegistryEntry.class);
+        verify(brandRepository).save(captor.capture());
+        assertEquals("piraque", captor.getValue().getNormalizedKey());
+    }
+
+    @Test
     void derive_dropsBrandsBelowThreshold() {
         when(eanCatalogRepository.countByBrand()).thenReturn(List.of(
                 occurrence("Marca Obscura", 1)));

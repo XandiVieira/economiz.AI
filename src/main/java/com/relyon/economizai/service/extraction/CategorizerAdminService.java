@@ -220,11 +220,18 @@ public class CategorizerAdminService {
     @Transactional
     public BrandDerivationOutcome deriveBrandsFromEanCatalog(int minProducts) {
         var threshold = Math.max(1, minProducts);
+        // Words the curated dictionary already knows are generic PRODUCT terms
+        // (arroz, tomate, leite…). A brand key equal to one of these is noise —
+        // "tomate" is never a brand — so skip it. Uses our own truth instead of
+        // an ever-growing stopword list.
+        var productWords = curatedRepository.findAll().stream()
+                .map(entry -> entry.getKeyword().toLowerCase())
+                .collect(java.util.stream.Collectors.toSet());
         var variantsByKey = new LinkedHashMap<String, List<EanCatalogRepository.BrandOccurrence>>();
         for (var occurrence : eanCatalogRepository.countByBrand()) {
             var key = DescriptionNormalizer.normalize(occurrence.getBrand());
             if (key.length() < MIN_BRAND_KEY_LENGTH || key.chars().allMatch(Character::isDigit)
-                    || BRAND_KEY_STOPWORDS.contains(key)) {
+                    || BRAND_KEY_STOPWORDS.contains(key) || productWords.contains(key)) {
                 continue;
             }
             variantsByKey.computeIfAbsent(key, ignored -> new ArrayList<>()).add(occurrence);
