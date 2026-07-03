@@ -68,6 +68,19 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-07-03 16:47:46] [NEEDS-HUMAN] PUSH-FAILED (attempt 1x) - org.springframework.dao.DataIntegrityViolationException: cou
+- **Error snippet:**
+```r
+2026-07-03 19:36:14.374 ERROR [req=d4e9fafc user=xandivieira@outlook.com rcpt= item=] c.r.e.e.GlobalExceptionHandler - Unexpected error: org.springframework.dao.DataIntegrityViolationException: could not execute statement [ERROR: value too long for type character varying(100)] [update ean_catalog set brand=?,category=?,ean=?,generic_name=?,source=?,updated_at=? where id=?]; SQL [update ean_catalog set brand=?,category=?,ean=?,generic_name=?,source=?,updated_at=? where id=?]
+at com.relyon.economizai.service.extraction.EanCatalogService.bulkImport(EanCatalogService.java:77)
+```
+- **Attempted fix:** All 14 tests pass. The reproducing test now passes and nothing else broke.
+
+FIXED com.relyon.economizai.service.extraction.EanCatalogServiceTest#bulkImport_truncatesGenericNameAndBrandToColumnLength | Root cause: bulkImport validated EAN length but wrote genericName/brand straight through, so an Open Food Facts value over 100 chars overflowed the varchar(100) generic_name/brand columns and threw DataIntegrityViolationException on flush. Fix: added MAX_TEXT_LENGTH=100 and a fitToColumn() helper that truncates genericName and brand to the column length before setting them.
+- **Outcome:** fix built + committed locally (95622d6) but could NOT be pushed after retries.
+- **Saved patch:** `C:\Users\Xandi\AppData\Local\economizai\autofix-20260703-164746-95622d6.patch` - apply with `git am` (the fix is build-verified, not lost).
+- **Note for human:** bug still live; apply the saved patch or re-run - needs eyes.
+
 ### [2026-07-03 16:40:12] FIX 901d856 - org.springframework.dao.DataIntegrityViolationException: cou
 - **Status code:** 469
 - **Error snippet:**
@@ -534,6 +547,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
