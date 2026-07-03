@@ -12,6 +12,7 @@ import com.relyon.economizai.service.notifications.NotificationEventService.Reco
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -60,7 +61,15 @@ public class SavingsAttributionService {
     private final NotificationEventService eventService;
     private final CollaborativeProperties properties;
 
-    @Transactional
+    /**
+     * Runs in its OWN transaction (REQUIRES_NEW), not the caller's. confirm()
+     * invokes this as best-effort analytics and catches any failure — but if we
+     * joined confirm's transaction, a failure here would mark it rollback-only and
+     * confirm's commit would blow up with UnexpectedRollbackException despite the
+     * catch. Isolating attribution means a failed pass rolls back only its own
+     * work; confirm commits regardless.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void attribute(Receipt receipt) {
         var cnpj = receipt.getCnpjEmitente();
         if (cnpj == null || cnpj.isBlank() || receipt.getIssuedAt() == null) {
