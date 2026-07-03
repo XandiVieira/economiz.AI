@@ -14,6 +14,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.postgresql.util.PSQLException;
+import org.postgresql.util.PSQLState;
+import org.springframework.dao.TransientDataAccessResourceException;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -134,6 +137,30 @@ class ReceiptIngestionServiceTest {
         var captor = ArgumentCaptor.forClass(Receipt.class);
         verify(receiptRepository).save(captor.capture());
         assertEquals(ReceiptStatus.FAILED_PARSE, captor.getValue().getStatus());
+    }
+
+    @Test
+    void ingest_transientDbTermination_leavesReceiptProcessingForRetry() {
+        // Reproduces the live error:
+        //   org.postgresql.util.PSQLException: FATAL: terminating connection due to administrator command
+        // SQLState 57P01 — an admin-initiated / transient connection drop (DB restart,
+        // idle-in-transaction timeout, pg_terminate_backend). Spring translates it to a
+        // TransientDataAccessResourceException, which is a RuntimeException. The receipt
+        // itself is perfectly valid — a retry seconds later would succeed — so the row
+        // must stay PROCESSING for the sweeper/retry, NOT be poisoned to FAILED_PARSE
+        // (which forces the user to needlessly rescan a good receipt).
+        var receipt = processingReceipt();
+        when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+        var pgTermination = new PSQLException(
+                "FATAL: terminating connection due to administrator command",
+                PSQLState.CONNECTION_FAILURE);
+        when(sefazIngestionService.fetch(QR))
+                .thenThrow(new TransientDataAccessResourceException("connection lost", pgTermination));
+
+        service.ingest(receipt.getId(), QR);
+
+        assertEquals(ReceiptStatus.PROCESSING, receipt.getStatus());
+        verify(receiptRepository, never()).save(any());
     }
 
     @Test

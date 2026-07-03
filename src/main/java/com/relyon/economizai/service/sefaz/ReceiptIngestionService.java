@@ -10,6 +10,8 @@ import com.relyon.economizai.repository.ReceiptRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
+import org.springframework.dao.RecoverableDataAccessException;
+import org.springframework.dao.TransientDataAccessException;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -67,6 +69,13 @@ public class ReceiptIngestionService {
             } catch (ReceiptParseException ex) {
                 persistParseFailure(receiptId, fetched, ex);
             }
+        } catch (TransientDataAccessException | RecoverableDataAccessException ex) {
+            // Transient DB blip (e.g. PSQLException 57P01 "terminating connection due to
+            // administrator command" — a DB restart / idle-in-transaction kill). The receipt
+            // itself is valid; poisoning it to FAILED_PARSE would force a needless rescan.
+            // Leave it PROCESSING so the sweeper (or a re-dispatch) can recover it.
+            log.warn("ingest transient DB failure, leaving receipt {} PROCESSING for retry: {}",
+                    abbrev(receiptId), ex.getMessage());
         } catch (RuntimeException ex) {
             // SEFAZ fetch / captcha / commit-time failure — mark FAILED_PARSE so the
             // FE stops polling and shows an error instead of spinning forever.
