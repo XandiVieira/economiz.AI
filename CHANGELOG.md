@@ -14,6 +14,28 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-07-03 (noite) — Snapshot de categoria + flag `categorySuggested`
+
+Duas mudanças no modelo de categorias, seguindo o princípio "conhecimento novo
+só afeta entradas novas":
+
+1. **Novo campo `categorySuggested`** (boolean) em cada item de recibo. `true` =
+   o valor em `category` é um **palpite nosso** (preview em nota pendente,
+   item ainda não vinculado) — renderizar como sugestão (ex: chip tracejado
+   "Mercearia?"). `false` = categoria confirmada/escolhida (chip sólido). Tocar
+   pra corrigir/aceitar via `PUT .../items/{id}/category` transforma em escolha
+   do usuário, que ganha de tudo pra sempre.
+2. **Histórico congelado**: ao confirmar a nota, a categoria de cada item é
+   fotografada. Recategorizações futuras (consenso da comunidade, melhorias de
+   dicionário) passam a valer só para compras NOVAS — o histórico confirmado
+   (e os dashboards de gasto por categoria) nunca muda sozinho. Exceção única:
+   correção explícita do próprio usuário, que se aplica a tudo.
+
+Nada quebra no FE: `category` continua no mesmo lugar; `categorySuggested` é
+campo novo aditivo.
+
+---
+
 ## 2026-07-03 (mais tarde) — Review screen agora mostra categorias SUGERIDAS
 
 Itens de nota `PENDING_CONFIRMATION` voltavam com `category: null` em tudo (a
