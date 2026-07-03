@@ -12,6 +12,7 @@ import com.relyon.economizai.repository.ProductAliasRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.repository.PriceObservationRepository;
 import com.relyon.economizai.repository.ReceiptItemRepository;
+import com.relyon.economizai.service.extraction.EanCatalogService;
 import com.relyon.economizai.service.extraction.ProductExtraction;
 import com.relyon.economizai.service.extraction.ProductExtractor;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +49,7 @@ class ProductServiceSearchGetUpdateTest {
     @Mock private ReceiptItemRepository receiptItemRepository;
     @Mock private PriceObservationRepository priceObservationRepository;
     @Mock private ProductExtractor productExtractor;
+    @Mock private EanCatalogService eanCatalogService;
 
     private ProductService productService;
 
@@ -56,7 +58,7 @@ class ProductServiceSearchGetUpdateTest {
     @BeforeEach
     void setUp() {
         productService = new ProductService(productRepository, aliasRepository,
-                receiptItemRepository, priceObservationRepository, productExtractor);
+                receiptItemRepository, priceObservationRepository, productExtractor, eanCatalogService);
     }
 
     private User user() {

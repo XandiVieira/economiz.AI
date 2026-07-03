@@ -3,6 +3,7 @@ package com.relyon.economizai.service;
 import com.relyon.economizai.dto.request.CreateAliasRequest;
 import com.relyon.economizai.dto.request.CreateProductRequest;
 import com.relyon.economizai.dto.request.UpdateProductRequest;
+import com.relyon.economizai.dto.response.EanLookupResponse;
 import com.relyon.economizai.dto.response.ProductResponse;
 import com.relyon.economizai.dto.response.UnmatchedItemResponse;
 import com.relyon.economizai.exception.EanConflictException;
@@ -18,6 +19,7 @@ import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.repository.PriceObservationRepository;
 import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.service.canonicalization.DescriptionNormalizer;
+import com.relyon.economizai.service.extraction.EanCatalogService;
 import com.relyon.economizai.service.extraction.ProductExtractor;
 import com.relyon.economizai.service.geo.DistanceCalculator;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +47,7 @@ public class ProductService {
     private final ReceiptItemRepository receiptItemRepository;
     private final PriceObservationRepository priceObservationRepository;
     private final ProductExtractor productExtractor;
+    private final EanCatalogService eanCatalogService;
 
     @Transactional(readOnly = true)
     public Page<ProductResponse> search(String query, User user, Pageable pageable) {
@@ -68,6 +71,27 @@ public class ProductService {
     @Transactional(readOnly = true)
     public ProductResponse get(UUID id) {
         return ProductResponse.from(loadProduct(id));
+    }
+
+    /**
+     * Barcode-scan lookup: resolve the EAN to a tracked product (price queries
+     * possible), or fall back to an EAN-catalog preview (product known to the
+     * catalog but never scanned in a receipt — no price data yet). 404 when the
+     * barcode is unknown to both.
+     */
+    @Transactional(readOnly = true)
+    public EanLookupResponse lookupByEan(String ean) {
+        var digits = ean == null ? "" : ean.replaceAll("\\D", "");
+        if (digits.length() < 8) {
+            throw new ProductNotFoundException();
+        }
+        var product = productRepository.findByEan(digits);
+        if (product.isPresent()) {
+            return EanLookupResponse.ofProduct(ProductResponse.from(product.get()));
+        }
+        return eanCatalogService.lookup(digits)
+                .map(EanLookupResponse::ofCatalog)
+                .orElseThrow(ProductNotFoundException::new);
     }
 
     @Transactional

@@ -5,6 +5,7 @@ import com.relyon.economizai.dto.request.CreateProductRequest;
 import com.relyon.economizai.exception.EanConflictException;
 import com.relyon.economizai.exception.ProductAliasConflictException;
 import com.relyon.economizai.exception.ProductNotFoundException;
+import com.relyon.economizai.model.EanCatalogEntry;
 import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.ProductAlias;
@@ -17,6 +18,7 @@ import com.relyon.economizai.repository.ProductAliasRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.repository.PriceObservationRepository;
 import com.relyon.economizai.repository.ReceiptItemRepository;
+import com.relyon.economizai.service.extraction.EanCatalogService;
 import com.relyon.economizai.service.extraction.ProductExtraction;
 import com.relyon.economizai.service.extraction.ProductExtractor;
 import org.junit.jupiter.api.Test;
@@ -48,8 +50,62 @@ class ProductServiceTest {
     @Mock private ReceiptItemRepository receiptItemRepository;
     @Mock private PriceObservationRepository priceObservationRepository;
     @Mock private ProductExtractor productExtractor;
+    @Mock private EanCatalogService eanCatalogService;
 
     @InjectMocks private ProductService productService;
+
+    @Test
+    void lookupByEan_returnsTrackedProductWhenKnown() {
+        var product = Product.builder().id(UUID.randomUUID()).ean("7891234567890")
+                .normalizedName("ARROZ TIO J 5KG").category(ProductCategory.GROCERIES).build();
+        when(productRepository.findByEan("7891234567890")).thenReturn(Optional.of(product));
+
+        var result = productService.lookupByEan("7891234567890");
+
+        assertEquals(true, result.known());
+        assertEquals(product.getId(), result.product().id());
+        assertNull(result.catalogPreview());
+    }
+
+    @Test
+    void lookupByEan_fallsBackToCatalogPreview() {
+        when(productRepository.findByEan("7891234567890")).thenReturn(Optional.empty());
+        when(eanCatalogService.lookup("7891234567890")).thenReturn(Optional.of(
+                EanCatalogEntry.builder().ean("7891234567890").genericName("Arroz")
+                        .brand("Tio João").category(ProductCategory.GROCERIES).build()));
+
+        var result = productService.lookupByEan("7891234567890");
+
+        assertEquals(false, result.known());
+        assertNull(result.product());
+        assertEquals("Tio João", result.catalogPreview().brand());
+        assertEquals("GROCERIES", result.catalogPreview().category());
+    }
+
+    @Test
+    void lookupByEan_stripsNonDigitsBeforeLookup() {
+        var product = Product.builder().id(UUID.randomUUID()).ean("7891234567890").build();
+        when(productRepository.findByEan("7891234567890")).thenReturn(Optional.of(product));
+
+        var result = productService.lookupByEan(" 789.1234.5678-90 ");
+
+        assertEquals(true, result.known());
+    }
+
+    @Test
+    void lookupByEan_unknownBarcodeThrows404() {
+        when(productRepository.findByEan("7899999999999")).thenReturn(Optional.empty());
+        when(eanCatalogService.lookup("7899999999999")).thenReturn(Optional.empty());
+
+        assertThrows(ProductNotFoundException.class, () -> productService.lookupByEan("7899999999999"));
+    }
+
+    @Test
+    void lookupByEan_tooShortInputThrows404WithoutQuerying() {
+        assertThrows(ProductNotFoundException.class, () -> productService.lookupByEan("123"));
+
+        verify(productRepository, never()).findByEan(any());
+    }
 
     private User buildUser() {
         var household = Household.builder().id(UUID.randomUUID()).inviteCode("ABC123").build();

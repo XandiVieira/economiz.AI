@@ -2049,6 +2049,32 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Lookup product by EAN (barcode scan)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "pt"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/by-ean/7891234567890",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "by-ean",
+                "7891234567890"
+              ]
+            },
+            "description": "Products whose detail screen the user opened, newest first. 200 List<ProductResponse>."
+          }
         }
       ]
     },
@@ -6168,7 +6194,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/price-index/products/{{e2eProductId}}/best-markets?limit=10",
+              "raw": "{{baseUrl}}/api/v1/price-index/products/{{e2eProductId}}/best-markets?limit=10&radiusKm=5&lat=-30.05&lng=-51.20",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -6184,6 +6210,20 @@
                 {
                   "key": "limit",
                   "value": "10"
+                },
+                {
+                  "key": "radiusKm",
+                  "value": "5"
+                },
+                {
+                  "key": "lat",
+                  "value": "-30.05",
+                  "description": "optional: current position (defaults to home)"
+                },
+                {
+                  "key": "lng",
+                  "value": "-51.20",
+                  "description": "optional: current position (defaults to home)"
                 }
               ]
             }

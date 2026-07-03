@@ -14,6 +14,24 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-07-03 (later) — Barcode scan lookup + position-aware best-markets
+
+Two additions for the "scan a barcode in the store" flow:
+
+1. **`GET /products/by-ean/{ean}`** — resolves a scanned barcode. Returns
+   `{ known, product, catalogPreview }`: `known: true` gives the full product
+   (price queries possible); `known: false` gives an EAN-catalog preview
+   (`{ean, name, brand, category}` — no price data yet); 404 = unknown barcode.
+2. **`best-markets` accepts `lat`/`lng`** — distance was always measured from
+   the user's HOME; now the FE can pass the current GPS position for in-store
+   comparisons: `GET /price-index/products/{id}/best-markets?lat=&lng=&radiusKm=`.
+
+Suggested FE flow: scan → `by-ean` → if known, `best-markets` with current
+position → list of cheapest nearby markets (k-anon protected, so sparse data
+returns fewer rows rather than unreliable ones).
+
+---
+
 ## 2026-07-03 — SC (Santa Catarina) NFC-e scanning is live
 
 Fourth supported state: **RS, PR, SC, MS**. SC receipts arrive as a

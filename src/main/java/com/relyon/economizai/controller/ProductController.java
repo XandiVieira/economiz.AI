@@ -3,6 +3,7 @@ package com.relyon.economizai.controller;
 import com.relyon.economizai.dto.request.CreateAliasRequest;
 import com.relyon.economizai.dto.request.CreateProductRequest;
 import com.relyon.economizai.dto.request.UpdateProductRequest;
+import com.relyon.economizai.dto.response.EanLookupResponse;
 import com.relyon.economizai.dto.response.HouseholdProductResponse;
 import com.relyon.economizai.dto.response.ProductMarketPriceResponse;
 import com.relyon.economizai.dto.response.ProductResponse;
@@ -100,6 +101,17 @@ public class ProductController {
     @GetMapping("/{id}")
     public ResponseEntity<ProductResponse> get(@PathVariable UUID id) {
         return ResponseEntity.ok(productService.get(id));
+    }
+
+    /**
+     * Barcode-scan lookup. Returns the tracked product when we have one for the
+     * EAN (follow up with {@code /price-index/products/{id}/best-markets} for
+     * nearby prices), or an EAN-catalog preview when the barcode is known but
+     * has no price data yet. 404 when unknown to both.
+     */
+    @GetMapping("/by-ean/{ean}")
+    public ResponseEntity<EanLookupResponse> lookupByEan(@PathVariable String ean) {
+        return ResponseEntity.ok(productService.lookupByEan(ean));
     }
 
     @PostMapping

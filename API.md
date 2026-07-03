@@ -638,12 +638,32 @@ When `kAnonBlocked: true`, `medianPrice` is `null` but `sampleCount` /
 `distinctHouseholds` are still visible — show the "poucas amostras" warning.
 
 ```
-GET /api/v1/price-index/products/{productId}/best-markets?limit=10&radiusKm=5
+GET /api/v1/price-index/products/{productId}/best-markets?limit=10&radiusKm=5[&lat=&lng=]
 GET /api/v1/price-index/promos?radiusKm=5
 ```
 
 `promos` returns currently-detected community promos in the user's area
 (recent median ≥ 15% below baseline, k-anon protected).
+
+`best-markets` measures distance from the user's HOME location by default; pass
+`lat`/`lng` to measure from the current position instead (barcode scan inside a
+store — see the flow below).
+
+### Barcode scan flow (scan → price nearby)
+
+```
+GET /api/v1/products/by-ean/{ean}      → { known, product, catalogPreview }
+```
+
+Scan the product barcode, call `by-ean`:
+- `known: true` → `product` is populated; follow up with
+  `GET /price-index/products/{product.id}/best-markets?lat=&lng=&radiusKm=` for
+  the cheapest nearby markets (k-anon protected).
+- `known: false` → `catalogPreview` has `{ean, name, brand, category}` from the
+  EAN catalog: we know the product but have no price data yet — show the
+  preview and invite the user to scan a receipt containing it.
+- `404` → barcode unknown to both. Non-digits in the path are stripped
+  server-side; anything under 8 digits is a 404.
 
 ---
 

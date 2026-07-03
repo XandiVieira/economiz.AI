@@ -25,7 +25,9 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -93,6 +95,23 @@ class PriceIndexControllerTest {
                 .andExpect(jsonPath("$[0].cnpj").value("93015006005182"))
                 .andExpect(jsonPath("$[0].cnpjRoot").value("93015006"))
                 .andExpect(jsonPath("$[0].watching").value(false));
+    }
+
+    @Test
+    void bestMarkets_usesExplicitPositionWhenProvided() throws Exception {
+        var pid = UUID.randomUUID();
+        when(watchedMarketService.watchedCnpjs(any())).thenReturn(Set.of());
+        when(priceIndexService.bestMarkets(any(), anyInt(),
+                eq(new BigDecimal("-30.05")), eq(new BigDecimal("-51.20")), eq(5.0), any()))
+                .thenReturn(List.of());
+
+        mockMvc.perform(get("/api/v1/price-index/products/" + pid + "/best-markets")
+                        .param("lat", "-30.05").param("lng", "-51.20").param("radiusKm", "5")
+                        .with(SecurityMockMvcRequestPostProcessors.user(principal())))
+                .andExpect(status().isOk());
+
+        verify(priceIndexService).bestMarkets(any(), anyInt(),
+                eq(new BigDecimal("-30.05")), eq(new BigDecimal("-51.20")), eq(5.0), any());
     }
 
     @Test

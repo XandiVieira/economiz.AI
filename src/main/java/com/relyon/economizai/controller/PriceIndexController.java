@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -44,14 +45,23 @@ public class PriceIndexController {
         return ResponseEntity.ok(priceIndexService.referencePrice(productId, marketCnpj));
     }
 
+    /**
+     * Cheapest markets for a product. Distance is measured from the user's HOME
+     * location by default; pass {@code lat}/{@code lng} to measure from the
+     * current position instead (barcode scan inside a store).
+     */
     @GetMapping("/products/{productId}/best-markets")
     public ResponseEntity<List<PriceIndexService.MarketPriceRow>> bestMarkets(
             @AuthenticationPrincipal User user,
             @PathVariable UUID productId,
             @RequestParam(defaultValue = "10") int limit,
-            @RequestParam(required = false) Double radiusKm) {
+            @RequestParam(required = false) Double radiusKm,
+            @RequestParam(required = false) BigDecimal lat,
+            @RequestParam(required = false) BigDecimal lng) {
+        var originLatitude = lat != null ? lat : user.getHomeLatitude();
+        var originLongitude = lng != null ? lng : user.getHomeLongitude();
         return ResponseEntity.ok(priceIndexService.bestMarkets(productId, limit,
-                user.getHomeLatitude(), user.getHomeLongitude(), radiusKm,
+                originLatitude, originLongitude, radiusKm,
                 watchedMarketService.watchedCnpjs(user)));
     }
 
