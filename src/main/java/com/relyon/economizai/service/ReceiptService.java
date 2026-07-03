@@ -23,6 +23,7 @@ import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.repository.ReceiptRepository;
 import com.relyon.economizai.service.cache.HouseholdCacheGen;
 import com.relyon.economizai.service.canonicalization.CanonicalizationService;
+import com.relyon.economizai.service.extraction.ProductExtractor;
 import com.relyon.economizai.service.geo.MarketLocationService;
 import com.relyon.economizai.service.geo.MarketNameService;
 import com.relyon.economizai.service.notifications.NotificationPayload;
@@ -53,6 +54,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -77,6 +79,7 @@ public class ReceiptService {
     private final HouseholdProductCategoryOverrideService categoryOverrideService;
     private final HouseholdCacheGen householdCacheGen;
     private final LocalizedMessageService localizedMessageService;
+    private final ProductExtractor productExtractor;
     private final MarketNameService marketNameService;
     private final SubscriptionGateService subscriptionGate;
     private final SavingsAttributionService savingsAttributionService;
@@ -262,7 +265,27 @@ public class ReceiptService {
                 .distinct()
                 .toList();
         var overrides = categoryOverrideService.overridesByProduct(user.getHousehold().getId(), productIds);
-        return withFriendlyName(user.getHousehold().getId(), receipt, ReceiptResponse.from(receipt, overrides));
+        return withFriendlyName(user.getHousehold().getId(),
+                receipt, ReceiptResponse.from(receipt, overrides, suggestedCategories(receipt)));
+    }
+
+    /**
+     * Dictionary-suggested categories for items not yet linked to a product, so
+     * the review screen shows what confirm() will apply instead of everything
+     * uncategorized. Computed in-memory per request — dictionary improvements
+     * show up instantly, nothing persisted until confirm.
+     */
+    private Map<UUID, String> suggestedCategories(Receipt receipt) {
+        if (receipt.getStatus() != ReceiptStatus.PENDING_CONFIRMATION) return Map.of();
+        var suggestions = new HashMap<UUID, String>();
+        for (var item : receipt.getItems()) {
+            if (item.getProduct() != null) continue;
+            var extraction = productExtractor.extract(item.getRawDescription());
+            if (extraction.category() != null) {
+                suggestions.put(item.getId(), extraction.category().name());
+            }
+        }
+        return suggestions;
     }
 
     /**
@@ -451,7 +474,7 @@ public class ReceiptService {
         householdCacheGen.bump(receipt.getHousehold().getId());
         log.info("item.updated description='{}' qty={} totalPrice={}",
                 item.getRawDescription(), item.getQuantity(), item.getTotalPrice());
-        return withFriendlyName(user.getHousehold().getId(), receipt, ReceiptResponse.from(receipt));
+        return toResponse(user, receipt);
     }
 
     /**
@@ -484,7 +507,7 @@ public class ReceiptService {
         householdCacheGen.bump(receipt.getHousehold().getId());
         log.info("item.added line={} description='{}' qty={} totalPrice={}",
                 nextLine, item.getRawDescription(), item.getQuantity(), item.getTotalPrice());
-        return withFriendlyName(user.getHousehold().getId(), receipt, ReceiptResponse.from(receipt));
+        return toResponse(user, receipt);
     }
 
     /** Apply the household's custom market display name to the response (sibling field; original untouched). */

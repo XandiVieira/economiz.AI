@@ -34,15 +34,23 @@ public record ReceiptResponse(
         List<ReceiptItemResponse> items
 ) {
     public static ReceiptResponse from(Receipt receipt) {
-        return from(receipt, Map.of());
+        return from(receipt, Map.of(), Map.of());
+    }
+
+    public static ReceiptResponse from(Receipt receipt, Map<UUID, String> categoryOverrides) {
+        return from(receipt, categoryOverrides, Map.of());
     }
 
     /**
-     * @param categoryOverrides productId → the household's corrected category label
-     *                          (enum name or custom-category name), applied in
-     *                          place of the product's global category.
+     * @param categoryOverrides    productId → the household's corrected category label
+     *                             (enum name or custom-category name), applied in
+     *                             place of the product's global category.
+     * @param suggestionsByItemId  itemId → dictionary-suggested category for items
+     *                             not yet linked to a product (review screen preview
+     *                             of what confirm will apply).
      */
-    public static ReceiptResponse from(Receipt receipt, Map<UUID, String> categoryOverrides) {
+    public static ReceiptResponse from(Receipt receipt, Map<UUID, String> categoryOverrides,
+                                       Map<UUID, String> suggestionsByItemId) {
         var householdTotal = receipt.getItems().stream()
                 .filter(i -> !i.isExcluded())
                 .map(i -> i.getTotalPrice())
@@ -68,7 +76,8 @@ public record ReceiptResponse(
                 receipt.getConfirmedAt(),
                 receipt.getCreatedAt(),
                 receipt.getItems().stream()
-                        .map(item -> ReceiptItemResponse.from(item, overrideFor(item, categoryOverrides)))
+                        .map(item -> ReceiptItemResponse.from(item,
+                                labelFor(item, categoryOverrides, suggestionsByItemId)))
                         .toList()
         );
     }
@@ -89,9 +98,14 @@ public record ReceiptResponse(
                 approxTaxTotal, status, parseErrorReason, parseErrorMessage, confirmedAt, createdAt, items);
     }
 
-    private static String overrideFor(ReceiptItem item, Map<UUID, String> categoryOverrides) {
-        if (categoryOverrides.isEmpty() || item.getProduct() == null) return null;
-        return categoryOverrides.get(item.getProduct().getId());
+    /** Household override wins; for unlinked items fall back to the dictionary suggestion. */
+    private static String labelFor(ReceiptItem item, Map<UUID, String> categoryOverrides,
+                                   Map<UUID, String> suggestionsByItemId) {
+        if (item.getProduct() == null) {
+            return suggestionsByItemId.isEmpty() || item.getId() == null
+                    ? null : suggestionsByItemId.get(item.getId());
+        }
+        return categoryOverrides.isEmpty() ? null : categoryOverrides.get(item.getProduct().getId());
     }
 
     private static BigDecimal approxTaxTotal(Receipt receipt) {

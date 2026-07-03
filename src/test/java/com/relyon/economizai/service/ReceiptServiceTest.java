@@ -12,6 +12,7 @@ import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.CategorizationSource;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
@@ -26,6 +27,8 @@ import com.relyon.economizai.service.geo.MarketNameService;
 import com.relyon.economizai.service.notifications.SavingsAttributionService;
 import com.relyon.economizai.service.priceindex.PriceIndexService;
 import com.relyon.economizai.service.priceindex.PromoDetector;
+import com.relyon.economizai.service.extraction.ProductExtraction;
+import com.relyon.economizai.service.extraction.ProductExtractor;
 import com.relyon.economizai.service.sefaz.ChaveAcessoParser;
 import com.relyon.economizai.service.sefaz.ParsedReceipt;
 import com.relyon.economizai.service.sefaz.ParsedReceiptItem;
@@ -50,6 +53,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -79,6 +83,7 @@ class ReceiptServiceTest {
     @Mock private SubscriptionGateService subscriptionGate;
     @Mock private SavingsAttributionService savingsAttributionService;
     @Mock private LocalizedMessageService localizedMessageService;
+    @Mock private ProductExtractor productExtractor;
 
     @InjectMocks private ReceiptService receiptService;
 
@@ -93,6 +98,35 @@ class ReceiptServiceTest {
         lenient().when(subscriptionGate.monthlyReceiptLimit(any())).thenReturn(Integer.MAX_VALUE);
         lenient().when(sefazIngestionService.resolveChave(any()))
                 .thenAnswer(invocation -> ChaveAcessoParser.extractChave(invocation.getArgument(0)));
+        lenient().when(productExtractor.extract(any())).thenReturn(ProductExtraction.EMPTY);
+    }
+
+    @Test
+    void get_pendingReceipt_fillsUnlinkedItemCategoriesWithDictionarySuggestion() {
+        var user = buildUser();
+        var receipt = persistedReceipt(user, ReceiptStatus.PENDING_CONFIRMATION); // item has no product
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
+        when(productExtractor.extract(any())).thenReturn(new ProductExtraction(
+                "Arroz", null, null, null, ProductCategory.GROCERIES,
+                CategorizationSource.DICTIONARY));
+
+        var response = receiptService.get(user, receipt.getId());
+
+        assertEquals("GROCERIES", response.items().get(0).category(),
+                "review screen should preview the dictionary suggestion");
+        assertNull(response.items().get(0).productId(), "item stays unlinked until confirm");
+    }
+
+    @Test
+    void get_confirmedReceipt_doesNotSuggestForUnlinkedItems() {
+        var user = buildUser();
+        var receipt = persistedReceipt(user, ReceiptStatus.CONFIRMED);
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
+
+        var response = receiptService.get(user, receipt.getId());
+
+        assertNull(response.items().get(0).category());
+        verify(productExtractor, never()).extract(any());
     }
 
     @Test

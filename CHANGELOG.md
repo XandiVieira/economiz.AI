@@ -14,6 +14,17 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-07-03 (mais tarde) — Review screen agora mostra categorias SUGERIDAS
+
+Itens de nota `PENDING_CONFIRMATION` voltavam com `category: null` em tudo (a
+categorização só rodava na confirmação). Agora o campo `category` de itens
+ainda não vinculados traz a **sugestão do dicionário** — o mesmo valor que a
+confirmação vai aplicar. O shape do contrato não muda; o campo só deixa de ser
+null quando temos sugestão. Edição do usuário via
+`PUT .../items/{id}/category` continua ganhando da sugestão.
+
+---
+
 ## 2026-07-03 (later) — Barcode scan lookup + position-aware best-markets
 
 Two additions for the "scan a barcode in the store" flow:
