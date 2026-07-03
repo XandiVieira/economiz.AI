@@ -29,4 +29,9 @@ public class BrandRegistryEntry extends BaseEntity {
 
     @Column(name = "display_name", nullable = false, length = 120)
     private String displayName;
+
+    /** CURATED (hand-maintained / seed) or DERIVED (from the EAN catalog). */
+    @Column(nullable = false, length = 20)
+    @lombok.Builder.Default
+    private String source = "CURATED";
 }

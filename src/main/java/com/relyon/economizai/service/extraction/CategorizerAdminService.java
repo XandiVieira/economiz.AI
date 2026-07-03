@@ -22,6 +22,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Set;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -198,13 +199,23 @@ public class CategorizerAdminService {
         return new BulkImportOutcome(imported, skipped);
     }
 
+    // Short/common tokens that appear inside descriptions and would false-match if
+    // treated as brand keys (Open Food Facts brand data is noisy — "BOLACHA DE
+    // MANTEIGA" must NOT resolve to brand "De"). Also enforce a 4-char minimum.
+    private static final int MIN_BRAND_KEY_LENGTH = 4;
+    private static final Set<String> BRAND_KEY_STOPWORDS = Set.of(
+            "de", "da", "do", "com", "sem", "para", "nat", "int", "und", "kit",
+            "barra", "linha", "tipo", "casa", "boa", "vita", "life", "premium",
+            "select", "gold", "extra", "class", "top", "mais", "novo", "nova");
+
     /**
      * Grows the brand registry from the brand strings already sitting in the
      * EAN catalog (Open Food Facts imports) — zero external calls. Crowd-sourced
-     * data is messy, so raw variants ("Nestlé"/"NESTLE") are grouped by their
-     * normalized key, the most frequent variant wins as display name, and keys
-     * below {@code minProducts} catalog occurrences are dropped as noise.
-     * Fill-only: never overwrites an existing registry entry (curation wins).
+     * data is messy, so: variants are grouped by normalized key (most frequent
+     * wins as display name), keys shorter than {@value #MIN_BRAND_KEY_LENGTH}
+     * chars / numeric / stopwords are dropped, and keys below {@code minProducts}
+     * catalog occurrences are dropped as noise. Fill-only (curation wins); rows
+     * are tagged {@code source=DERIVED} so they can be cleaned up separately.
      */
     @Transactional
     public BrandDerivationOutcome deriveBrandsFromEanCatalog(int minProducts) {
@@ -212,7 +223,10 @@ public class CategorizerAdminService {
         var variantsByKey = new LinkedHashMap<String, List<EanCatalogRepository.BrandOccurrence>>();
         for (var occurrence : eanCatalogRepository.countByBrand()) {
             var key = DescriptionNormalizer.normalize(occurrence.getBrand());
-            if (key.length() < 2 || key.chars().allMatch(Character::isDigit)) continue;
+            if (key.length() < MIN_BRAND_KEY_LENGTH || key.chars().allMatch(Character::isDigit)
+                    || BRAND_KEY_STOPWORDS.contains(key)) {
+                continue;
+            }
             variantsByKey.computeIfAbsent(key, ignored -> new ArrayList<>()).add(occurrence);
         }
         var created = 0;
@@ -236,6 +250,7 @@ public class CategorizerAdminService {
             brandRepository.save(BrandRegistryEntry.builder()
                     .normalizedKey(entry.getKey())
                     .displayName(displayName.trim())
+                    .source("DERIVED")
                     .build());
             created++;
         }

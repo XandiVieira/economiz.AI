@@ -94,11 +94,26 @@ class BrandDerivationTest {
     void derive_skipsJunkKeys() {
         when(eanCatalogRepository.countByBrand()).thenReturn(List.of(
                 occurrence("7", 50),            // numeric-only
-                occurrence("x", 50)));          // too short after normalization
+                occurrence("de", 50),           // stopword — would false-match "BOLACHA DE MANTEIGA"
+                occurrence("nat", 50),          // stopword + too short
+                occurrence("barra", 50),        // stopword
+                occurrence("abc", 50)));        // 3 chars, below the 4-char minimum
 
         var outcome = categorizerAdminService.deriveBrandsFromEanCatalog(1);
 
         assertEquals(0, outcome.created());
         verify(brandRepository, never()).save(any());
+    }
+
+    @Test
+    void derive_tagsEntriesAsDerived() {
+        when(eanCatalogRepository.countByBrand()).thenReturn(List.of(occurrence("Nestlé", 40)));
+        when(brandRepository.findByNormalizedKey("nestle")).thenReturn(Optional.empty());
+
+        categorizerAdminService.deriveBrandsFromEanCatalog(2);
+
+        var captor = ArgumentCaptor.forClass(BrandRegistryEntry.class);
+        verify(brandRepository).save(captor.capture());
+        assertEquals("DERIVED", captor.getValue().getSource());
     }
 }
