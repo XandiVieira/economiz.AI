@@ -14,6 +14,16 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-07-03 — SC (Santa Catarina) NFC-e scanning is live
+
+Fourth supported state: **RS, PR, SC, MS**. SC receipts arrive as a
+`SecurityVerify.aspx?rq=...` URL (Cloudflare Turnstile challenge) — submit the
+**full QR URL** as `qrPayload`, exactly as scanned. Same async flow as always:
+`PROCESSING` → poll → `PENDING_CONFIRMATION`. Expect up to ~1 min (Turnstile
+solve). The unsupported-state 400 message now lists SC too.
+
+---
+
 ## 2026-07-02 (even later) — ⚠️ BREAKING: email verification is now a 6-digit CODE
 
 `POST /auth/verify-email` body changed from `{ "token" }` to
