@@ -145,6 +145,31 @@ class EanCatalogServiceTest {
     }
 
     @Test
+    void bulkImport_truncatesOversizedNameAndBrandToColumnLimit() {
+        // Direct curated import (POST /ean-catalog/import) forwards raw request
+        // fields. An oversized genericName/brand on an EXISTING entry produces the
+        // prod UPDATE that overflows varchar(100):
+        //   value too long for type character varying(100) [update ean_catalog set brand=?,generic_name=?...]
+        var existing = EanCatalogEntry.builder()
+                .ean("7894900010015").category(ProductCategory.OTHER).build();
+        when(eanCatalogRepository.findByEanIn(anyCollection())).thenReturn(List.of(existing));
+        when(eanCatalogRepository.count()).thenReturn(1L);
+        var longName = "X".repeat(250);
+        var longBrand = "Y".repeat(150);
+
+        service.bulkImport(List.of(
+                new EanCatalogService.EanImportRequest("7894900010015", longName, longBrand,
+                        ProductCategory.BEVERAGES, EanCatalogSource.CURATED_IMPORT)));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<EanCatalogEntry>> captor = ArgumentCaptor.captor();
+        verify(eanCatalogRepository).saveAll(captor.capture());
+        var saved = captor.getValue().get(0);
+        assertEquals(100, saved.getGenericName().length(), "name truncated to column limit");
+        assertEquals(100, saved.getBrand().length(), "brand truncated to column limit");
+    }
+
+    @Test
     void bulkImport_dedupesDuplicateEanWithinBatch() {
         when(eanCatalogRepository.findByEanIn(anyCollection())).thenReturn(List.of());
         when(eanCatalogRepository.count()).thenReturn(1L);

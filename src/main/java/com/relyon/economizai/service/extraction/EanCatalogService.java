@@ -76,8 +76,11 @@ public class EanCatalogService {
             }
             var entry = toSaveByEan.computeIfAbsent(req.ean(), ean ->
                     existingByEan.getOrDefault(ean, EanCatalogEntry.builder().ean(ean).build()));
-            if (req.genericName() != null) entry.setGenericName(req.genericName());
-            if (req.brand() != null) entry.setBrand(req.brand());
+            // Truncate to column limits: direct/curated imports forward raw request
+            // text, which routinely overflows varchar(100) and fails the UPDATE at
+            // flush (the OFF path already truncates in parseOpenFoodFactsRow).
+            if (req.genericName() != null) entry.setGenericName(truncate(req.genericName(), NAME_MAX));
+            if (req.brand() != null) entry.setBrand(truncate(req.brand(), BRAND_MAX));
             if (req.category() != null) entry.setCategory(req.category());
             entry.setSource(req.source() != null ? req.source() : EanCatalogSource.CURATED_IMPORT);
         }
