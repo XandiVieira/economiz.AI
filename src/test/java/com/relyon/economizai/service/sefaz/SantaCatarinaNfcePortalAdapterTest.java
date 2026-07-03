@@ -87,6 +87,32 @@ class SantaCatarinaNfcePortalAdapterTest {
     }
 
     @Test
+    void fetchHtml_preservesCookiesFromInitialConsultRedirectIntoCaptchaPost() {
+        var solver = solver(true);
+        var adapter = new TestScAdapter(solver);
+        var consultUrl = "https://sat.sef.sc.gov.br/tax.NET/Sat.DFe.NFCe.Web/Consultas/ConsultaPublicaNFCe.aspx?p="
+                + CHAVE_SC + "%7C3%7C1";
+        adapter.getResponses.put(consultUrl, ResponseEntity.status(302)
+                .header("Location", SECURITY_URL)
+                .header("Set-Cookie", "SC_GATE=gate-1; path=/")
+                .build());
+        adapter.getResponses.put(SECURITY_URL, ResponseEntity.ok()
+                .header("Set-Cookie", "ASP.NET_SessionId=session-1; path=/")
+                .body(securityHtml()));
+        adapter.postResponse = ResponseEntity.status(302)
+                .header("Location", FINAL_URL)
+                .header("Set-Cookie", "SAT_AUTH=ok; path=/")
+                .build();
+        adapter.getResponses.put(FINAL_URL, ResponseEntity.ok(scDanfeHtml()));
+
+        var html = adapter.fetchHtml(consultUrl);
+
+        assertEquals(scDanfeHtml(), html);
+        assertEquals("SC_GATE=gate-1; ASP.NET_SessionId=session-1", adapter.postedCookie);
+        assertEquals("SC_GATE=gate-1; ASP.NET_SessionId=session-1; SAT_AUTH=ok", adapter.redirectCookie);
+    }
+
+    @Test
     void fetchHtml_whenTurnstileRejectedThrowsCaptchaSolveFailed() {
         var solver = solver(true);
         var adapter = new TestScAdapter(solver);

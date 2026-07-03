@@ -89,7 +89,7 @@ public class SantaCatarinaNfcePortalAdapter implements SefazAdapter {
         try {
             var url = resolveUrl(qrPayload);
             if (!isAllowedScUrl(url)) return Optional.empty();
-            var html = httpGetResponse(url).getBody();
+            var html = getFollowingRedirects(url).body();
             return extractChaveFromHtml(html);
         } catch (RuntimeException ex) {
             log.debug("sc.preflight.failed reason={}", ex.getClass().getSimpleName());
@@ -101,15 +101,15 @@ public class SantaCatarinaNfcePortalAdapter implements SefazAdapter {
     public String fetchHtml(String qrPayload) {
         var url = resolveUrl(qrPayload);
         try {
-            var response = httpGetResponse(url);
-            var html = response.getBody();
+            var page = getFollowingRedirects(url);
+            var html = page.body();
             if (html == null || html.isBlank()) {
                 throw new SefazFetchException(UnidadeFederativa.SC.name());
             }
             if (!ScSecurityChallengeDetector.looksLikeHtml(html)) {
                 return html;
             }
-            return solveSecurityChallenge(html, url, response);
+            return solveSecurityChallenge(html, url, page.cookieHeader());
         } catch (CaptchaUnavailableException | CaptchaSolveFailedException | ReceiptParseException ex) {
             throw ex;
         } catch (RestClientException ex) {
@@ -136,7 +136,7 @@ public class SantaCatarinaNfcePortalAdapter implements SefazAdapter {
         return CONSULT_URL + "?p=" + chave + "%7C3%7C1";
     }
 
-    private String solveSecurityChallenge(String securityHtml, String currentUrl, ResponseEntity<String> response) {
+    private String solveSecurityChallenge(String securityHtml, String currentUrl, String cookieHeader) {
         if (!captchaSolver.isConfigured()) {
             throw new CaptchaUnavailableException(UnidadeFederativa.SC.name());
         }
@@ -148,7 +148,6 @@ public class SantaCatarinaNfcePortalAdapter implements SefazAdapter {
         var chave = extractChaveFromHtml(securityHtml).orElse(null);
         log.info("sc.turnstile.solving chave={} siteKey={}", LogMasker.chave(chave), siteKey);
         var token = captchaSolver.solveCloudflareTurnstile(siteKey, securityUrl);
-        var cookieHeader = extractCookies(response.getHeaders().get("Set-Cookie"));
         var postResponse = submitSecurityForm(securityHtml, securityUrl, token, cookieHeader);
         var danfe = followIfRedirect(postResponse, mergeCookies(cookieHeader, postResponse.getHeaders().get("Set-Cookie")));
         if (danfe == null || danfe.isBlank()) {
@@ -198,6 +197,24 @@ public class SantaCatarinaNfcePortalAdapter implements SefazAdapter {
                 })
                 .retrieve()
                 .toEntity(String.class);
+    }
+
+    private PortalPage getFollowingRedirects(String url) {
+        var currentUrl = url;
+        String cookieHeader = null;
+        for (var i = 0; i < 6; i++) {
+            var response = httpGetResponse(currentUrl, cookieHeader);
+            cookieHeader = mergeCookies(cookieHeader, response.getHeaders().get("Set-Cookie"));
+            if (!response.getStatusCode().is3xxRedirection()) {
+                return new PortalPage(response.getBody(), cookieHeader);
+            }
+            var location = response.getHeaders().getLocation();
+            if (location == null) {
+                throw new ReceiptParseException("sc-redirect-missing-location");
+            }
+            currentUrl = absoluteUrl(location.toString());
+        }
+        throw new ReceiptParseException("sc-redirect-loop");
     }
 
     protected ResponseEntity<String> submitSecurityForm(String securityHtml, String securityUrl,
@@ -306,5 +323,8 @@ public class SantaCatarinaNfcePortalAdapter implements SefazAdapter {
                     .forEach(cookies::add);
         }
         return cookies.isEmpty() ? null : String.join("; ", cookies);
+    }
+
+    private record PortalPage(String body, String cookieHeader) {
     }
 }
