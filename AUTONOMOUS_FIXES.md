@@ -68,6 +68,21 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-07-03 16:40:12] FIX 901d856 - org.springframework.dao.DataIntegrityViolationException: cou
+- **Status code:** 469
+- **Error snippet:**
+```r
+2026-07-03 19:34:34.469 ERROR [req=295f1575 user=xandivieira@outlook.com rcpt= item=] c.r.e.e.GlobalExceptionHandler - Unexpected error: org.springframework.dao.DataIntegrityViolationException: could not execute statement [ERROR: value too long for type character varying(14)] [insert into ean_catalog (brand,category,created_at,ean,generic_name,source,updated_at,id) values (?,?,?,?,?,?,?,?)]; SQL [insert into ean_catalog (brand,category,created_at,ean,generic_name,source,updated_at,id) values (?,?,?,?,?,?,?,?)]
+at com.relyon.economizai.service.extraction.EanCatalogService.bulkImport(EanCatalogService.java:77)
+```
+- **Reproduced by:** `com.relyon.economizai.service.extraction.EanCatalogServiceTest#bulkImport_skipsEntriesWithEanLongerThanColumn` (failed before fix, passes after)
+- **Root cause + fix:** All 13 tests pass, including the new reproducing test. The bug is reproduced and fixed.
+
+FIXED com.relyon.economizai.service.extraction.EanCatalogServiceTest#bulkImport_skipsEntriesWithEanLongerThanColumn | Root cause: `bulkImport` only filtered null/blank EANs, so an Open Food Facts code longer than 14 chars flowed into the `ean varchar(14)` column and crashed the whole batch with `DataIntegrityViolationException` (value too long). Fix: added `isImportableEan` guard (non-blank AND length Ôëñ MAX_EAN_LENGTH=14, matching the column) used in both the pre-fetch stream and the per-row loop, so over-length EANs are skipped like invalid ones instead of overflowing the column.
+- **Build:** PASS (mvnw test, full suite)
+- **Deploy:** pushed 901d856 -> auto-deploy, health **UP**
+- **Outcome:** RESOLVED
+
 ### [2026-07-03 15:22:01] [NEEDS-HUMAN] NO-REPRO (attempt 1x) - org.springframework.orm.jpa.JpaSystemException: JDBC excepti
 - **Error snippet:**
 ```r
@@ -519,6 +534,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
