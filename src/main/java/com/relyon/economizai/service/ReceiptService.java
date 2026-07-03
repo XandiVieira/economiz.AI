@@ -23,7 +23,6 @@ import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.repository.ReceiptRepository;
 import com.relyon.economizai.service.cache.HouseholdCacheGen;
 import com.relyon.economizai.service.canonicalization.CanonicalizationService;
-import com.relyon.economizai.service.extraction.ProductExtractor;
 import com.relyon.economizai.service.geo.MarketLocationService;
 import com.relyon.economizai.service.geo.MarketNameService;
 import com.relyon.economizai.service.notifications.NotificationPayload;
@@ -79,7 +78,6 @@ public class ReceiptService {
     private final HouseholdProductCategoryOverrideService categoryOverrideService;
     private final HouseholdCacheGen householdCacheGen;
     private final LocalizedMessageService localizedMessageService;
-    private final ProductExtractor productExtractor;
     private final MarketNameService marketNameService;
     private final SubscriptionGateService subscriptionGate;
     private final SavingsAttributionService savingsAttributionService;
@@ -270,20 +268,19 @@ public class ReceiptService {
     }
 
     /**
-     * Dictionary-suggested categories for items not yet linked to a product, so
+     * Best-effort category preview for items not yet linked to a product, so
      * the review screen shows what confirm() will apply instead of everything
-     * uncategorized. Computed in-memory per request — dictionary improvements
-     * show up instantly, nothing persisted until confirm.
+     * uncategorized. Mirrors the confirm-time cascade (EAN product → EAN
+     * catalog → alias → dictionary) read-only — nothing persisted until confirm,
+     * and dictionary improvements show up instantly.
      */
     private Map<UUID, String> suggestedCategories(Receipt receipt) {
         if (receipt.getStatus() != ReceiptStatus.PENDING_CONFIRMATION) return Map.of();
         var suggestions = new HashMap<UUID, String>();
         for (var item : receipt.getItems()) {
             if (item.getProduct() != null) continue;
-            var extraction = productExtractor.extract(item.getRawDescription());
-            if (extraction.category() != null) {
-                suggestions.put(item.getId(), extraction.category().name());
-            }
+            canonicalizationService.previewCategory(item)
+                    .ifPresent(category -> suggestions.put(item.getId(), category.name()));
         }
         return suggestions;
     }

@@ -27,8 +27,6 @@ import com.relyon.economizai.service.notifications.NotificationRuleService;
 import com.relyon.economizai.service.notifications.NotificationService;
 import com.relyon.economizai.service.notifications.SavingsAttributionService;
 import com.relyon.economizai.service.priceindex.PriceIndexService;
-import com.relyon.economizai.service.extraction.ProductExtraction;
-import com.relyon.economizai.service.extraction.ProductExtractor;
 import com.relyon.economizai.service.priceindex.PromoDetector;
 import com.relyon.economizai.service.sefaz.ChaveAcessoParser;
 import com.relyon.economizai.service.sefaz.ReceiptIngestionService;
@@ -101,13 +99,12 @@ class ReceiptServiceCoverageTest {
     @Mock private MarketNameService marketNameService;
     @Mock private SubscriptionGateService subscriptionGate;
     @Mock private SavingsAttributionService savingsAttributionService;
-    @Mock private ProductExtractor productExtractor;
 
     @InjectMocks private ReceiptService receiptService;
 
     @BeforeEach
     void stubMarketNames() {
-        lenient().when(productExtractor.extract(any())).thenReturn(ProductExtraction.EMPTY);
+        lenient().when(canonicalizationService.previewCategory(any())).thenReturn(Optional.empty());
         lenient().when(marketNameService.resolve(any(), any(), any()))
                 .thenAnswer(invocation -> invocation.getArgument(2));
         lenient().when(marketNameService.resolveNames(any(), any())).thenReturn(Map.of());

@@ -20,6 +20,7 @@ import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Optional;
 import java.util.UUID;
 
 import static com.relyon.economizai.service.canonicalization.JaroWinklerSimilarity.score;
@@ -150,6 +151,35 @@ public class CanonicalizationService {
      * Falls through to UNMATCHED only when an EAN-less item matches no alias
      * and the description is too weak to seed a product automatically.
      */
+    /**
+     * Read-only preview of the category {@link #canonicalize} would assign to an
+     * unlinked item — same priority order (EAN product → EAN catalog → exact
+     * alias → dictionary/extraction) but nothing is created, linked or
+     * persisted. Used by the review screen so the user sees our best effort
+     * before confirming. Fuzzy alias matching is skipped (scans every alias —
+     * too heavy per GET; confirm still applies it).
+     */
+    @Transactional(readOnly = true)
+    public Optional<ProductCategory> previewCategory(ReceiptItem item) {
+        if (hasEan(item)) {
+            var byEan = productRepository.findByEan(item.getEan());
+            if (byEan.isPresent() && byEan.get().getCategory() != null) {
+                return Optional.of(byEan.get().getCategory());
+            }
+            var catalogCategory = eanCatalogService.lookup(item.getEan())
+                    .map(EanCatalogEntry::getCategory).orElse(null);
+            if (catalogCategory != null) {
+                return Optional.of(catalogCategory);
+            }
+        }
+        var normalized = DescriptionNormalizer.normalize(item.getRawDescription());
+        var byAlias = aliasRepository.findByNormalizedDescription(normalized);
+        if (byAlias.isPresent() && byAlias.get().getProduct().getCategory() != null) {
+            return Optional.of(byAlias.get().getProduct().getCategory());
+        }
+        return Optional.ofNullable(productExtractor.extract(item.getRawDescription()).category());
+    }
+
     private ItemResult canonicalizeItem(ReceiptItem item, boolean pharmacyMerchant) {
         if (item.getProduct() != null) {
             log.info("item.skip already linked product={}", abbrev(item.getProduct().getId()));

@@ -12,7 +12,6 @@ import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
-import com.relyon.economizai.model.enums.CategorizationSource;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
@@ -27,8 +26,6 @@ import com.relyon.economizai.service.geo.MarketNameService;
 import com.relyon.economizai.service.notifications.SavingsAttributionService;
 import com.relyon.economizai.service.priceindex.PriceIndexService;
 import com.relyon.economizai.service.priceindex.PromoDetector;
-import com.relyon.economizai.service.extraction.ProductExtraction;
-import com.relyon.economizai.service.extraction.ProductExtractor;
 import com.relyon.economizai.service.sefaz.ChaveAcessoParser;
 import com.relyon.economizai.service.sefaz.ParsedReceipt;
 import com.relyon.economizai.service.sefaz.ParsedReceiptItem;
@@ -83,7 +80,6 @@ class ReceiptServiceTest {
     @Mock private SubscriptionGateService subscriptionGate;
     @Mock private SavingsAttributionService savingsAttributionService;
     @Mock private LocalizedMessageService localizedMessageService;
-    @Mock private ProductExtractor productExtractor;
 
     @InjectMocks private ReceiptService receiptService;
 
@@ -98,22 +94,20 @@ class ReceiptServiceTest {
         lenient().when(subscriptionGate.monthlyReceiptLimit(any())).thenReturn(Integer.MAX_VALUE);
         lenient().when(sefazIngestionService.resolveChave(any()))
                 .thenAnswer(invocation -> ChaveAcessoParser.extractChave(invocation.getArgument(0)));
-        lenient().when(productExtractor.extract(any())).thenReturn(ProductExtraction.EMPTY);
+        lenient().when(canonicalizationService.previewCategory(any())).thenReturn(Optional.empty());
     }
 
     @Test
-    void get_pendingReceipt_fillsUnlinkedItemCategoriesWithDictionarySuggestion() {
+    void get_pendingReceipt_fillsUnlinkedItemCategoriesWithBestEffortPreview() {
         var user = buildUser();
         var receipt = persistedReceipt(user, ReceiptStatus.PENDING_CONFIRMATION); // item has no product
         when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
-        when(productExtractor.extract(any())).thenReturn(new ProductExtraction(
-                "Arroz", null, null, null, ProductCategory.GROCERIES,
-                CategorizationSource.DICTIONARY));
+        when(canonicalizationService.previewCategory(any())).thenReturn(Optional.of(ProductCategory.GROCERIES));
 
         var response = receiptService.get(user, receipt.getId());
 
         assertEquals("GROCERIES", response.items().get(0).category(),
-                "review screen should preview the dictionary suggestion");
+                "review screen should preview the confirm-time category");
         assertNull(response.items().get(0).productId(), "item stays unlinked until confirm");
     }
 
@@ -126,7 +120,7 @@ class ReceiptServiceTest {
         var response = receiptService.get(user, receipt.getId());
 
         assertNull(response.items().get(0).category());
-        verify(productExtractor, never()).extract(any());
+        verify(canonicalizationService, never()).previewCategory(any());
     }
 
     @Test
