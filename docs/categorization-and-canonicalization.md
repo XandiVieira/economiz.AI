@@ -186,6 +186,31 @@ correção como override. O backend suporta os dois caminhos.
 
 ---
 
+## Baseline de qualidade — 2026-07-03 (773 itens reais, 13 mercados)
+
+Snapshot end-to-end sobre TODAS as NFs já ingeridas (59 notas, pós-importação
+do catálogo Open Food Facts). Mede o que o usuário efetivamente vê:
+
+| Métrica | Resultado | Nota |
+|---|---|---|
+| **Categoria prevista** | **89,8%** (694/773) | Os ~10% sem categoria são granel/açougue |
+| **Produto vinculado** | **89,8%** (694/773) | Matching EAN+alias+fuzzy; resto = UNMATCHED (fora do índice) |
+| **Marca identificada** | **47,3%** (366/773) | Metade não tem marca no texto (granel); resto depende do aprendizado |
+
+Distribuição de categorias (realista p/ cesta BR): Mercearia 29%, Carnes &
+Laticínios 17%, Hortifruti 17%, Limpeza 9%, Bebidas 9%, Padaria 3%, Outros 3%,
+Higiene 2%, Saúde 0,3%.
+
+**Benchmark de categoria (texto puro, 452 golden):** 99,3% — mede a previsão
+por descrição isolada, sem depender de matching.
+
+**Ressalva:** categoria/marca vêm dos produtos globais (criados em ingestões
+anteriores); mede cobertura real, não isola o efeito do OFF em produtos novos.
+Enviesado p/ RS (a maioria dos 13 mercados). Re-medir quando entrar gente de
+regiões/mercados diversos — é o que destrava o ML (holdout limpo + diversidade).
+
+---
+
 ## Convergência da comunidade (as inconsistências se resolvem sozinhas?)
 
 Meta: com escala, a comunidade deve fechar todas as inconsistências —
@@ -205,8 +230,11 @@ Meta: com escala, a comunidade deve fechar todas as inconsistências —
 
 ## Backlog derivado deste documento
 
-- [ ] Medir taxa de UNMATCHED (endpoint admin / métrica)
-- [ ] Rodar extração de marca sobre todos os produtos + medir eficácia
+- [x] Medir taxa de UNMATCHED (endpoint `/admin/products/unmatched-report`) — ~10% na baseline
+- [x] Rodar extração de marca sobre todos os produtos + medir eficácia (`/admin/products/brand-coverage`) — 47% cobertura, ruído do OFF filtrado
+- [x] Popular catálogo EAN do Open Food Facts (32.418 produtos BR) — destrava barcode-scan
 - [ ] Decidir override-vs-canônico para consenso (item 2 acima)
 - [ ] Opção D: notificar mudança de categoria em item já comprado
 - [ ] Definir a experiência da tela de confirmação (com a FE)
+- [ ] Holdout limpo p/ medir ML sem vazamento antes de ligar apply mode
+- [ ] Mecanismo de merge de produtos guiado por consenso (matching)
