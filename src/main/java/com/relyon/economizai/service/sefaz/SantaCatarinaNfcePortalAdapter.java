@@ -20,6 +20,7 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
+import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -183,13 +184,17 @@ public class SantaCatarinaNfcePortalAdapter implements SefazAdapter {
         return siteKey.isBlank() ? null : siteKey;
     }
 
+    // URLs are passed as pre-built URIs: the portal's rq token is a SIGNED,
+    // already-percent-encoded blob, and RestClient.uri(String) treats strings as
+    // URI templates and re-encodes them (%2F -> %252F), which the portal rejects
+    // with a redirect to Errors/UrlTampering.aspx.
     protected ResponseEntity<String> httpGetResponse(String url) {
-        return restClient.get().uri(url).retrieve().toEntity(String.class);
+        return restClient.get().uri(URI.create(url)).retrieve().toEntity(String.class);
     }
 
     protected ResponseEntity<String> httpGetResponse(String url, String cookieHeader) {
         return noRedirectClient.get()
-                .uri(url)
+                .uri(URI.create(url))
                 .headers(headers -> {
                     if (cookieHeader != null && !cookieHeader.isBlank()) {
                         headers.set("Cookie", cookieHeader);
@@ -236,7 +241,7 @@ public class SantaCatarinaNfcePortalAdapter implements SefazAdapter {
 
     protected ResponseEntity<String> httpPostForm(String url, MultiValueMap<String, String> body, String cookieHeader) {
         return noRedirectClient.post()
-                .uri(url)
+                .uri(URI.create(url))
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                 .headers(headers -> {
                     if (cookieHeader != null && !cookieHeader.isBlank()) {
