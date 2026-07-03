@@ -8,6 +8,7 @@ import com.relyon.economizai.exception.ReceiptItemNotFoundException;
 import com.relyon.economizai.exception.ReceiptNotEditableException;
 import com.relyon.economizai.exception.ReceiptNotFoundException;
 import com.relyon.economizai.model.Household;
+import com.relyon.economizai.dto.response.ReceiptItemResponse;
 import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.ReceiptItem;
@@ -357,6 +358,45 @@ class ReceiptServiceTest {
         assertEquals(ReceiptStatus.CONFIRMED, response.receipt().status());
         assertNotNull(response.receipt().confirmedAt());
         assertEquals(0, response.personalPromos().size());
+    }
+
+    @Test
+    void confirm_snapshotsCategoryFromLinkedProduct() {
+        var user = buildUser();
+        var receipt = persistedReceipt(user, ReceiptStatus.PENDING_CONFIRMATION);
+        var item = receipt.getItems().get(0);
+        var product = Product.builder().id(UUID.randomUUID())
+                .normalizedName("ARROZ TIO J 5KG").category(ProductCategory.GROCERIES).build();
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
+        when(receiptRepository.save(receipt)).thenReturn(receipt);
+        when(promoDetector.detectPersonalPromos(receipt)).thenReturn(List.of());
+        // canonicalize() links the item during confirm — simulate that side effect.
+        when(canonicalizationService.canonicalize(receipt)).thenAnswer(invocation -> {
+            item.setProduct(product);
+            return null;
+        });
+
+        receiptService.confirm(user, receipt.getId(), null);
+
+        assertEquals(ProductCategory.GROCERIES, item.getCategoryAtConfirmation(),
+                "category must be frozen at confirmation time");
+    }
+
+    @Test
+    void itemResponse_prefersSnapshotOverLiveProductCategory() {
+        var product = Product.builder().id(UUID.randomUUID())
+                .normalizedName("ARROZ").category(ProductCategory.OTHER).build(); // live category drifted
+        var item = ReceiptItem.builder()
+                .id(UUID.randomUUID()).lineNumber(1).rawDescription("ARROZ TIO J 5KG")
+                .quantity(BigDecimal.ONE).totalPrice(new BigDecimal("28.90"))
+                .product(product)
+                .categoryAtConfirmation(ProductCategory.GROCERIES) // what the user saw
+                .build();
+
+        var response = ReceiptItemResponse.from(item);
+
+        assertEquals("GROCERIES", response.category(),
+                "confirmed history shows the snapshot, not the drifted live category");
     }
 
     @Test

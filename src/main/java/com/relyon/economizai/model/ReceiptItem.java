@@ -1,12 +1,16 @@
 package com.relyon.economizai.model;
 
+import com.relyon.economizai.model.enums.ProductCategory;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -56,7 +60,7 @@ public class ReceiptItem extends BaseEntity {
     private BigDecimal totalPrice;
 
     @Column(nullable = false)
-    @lombok.Builder.Default
+    @Builder.Default
     private boolean excluded = false;
 
     /**
@@ -65,6 +69,17 @@ public class ReceiptItem extends BaseEntity {
      * the price-index pipeline NOT to use this row as a baseline price.
      */
     @Column(name = "nfce_promo_flag", nullable = false)
-    @lombok.Builder.Default
+    @Builder.Default
     private boolean nfcePromoFlag = false;
+
+    /**
+     * Category snapshot frozen at confirmation — "new knowledge only affects
+     * new entries". The linked product's category keeps evolving (consensus,
+     * dictionary backfills) for FUTURE purchases; confirmed history displays
+     * and aggregates by this snapshot. Household overrides (explicit user
+     * choice) still win over both. Null for unmatched/uncategorized items.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "category_at_confirmation", length = 30)
+    private ProductCategory categoryAtConfirmation;
 }

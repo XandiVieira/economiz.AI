@@ -303,6 +303,7 @@ public class ReceiptService {
         receipt.setStatus(ReceiptStatus.CONFIRMED);
         receipt.setConfirmedAt(LocalDateTime.now());
         canonicalizationService.canonicalize(receipt);
+        snapshotCategories(receipt);
         var personalPromos = promoDetector.detectPersonalPromos(receipt);
         priceIndexService.recordContributions(receipt);
         marketLocationService.registerMarketFromReceipt(receipt);
@@ -313,6 +314,21 @@ public class ReceiptService {
         log.info("confirm ok status=CONFIRMED personalPromos={}", personalPromos.size());
         return new ConfirmReceiptResponse(
                 withFriendlyName(user.getHousehold().getId(), saved, ReceiptResponse.from(saved)), personalPromos);
+    }
+
+    /**
+     * Freeze each item's category as seen at confirmation ("new knowledge only
+     * affects new entries"): the product's live category keeps improving for
+     * FUTURE purchases, but this household's confirmed history displays and
+     * aggregates by the snapshot. Runs right after canonicalization so newly
+     * linked/created products contribute their category.
+     */
+    private void snapshotCategories(Receipt receipt) {
+        for (var item : receipt.getItems()) {
+            if (item.getProduct() != null && item.getProduct().getCategory() != null) {
+                item.setCategoryAtConfirmation(item.getProduct().getCategory());
+            }
+        }
     }
 
     /**

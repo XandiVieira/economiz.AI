@@ -145,14 +145,16 @@ public class ItemQueryService {
             bindings.put("marketCnpjRoots", filters.marketCnpjRoots());
         }
         if (filters.categories() != null) {
-            // Unmatched items (no product) and products with no category have a null
-            // p.category, which the insights breakdown buckets as OTHER. Mirror that:
-            // when OTHER is filtered, also include null-category rows so ?category=OTHER
-            // returns them instead of an empty page.
+            // Snapshot-first (categoryAtConfirmation, falling back to live p.category
+            // for legacy rows) so category filtering matches what the history shows.
+            // Unmatched items (no product) and uncategorized rows show as OTHER in the
+            // insights breakdown; mirror that: when OTHER is filtered, also include
+            // null-category rows so ?category=OTHER returns them, not an empty page.
             var includeUnmatched = filters.categories().contains(ProductCategory.OTHER);
             var enumMatch = includeUnmatched
-                    ? "(p.category IS NULL OR p.category IN (:categories))"
-                    : "p.category IN (:categories)";
+                    ? "(COALESCE(ri.categoryAtConfirmation, p.category) IS NULL"
+                            + " OR COALESCE(ri.categoryAtConfirmation, p.category) IN (:categories))"
+                    : "COALESCE(ri.categoryAtConfirmation, p.category) IN (:categories)";
             if (filters.categoryView() == CategoryView.HOUSEHOLD) {
                 // Household lens: filter by EFFECTIVE category. A row matches when it has
                 // no override and its global category matches (incl. null→OTHER above), OR

@@ -132,8 +132,12 @@ public interface InsightsRepository extends JpaRepository<Receipt, UUID> {
     // fully-qualified enum literal — a string literal makes the projection a
     // String and breaks both the cast and Postgres enum/text unification.
     // This is the rare JPQL type-inference exception to the no-FQN rule.
+    // Snapshot-first: confirmed history aggregates by the category frozen at
+    // confirmation (categoryAtConfirmation), so later recategorizations never
+    // rewrite what the household already saw; live p.category is only the
+    // fallback for legacy rows without a snapshot.
     @Query("""
-        SELECT COALESCE(p.category, com.relyon.economizai.model.enums.ProductCategory.OTHER) AS category,
+        SELECT COALESCE(ri.categoryAtConfirmation, p.category, com.relyon.economizai.model.enums.ProductCategory.OTHER) AS category,
                COALESCE(SUM(ri.totalPrice), 0) AS total,
                COUNT(ri) AS itemCount
         FROM ReceiptItem ri
@@ -144,7 +148,7 @@ public interface InsightsRepository extends JpaRepository<Receipt, UUID> {
           AND ri.excluded = false
           AND r.issuedAt >= :from
           AND r.issuedAt <= :to
-        GROUP BY COALESCE(p.category, com.relyon.economizai.model.enums.ProductCategory.OTHER)
+        GROUP BY COALESCE(ri.categoryAtConfirmation, p.category, com.relyon.economizai.model.enums.ProductCategory.OTHER)
         ORDER BY total DESC
     """)
     List<Object[]> spendByCategory(@Param("householdId") UUID householdId,
@@ -158,7 +162,7 @@ public interface InsightsRepository extends JpaRepository<Receipt, UUID> {
     // under a null productId + null category (treated as OTHER downstream).
     @Query("""
         SELECT p.id AS productId,
-               p.category AS category,
+               COALESCE(ri.categoryAtConfirmation, p.category) AS category,
                COALESCE(SUM(ri.totalPrice), 0) AS total,
                COUNT(ri) AS itemCount
         FROM ReceiptItem ri
@@ -169,7 +173,7 @@ public interface InsightsRepository extends JpaRepository<Receipt, UUID> {
           AND ri.excluded = false
           AND r.issuedAt >= :from
           AND r.issuedAt <= :to
-        GROUP BY p.id, p.category
+        GROUP BY p.id, COALESCE(ri.categoryAtConfirmation, p.category)
     """)
     List<Object[]> spendByProduct(@Param("householdId") UUID householdId,
                                   @Param("from") LocalDateTime from,

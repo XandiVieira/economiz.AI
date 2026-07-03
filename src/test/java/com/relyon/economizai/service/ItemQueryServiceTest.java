@@ -207,7 +207,7 @@ class ItemQueryServiceTest {
         var jpql = capturedCountJpql.getValue();
         assertTrue(jpql.contains("r.cnpjEmitente IN (:marketCnpjs)"));
         assertTrue(jpql.contains("SUBSTRING(r.cnpjEmitente, 1, 8) IN (:marketCnpjRoots)"));
-        assertTrue(jpql.contains("p.category IN (:categories)"));
+        assertTrue(jpql.contains("COALESCE(ri.categoryAtConfirmation, p.category) IN (:categories)"));
         assertTrue(jpql.contains("p.id IN (:productIds)"));
         assertTrue(jpql.contains("ri.ean IN (:eans)"));
         assertTrue(jpql.contains("r.totalAmount >= :minReceiptTotal"));

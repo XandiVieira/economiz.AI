@@ -216,14 +216,14 @@ public class InsightsQueryService {
     private List<Bucket> computeHouseholdCategoryBuckets(QueryFilters filters) {
         var clauses = buildClauses(filters);
         var jpql = """
-                SELECT p.id, p.category, r.id,
+                SELECT p.id, COALESCE(ri.categoryAtConfirmation, p.category), r.id,
                        COALESCE(SUM(ri.totalPrice), 0),
                        COUNT(ri)
                 FROM ReceiptItem ri
                 JOIN ri.receipt r
                 LEFT JOIN ri.product p
                 WHERE %s
-                GROUP BY p.id, p.category, r.id
+                GROUP BY p.id, COALESCE(ri.categoryAtConfirmation, p.category), r.id
                 """.formatted(clauses.where());
         var query = entityManager.createQuery(jpql, Object[].class);
         clauses.bind(query);

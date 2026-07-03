@@ -76,8 +76,11 @@ public record ReceiptResponse(
                 receipt.getConfirmedAt(),
                 receipt.getCreatedAt(),
                 receipt.getItems().stream()
-                        .map(item -> ReceiptItemResponse.from(item,
-                                labelFor(item, categoryOverrides, suggestionsByItemId)))
+                        .map(item -> {
+                            var label = labelFor(item, categoryOverrides, suggestionsByItemId);
+                            var suggested = label != null && item.getProduct() == null;
+                            return ReceiptItemResponse.from(item, label, suggested);
+                        })
                         .toList()
         );
     }
