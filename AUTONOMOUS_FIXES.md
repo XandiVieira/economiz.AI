@@ -68,6 +68,25 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-07-03 15:22:01] [NEEDS-HUMAN] NO-REPRO (attempt 1x) - org.springframework.orm.jpa.JpaSystemException: JDBC excepti
+- **Error snippet:**
+```r
+org.springframework.orm.jpa.JpaSystemException: JDBC exception executing SQL [FATAL: terminating connection due to administrator command] [select o1_0.market_cnpj,count(distinct poa1_0.household_id) from price_observation_audits poa1_0 join price_observations o1_0 on o1_0.id=poa1_0.observation_id where o1_0.product_id=? and o1_0.is_outlier=false and o1_0.observed_at>=? group by o1_0.market_cnpj]
+at com.relyon.economizai.service.priceindex.PriceIndexService.bestMarkets(PriceIndexService.java:205)
+```
+- **Outcome:** could NOT reproduce the bug with a failing test; no code changed.
+- **Detail:** The query and its caller are correct, valid JPQL that Hibernate translates to valid SQL (matching the log). The failure `FATAL: terminating connection due to administrator command` is a PostgreSQL server-side event: the backend connection was killed by an administrator command (`pg_terminate_backend`), a database restart, or a maintenance action. Hibernate wraps that JDBC `SQLException` as `JpaSystemException`.
+
+This is not reproducible as a unit-test-exposable code defect:
+- The SQL is syntactically and semantically correct (it's the exact SQL from the log, and the JPQL maps cleanly to it).
+- There's no parameter, logic, or transaction-boundary error in the query or its callers.
+- The trigger is an external/environmental event (connection terminated by the DB administrator), which cannot be induced by a unit test against the code and reflects infra behavior, not application logic.
+
+Per the instructions, when the issue is environmental/external rather than a code bug, I make no changes and report REPRO_FAIL.
+
+REPRO_FAIL PostgreSQL "FATAL: terminating connection due to administrator command" is an external/infra event (backend killed via pg_terminate_backend/restart/maintenance) wrapping a correct query ÔÇö not a reproducible code defect.
+- **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 ### [2026-07-03 15:21:20] FIX 8b2ad10 - ERROR [req=    o.s.t.i.TransactionInterceptor - Application 
 - **Status code:** 499
 - **Error snippet:**
@@ -500,6 +519,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
