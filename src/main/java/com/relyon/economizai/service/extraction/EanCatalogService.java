@@ -79,6 +79,21 @@ public class EanCatalogService {
     }
 
     /**
+     * Bulk-imports raw Open Food Facts rows, mapping OPF category tags to our
+     * enum server-side (via {@link OpenFoodFactsCategoryMapper}) so the import
+     * client stays dumb — it just forwards what the OFF API returns. Rows with
+     * no EAN are skipped.
+     */
+    @Transactional
+    public BulkImportOutcome bulkImportOpenFoodFacts(List<OpenFoodFactsRow> rows) {
+        if (rows == null || rows.isEmpty()) return new BulkImportOutcome(0, 0);
+        var mapped = rows.stream()
+                .map(row -> parseOpenFoodFactsRow(row.code(), row.productName(), row.brands(), row.categoryTags()))
+                .toList();
+        return bulkImport(mapped);
+    }
+
+    /**
      * Parses a single Open Food Facts CSV row (header fields expected:
      * {@code code,product_name,brands,categories_tags}) and imports it.
      * Intended for batch use — caller collects rows and calls
@@ -95,6 +110,9 @@ public class EanCatalogService {
                 EanCatalogSource.OPEN_FOOD_FACTS
         );
     }
+
+    /** Raw Open Food Facts row as returned by its search API. */
+    public record OpenFoodFactsRow(String code, String productName, String brands, String categoryTags) {}
 
     public record EanImportRequest(
             String ean,

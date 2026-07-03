@@ -131,6 +131,17 @@ public class CategorizerController {
     }
 
     /**
+     * ADMIN. Bulk-import raw Open Food Facts rows — category tags are mapped to
+     * our enum server-side. Body: <pre>[{"code":"789...","productName":"...",
+     * "brands":"...","categoryTags":"en:beverages,en:sodas"}, ...]</pre>
+     */
+    @PostMapping("/ean-catalog/import-off")
+    public ResponseEntity<EanCatalogService.BulkImportOutcome> importOpenFoodFacts(
+            @RequestBody List<EanCatalogService.OpenFoodFactsRow> rows) {
+        return ResponseEntity.ok(eanCatalogService.bulkImportOpenFoodFacts(rows));
+    }
+
+    /**
      * Lists all products whose category was set by consensus promotion (source = CONSENSUS).
      * Use to review what the consensus job graduated before deciding whether to keep or revert.
      * Safe read — nothing is mutated.

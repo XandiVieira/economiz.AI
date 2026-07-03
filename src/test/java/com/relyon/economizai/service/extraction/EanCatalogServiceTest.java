@@ -90,6 +90,28 @@ class EanCatalogServiceTest {
     }
 
     @Test
+    void bulkImportOpenFoodFacts_mapsCategoryTagsServerSide() {
+        when(eanCatalogRepository.findByEanIn(anyCollection())).thenReturn(List.of());
+        when(eanCatalogRepository.count()).thenReturn(2L);
+
+        var outcome = service.bulkImportOpenFoodFacts(List.of(
+                new EanCatalogService.OpenFoodFactsRow("7894900010015", "Coca-Cola 2L",
+                        "Coca-Cola", "en:beverages,en:sodas,pt:refrigerantes"),
+                new EanCatalogService.OpenFoodFactsRow("7891000100103", "Leite Moça",
+                        "Nestlé,Moça", "en:dairies,en:sweetened-condensed-milks")));
+
+        assertEquals(2, outcome.imported());
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<EanCatalogEntry>> captor = ArgumentCaptor.captor();
+        verify(eanCatalogRepository).saveAll(captor.capture());
+        var saved = captor.getValue();
+        assertEquals(ProductCategory.BEVERAGES, saved.get(0).getCategory());
+        assertEquals("Coca-Cola", saved.get(0).getBrand());
+        assertEquals(ProductCategory.MEAT_DAIRY, saved.get(1).getCategory());
+        assertEquals("Nestlé", saved.get(1).getBrand(), "first brand of a comma list wins");
+    }
+
+    @Test
     void bulkImport_skipsEntriesWithNullOrBlankEan() {
         when(eanCatalogRepository.findByEanIn(any())).thenReturn(List.of());
         when(eanCatalogRepository.count()).thenReturn(0L);

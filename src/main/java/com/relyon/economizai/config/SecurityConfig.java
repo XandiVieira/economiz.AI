@@ -101,6 +101,7 @@ public class SecurityConfig {
                                 "/api/v1/categorizer/auto-promote",
                                 "/api/v1/categorizer/promote-consensus",
                                 "/api/v1/categorizer/ean-catalog/import",
+                                "/api/v1/categorizer/ean-catalog/import-off",
                                 "/api/v1/categorizer/dictionary/import",
                                 "/api/v1/categorizer/dictionary/curated/import",
                                 "/api/v1/categorizer/brands/import",
