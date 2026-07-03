@@ -68,13 +68,9 @@ public class EanCatalogService {
         var skipped = 0;
 
         for (var req : entries) {
-<<<<<<< Updated upstream
+            // GTIN is at most 14 chars; longer "codes" in OFF are junk that would
+            // overflow the ean column. Skip rather than fail the whole batch.
             if (!isImportableEan(req.ean())) {
-=======
-            // GTIN is at most 14 digits; longer "codes" in OFF are junk and would
-            // overflow the ean column. Skip rather than fail the batch.
-            if (req.ean() == null || req.ean().isBlank() || req.ean().length() > 14) {
->>>>>>> Stashed changes
                 skipped++;
                 continue;
             }
