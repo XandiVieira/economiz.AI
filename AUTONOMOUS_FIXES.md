@@ -68,6 +68,25 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-07-03 15:21:20] FIX 8b2ad10 - ERROR [req=    o.s.t.i.TransactionInterceptor - Application 
+- **Status code:** 499
+- **Error snippet:**
+```r
+2026-07-03 18:00:02.499 ERROR [req= user= rcpt= item=] o.s.t.i.TransactionInterceptor - Application exception overridden by rollback exception
+at com.relyon.economizai.service.priceindex.PriceIndexService.bestMarkets(PriceIndexService.java:205)
+```
+- **Reproduced by:** `com.relyon.economizai.integration.ConfirmRollbackOnAttributionFailureIntegrationTest#confirm_succeedsEvenWhenAttributionMarksTransactionRollbackOnly` (failed before fix, passes after)
+- **Root cause + fix:** All 32 tests pass (reproduction test + all related receipt/attribution suites). The fix is minimal and correct: the reproduction test now passes, and no existing tests broke.
+
+Summary of what happened:
+- **Reproduced**: `confirm()` (a `@Transactional` method) calls best-effort `SavingsAttributionService.attribute()`, which with default `REQUIRED` propagation *joined* confirm's transaction. When attribution threw, the inner proxy marked the shared transaction rollback-only; `confirm()` caught and logged the exception per its "never break confirm" contract, but commit then raised `UnexpectedRollbackException` ÔåÆ the exact log line, and the endpoint 500'd.
+- **Fixed**: made `attribute()` run in its own transaction (`@Transactional(propagation = REQUIRES_NEW)`), so an attribution failure rolls back only its own work and confirm commits normally.
+
+FIXED com.relyon.economizai.integration.ConfirmRollbackOnAttributionFailureIntegrationTest#confirm_succeedsEvenWhenAttributionMarksTransactionRollbackOnly | Root cause: best-effort SavingsAttributionService.attribute() used default @Transactional (REQUIRED), joining confirm()'s transaction; on failure it marked the shared tx rollback-only, so confirm()'s swallow-and-continue still hit UnexpectedRollbackException at commit (the "Application exception overridden by rollback exception" log). Fix: annotate attribute() with @Transactional(propagation = REQUIRES_NEW) so attribution runs in its own transaction and its failure can no longer roll back confirm.
+- **Build:** PASS (mvnw test, full suite)
+- **Deploy:** pushed 8b2ad10 -> auto-deploy, health **UP**
+- **Outcome:** RESOLVED
+
 ### [2026-07-03 15:10:32] FIX 2de14d2 - org.postgresql.util.PSQLException: FATAL: terminating connec
 - **Error snippet:**
 ```r
@@ -481,6 +500,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
