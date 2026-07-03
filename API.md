@@ -1085,7 +1085,10 @@ POST   /api/v1/categorizer/dictionary/curated/import → bulk-upsert CURATED ent
 POST   /api/v1/categorizer/brands/import      → bulk-upsert brand-registry entries, hot-reloaded   [ADMIN only]
 POST   /api/v1/categorizer/brands/derive-from-catalog?minProducts=2 → grow registry from EAN-catalog brands (no external calls) [ADMIN only]
 POST   /api/v1/categorizer/benchmark/import   → bulk-upsert golden-set rows for the benchmark      [ADMIN only]
-POST   /api/v1/categorizer/ean-catalog/import → bulk-seed EAN→category catalog (Open Food Facts)  [ADMIN only]
+POST   /api/v1/categorizer/ean-catalog/import → bulk-seed EAN→category catalog (pre-mapped rows)   [ADMIN only]
+POST   /api/v1/categorizer/ean-catalog/import-off → bulk-seed from RAW Open Food Facts rows (server maps tags) [ADMIN only]
+GET    /api/v1/admin/products/brand-coverage    → dry-run brand-extraction coverage over the base  [ADMIN only]
+GET    /api/v1/admin/products/unmatched-report?topN=30 → item→product matching KPI + worst orphans [ADMIN only]
 ```
 
 > The **model-training / catalog-mutating** endpoints (`retrain`, `auto-promote`, `promote-consensus`, `learned`, `consensus`, the four `*/import`s) require `Role.ADMIN` — a normal user gets `403`. The read/debug GETs (`classify`, `ml/predict`, `benchmark`, `quality/history`, `status`) remain open to any authenticated user.
