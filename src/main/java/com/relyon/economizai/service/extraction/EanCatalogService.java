@@ -31,7 +31,14 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class EanCatalogService {
 
+    /** Matches the {@code ean} column length ({@code varchar(14)}) in {@link EanCatalogEntry}. */
+    private static final int MAX_EAN_LENGTH = 14;
+
     private final EanCatalogRepository eanCatalogRepository;
+
+    private static boolean isImportableEan(String ean) {
+        return ean != null && !ean.isBlank() && ean.length() <= MAX_EAN_LENGTH;
+    }
 
     /** Step A2 in the cascade — O(1) primary-key lookup. */
     public Optional<EanCatalogEntry> lookup(String ean) {
@@ -48,7 +55,7 @@ public class EanCatalogService {
         if (entries == null || entries.isEmpty()) return new BulkImportOutcome(0, 0);
 
         var eans = entries.stream()
-                .filter(req -> req.ean() != null && !req.ean().isBlank())
+                .filter(req -> isImportableEan(req.ean()))
                 .map(EanImportRequest::ean)
                 .toList();
 
@@ -59,7 +66,7 @@ public class EanCatalogService {
         var skipped = 0;
 
         for (var req : entries) {
-            if (req.ean() == null || req.ean().isBlank()) {
+            if (!isImportableEan(req.ean())) {
                 skipped++;
                 continue;
             }

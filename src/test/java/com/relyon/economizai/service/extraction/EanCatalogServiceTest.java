@@ -126,6 +126,28 @@ class EanCatalogServiceTest {
     }
 
     @Test
+    void bulkImport_skipsEntriesWithEanLongerThanColumn() {
+        when(eanCatalogRepository.findByEanIn(anyCollection())).thenReturn(List.of());
+        when(eanCatalogRepository.count()).thenReturn(1L);
+
+        var outcome = service.bulkImport(List.of(
+                // 15 chars — overflows ean varchar(14), triggering the DataIntegrityViolationException in prod
+                new EanCatalogService.EanImportRequest("789490001001599", "Bad Code", null,
+                        ProductCategory.BEVERAGES, EanCatalogSource.OPEN_FOOD_FACTS),
+                new EanCatalogService.EanImportRequest("7894900010015", "Coca-Cola", "Coca-Cola",
+                        ProductCategory.BEVERAGES, EanCatalogSource.OPEN_FOOD_FACTS)
+        ));
+
+        assertEquals(1, outcome.imported());
+        assertEquals(1, outcome.skipped());
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<EanCatalogEntry>> captor = ArgumentCaptor.captor();
+        verify(eanCatalogRepository).saveAll(captor.capture());
+        assertEquals(1, captor.getValue().size());
+        assertEquals("7894900010015", captor.getValue().get(0).getEan());
+    }
+
+    @Test
     void bulkImport_returnsZeroOnEmptyList() {
         var outcome = service.bulkImport(List.of());
 
