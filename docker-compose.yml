@@ -78,6 +78,20 @@ services:
       # OAuth audience allowlists — empty skips the aud check (dev only)
       GOOGLE_OAUTH_CLIENT_IDS: ${GOOGLE_OAUTH_CLIENT_IDS:-}
       APPLE_OAUTH_CLIENT_IDS: ${APPLE_OAUTH_CLIENT_IDS:-}
+      # Prometheus scrape auth — empty leaves /actuator/prometheus locked.
+      METRICS_PASSWORD: ${METRICS_PASSWORD:-}
+      # Billing webhooks — empty leaves each webhook seam disabled (fail-closed).
+      REVENUECAT_WEBHOOK_AUTH: ${REVENUECAT_WEBHOOK_AUTH:-}
+      BILLING_WEBHOOK_SECRET: ${BILLING_WEBHOOK_SECRET:-}
+      # Paywall enforcement — false (default) = all PRO features open in dev.
+      SUBSCRIPTION_ENFORCE: ${SUBSCRIPTION_ENFORCE:-false}
+      # Twilio — SMS / WhatsApp channels; empty degrades gracefully (dev logs OTP).
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_FROM_SMS: ${TWILIO_FROM_SMS:-}
+      TWILIO_FROM_WHATSAPP: ${TWILIO_FROM_WHATSAPP:-}
+      # Expo push — empty uses the anonymous (lower) rate limit.
+      EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN:-}
       # profile pics live on a named volume (below) so they survive container
       # rebuilds — /tmp is wiped on every --build redeploy, which silently
       # orphaned the DB key and made avatars "disappear".

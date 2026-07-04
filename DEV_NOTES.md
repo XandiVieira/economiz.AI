@@ -10,6 +10,18 @@ mirror entries here.
 
 ---
 
+## ⚠️ EAN catalog is NOT seeded by a migration — prod DB starts EMPTY (2026-07-04)
+- **Now**: `V51__create_ean_catalog.sql` creates the `ean_catalog` table but seeds NOTHING. The ~32k Brazilian products came from a one-off runtime import (stream the Open Food Facts CSV dump through `POST /api/v1/categorizer/ean-catalog/import-off` — see `scratchpad/stream_import.py` for the script: `curl -sL <OFF csv.gz> | gunzip | python3 stream_import.py`, filters BR rows, pushes in batches of 500).
+- **Why it matters for prod**: a fresh prod DB rebuilds schema from Flyway on an empty volume → the EAN catalog is **empty**, so barcode-scan (`/products/by-ean`) returns catalog-preview misses and category-for-EAN-items silently degrades to dictionary-only. No migration and (until this note) no checklist item = data-loss-on-migrate trap.
+- **Fix before prod**: after the first prod deploy, re-run the OFF import against the prod host (ADMIN token). ~40 min streaming. Consider baking a seed migration or a startup importer later.
+
+## Paid external services — cost + toggles (CapSolver, Infosimples) (2026-07-04)
+- **CapSolver** (captcha): required for MS + SC receipts. `CAPTCHA_PROVIDER=capsolver` + `CAPTCHA_API_KEY`. Without it, MS/SC receipts 503 ("coming soon"). ~US$1-3 / 1000 solves. Key currently in the dev box `.env` and `.claude/settings.local.json` (untracked). **Rotate before prod** and set in the prod env only.
+- **Infosimples** (paid SEFAZ fallback, all UFs): `INFOSIMPLES_ENABLED=false` by default; enable with the API key. **~R$0.24 PER QUERY** — a silent cost sink once on. Only fires when the primary scraper exhausts retries on a rescuable failure. Keep OFF until the cost is justified; document the toggle in the prod runbook.
+- Both are absent from `application-prod.yaml`'s recommended-env list — add them there.
+
+---
+
 ## Household merge/split — shipped dark, two follow-ups before enabling
 - **Now**: full merge (join `bringData` + per-category), restore-on-leave by
   `origin_household_id`, and mutual data-share consent are implemented and tested
@@ -196,7 +208,7 @@ The report works identically in SHADOW and ON (computed purely from
 - **Why OK for dev**: no SMTP creds, FE end-to-end testing still works (manually grab the link).
 - **Why NOT OK for prod**: real users won't see a `[DEV-MODE]` log line. They get NO password-reset / verification email at all.
 - **⚠️ Security gap**: in DEV-MODE the reset/verify **token is written in plaintext** to the persistent app log (`C:\economizai-data\logs\app\app.log`) and is visible in Dozzle. Anyone with log access can hijack any account mid-reset. Acceptable only because this is a single-owner dev box — but the DEV-MODE fallback must be **disabled in prod** (not just "SMTP configured"): once real email works, `AuthEmailSender` should never log the link. Tighten before prod.
-- **Fix before prod**: set SMTP creds in env (Render → `SMTP_HOST/PORT/USERNAME/PASSWORD`) and flip `NOTIFICATIONS_EMAIL_ENABLED=true`. Recommend SES, Mailgun, or Postmark — Gmail SMTP rate-limits hard. ~30 min.
+- **Fix before prod**: set SMTP creds in env (`SMTP_HOST/PORT/USERNAME/PASSWORD`) and flip `NOTIFICATIONS_EMAIL_ENABLED=true`. Recommend SES, Mailgun, or Postmark — Gmail SMTP rate-limits hard. ~30 min.
 
 ---
 
@@ -400,9 +412,9 @@ Helper scripts at repo root (run each in an **Administrator** PowerShell once):
 - **Fixed**: `/actuator/prometheus` now sits behind a dedicated HTTP Basic security chain (`SecurityConfig.metricsSecurityFilterChain`, `@Order(1)`), with the credential from `economizai.metrics.username/password` (`METRICS_USERNAME`/`METRICS_PASSWORD`). **Fail-closed**: blank password ⇒ no user ⇒ every request 401, so it's never exposed unauthenticated. `/actuator/health` stays public on the main chain for UptimeRobot.
 - **Remaining (infra, not code)**: nothing scrapes it yet — stand up Prometheus + Grafana on the box and set `METRICS_PASSWORD`. Steps in INFRASTRUCTURE.md → Monitoring → Metrics.
 
-### Logs go to stdout only — no aggregation
-- **Now**: Render captures stdout. Searchable in their dashboard but no retention beyond the free-tier window.
-- **Fix before serious ops**: ship logs to BetterStack, Loki, or Papertrail. Render has add-ons for this. ~1 hr.
+### Logs go to stdout + host file — no central aggregation
+- **Now**: self-hosted box. App logs to a bind-mounted host file (`/var/log/economizai/app.log`, rotated 50MB×10) and Docker json-file; Dozzle gives a live web view. No search/retention across restarts beyond the rotated files.
+- **Fix before serious ops**: ship logs to BetterStack, Loki, or Papertrail. ~1 hr.
 
 ### Read caches (dashboard / insights) are in-process
 - **Now**: `dashboard` (2 min) + `insightsSpend` (5 min) are cached in-memory via Caffeine (`CachingConfig`), keyed by household with a per-household generation counter (`HouseholdCacheGen`) bumped on receipt mutations. ETags via `ShallowEtagHeaderFilter`.

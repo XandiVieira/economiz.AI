@@ -293,7 +293,14 @@ workaround, use the platform feature"):
 6. **Dev shortcuts (see `DEV_NOTES.md`):** local-disk profile pics → S3/Cloudinary;
    SMTP enabled; `/actuator/prometheus` secured; etc.
 7. **Logs/monitoring:** Dozzle/files → centralized aggregator + alerting.
+8. **Re-seed the EAN catalog (data, not schema):** Flyway builds the `ean_catalog`
+   TABLE but seeds NO rows — a fresh prod DB starts EMPTY, so barcode/category
+   lookups silently degrade to dictionary-only. After the first prod boot, re-run
+   the ~32k-row Open Food Facts import (`POST /api/v1/categorizer/ean-catalog/import-off`,
+   ADMIN token, ~40 min streaming). If you `pg_dump`/`pg_restore` the dev DB (step 2)
+   the catalog comes along and this step is moot — only needed for a clean-slate prod DB.
+   See `DEV_NOTES.md` "EAN catalog is NOT seeded by a migration".
 
 ---
 
-_Last updated: 2026-06-12. Keep this in sync when infra changes._
+_Last updated: 2026-07-04. Keep this in sync when infra changes._
