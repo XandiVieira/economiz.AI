@@ -47,6 +47,12 @@ GitHub repo: `economiz.AI` (https://github.com/XandiVieira/economiz.AI.git)
 ### Fallbacks to Paid APIs
 - Gate paid fallbacks (Infosimples, captcha solvers) on failure types they can plausibly rescue (portal down, solver unavailable). Deterministic failures (bad input, missing markup) must propagate WITHOUT spending money. Catch specific exception types, never a blanket `RuntimeException`.
 
+### SEFAZ Portal Adapters (captcha & scraping)
+- **Captcha is never 100% on the first try.** Any captcha-gated adapter (MS reCAPTCHA, SC Turnstile) MUST wrap its fetch in a retry loop that RE-SOLVES a fresh token on rejection — a solved token is occasionally rejected by the portal, and without retry a valid receipt fails and forces a needless rescan. Bound it (`*-max-attempts`, default 3) so a hostile portal can't grind forever (each attempt costs a paid solve). See `MsDfePortalAdapter` / `SantaCatarinaNfcePortalAdapter` for the shape. When adding a 5th captcha state, copy this pattern.
+- **Never hardcode portal form field IDs.** JSF/ASP.NET portals renumber auto-generated component IDs (`j_idtNN`) without notice — hardcoding them silently posts empty values and every receipt for that state breaks (MS did exactly this). Locate fields by stable attributes instead (the chave input by `maxlength=44`, dropdowns by `<select>`, etc.).
+- **Retry classification**: transient (5xx, timeouts, empty body, captcha-rejected) → retry; deterministic (4xx bad chave, missing sitekey/viewstate, no solver configured, invalid QR) → propagate immediately. Distinguish by exception type in the retry loop's catch.
+- **Each new state needs one real NF to verify** — the QR URL shape (full signed URL vs bare chave) AND the item/EAN semantics. Bare-chave re-consult does NOT work for SVRS/RS (needs the QR's signature params); real QR scans do. Store a fixture under `src/test/resources/fixtures/sefaz/<state>/`.
+
 ### Security Patterns
 - **Client IP**: always via `ClientIpResolver` — it trusts `CF-Connecting-IP` / the LAST `X-Forwarded-For` hop. Never read the first XFF hop (client-spoofable).
 - **Short verification codes** (password reset, OTP): store only a hash, compare constant-time (`MessageDigest.isEqual`), count failed attempts against the active code and lock after a small budget. Never rely on the code space alone.
