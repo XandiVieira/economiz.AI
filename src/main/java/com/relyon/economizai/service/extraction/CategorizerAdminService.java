@@ -224,8 +224,10 @@ public class CategorizerAdminService {
         // (arroz, tomate, leite…). A brand key equal to one of these is noise —
         // "tomate" is never a brand — so skip it. Uses our own truth instead of
         // an ever-growing stopword list.
+        // Normalize with the SAME normalizer the brand keys use (accent-stripping),
+        // else an accented product word ("açúcar") won't match its stripped brand key.
         var productWords = curatedRepository.findAll().stream()
-                .map(entry -> entry.getKeyword().toLowerCase())
+                .map(entry -> DescriptionNormalizer.normalize(entry.getKeyword()))
                 .collect(java.util.stream.Collectors.toSet());
         var variantsByKey = new LinkedHashMap<String, List<EanCatalogRepository.BrandOccurrence>>();
         for (var occurrence : eanCatalogRepository.countByBrand()) {
