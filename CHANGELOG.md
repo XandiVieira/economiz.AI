@@ -14,6 +14,16 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-07-04 — Correção: notas de MS voltaram a funcionar
+
+O portal da SEFAZ-MS renumerou os IDs internos do formulário (JSF/Mojarra), o
+que fazia **toda** nota de MS falhar com `FAILED_PARSE` (`no-items-found`) — a
+chave era enviada vazia na consulta. O backend agora localiza os campos
+dinamicamente (imune a essa renumeração). Nada muda no contrato do FE; notas de
+MS que davam erro passam a processar normalmente. RS/PR/SC não eram afetados.
+
+---
+
 ## 2026-07-03 (noite) — Snapshot de categoria + flag `categorySuggested`
 
 Duas mudanças no modelo de categorias, seguindo o princípio "conhecimento novo
