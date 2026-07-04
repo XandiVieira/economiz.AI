@@ -58,8 +58,11 @@ public class PriceIndexController {
             @RequestParam(required = false) Double radiusKm,
             @RequestParam(required = false) BigDecimal lat,
             @RequestParam(required = false) BigDecimal lng) {
-        var originLatitude = lat != null ? lat : user.getHomeLatitude();
-        var originLongitude = lng != null ? lng : user.getHomeLongitude();
+        // lat/lng are an all-or-nothing pair — using one with the home value of the
+        // other would be a garbage coordinate that skews distance/radius filtering.
+        var useCurrentPosition = lat != null && lng != null;
+        var originLatitude = useCurrentPosition ? lat : user.getHomeLatitude();
+        var originLongitude = useCurrentPosition ? lng : user.getHomeLongitude();
         return ResponseEntity.ok(priceIndexService.bestMarkets(productId, limit,
                 originLatitude, originLongitude, radiusKm,
                 watchedMarketService.watchedCnpjs(user)));
