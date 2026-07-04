@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -190,7 +191,7 @@ class EanCatalogServiceTest {
 
     @Test
     void bulkImport_skipsEntriesWithNullOrBlankEan() {
-        when(eanCatalogRepository.findByEanIn(any())).thenReturn(List.of());
+        // All EANs invalid → the eans list is empty, so findByEanIn is never queried.
         when(eanCatalogRepository.count()).thenReturn(0L);
 
         var outcome = service.bulkImport(List.of(
@@ -200,6 +201,7 @@ class EanCatalogServiceTest {
 
         assertEquals(0, outcome.imported());
         assertEquals(2, outcome.skipped());
+        verify(eanCatalogRepository, never()).findByEanIn(any());
     }
 
     @Test

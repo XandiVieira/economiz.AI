@@ -33,6 +33,8 @@ public class EanCatalogService {
 
     /** Matches the {@code ean} column length ({@code varchar(14)}) in {@link EanCatalogEntry}. */
     private static final int MAX_EAN_LENGTH = 14;
+    /** IN-clause chunk size — keeps the existing-row lookup under Postgres's bind-param limit. */
+    private static final int LOOKUP_CHUNK = 1000;
 
     private final EanCatalogRepository eanCatalogRepository;
 
@@ -57,10 +59,18 @@ public class EanCatalogService {
         var eans = entries.stream()
                 .filter(req -> isImportableEan(req.ean()))
                 .map(EanImportRequest::ean)
+                .distinct()
                 .toList();
 
-        var existingByEan = eanCatalogRepository.findByEanIn(eans).stream()
-                .collect(java.util.stream.Collectors.toMap(EanCatalogEntry::getEan, entry -> entry));
+        // Look up existing rows in chunks — a single IN (...) with tens of thousands
+        // of EANs would blow Postgres's ~65535 bind-parameter limit.
+        var existingByEan = new java.util.HashMap<String, EanCatalogEntry>();
+        for (var start = 0; start < eans.size(); start += LOOKUP_CHUNK) {
+            var chunk = eans.subList(start, Math.min(start + LOOKUP_CHUNK, eans.size()));
+            for (var found : eanCatalogRepository.findByEanIn(chunk)) {
+                existingByEan.put(found.getEan(), found);
+            }
+        }
 
         // Keyed by EAN so a duplicate code within the same batch (OFF repeats them)
         // updates the same entry instead of inserting a second row → no unique violation.
