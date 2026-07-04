@@ -55,6 +55,10 @@ public class MsDfePortalAdapter implements SefazAdapter {
     private static final Pattern SESSION_ID = Pattern.compile(";jsessionid=([a-zA-Z0-9]+)");
     private static final Pattern VIEW_STATE = Pattern.compile(
             "name=\"javax\\.faces\\.ViewState\"[^>]*value=\"([^\"]+)\"", Pattern.CASE_INSENSITIVE);
+    private static final Pattern INPUT_TAG = Pattern.compile("<input\\b[^>]*>", Pattern.CASE_INSENSITIVE);
+    private static final Pattern FIELD_NAME = Pattern.compile("name=\"(formListar:[^\"]+)\"", Pattern.CASE_INSENSITIVE);
+    private static final Pattern SELECT_NAME = Pattern.compile(
+            "<select\\b[^>]*name=\"(formListar:[^\"]+)\"", Pattern.CASE_INSENSITIVE);
 
     private final CaptchaSolver captchaSolver;
     private final RestClient restClient;
@@ -233,6 +237,26 @@ public class MsDfePortalAdapter implements SefazAdapter {
         return matcher.find() ? matcher.group(1) : null;
     }
 
+    /** The chave input is the {@code formListar:*} text field with maxlength=44. */
+    static String extractChaveFieldName(String html) {
+        var inputs = INPUT_TAG.matcher(html);
+        while (inputs.find()) {
+            var tag = inputs.group();
+            var lower = tag.toLowerCase();
+            if (lower.contains("maxlength=\"44\"") || lower.contains("alt=\"chave")) {
+                var name = FIELD_NAME.matcher(tag);
+                if (name.find()) return name.group(1);
+            }
+        }
+        return null;
+    }
+
+    /** The environment (tpAmb) dropdown — its JSF id also drifts. */
+    static String extractEnvSelectName(String html) {
+        var matcher = SELECT_NAME.matcher(html);
+        return matcher.find() ? matcher.group(1) : null;
+    }
+
     /** GET seam — returns the full response so cookies can be forwarded to the POST. */
     protected ResponseEntity<String> httpGetResponse(String url) {
         return restClient.get().uri(url).retrieve().toEntity(String.class);
@@ -253,21 +277,35 @@ public class MsDfePortalAdapter implements SefazAdapter {
             log.warn("ms.captcha.no_viewstate chave={}", LogMasker.chave(chave));
             throw new ReceiptParseException("captcha-viewstate-missing");
         }
+        // The portal's JSF component IDs (j_idtNN) shift whenever Mojarra
+        // re-numbers the view — hardcoding them silently posts an empty chave
+        // ("Chave de acesso não preenchida" → no items). Extract the real field
+        // names from the page instead: the 44-char text input is the chave, the
+        // <select> is the tpAmb (environment) dropdown.
+        var chaveField = extractChaveFieldName(captchaPageHtml);
+        if (chaveField == null) {
+            log.warn("ms.captcha.no_chave_field chave={}", LogMasker.chave(chave));
+            throw new ReceiptParseException("captcha-chave-field-missing");
+        }
+        var envSelectField = extractEnvSelectName(captchaPageHtml);
         var postUrl = CONSULT_URL + (sessionId != null ? ";jsessionid=" + sessionId : "");
-        var body = "formListar=formListar"
-                + "&javax.faces.ViewState=" + enc(viewState)
-                + "&" + enc("formListar:j_idt23") + "=1"
-                + "&" + enc("formListar:j_idt27") + "=" + enc(chave)
-                + "&g-recaptcha-response=" + enc(recaptchaToken)
-                + "&" + enc("formListar:enter") + "=" + enc("formListar:enter");
-        log.info("ms.captcha.submitting chave={} sessionId={}", LogMasker.chave(chave), sessionId);
+        var body = new StringBuilder("formListar=formListar")
+                .append("&javax.faces.ViewState=").append(enc(viewState));
+        if (envSelectField != null) {
+            body.append("&").append(enc(envSelectField)).append("=1"); // 1 = Produção
+        }
+        body.append("&").append(enc(chaveField)).append("=").append(enc(chave))
+                .append("&g-recaptcha-response=").append(enc(recaptchaToken))
+                .append("&").append(enc("formListar:enter")).append("=").append(enc("formListar:enter"));
+        log.info("ms.captcha.submitting chave={} sessionId={} chaveField={}",
+                LogMasker.chave(chave), sessionId, chaveField);
         var post = noRedirectClient.post()
                 .uri(postUrl)
                 .header("Content-Type", "application/x-www-form-urlencoded");
         if (cookieHeader != null && !cookieHeader.isBlank()) {
             post = post.header("Cookie", cookieHeader);
         }
-        var postResponse = post.body(body).retrieve().toEntity(String.class);
+        var postResponse = post.body(body.toString()).retrieve().toEntity(String.class);
         if (postResponse.getStatusCode().is3xxRedirection()) {
             var location = postResponse.getHeaders().getLocation();
             if (location == null) throw new ReceiptParseException("captcha-redirect-missing-location");

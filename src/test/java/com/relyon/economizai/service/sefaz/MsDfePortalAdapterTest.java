@@ -15,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -62,6 +63,29 @@ class MsDfePortalAdapterTest {
         var html = captchaPage();
         assertTrue(MsDfePortalAdapter.looksLikeCaptcha(html));
         assertEquals("6Ld92rYUAAAAAEDBMjM9PhWRkjc10WuVFBOOYV0O", MsDfePortalAdapter.extractSiteKey(html));
+    }
+
+    @Test
+    void extractsChaveAndEnvFieldNamesDynamically_toleratingJsfIdDrift() {
+        // The portal re-numbers its JSF component IDs (j_idtNN); the chave input
+        // is identified by maxlength=44, the environment dropdown by <select>.
+        var html = """
+                <form name="formListar">
+                  <select name="formListar:j_idt99" class="form-control">
+                    <option value="1">Producao</option><option value="2">Homologacao</option>
+                  </select>
+                  <input type="text" name="formListar:j_idt77" alt="Chave de Acesso" maxlength="44" size="44" />
+                  <a id="formListar:enter" href="#">Consultar</a>
+                </form>
+                """;
+        assertEquals("formListar:j_idt77", MsDfePortalAdapter.extractChaveFieldName(html));
+        assertEquals("formListar:j_idt99", MsDfePortalAdapter.extractEnvSelectName(html));
+    }
+
+    @Test
+    void extractChaveFieldName_returnsNullWhenAbsent() {
+        var html = "<form name=\"formListar\"><input type=\"text\" name=\"formListar:other\" /></form>";
+        assertNull(MsDfePortalAdapter.extractChaveFieldName(html));
     }
 
     @Test
