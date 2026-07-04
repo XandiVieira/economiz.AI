@@ -19,6 +19,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import jakarta.validation.constraints.Size;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -29,15 +31,20 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Operational endpoints for the extraction pipeline. Authenticated; no
- * role gating yet (every logged-in user can poke these). Tighten to
- * ADMIN once we have admin users in production.
+ * Operational endpoints for the extraction pipeline. Read/debug endpoints are
+ * open to any authenticated user; the model-training and catalog/dictionary-
+ * mutating endpoints (retrain, promote-consensus, all the *\/import ones,
+ * derive-from-catalog) are ADMIN-gated in {@code SecurityConfig}. Bulk import
+ * lists are capped ({@value #MAX_IMPORT_BATCH}) to bound heap on huge payloads.
  */
 @RestController
 @RequestMapping("/api/v1/categorizer")
 @RequiredArgsConstructor
+@Validated
 @Tag(name = "Categorizer", description = "ML classifier status and pipeline operational endpoints")
 public class CategorizerController {
+
+    static final int MAX_IMPORT_BATCH = 5000;
 
     private final MlClassifierService mlClassifier;
     private final AutoPromotionService autoPromotionService;
@@ -126,7 +133,7 @@ public class CategorizerController {
      */
     @PostMapping("/ean-catalog/import")
     public ResponseEntity<EanCatalogService.BulkImportOutcome> importEanCatalog(
-            @RequestBody List<EanCatalogService.EanImportRequest> entries) {
+            @Size(max = MAX_IMPORT_BATCH) @RequestBody List<EanCatalogService.EanImportRequest> entries) {
         return ResponseEntity.ok(eanCatalogService.bulkImport(entries));
     }
 
@@ -137,7 +144,7 @@ public class CategorizerController {
      */
     @PostMapping("/ean-catalog/import-off")
     public ResponseEntity<EanCatalogService.BulkImportOutcome> importOpenFoodFacts(
-            @RequestBody List<EanCatalogService.OpenFoodFactsRow> rows) {
+            @Size(max = MAX_IMPORT_BATCH) @RequestBody List<EanCatalogService.OpenFoodFactsRow> rows) {
         return ResponseEntity.ok(eanCatalogService.bulkImportOpenFoodFacts(rows));
     }
 
@@ -184,7 +191,7 @@ public class CategorizerController {
      */
     @PostMapping("/dictionary/import")
     public ResponseEntity<CategorizerAdminService.BulkImportOutcome> bulkImportDictionary(
-            @RequestBody List<CategorizerAdminService.DictionaryImportRequest> entries) {
+            @Size(max = MAX_IMPORT_BATCH) @RequestBody List<CategorizerAdminService.DictionaryImportRequest> entries) {
         return ResponseEntity.ok(categorizerAdminService.bulkImport(entries));
     }
 
@@ -195,7 +202,7 @@ public class CategorizerController {
      */
     @PostMapping("/dictionary/curated/import")
     public ResponseEntity<CategorizerAdminService.BulkImportOutcome> bulkImportCurated(
-            @RequestBody List<CategorizerAdminService.CuratedImportRequest> entries) {
+            @Size(max = MAX_IMPORT_BATCH) @RequestBody List<CategorizerAdminService.CuratedImportRequest> entries) {
         return ResponseEntity.ok(categorizerAdminService.importCuratedEntries(entries));
     }
 
@@ -205,7 +212,7 @@ public class CategorizerController {
      */
     @PostMapping("/brands/import")
     public ResponseEntity<CategorizerAdminService.BulkImportOutcome> bulkImportBrands(
-            @RequestBody List<CategorizerAdminService.BrandImportRequest> entries) {
+            @Size(max = MAX_IMPORT_BATCH) @RequestBody List<CategorizerAdminService.BrandImportRequest> entries) {
         return ResponseEntity.ok(categorizerAdminService.importBrands(entries));
     }
 
@@ -229,7 +236,7 @@ public class CategorizerController {
      */
     @PostMapping("/benchmark/import")
     public ResponseEntity<CategorizerAdminService.BulkImportOutcome> bulkImportBenchmark(
-            @RequestBody List<CategorizerAdminService.BenchmarkImportRequest> entries) {
+            @Size(max = MAX_IMPORT_BATCH) @RequestBody List<CategorizerAdminService.BenchmarkImportRequest> entries) {
         return ResponseEntity.ok(categorizerAdminService.importBenchmarkEntries(entries));
     }
 }
