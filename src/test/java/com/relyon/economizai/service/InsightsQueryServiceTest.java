@@ -32,6 +32,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -401,6 +402,27 @@ class InsightsQueryServiceTest {
                 "householdId", "status", "from", "to",
                 "marketCnpjs", "marketCnpjRoots", "categories",
                 "productIds", "eans", "minReceiptTotal", "maxReceiptTotal")));
+    }
+
+    @Test
+    void query_categoryFilter_isSnapshotFirstAndOverrideAware() {
+        when(summaryQuery.getSingleResult())
+                .thenReturn(new Object[]{new BigDecimal("5.00"), 1L, 1L});
+        var input = QueryFilters.fromRequest(
+                LocalDateTime.of(2026, Month.JANUARY, 1, 0, 0),
+                LocalDateTime.of(2026, Month.JUNE, 30, 23, 59),
+                null, null, List.of(ProductCategory.GROCERIES), null, null, null, null,
+                InsightsGroupBy.NONE, 50, CategoryView.HOUSEHOLD);
+
+        insightsQueryService.query(user, input);
+
+        var jpqlCaptor = ArgumentCaptor.forClass(String.class);
+        verify(entityManager, atLeastOnce()).createQuery(jpqlCaptor.capture(), eq(Object[].class));
+        var jpql = jpqlCaptor.getAllValues().get(0);
+        assertTrue(jpql.contains("COALESCE(ri.categoryAtConfirmation, p.category)"),
+                "category filter must be snapshot-first, not live p.category");
+        assertTrue(jpql.contains("HouseholdProductCategoryOverride o"),
+                "household lens must join the override so effective category is filtered");
     }
 
     @Test

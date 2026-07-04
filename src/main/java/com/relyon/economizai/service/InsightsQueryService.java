@@ -112,9 +112,9 @@ public class InsightsQueryService {
                        COUNT(ri)
                 FROM ReceiptItem ri
                 JOIN ri.receipt r
-                LEFT JOIN ri.product p
+                LEFT JOIN ri.product p%s
                 WHERE %s
-                """.formatted(clauses.where());
+                """.formatted(clauses.join(), clauses.where());
         var query = entityManager.createQuery(jpql, Object[].class);
         clauses.bind(query);
         var row = query.getSingleResult();
@@ -137,9 +137,9 @@ public class InsightsQueryService {
                 SELECT DISTINCT r.id, r.discountTotal
                 FROM ReceiptItem ri
                 JOIN ri.receipt r
-                LEFT JOIN ri.product p
+                LEFT JOIN ri.product p%s
                 WHERE %s
-                """.formatted(clauses.where());
+                """.formatted(clauses.join(), clauses.where());
         var query = entityManager.createQuery(jpql, Object[].class);
         clauses.bind(query);
         var sum = BigDecimal.ZERO;
@@ -162,9 +162,9 @@ public class InsightsQueryService {
                 SELECT DISTINCT r.id, %s, r.discountTotal
                 FROM ReceiptItem ri
                 JOIN ri.receipt r
-                LEFT JOIN ri.product p
+                LEFT JOIN ri.product p%s
                 WHERE %s
-                """.formatted(dimension.groupByKeys(), clauses.where());
+                """.formatted(dimension.groupByKeys(), clauses.join(), clauses.where());
         var query = entityManager.createQuery(jpql, Object[].class);
         clauses.bind(query);
         var discounts = new LinkedHashMap<String, BigDecimal>();
@@ -186,11 +186,11 @@ public class InsightsQueryService {
                        COUNT(ri)
                 FROM ReceiptItem ri
                 JOIN ri.receipt r
-                LEFT JOIN ri.product p
+                LEFT JOIN ri.product p%s
                 WHERE %s
                 GROUP BY %s
                 ORDER BY %s
-                """.formatted(dimension.selectKeys(), clauses.where(),
+                """.formatted(dimension.selectKeys(), clauses.join(), clauses.where(),
                 dimension.groupByKeys(), dimension.orderBy());
         var query = entityManager.createQuery(jpql, Object[].class);
         clauses.bind(query);
@@ -221,10 +221,10 @@ public class InsightsQueryService {
                        COUNT(ri)
                 FROM ReceiptItem ri
                 JOIN ri.receipt r
-                LEFT JOIN ri.product p
+                LEFT JOIN ri.product p%s
                 WHERE %s
                 GROUP BY p.id, COALESCE(ri.categoryAtConfirmation, p.category), r.id
-                """.formatted(clauses.where());
+                """.formatted(clauses.join(), clauses.where());
         var query = entityManager.createQuery(jpql, Object[].class);
         clauses.bind(query);
         var rows = query.getResultList();
@@ -296,6 +296,7 @@ public class InsightsQueryService {
     private static FilterClauses buildClauses(QueryFilters filters) {
         var clauses = new ArrayList<String>();
         var bindings = new LinkedHashMap<String, Object>();
+        var join = "";
 
         clauses.add("r.household.id = :householdId");
         bindings.put("householdId", filters.householdId());
@@ -319,7 +320,24 @@ public class InsightsQueryService {
             bindings.put("marketCnpjRoots", filters.marketCnpjRoots());
         }
         if (filters.categories() != null) {
-            clauses.add("p.category IN (:categories)");
+            // Snapshot-first (categoryAtConfirmation → live p.category) so the filter
+            // matches the snapshot-first aggregation and the /items endpoint. OTHER
+            // also matches null-category rows (unmatched/uncategorized show as OTHER).
+            var includeUnmatched = filters.categories().contains(ProductCategory.OTHER);
+            var enumMatch = includeUnmatched
+                    ? "(COALESCE(ri.categoryAtConfirmation, p.category) IS NULL"
+                            + " OR COALESCE(ri.categoryAtConfirmation, p.category) IN (:categories))"
+                    : "COALESCE(ri.categoryAtConfirmation, p.category) IN (:categories)";
+            if (filters.categoryView() == CategoryView.HOUSEHOLD) {
+                // Household lens: filter by EFFECTIVE category (override wins), mirroring
+                // ItemQueryService — a row matches with no override + matching enum, or an
+                // override targeting a listed enum.
+                join = " LEFT JOIN HouseholdProductCategoryOverride o"
+                        + " ON o.product = p AND o.household.id = :householdId";
+                clauses.add("((o.id IS NULL AND " + enumMatch + ") OR o.category IN (:categories))");
+            } else {
+                clauses.add(enumMatch);
+            }
             bindings.put("categories", filters.categories());
         }
         if (filters.productIds() != null) {
@@ -338,10 +356,10 @@ public class InsightsQueryService {
             clauses.add("r.totalAmount <= :maxReceiptTotal");
             bindings.put("maxReceiptTotal", filters.maxReceiptTotal());
         }
-        return new FilterClauses(String.join(" AND ", clauses), bindings);
+        return new FilterClauses(String.join(" AND ", clauses), join, bindings);
     }
 
-    private record FilterClauses(String where, Map<String, Object> bindings) {
+    private record FilterClauses(String where, String join, Map<String, Object> bindings) {
         void bind(Query query) {
             bindings.forEach(query::setParameter);
         }
