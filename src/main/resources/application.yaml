@@ -87,6 +87,11 @@ economizai:
         # delay-ms apart (default schedule: 0s, 5s, 5s, 5s). 4xx never retries.
         max-attempts: ${SEFAZ_RETRY_MAX_ATTEMPTS:5}
         delay-ms: ${SEFAZ_RETRY_DELAY_MS:5000}
+        # Captcha-gated portals re-solve on rejection (imperfect solver). Bounded
+        # attempts so a hostile portal can't grind forever (each attempt re-solves).
+        ms-max-attempts: ${SEFAZ_MS_RETRY_MAX_ATTEMPTS:3}
+        ms-max-total-ms: ${SEFAZ_MS_RETRY_MAX_TOTAL_MS:180000}
+        sc-max-attempts: ${SEFAZ_SC_RETRY_MAX_ATTEMPTS:3}
       # SSRF guard: when a QR payload carries a full URL, we only fetch it if
       # the host matches one of these suffixes (e.g. svrs.rs.gov.br admits
       # dfe-portal.svrs.rs.gov.br). Extend when onboarding new state portals.

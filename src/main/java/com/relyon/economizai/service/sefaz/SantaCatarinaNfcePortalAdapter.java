@@ -47,12 +47,18 @@ public class SantaCatarinaNfcePortalAdapter implements SefazAdapter {
     private final CaptchaSolver captchaSolver;
     private final RestClient restClient;
     private final RestClient noRedirectClient;
+    private final int maxAttempts;
+    private final long retryDelayMs;
 
     public SantaCatarinaNfcePortalAdapter(RestClient.Builder builder,
                                           CaptchaSolver captchaSolver,
                                           @Value("${economizai.ingestion.sefaz.timeout-ms:30000}") int timeoutMs,
+                                          @Value("${economizai.ingestion.sefaz.retry.sc-max-attempts:3}") int maxAttempts,
+                                          @Value("${economizai.ingestion.sefaz.retry.delay-ms:5000}") long retryDelayMs,
                                           @Value("${economizai.ingestion.sefaz.user-agent:economizai}") String userAgent) {
         this.captchaSolver = captchaSolver;
+        this.maxAttempts = Math.max(1, maxAttempts);
+        this.retryDelayMs = Math.max(0, retryDelayMs);
         var requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Math.min(timeoutMs, 10000));
         requestFactory.setReadTimeout(timeoutMs);
@@ -76,7 +82,8 @@ public class SantaCatarinaNfcePortalAdapter implements SefazAdapter {
                 .defaultHeader("Accept", "text/html,application/xhtml+xml")
                 .requestFactory(noRedirectFactory)
                 .build();
-        log.info("SantaCatarinaNfcePortalAdapter active captchaSolver configured={}", captchaSolver.isConfigured());
+        log.info("SantaCatarinaNfcePortalAdapter active retry maxAttempts={} delayMs={} captchaSolver configured={}",
+                this.maxAttempts, this.retryDelayMs, captchaSolver.isConfigured());
     }
 
     @Override
@@ -98,23 +105,55 @@ public class SantaCatarinaNfcePortalAdapter implements SefazAdapter {
         }
     }
 
+    /**
+     * Fetches the DANFE, retrying a rejected Cloudflare Turnstile token (each
+     * retry re-solves fresh) and transient portal errors up to {@code maxAttempts}.
+     * The Turnstile solver is imperfect — a token is occasionally rejected — so
+     * without this a valid SC receipt would fail on the first bad token, forcing
+     * a needless rescan. Deterministic failures (no solver, bad URL, sitekey
+     * missing) propagate immediately. Mirrors {@link MsDfePortalAdapter}.
+     */
     @Override
     public String fetchHtml(String qrPayload) {
         var url = resolveUrl(qrPayload);
+        for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                return fetchOnce(url, attempt);
+            } catch (CaptchaSolveFailedException | RestClientException ex) {
+                // Turnstile rejected (bad token) or transient network/5xx — re-solve and retry.
+                if (attempt >= maxAttempts) break;
+                var delay = attempt == 1 ? 0 : retryDelayMs;
+                log.warn("sc.fetch.retry attempt={}/{} reason={} nextDelayMs={}",
+                        attempt, maxAttempts, ex.getClass().getSimpleName(), delay);
+                sleep(delay);
+            }
+            // CaptchaUnavailableException / ReceiptParseException / InvalidQrPayloadException
+            // are deterministic — they propagate without being caught here.
+        }
+        log.warn("sc.fetch.exhausted attempts={}", maxAttempts);
+        throw new SefazFetchException(UnidadeFederativa.SC.name());
+    }
+
+    private String fetchOnce(String url, int attempt) {
+        log.info("sc.fetch attempt={}/{}", attempt, maxAttempts);
+        var page = getFollowingRedirects(url);
+        var html = page.body();
+        if (html == null || html.isBlank()) {
+            // Transient empty body — let the retry loop handle it.
+            throw new RestClientException("sc-empty-response-body");
+        }
+        if (!ScSecurityChallengeDetector.looksLikeHtml(html)) {
+            return html;
+        }
+        return solveSecurityChallenge(html, url, page.cookieHeader());
+    }
+
+    private void sleep(long ms) {
+        if (ms <= 0) return;
         try {
-            var page = getFollowingRedirects(url);
-            var html = page.body();
-            if (html == null || html.isBlank()) {
-                throw new SefazFetchException(UnidadeFederativa.SC.name());
-            }
-            if (!ScSecurityChallengeDetector.looksLikeHtml(html)) {
-                return html;
-            }
-            return solveSecurityChallenge(html, url, page.cookieHeader());
-        } catch (CaptchaUnavailableException | CaptchaSolveFailedException | ReceiptParseException ex) {
-            throw ex;
-        } catch (RestClientException ex) {
-            log.warn("sc.fetch.failed reason={}", ex.getClass().getSimpleName());
+            Thread.sleep(ms);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
             throw new SefazFetchException(UnidadeFederativa.SC.name());
         }
     }

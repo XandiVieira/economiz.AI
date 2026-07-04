@@ -1,7 +1,7 @@
 package com.relyon.economizai.service.sefaz;
 
-import com.relyon.economizai.exception.CaptchaSolveFailedException;
 import com.relyon.economizai.exception.CaptchaUnavailableException;
+import com.relyon.economizai.exception.SefazFetchException;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
 import com.relyon.economizai.service.sefaz.captcha.CaptchaSolver;
 import org.junit.jupiter.api.Test;
@@ -30,14 +30,14 @@ class SantaCatarinaNfcePortalAdapterTest {
 
     @Test
     void supportedStates_containsSc() {
-        var adapter = new SantaCatarinaNfcePortalAdapter(RestClient.builder(), solver(true), 30000, "test");
+        var adapter = new SantaCatarinaNfcePortalAdapter(RestClient.builder(), solver(true), 30000, 1, 0L, "test");
 
         assertEquals(Set.of(UnidadeFederativa.SC), adapter.supportedStates());
     }
 
     @Test
     void resolveUrl_encodesScPipeSeparatorsForHttpClients() {
-        var adapter = new SantaCatarinaNfcePortalAdapter(RestClient.builder(), solver(true), 30000, "test");
+        var adapter = new SantaCatarinaNfcePortalAdapter(RestClient.builder(), solver(true), 30000, 1, 0L, "test");
 
         assertEquals(
                 "https://sat.sef.sc.gov.br/tax.NET/Sat.DFe.NFCe.Web/Consultas/ConsultaPublicaNFCe.aspx?p="
@@ -113,13 +113,31 @@ class SantaCatarinaNfcePortalAdapterTest {
     }
 
     @Test
-    void fetchHtml_whenTurnstileRejectedThrowsCaptchaSolveFailed() {
+    void fetchHtml_whenTurnstilePersistentlyRejected_exhaustsRetriesThenThrowsSefazFetch() {
         var solver = solver(true);
-        var adapter = new TestScAdapter(solver);
+        var adapter = new TestScAdapter(solver, 3);
         adapter.getResponses.put(SECURITY_URL, ResponseEntity.ok(securityHtml()));
+        // Portal keeps returning the challenge page (token rejected every time).
         adapter.postResponse = ResponseEntity.ok(securityHtml());
 
-        assertThrows(CaptchaSolveFailedException.class, () -> adapter.fetchHtml(SECURITY_URL));
+        assertThrows(SefazFetchException.class, () -> adapter.fetchHtml(SECURITY_URL));
+        assertEquals(3, adapter.postCount, "should re-solve and retry up to maxAttempts");
+    }
+
+    @Test
+    void fetchHtml_retriesRejectedTurnstileThenSucceedsWithFreshToken() {
+        var solver = solver(true);
+        var adapter = new TestScAdapter(solver, 3);
+        adapter.getResponses.put(SECURITY_URL, ResponseEntity.ok(securityHtml()));
+        adapter.getResponses.put(FINAL_URL, ResponseEntity.ok(scDanfeHtml()));
+        // 1st POST: token rejected (challenge page again). 2nd POST: accepted → redirect to DANFE.
+        adapter.postResponses.add(ResponseEntity.ok(securityHtml()));
+        adapter.postResponses.add(ResponseEntity.status(302).header("Location", FINAL_URL).build());
+
+        var html = adapter.fetchHtml(SECURITY_URL);
+
+        assertEquals(scDanfeHtml(), html);
+        assertEquals(2, adapter.postCount, "first token rejected, second succeeded");
     }
 
     @Test
@@ -132,7 +150,7 @@ class SantaCatarinaNfcePortalAdapterTest {
 
     @Test
     void parseHtml_parsesScDetailsPage() {
-        var adapter = new SantaCatarinaNfcePortalAdapter(RestClient.builder(), solver(false), 30000, "test");
+        var adapter = new SantaCatarinaNfcePortalAdapter(RestClient.builder(), solver(false), 30000, 1, 0L, "test");
 
         var parsed = adapter.parseHtml(scDanfeHtml(), CHAVE_SC, FINAL_URL);
 
@@ -153,7 +171,7 @@ class SantaCatarinaNfcePortalAdapterTest {
 
     @Test
     void parseHtml_parsesScItemsSplitAcrossTextLines() {
-        var adapter = new SantaCatarinaNfcePortalAdapter(RestClient.builder(), solver(false), 30000, "test");
+        var adapter = new SantaCatarinaNfcePortalAdapter(RestClient.builder(), solver(false), 30000, 1, 0L, "test");
 
         var parsed = adapter.parseHtml(scDanfeHtmlWithSplitItems(), CHAVE_SC, FINAL_URL);
 
@@ -166,7 +184,7 @@ class SantaCatarinaNfcePortalAdapterTest {
 
     @Test
     void parseHtml_parsesScItemsFromFlattenedText() {
-        var adapter = new SantaCatarinaNfcePortalAdapter(RestClient.builder(), solver(false), 30000, "test");
+        var adapter = new SantaCatarinaNfcePortalAdapter(RestClient.builder(), solver(false), 30000, 1, 0L, "test");
 
         var parsed = adapter.parseHtml(scDanfeHtmlWithFlattenedItems(), CHAVE_SC, FINAL_URL);
 
@@ -284,13 +302,21 @@ class SantaCatarinaNfcePortalAdapterTest {
     private static final class TestScAdapter extends SantaCatarinaNfcePortalAdapter {
         private final Map<String, ResponseEntity<String>> getResponses = new HashMap<>();
         private ResponseEntity<String> postResponse;
+        // When non-empty, each POST pops the next response — lets tests script a
+        // rejected-then-accepted Turnstile sequence across retries.
+        private final java.util.ArrayDeque<ResponseEntity<String>> postResponses = new java.util.ArrayDeque<>();
+        private int postCount;
         private String postedUrl;
         private String postedCookie;
         private String redirectCookie;
         private MultiValueMap<String, String> postedBody;
 
         private TestScAdapter(CaptchaSolver solver) {
-            super(RestClient.builder(), solver, 30000, "test");
+            this(solver, 1);
+        }
+
+        private TestScAdapter(CaptchaSolver solver, int maxAttempts) {
+            super(RestClient.builder(), solver, 30000, maxAttempts, 0L, "test");
         }
 
         @Override
@@ -311,7 +337,8 @@ class SantaCatarinaNfcePortalAdapterTest {
             this.postedUrl = url;
             this.postedBody = body;
             this.postedCookie = cookieHeader;
-            return postResponse;
+            this.postCount++;
+            return postResponses.isEmpty() ? postResponse : postResponses.poll();
         }
     }
 }
