@@ -23,7 +23,6 @@ import org.springframework.web.client.RestClientException;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.Base64;
 import java.util.EnumSet;
 import java.util.List;
@@ -348,25 +347,35 @@ public class SantaCatarinaNfcePortalAdapter implements SefazAdapter {
         return value.replace("|", "%7C");
     }
 
-    private static String extractCookies(List<String> setCookieHeaders) {
-        if (setCookieHeaders == null || setCookieHeaders.isEmpty()) return null;
-        return setCookieHeaders.stream()
-                .map(cookie -> cookie.split(";")[0])
+    /**
+     * Merges cookies across redirect hops, keyed by NAME so a re-set cookie
+     * (e.g. a fresh ASP.NET_SessionId on a later hop) REPLACES the stale value
+     * instead of the header carrying {@code NAME=old; NAME=new} — per RFC 6265
+     * the server may pick the first (stale) one, invalidating the session.
+     */
+    private static String mergeCookies(String existingCookieHeader, List<String> setCookieHeaders) {
+        var byName = new java.util.LinkedHashMap<String, String>();
+        putCookie(byName, existingCookieHeader == null ? null : existingCookieHeader.split(";\\s*"));
+        if (setCookieHeaders != null) {
+            setCookieHeaders.stream().map(cookie -> cookie.split(";")[0]).forEach(pair -> putCookie(byName, pair));
+        }
+        if (byName.isEmpty()) return null;
+        return byName.entrySet().stream()
+                .map(entry -> entry.getKey() + "=" + entry.getValue())
                 .collect(Collectors.joining("; "));
     }
 
-    private static String mergeCookies(String existingCookieHeader, List<String> setCookieHeaders) {
-        var cookies = new ArrayList<String>();
-        if (existingCookieHeader != null && !existingCookieHeader.isBlank()) {
-            cookies.addAll(List.of(existingCookieHeader.split(";\\s*")));
+    private static void putCookie(java.util.LinkedHashMap<String, String> byName, String... pairs) {
+        if (pairs == null) return;
+        for (var pair : pairs) {
+            if (pair == null || pair.isBlank() || !pair.contains("=")) continue;
+            var eq = pair.indexOf('=');
+            byName.put(pair.substring(0, eq).trim(), pair.substring(eq + 1).trim());
         }
-        if (setCookieHeaders != null && !setCookieHeaders.isEmpty()) {
-            setCookieHeaders.stream()
-                    .map(cookie -> cookie.split(";")[0])
-                    .filter(cookie -> !cookie.isBlank())
-                    .forEach(cookies::add);
-        }
-        return cookies.isEmpty() ? null : String.join("; ", cookies);
+    }
+
+    private static void putCookie(java.util.LinkedHashMap<String, String> byName, String pair) {
+        putCookie(byName, new String[]{pair});
     }
 
     private record PortalPage(String body, String cookieHeader) {

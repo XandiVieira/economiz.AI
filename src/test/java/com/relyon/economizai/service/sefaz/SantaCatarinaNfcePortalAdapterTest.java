@@ -113,6 +113,29 @@ class SantaCatarinaNfcePortalAdapterTest {
     }
 
     @Test
+    void fetchHtml_reSetSessionCookieReplacesStaleValueNotAppends() {
+        var solver = solver(true);
+        var adapter = new TestScAdapter(solver);
+        // The security page re-sets ASP.NET_SessionId (Cloudflare rotates it). The
+        // outgoing Cookie must carry the NEW value only, not "NAME=old; NAME=new".
+        var consultUrl = "https://sat.sef.sc.gov.br/tax.NET/Sat.DFe.NFCe.Web/Consultas/ConsultaPublicaNFCe.aspx?p="
+                + CHAVE_SC + "%7C3%7C1";
+        adapter.getResponses.put(consultUrl, ResponseEntity.status(302)
+                .header("Location", SECURITY_URL)
+                .header("Set-Cookie", "ASP.NET_SessionId=stale; path=/")
+                .build());
+        adapter.getResponses.put(SECURITY_URL, ResponseEntity.ok()
+                .header("Set-Cookie", "ASP.NET_SessionId=fresh; path=/")
+                .body(securityHtml()));
+        adapter.postResponse = ResponseEntity.status(302).header("Location", FINAL_URL).build();
+        adapter.getResponses.put(FINAL_URL, ResponseEntity.ok(scDanfeHtml()));
+
+        adapter.fetchHtml(consultUrl);
+
+        assertEquals("ASP.NET_SessionId=fresh", adapter.postedCookie, "re-set cookie replaces stale value");
+    }
+
+    @Test
     void fetchHtml_whenTurnstilePersistentlyRejected_exhaustsRetriesThenThrowsSefazFetch() {
         var solver = solver(true);
         var adapter = new TestScAdapter(solver, 3);
