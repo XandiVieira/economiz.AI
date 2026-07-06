@@ -14,6 +14,16 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-07-06 — Novo estado suportado: **SP** (São Paulo)
+
+Notas de consumidor (NFC-e) de **SP** agora são processadas. O portal da SEFAZ-SP
+(`www.nfce.fazenda.sp.gov.br`) entrega a mesma DANFE responsiva de RS/PR num GET
+simples, sem captcha — verificado com uma nota real (Mercadão Atacadista, 20 itens,
+R$ 158,12). UFs cobertas agora: **RS, PR, SP, MS, SC**. Nada muda no contrato do
+FE; basta escanear o QR da nota de SP normalmente.
+
+---
+
 ## 2026-07-04 — Correção: notas de MS voltaram a funcionar
 
 O portal da SEFAZ-MS renumerou os IDs internos do formulário (JSF/Mojarra), o

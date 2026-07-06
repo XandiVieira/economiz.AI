@@ -26,15 +26,17 @@ import java.util.stream.Collectors;
  * ({@code https://dfe-portal.svrs.rs.gov.br/Dfe/QrCodeNFce}, RS + the states
  * that delegate to SVRS), but other states' own portals serve the exact same
  * markup — PR ({@code www.fazenda.pr.gov.br/nfce/qrcode}) verified with a real
- * fixture on 2026-06-12. The set of UFs this adapter claims is driven by config
- * ({@code economizai.ingestion.sefaz.svrs.states}, default {@code RS,PR}) so a
+ * fixture on 2026-06-12, SP ({@code www.nfce.fazenda.sp.gov.br}, plain-GET
+ * ASP.NET portal, no captcha) verified 2026-07-06. The set of UFs this adapter
+ * claims is driven by config
+ * ({@code economizai.ingestion.sefaz.svrs.states}, default {@code RS,PR,SP}) so a
  * curator can opt-in additional states empirically — submit a real chave,
  * verify the parser extracts fields correctly, then add the UF to the env var
  * (and the portal host to {@code allowed-url-hosts}).
  *
  * <p>Real QR codes carry the full portal URL, so fetching usually needs no
  * URL-building; for bare-chave payloads {@link #resolveUrl} picks the portal
- * by the chave's UF. States whose portal renders a DIFFERENT layout (SP, MG,
+ * by the chave's UF. States whose portal renders a DIFFERENT layout (MG,
  * BA, PE, …) need a dedicated adapter.
  */
 @Slf4j
@@ -57,10 +59,10 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
                                    CaptchaSolver captchaSolver,
                                    @Value("${economizai.ingestion.sefaz.timeout-ms:30000}") int timeoutMs,
                                    @Value("${economizai.ingestion.sefaz.user-agent:economizai}") String userAgent,
-                                   @Value("${economizai.ingestion.sefaz.svrs.states:RS,PR}") String svrsStates,
+                                   @Value("${economizai.ingestion.sefaz.svrs.states:RS,PR,SP}") String svrsStates,
                                    @Value("${economizai.ingestion.sefaz.retry.max-attempts:5}") int maxAttempts,
                                    @Value("${economizai.ingestion.sefaz.retry.delay-ms:5000}") long retryDelayMs,
-                                   @Value("${economizai.ingestion.sefaz.allowed-url-hosts:svrs.rs.gov.br,sefaz.rs.gov.br,fazenda.pr.gov.br,sef.sc.gov.br}") String allowedUrlHosts) {
+                                   @Value("${economizai.ingestion.sefaz.allowed-url-hosts:svrs.rs.gov.br,sefaz.rs.gov.br,fazenda.pr.gov.br,sef.sc.gov.br,fazenda.sp.gov.br}") String allowedUrlHosts) {
         var requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Math.min(timeoutMs, 10000));
         requestFactory.setReadTimeout(timeoutMs);

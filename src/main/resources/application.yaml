@@ -95,12 +95,15 @@ economizai:
       # SSRF guard: when a QR payload carries a full URL, we only fetch it if
       # the host matches one of these suffixes (e.g. svrs.rs.gov.br admits
       # dfe-portal.svrs.rs.gov.br). Extend when onboarding new state portals.
-      allowed-url-hosts: ${SEFAZ_ALLOWED_URL_HOSTS:svrs.rs.gov.br,sefaz.rs.gov.br,fazenda.pr.gov.br,sef.sc.gov.br}
+      allowed-url-hosts: ${SEFAZ_ALLOWED_URL_HOSTS:svrs.rs.gov.br,sefaz.rs.gov.br,fazenda.pr.gov.br,sef.sc.gov.br,fazenda.sp.gov.br}
       svrs:
         # UFs whose NFC-e consult page renders the shared responsive-DANFE
         # layout the adapter parses. RS proven since day one; PR verified
         # 2026-06-12 with a real RaiaDrogasil fixture (own portal, same
-        # markup, QR carries the full URL). States that delegate to SVRS
+        # markup, QR carries the full URL); SP verified 2026-07-06 with a real
+        # Mercadao Atacadista fixture (www.nfce.fazenda.sp.gov.br, ASP.NET
+        # ConsultaQRCode.aspx, plain GET — no captcha — same #tabResult markup).
+        # States that delegate to SVRS
         # (AC, AL, AP, CE, ES, MA, PA, PB, PI, RJ, RN, RO, RR, SE, TO)
         # are worth testing one at a time: submit a real chave, verify the
         # parser extracts items correctly, then add the UF code here (and
@@ -108,9 +111,9 @@ economizai:
         # handled by SantaCatarinaNfcePortalAdapter because it redirects through
         # sat.sef.sc.gov.br/tax.NET/SecurityVerify.aspx and renders a different
         # details page after Cloudflare Turnstile.
-        # States whose portal renders a DIFFERENT layout (SP, MG, BA, PE, …)
+        # States whose portal renders a DIFFERENT layout (MG, BA, PE, …)
         # need a dedicated adapter.
-        states: ${SEFAZ_SVRS_STATES:RS,PR}
+        states: ${SEFAZ_SVRS_STATES:RS,PR,SP}
       captcha:
         # UFs whose consult portal gates the DANFE behind a captcha and is
         # handled by a dedicated adapter (currently MS — www.dfe.ms.gov.br with
