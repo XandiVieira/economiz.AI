@@ -58,6 +58,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ConfirmRollbackOnAttributionFailureIntegrationTest {
 
     private static final String CHAVE = "43260493015006005182651130003394021410599999";
+    // Submit rejects a BARE RS chave (gov.br wall); a scanned RS QR is a full URL.
+    private static final String QR_URL = "https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx?p=" + CHAVE + "|2|1";
 
     @Autowired private MockMvc mockMvc;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -99,7 +101,7 @@ class ConfirmRollbackOnAttributionFailureIntegrationTest {
         var submitResult = mockMvc.perform(post("/api/v1/receipts")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"qrPayload\":\"" + CHAVE + "\"}"))
+                        .content("{\"qrPayload\":\"" + QR_URL + "\"}"))
                 .andExpect(status().isCreated())
                 .andReturn();
         var receiptId = objectMapper.readTree(submitResult.getResponse().getContentAsString()).get("id").asText();

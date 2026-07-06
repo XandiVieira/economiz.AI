@@ -283,6 +283,65 @@ class SefazIngestionServiceTest {
     }
 
     @Test
+    void fetch_bareChaveWithSignatureRequiringAdapter_routesToInfosimplesWithoutScraping() {
+        var spAdapter = mockAdapterFor(UnidadeFederativa.SP);
+        when(spAdapter.requiresQrSignature()).thenReturn(true);
+        var infosimples = mock(InfosimplesService.class);
+        var preParsed = sampleParsed();
+        when(infosimples.fetchParsed(eq(CHAVE_SP), eq(UnidadeFederativa.SP))).thenReturn(preParsed);
+        var service = new SefazIngestionService(List.of(spAdapter), Optional.of(infosimples));
+
+        var fetched = service.fetch(CHAVE_SP); // bare chave, no QR signature
+
+        assertSame(preParsed, fetched.preParsed());
+        assertNull(fetched.adapter());
+        verify(infosimples).fetchParsed(CHAVE_SP, UnidadeFederativa.SP);
+        // the doomed scrape is skipped entirely
+        verify(spAdapter, never()).fetchHtml(anyString());
+    }
+
+    @Test
+    void fetch_bareChaveWithSignatureRequiringAdapter_noInfosimples_throwsWithoutScraping() {
+        var spAdapter = mockAdapterFor(UnidadeFederativa.SP);
+        when(spAdapter.requiresQrSignature()).thenReturn(true);
+        var service = new SefazIngestionService(List.of(spAdapter), Optional.empty());
+
+        assertThrows(SefazFetchException.class, () -> service.fetch(CHAVE_SP));
+        verify(spAdapter, never()).fetchHtml(anyString());
+    }
+
+    @Test
+    void fetch_bareChaveWithNativeAdapter_scrapesAndDoesNotUseInfosimples() {
+        // MS/SC consult by chave natively (requiresQrSignature defaults false),
+        // so a bare chave must go through the adapter, not the paid fallback.
+        var msAdapter = mockAdapterFor(UnidadeFederativa.MS);
+        var chaveMs = "50260777863223012709650180004455861342485537";
+        when(msAdapter.fetchHtml(chaveMs)).thenReturn("<html>ms</html>");
+        var infosimples = mock(InfosimplesService.class);
+        var service = new SefazIngestionService(List.of(msAdapter), Optional.of(infosimples));
+
+        var fetched = service.fetch(chaveMs); // bare chave
+
+        assertSame(msAdapter, fetched.adapter());
+        verify(infosimples, never()).fetchParsed(any(), any());
+    }
+
+    @Test
+    void fetch_realQrUrlWithSignatureRequiringAdapter_scrapesNotInfosimples() {
+        var rsAdapter = mockAdapterFor(UnidadeFederativa.RS);
+        when(rsAdapter.requiresQrSignature()).thenReturn(true);
+        var httpUrl = "https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx?p=" + CHAVE_RS + "|2|1|1|hash";
+        when(rsAdapter.fetchHtml(httpUrl)).thenReturn("<html>rs</html>");
+        var infosimples = mock(InfosimplesService.class);
+        var service = new SefazIngestionService(List.of(rsAdapter), Optional.of(infosimples));
+
+        var fetched = service.fetch(httpUrl); // full signed URL — scrapeable
+
+        assertSame(rsAdapter, fetched.adapter());
+        verify(infosimples, never()).fetchParsed(any(), any());
+    }
+
+    @Test
     void requireSupported_passesForRegisteredUf() {
         var service = new SefazIngestionService(List.of(mockAdapterFor(UnidadeFederativa.RS)), Optional.empty());
 

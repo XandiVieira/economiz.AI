@@ -13,6 +13,18 @@ public final class ChaveAcessoParser {
 
     private ChaveAcessoParser() {}
 
+    /**
+     * True when the payload is a manually-typed bare chave (exactly 44 digits) —
+     * NOT a scanned QR (full URL or a pipe payload that carries the signature).
+     * Manual entry lacks the QR's signature params, so state portals that gate
+     * the DANFE behind a signed QR (the SVRS family — RS/PR/SP) cannot be scraped
+     * from it and must fall back (Infosimples) or fail; MS/SC consult by chave
+     * natively (chNFe / ?p=chave), so a bare chave works there unchanged.
+     */
+    public static boolean isBareChave(String qrPayload) {
+        return qrPayload != null && CHAVE_PATTERN.matcher(qrPayload.trim()).matches();
+    }
+
     public static String extractChave(String qrPayload) {
         if (qrPayload == null || qrPayload.isBlank()) {
             throw new InvalidQrPayloadException();

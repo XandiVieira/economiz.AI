@@ -6,7 +6,9 @@ import com.relyon.economizai.model.enums.UnidadeFederativa;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ChaveAcessoParserTest {
 
@@ -15,6 +17,26 @@ class ChaveAcessoParserTest {
     @Test
     void extractChave_acceptsRawChave() {
         assertEquals(CHAVE_RS, ChaveAcessoParser.extractChave(CHAVE_RS));
+    }
+
+    @Test
+    void isBareChave_trueForExactly44Digits() {
+        assertTrue(ChaveAcessoParser.isBareChave(CHAVE_RS));
+        assertTrue(ChaveAcessoParser.isBareChave("  " + CHAVE_RS + "  "), "trimmed");
+    }
+
+    @Test
+    void isBareChave_falseForScannedQrPayloads() {
+        assertFalse(ChaveAcessoParser.isBareChave(CHAVE_RS + "|2|1|1|abcdef"), "pipe payload carries the signature");
+        assertFalse(ChaveAcessoParser.isBareChave(
+                "https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx?p=" + CHAVE_RS + "|2|1"), "full URL");
+    }
+
+    @Test
+    void isBareChave_falseForNullOrNon44Digits() {
+        assertFalse(ChaveAcessoParser.isBareChave(null));
+        assertFalse(ChaveAcessoParser.isBareChave("1234567890"));
+        assertFalse(ChaveAcessoParser.isBareChave(CHAVE_RS + "1"), "45 digits");
     }
 
     @Test

@@ -83,13 +83,25 @@ public class InfosimplesService {
 
     private ParsedReceipt toParsedReceipt(String chave, InfosimplesData data) {
         var emitente = data.emitente();
-        var nota = data.informacoesNota();
+        var totais = data.totais();
+        var nfe = data.nfe();
 
-        var cnpj = emitente != null && emitente.cnpj() != null
-                ? emitente.cnpj().replaceAll("\\D", "") : null;
-        var marketName = emitente != null ? emitente.nomeRazaoSocial() : null;
-        var marketAddress = emitente != null ? emitente.endereco() : null;
-        var issuedAt = parseIssuedAt(nota);
+        var cnpj = firstNonBlank(
+                emitente == null ? null : emitente.normalizadoCnpj(),
+                emitente == null || emitente.cnpj() == null ? null : emitente.cnpj().replaceAll("\\D", ""));
+        // Market name: "resumida" shape uses nome_razao_social; "completa" uses nome.
+        var marketName = emitente == null ? null
+                : firstNonBlank(emitente.nomeRazaoSocial(), emitente.nome());
+        var marketAddress = emitente == null ? null : emitente.endereco();
+        var issuedAt = parseIssuedAt(data.informacoesNota(), nfe);
+        // Total: "resumida" carries it top-level; "completa" nests it under totais/nfe.
+        var total = firstNonNull(
+                data.normalizadoValorAPagar(),
+                totais == null ? null : totais.normalizadoValorNfe(),
+                nfe == null ? null : nfe.normalizadoValorTotal());
+        var discount = firstNonNull(
+                data.normalizadoValorDesconto(),
+                totais == null ? null : totais.normalizadoValorDescontos());
         var items = toItems(data.produtos());
 
         return ParsedReceipt.builder()
@@ -98,8 +110,8 @@ public class InfosimplesService {
                 .marketName(marketName)
                 .marketAddress(marketAddress)
                 .issuedAt(issuedAt)
-                .totalAmount(data.normalizadoValorAPagar())
-                .discountTotal(data.normalizadoValorDesconto())
+                .totalAmount(total)
+                .discountTotal(discount)
                 .approxTaxFederal(null)
                 .approxTaxEstadual(null)
                 .sourceUrl(data.siteReceipt())
@@ -108,12 +120,30 @@ public class InfosimplesService {
                 .build();
     }
 
-    private static LocalDateTime parseIssuedAt(InfosimplesNotaInfo nota) {
-        if (nota == null || nota.dataEmissao() == null || nota.horaEmissao() == null) return null;
+    /**
+     * Emission timestamp across both response shapes: the "resumida" shape splits
+     * it into {@code informacoes_nota.data_emissao} + {@code hora_emissao}; the
+     * "completa" shape carries a single {@code nfe.data_emissao} like
+     * {@code "05/07/2026 14:11:14-03:00"} (trailing tz offset stripped).
+     */
+    private static LocalDateTime parseIssuedAt(InfosimplesNotaInfo nota, InfosimplesNfe nfe) {
+        if (nota != null && nota.dataEmissao() != null && nota.horaEmissao() != null) {
+            var parsed = tryParse(nota.dataEmissao() + " " + nota.horaEmissao());
+            if (parsed != null) return parsed;
+        }
+        if (nfe != null && nfe.dataEmissao() != null && !nfe.dataEmissao().isBlank()) {
+            // Strip a trailing "-03:00" style offset, keep "dd/MM/yyyy HH:mm:ss".
+            var head = nfe.dataEmissao().trim().replaceAll("([+-]\\d{2}:?\\d{2})$", "").trim();
+            return tryParse(head);
+        }
+        return null;
+    }
+
+    private static LocalDateTime tryParse(String value) {
         try {
-            return LocalDateTime.parse(nota.dataEmissao() + " " + nota.horaEmissao(), DATE_TIME_FMT);
+            return LocalDateTime.parse(value.trim(), DATE_TIME_FMT);
         } catch (Exception ex) {
-            log.warn("infosimples.parse.date-failed value='{}T{}'", nota.dataEmissao(), nota.horaEmissao());
+            log.warn("infosimples.parse.date-failed value='{}'", value);
             return null;
         }
     }
@@ -122,18 +152,25 @@ public class InfosimplesService {
         if (produtos == null) return List.of();
         var lineNumber = new int[]{1};
         return produtos.stream().map(produto -> {
-            // quantity/unitPrice/totalPrice map to NOT NULL columns — a null from
-            // the API would blow up at commit time, so default defensively.
-            var quantity = produto.normalizadoQuantidade() == null
-                    ? BigDecimal.ONE : BigDecimal.valueOf(produto.normalizadoQuantidade());
-            var unitPrice = produto.normalizadoValorUnitario() == null
-                    ? BigDecimal.ZERO : produto.normalizadoValorUnitario();
-            var totalPrice = produto.normalizadoValorTotalProduto() == null
-                    ? unitPrice.multiply(quantity).setScale(2, RoundingMode.HALF_UP)
-                    : produto.normalizadoValorTotalProduto();
+            // "resumida" uses nome/normalizado_quantidade/normalizado_valor_total_produto;
+            // "completa" uses descricao/qtd/normalizado_valor. quantity/unitPrice/
+            // totalPrice map to NOT NULL columns — default defensively.
+            var rawQty = firstNonNull(produto.normalizadoQuantidade(), produto.qtd());
+            var quantity = rawQty == null ? BigDecimal.ONE : BigDecimal.valueOf(rawQty);
+            var totalPrice = firstNonNull(
+                    produto.normalizadoValorTotalProduto(), produto.normalizadoValor());
+            var unitPrice = produto.normalizadoValorUnitario();
+            if (unitPrice == null) {
+                unitPrice = totalPrice == null || quantity.signum() == 0
+                        ? BigDecimal.ZERO
+                        : totalPrice.divide(quantity, 2, RoundingMode.HALF_UP);
+            }
+            if (totalPrice == null) {
+                totalPrice = unitPrice.multiply(quantity).setScale(2, RoundingMode.HALF_UP);
+            }
             return ParsedReceiptItem.builder()
                     .lineNumber(lineNumber[0]++)
-                    .rawDescription(produto.nome())
+                    .rawDescription(firstNonBlank(produto.nome(), produto.descricao()))
                     .ean(null)
                     .quantity(quantity)
                     .unit(produto.unidade())
@@ -148,6 +185,21 @@ public class InfosimplesService {
         return chave == null || chave.length() < 8 ? chave : chave.substring(0, 8);
     }
 
+    @SafeVarargs
+    private static <T> T firstNonNull(T... values) {
+        for (var value : values) {
+            if (value != null) return value;
+        }
+        return null;
+    }
+
+    private static String firstNonBlank(String... values) {
+        for (var value : values) {
+            if (value != null && !value.isBlank()) return value;
+        }
+        return null;
+    }
+
     // ── Internal JSON DTOs ─────────────────────────────────────────────────────
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -160,6 +212,8 @@ public class InfosimplesService {
     record InfosimplesData(
             InfosimplesEmitente emitente,
             @JsonProperty("informacoes_nota") InfosimplesNotaInfo informacoesNota,
+            InfosimplesTotais totais,
+            InfosimplesNfe nfe,
             @JsonProperty("normalizado_valor_a_pagar") BigDecimal normalizadoValorAPagar,
             @JsonProperty("normalizado_valor_desconto") BigDecimal normalizadoValorDesconto,
             List<InfosimplesProduto> produtos,
@@ -169,7 +223,9 @@ public class InfosimplesService {
     @JsonIgnoreProperties(ignoreUnknown = true)
     record InfosimplesEmitente(
             String cnpj,
+            @JsonProperty("normalizado_cnpj") String normalizadoCnpj,
             String endereco,
+            String nome,
             @JsonProperty("nome_razao_social") String nomeRazaoSocial
     ) {}
 
@@ -179,12 +235,29 @@ public class InfosimplesService {
             @JsonProperty("hora_emissao") String horaEmissao
     ) {}
 
+    /** "completa" shape totals block. */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record InfosimplesTotais(
+            @JsonProperty("normalizado_valor_nfe") BigDecimal normalizadoValorNfe,
+            @JsonProperty("normalizado_valor_descontos") BigDecimal normalizadoValorDescontos
+    ) {}
+
+    /** "completa" shape nfe block (single-field emission datetime + total). */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record InfosimplesNfe(
+            @JsonProperty("data_emissao") String dataEmissao,
+            @JsonProperty("normalizado_valor_total") BigDecimal normalizadoValorTotal
+    ) {}
+
     @JsonIgnoreProperties(ignoreUnknown = true)
     record InfosimplesProduto(
             String nome,
+            String descricao,
             @JsonProperty("normalizado_quantidade") Double normalizadoQuantidade,
+            Double qtd,
             @JsonProperty("normalizado_valor_unitario") BigDecimal normalizadoValorUnitario,
             @JsonProperty("normalizado_valor_total_produto") BigDecimal normalizadoValorTotalProduto,
+            @JsonProperty("normalizado_valor") BigDecimal normalizadoValor,
             String unidade
     ) {}
 }

@@ -101,6 +101,16 @@ public class SvrsSharedPortalAdapter implements SefazAdapter {
     }
 
     /**
+     * These portals render the DANFE only for a fully-signed QR URL; a bare,
+     * manually-typed chave (no signature) yields no items. So manual entry must
+     * be routed to the fallback (Infosimples) rather than scraped here.
+     */
+    @Override
+    public boolean requiresQrSignature() {
+        return true;
+    }
+
+    /**
      * Fetches the NFC-e HTML, retrying transient SEFAZ-side failures (5xx,
      * timeouts, connection errors, empty body) so a flaky portal doesn't
      * force the user to keep re-submitting. The first retry is immediate;

@@ -16,6 +16,16 @@ public interface SefazAdapter {
     Set<UnidadeFederativa> supportedStates();
 
     /**
+     * True when this portal can only serve the DANFE from a fully-signed QR URL,
+     * so a manually-typed bare chave (no signature) can't be scraped and must be
+     * routed to a by-chave fallback (Infosimples). Defaults to false — MS/SC
+     * consult by chave natively (chNFe / ?p=chave), so a bare chave works there.
+     */
+    default boolean requiresQrSignature() {
+        return false;
+    }
+
+    /**
      * Some portals wrap the original QR payload in a security URL before the
      * 44-digit chave is visible. Adapters can do a cheap portal-specific fetch
      * to recover it so submit can still persist a PROCESSING receipt with chave

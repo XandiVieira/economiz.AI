@@ -91,6 +91,19 @@ public class SefazIngestionService {
         if (adapter == null) {
             throw new UnsupportedStateException(uf.name());
         }
+        // A manually-typed bare chave (damaged QR) has no signature. Portals that
+        // need it (SVRS family — PR/SP) can't be scraped, so go straight to the
+        // Infosimples by-chave fallback instead of a doomed scrape. RS is rejected
+        // up front at submit (gov.br wall), so it doesn't reach here.
+        if (adapter.requiresQrSignature() && ChaveAcessoParser.isBareChave(qrPayload)) {
+            if (infosimples.isEmpty()) {
+                log.warn("sefaz.fetch.bare_chave uf={} chave={} — no by-chave fallback configured", uf, abbrev(chave));
+                throw new SefazFetchException(uf.name());
+            }
+            log.info("sefaz.fetch.bare_chave uf={} chave={} — routing to infosimples (no QR signature to scrape)", uf, abbrev(chave));
+            var preParsed = infosimples.get().fetchParsed(chave, uf);
+            return new FetchedDocument(null, null, chave, uf, preParsed.sourceUrl(), preParsed);
+        }
         try {
             var html = adapter.fetchHtml(qrPayload);
             var sanitized = CpfMasker.strip(html);

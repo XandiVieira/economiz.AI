@@ -2,6 +2,7 @@ package com.relyon.economizai.service;
 
 import com.relyon.economizai.dto.request.SubmitReceiptRequest;
 import com.relyon.economizai.dto.request.UpdateReceiptItemRequest;
+import com.relyon.economizai.exception.ManualChaveUnsupportedException;
 import com.relyon.economizai.exception.PaywallException;
 import com.relyon.economizai.exception.ReceiptAlreadyIngestedException;
 import com.relyon.economizai.exception.ReceiptItemNotFoundException;
@@ -65,6 +66,11 @@ import static org.mockito.Mockito.when;
 class ReceiptServiceTest {
 
     private static final String CHAVE_RS = "43260412345678000190650010000123451123456780";
+    // A scanned RS QR (full signed URL). Submit's manual-chave guard rejects a
+    // BARE RS chave (gov.br wall), so the happy-path submit tests use the URL a
+    // real scan produces; it still resolves to CHAVE_RS server-side.
+    private static final String QR_RS =
+            "https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx?p=" + CHAVE_RS + "|2|1|1|hash";
 
     @Mock private ReceiptRepository receiptRepository;
     @Mock private ReceiptItemRepository receiptItemRepository;
@@ -227,14 +233,27 @@ class ReceiptServiceTest {
             return r;
         });
 
-        var response = receiptService.submit(user, new SubmitReceiptRequest(CHAVE_RS));
+        var response = receiptService.submit(user, new SubmitReceiptRequest(QR_RS));
 
         // submit returns immediately as PROCESSING (no SEFAZ work on the request thread)
         assertNotNull(response.id());
         assertEquals(ReceiptStatus.PROCESSING, response.status());
         verify(sefazIngestionService, never()).fetch(any());
         // the slow ingestion is handed off to the background service
-        verify(receiptIngestionService).ingest(eq(response.id()), eq(CHAVE_RS));
+        verify(receiptIngestionService).ingest(eq(response.id()), eq(QR_RS));
+    }
+
+    @Test
+    void submit_rejectsBareRsChaveWithLocalizedError() {
+        var user = buildUser();
+
+        // A manually-typed bare RS chave can't be looked up (gov.br wall) — reject
+        // up front, before spending any async work or paid fallback.
+        assertThrows(ManualChaveUnsupportedException.class,
+                () -> receiptService.submit(user, new SubmitReceiptRequest(CHAVE_RS)));
+
+        verify(receiptRepository, never()).save(any());
+        verify(receiptIngestionService, never()).ingest(any(), any());
     }
 
     @Test
@@ -244,7 +263,7 @@ class ReceiptServiceTest {
         when(receiptRepository.countByUserIdAndCreatedAtGreaterThanEqual(eq(user.getId()), any()))
                 .thenReturn(5L);
 
-        var request = new SubmitReceiptRequest(CHAVE_RS);
+        var request = new SubmitReceiptRequest(QR_RS);
         assertThrows(PaywallException.class,
                 () -> receiptService.submit(user, request));
 
@@ -265,10 +284,10 @@ class ReceiptServiceTest {
             return r;
         });
 
-        var response = receiptService.submit(user, new SubmitReceiptRequest(CHAVE_RS));
+        var response = receiptService.submit(user, new SubmitReceiptRequest(QR_RS));
 
         assertEquals(ReceiptStatus.PROCESSING, response.status());
-        verify(receiptIngestionService).ingest(eq(response.id()), eq(CHAVE_RS));
+        verify(receiptIngestionService).ingest(eq(response.id()), eq(QR_RS));
     }
 
     @Test
@@ -278,7 +297,7 @@ class ReceiptServiceTest {
         when(receiptRepository.findByHouseholdIdAndChaveAcesso(any(), eq(CHAVE_RS)))
                 .thenReturn(Optional.of(existingConfirmed));
 
-        var request = new SubmitReceiptRequest(CHAVE_RS);
+        var request = new SubmitReceiptRequest(QR_RS);
         assertThrows(ReceiptAlreadyIngestedException.class,
                 () -> receiptService.submit(user, request));
 
@@ -300,7 +319,7 @@ class ReceiptServiceTest {
             return r;
         });
 
-        var response = receiptService.submit(user, new SubmitReceiptRequest(CHAVE_RS));
+        var response = receiptService.submit(user, new SubmitReceiptRequest(QR_RS));
 
         // delete(T) and delete(DeleteSpecification<T>) overload conflict — use
         // an explicitly-typed captor to disambiguate, then check identity.

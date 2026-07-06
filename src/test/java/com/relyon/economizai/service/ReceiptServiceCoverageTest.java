@@ -82,6 +82,9 @@ import static org.mockito.Mockito.when;
 class ReceiptServiceCoverageTest {
 
     private static final String CHAVE_RS = "43260412345678000190650010000123451123456780";
+    // Scanned RS QR (full signed URL) — submit rejects a BARE RS chave (gov.br wall).
+    private static final String QR_RS =
+            "https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx?p=" + CHAVE_RS + "|2|1|1|hash";
 
     @Mock private ReceiptRepository receiptRepository;
     @Mock private ReceiptItemRepository receiptItemRepository;
@@ -130,14 +133,14 @@ class ReceiptServiceCoverageTest {
             return persisted;
         });
 
-        var response = receiptService.submit(user, new SubmitReceiptRequest(CHAVE_RS));
+        var response = receiptService.submit(user, new SubmitReceiptRequest(QR_RS));
 
         var deletedCaptor = ArgumentCaptor.forClass(Receipt.class);
         verify(receiptRepository).delete(deletedCaptor.capture());
         assertEquals(stale.getId(), deletedCaptor.getValue().getId());
         verify(receiptRepository).flush();
         assertEquals(ReceiptStatus.PROCESSING, response.status());
-        verify(receiptIngestionService).ingest(eq(response.id()), eq(CHAVE_RS));
+        verify(receiptIngestionService).ingest(eq(response.id()), eq(QR_RS));
     }
 
     // ------------------------------------------------------------------ list

@@ -7,6 +7,7 @@ import com.relyon.economizai.dto.request.UpdateReceiptItemRequest;
 import com.relyon.economizai.dto.response.ConfirmReceiptResponse;
 import com.relyon.economizai.dto.response.ReceiptResponse;
 import com.relyon.economizai.dto.response.ReceiptSummaryResponse;
+import com.relyon.economizai.exception.ManualChaveUnsupportedException;
 import com.relyon.economizai.exception.PaywallException;
 import com.relyon.economizai.exception.ReceiptAlreadyIngestedException;
 import com.relyon.economizai.exception.ReceiptItemNotFoundException;
@@ -18,6 +19,7 @@ import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.NotificationType;
 import com.relyon.economizai.model.enums.ProductCategory;
+import com.relyon.economizai.model.enums.UnidadeFederativa;
 import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.repository.ReceiptRepository;
@@ -101,7 +103,15 @@ public class ReceiptService {
 
         // Fail unsupported UFs up front with a localized 400 — the async path
         // would only surface a raw FAILED_PARSE key after polling.
-        sefazIngestionService.requireSupported(ChaveAcessoParser.extractUf(chave));
+        var uf = ChaveAcessoParser.extractUf(chave);
+        sefazIngestionService.requireSupported(uf);
+        // A manually-typed bare chave has no QR signature. RS's SEFAZ needs a
+        // gov.br login to look up by chave (Infosimples can't rescue it either),
+        // so reject up front instead of spending a doomed paid fallback async.
+        if (uf == UnidadeFederativa.RS && ChaveAcessoParser.isBareChave(qrPayload)) {
+            log.info("submit rejected reason=manual_chave_unsupported uf=RS");
+            throw new ManualChaveUnsupportedException(uf.name());
+        }
         enforceMonthlyReceiptCap(user);
         replaceStalePriorOrRejectConfirmedDuplicate(user, chave);
 

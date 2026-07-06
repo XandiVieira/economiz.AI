@@ -4,17 +4,20 @@ import com.relyon.economizai.exception.ReceiptParseException;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
@@ -148,6 +151,67 @@ class InfosimplesServiceTest {
         var parsed = service.fetchParsed(CHAVE, UnidadeFederativa.MS);
 
         assertNull(parsed.issuedAt());
+    }
+
+    // ── Real cross-shape fixtures: Infosimples returns a "resumida" schema for
+    //    some states (PR) and a fuller "completa" schema for others (SP). The
+    //    mapping must read both. ─────────────────────────────────────────────────
+
+    @Test
+    void fetchParsed_mapsCompletaShape_saoPaulo() {
+        var spChave = "35260716881767001421650010000620781001241617";
+        server.expect(requestTo(BASE_URL + "/api/v2/consultas/sefaz/sp/nfce?token=test-key&nfce=" + spChave))
+                .andRespond(withSuccess(fixture("sp-completa"), MediaType.APPLICATION_JSON));
+
+        var parsed = service.fetchParsed(spChave, UnidadeFederativa.SP);
+
+        assertEquals("16881767001421", parsed.cnpjEmitente());
+        assertTrue(parsed.marketName().contains("MERCADAO ATACADISTA"));
+        // total lives under totais.normalizado_valor_nfe in the completa shape
+        assertEquals(0, new BigDecimal("158.12").compareTo(parsed.totalAmount()));
+        // single-field nfe.data_emissao with a tz offset that must be stripped
+        assertEquals(LocalDateTime.of(2026, 7, 5, 14, 11, 14), parsed.issuedAt());
+        assertEquals(20, parsed.items().size());
+
+        var first = parsed.items().get(0);
+        assertEquals("LARANJA PERA KG", first.rawDescription());  // descricao, not nome
+        assertEquals(0, new BigDecimal("0.94").compareTo(first.quantity())); // qtd, not normalizado_quantidade
+        assertEquals("KG", first.unit());
+        assertEquals(0, new BigDecimal("2.80").compareTo(first.totalPrice())); // normalizado_valor
+
+        var itemSum = parsed.items().stream()
+                .map(item -> item.totalPrice())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        assertEquals(0, itemSum.compareTo(parsed.totalAmount()));
+    }
+
+    @Test
+    void fetchParsed_mapsResumidaShape_parana() {
+        var prChave = "41260361585865261893650030000564031777660148";
+        server.expect(requestTo(BASE_URL + "/api/v2/consultas/sefaz/pr/nfce?token=test-key&nfce=" + prChave))
+                .andRespond(withSuccess(fixture("pr-resumida"), MediaType.APPLICATION_JSON));
+
+        var parsed = service.fetchParsed(prChave, UnidadeFederativa.PR);
+
+        assertEquals("61585865261893", parsed.cnpjEmitente());
+        assertTrue(parsed.marketName().contains("RAIADROGASIL"));
+        assertEquals(0, new BigDecimal("28.97").compareTo(parsed.totalAmount()));
+        assertEquals(3, parsed.items().size());
+
+        var first = parsed.items().get(0);
+        assertTrue(first.rawDescription().contains("PAPIN"));  // nome
+        assertEquals(0, BigDecimal.ONE.compareTo(first.quantity()));
+        assertEquals("UN", first.unit());
+        assertEquals(0, new BigDecimal("9.99").compareTo(first.totalPrice()));
+    }
+
+    private static String fixture(String name) {
+        try {
+            return new String(new ClassPathResource("fixtures/infosimples/" + name + ".json")
+                    .getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
+        }
     }
 
     // ── JSON fixtures ──────────────────────────────────────────────────────────

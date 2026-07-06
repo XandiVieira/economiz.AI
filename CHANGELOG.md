@@ -14,6 +14,25 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-07-06 — Digitação manual da chave (QR danificado) funciona por estado
+
+Quando o QR está amassado/rasurado, o usuário pode digitar os **44 dígitos da
+chave de acesso** (shape 5 do submit — já aceito). O backend agora recupera a
+nota corretamente conforme o estado:
+
+- **MS, SC** — recuperam pela chave nativamente (consulta por chave + captcha). ✅
+- **PR, SP** — recuperam via fallback pago (Infosimples), pois o portal desses
+  estados só entrega a nota com o QR assinado. ✅
+- **RS** — **não é possível** por chave (a SEFAZ-RS exige login gov.br). O submit
+  agora **rejeita na hora** uma chave RS pura com **400** e mensagem localizada
+  (`receipt.manual-chave.unsupported`) orientando a escanear o QR — antes isso
+  virava um `FAILED_PARSE` lento após polling.
+
+Nada muda pra QR escaneado (URL completa) em nenhum estado. Campos de erro
+continuam trazendo `parseErrorReason` + `parseErrorMessage`.
+
+---
+
 ## 2026-07-06 — Novo estado suportado: **SP** (São Paulo)
 
 Notas de consumidor (NFC-e) de **SP** agora são processadas. O portal da SEFAZ-SP

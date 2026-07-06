@@ -55,6 +55,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ReceiptToPriceIndexIntegrationTest {
 
     private static final String CHAVE = "43260493015006005182651130003394021410514546";
+    // Submit rejects a BARE RS chave (gov.br wall); a scanned RS QR is a full URL
+    // that resolves to CHAVE (resolveChave is mocked below to return CHAVE anyway).
+    private static final String QR_URL = "https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx?p=" + CHAVE + "|2|1";
 
     @Autowired private MockMvc mockMvc;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -80,7 +83,7 @@ class ReceiptToPriceIndexIntegrationTest {
         var submitResult = mockMvc.perform(post("/api/v1/receipts")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"qrPayload\":\"" + CHAVE + "\"}"))
+                        .content("{\"qrPayload\":\"" + QR_URL + "\"}"))
                 .andExpect(status().isCreated())
                 .andReturn();
         var submitJson = objectMapper.readTree(submitResult.getResponse().getContentAsString());
@@ -176,7 +179,7 @@ class ReceiptToPriceIndexIntegrationTest {
         var first = mockMvc.perform(post("/api/v1/receipts")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"qrPayload\":\"" + CHAVE + "\"}"))
+                        .content("{\"qrPayload\":\"" + QR_URL + "\"}"))
                 .andExpect(status().isCreated())
                 .andReturn();
         var firstId = objectMapper.readTree(first.getResponse().getContentAsString()).get("id").asText();
@@ -194,7 +197,7 @@ class ReceiptToPriceIndexIntegrationTest {
         mockMvc.perform(post("/api/v1/receipts")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"qrPayload\":\"" + CHAVE + "\"}"))
+                        .content("{\"qrPayload\":\"" + QR_URL + "\"}"))
                 .andExpect(status().isConflict());
     }
 
