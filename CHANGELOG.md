@@ -14,6 +14,16 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-07-08 — Novo estado suportado: **CE** (Ceará), via Infosimples
+
+Notas de **CE** agora processam — por enquanto **via fallback Infosimples** (não temos
+scraper próprio do portal do CE ainda). O usuário pode **escanear o QR** ou **digitar a
+chave** de 44 dígitos do cupom; nos dois casos a nota é buscada pelo Infosimples.
+Verificado com uma nota real (A P FRIOS, 26 itens, R$ 196,17). Requer o Infosimples
+habilitado no ambiente; cada consulta tem custo. UFs cobertas: **RS, PR, SP, MS, SC, CE**.
+
+---
+
 ## 2026-07-06 — Digitação manual da chave (QR danificado) funciona por estado
 
 Quando o QR está amassado/rasurado, o usuário pode digitar os **44 dígitos da

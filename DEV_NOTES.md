@@ -17,7 +17,7 @@ mirror entries here.
 
 ## Paid external services — cost + toggles (CapSolver, Infosimples) (2026-07-04)
 - **CapSolver** (captcha): required for MS + SC receipts. `CAPTCHA_PROVIDER=capsolver` + `CAPTCHA_API_KEY`. Without it, MS/SC receipts 503 ("coming soon"). ~US$1-3 / 1000 solves. Key currently in the dev box `.env` and `.claude/settings.local.json` (untracked). **Rotate before prod** and set in the prod env only.
-- **Infosimples** (paid SEFAZ fallback, all UFs): `INFOSIMPLES_ENABLED=false` by default; enable with the API key. **~R$0.24 PER QUERY** — a silent cost sink once on. Only fires when the primary scraper exhausts retries on a rescuable failure. Keep OFF until the cost is justified; document the toggle in the prod runbook.
+- **Infosimples** (paid SEFAZ fallback, all UFs): `INFOSIMPLES_ENABLED=false` by default; enable with the API key. **~R$0.24 PER QUERY** — a silent cost sink once on. Fires when the primary scraper exhausts retries on a rescuable failure, when a manually-typed bare chave hits a signature-only state (PR/SP), AND for **CE every time** (CE has no native scraper — it's Infosimples-only). **CE support is gated on `INFOSIMPLES_ENABLED=true`**: with it off, `InfosimplesBackedAdapter` isn't registered and CE submits fail fast as "unsupported state". Keep the toggle in the prod runbook.
 - Both are absent from `application-prod.yaml`'s recommended-env list — add them there.
 
 ---

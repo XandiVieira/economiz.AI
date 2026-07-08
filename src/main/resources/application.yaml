@@ -114,6 +114,13 @@ economizai:
         # States whose portal renders a DIFFERENT layout (MG, BA, PE, …)
         # need a dedicated adapter.
         states: ${SEFAZ_SVRS_STATES:RS,PR,SP}
+      # UFs supported ONLY via the paid Infosimples fallback (no native scraper
+      # yet — portal layout unverified). CE proven 2026-07-08 with a real A P
+      # FRIOS receipt (26 items, R$196,17) fetched by chave. Users in these states
+      # can scan the QR OR type the 44-digit chave. Requires Infosimples enabled;
+      # each fetch costs ~R$0.24. Promote a UF to a native adapter once its portal
+      # is verified with a real QR (then remove it from here).
+      infosimples-only-states: ${SEFAZ_INFOSIMPLES_ONLY_STATES:CE}
       captcha:
         # UFs whose consult portal gates the DANFE behind a captcha and is
         # handled by a dedicated adapter (currently MS — www.dfe.ms.gov.br with

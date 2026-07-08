@@ -205,6 +205,20 @@ class InfosimplesServiceTest {
         assertEquals(0, new BigDecimal("9.99").compareTo(first.totalPrice()));
     }
 
+    @Test
+    void fetchParsed_mapsCearaReceipt() {
+        var ceChave = "23260723301562000170650110000433671111560131";
+        server.expect(requestTo(BASE_URL + "/api/v2/consultas/sefaz/ce/nfce?token=test-key&nfce=" + ceChave))
+                .andRespond(withSuccess(fixture("ce-nfce"), MediaType.APPLICATION_JSON));
+
+        var parsed = service.fetchParsed(ceChave, UnidadeFederativa.CE);
+
+        assertTrue(parsed.marketName().contains("FRIOS"));
+        assertEquals(0, new BigDecimal("196.17").compareTo(parsed.totalAmount()));
+        assertEquals(26, parsed.items().size());
+        assertTrue(parsed.items().get(0).rawDescription().contains("PIMENTA DE CHEIRO"));
+    }
+
     private static String fixture(String name) {
         try {
             return new String(new ClassPathResource("fixtures/infosimples/" + name + ".json")
