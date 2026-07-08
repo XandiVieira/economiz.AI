@@ -65,4 +65,31 @@ class OpenFoodFactsCategoryMapperTest {
         assertEquals(ProductCategory.MEAT_DAIRY,
                 OpenFoodFactsCategoryMapper.map("en:meats,en:steaks"));
     }
+
+    // ── Portuguese-only tags (many Brazilian OFF entries carry no en: tag) ──────
+
+    @Test
+    void portugueseOnlyCereais_mapsToGroceries() {
+        // The Neston case: OFF tags it only "pt:cereais" — the en:-only mapper
+        // dropped it to OTHER/null.
+        assertEquals(ProductCategory.GROCERIES, OpenFoodFactsCategoryMapper.map("pt:cereais"));
+    }
+
+    @Test
+    void portugueseAccentedTag_isFolded() {
+        // "pt:laticínios" (accented) must hit the accent-free "pt:laticinios" tag.
+        assertEquals(ProductCategory.MEAT_DAIRY, OpenFoodFactsCategoryMapper.map("pt:laticínios"));
+    }
+
+    @Test
+    void portugueseHygieneAndCleaning_mapCorrectly() {
+        assertEquals(ProductCategory.PERSONAL_CARE, OpenFoodFactsCategoryMapper.map("pt:higiene-pessoal"));
+        assertEquals(ProductCategory.CLEANING, OpenFoodFactsCategoryMapper.map("pt:produtos-de-limpeza"));
+    }
+
+    @Test
+    void portugueseBeverage_winsOverProduce() {
+        // pt:sucos (juice) must land in BEVERAGES, not PRODUCE via a fruit tag.
+        assertEquals(ProductCategory.BEVERAGES, OpenFoodFactsCategoryMapper.map("pt:frutas,pt:sucos"));
+    }
 }
