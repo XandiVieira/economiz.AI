@@ -108,6 +108,11 @@ próprios → integração 1 a 1); depende da **sessão do webview** (curta); **
 
 **Custo:** zero pro usuário (sem e-CPF, sem Infosimples) — só nosso esforço de dev por estado.
 
+**Efeito colateral valioso:** a lista por CPF traz também as **NF-e 55 (e-commerce, ex.:
+Amazon)**, não só NFC-e de mercado. Esse dado abre uma feature futura: **comparar preço por
+item e-commerce vs. mercado físico** e sugerir onde compensa comprar (ver HELP.md → Suggested
+Additions, "E-commerce vs. mercado").
+
 **Veredito:** é o **caminho preferido** para "começar com histórico". Recomendo protótipo
 real de 1 estado (RS já mapeado) + testar um CPF que tenha NFC-e de mercado.
 

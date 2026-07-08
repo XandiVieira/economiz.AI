@@ -786,6 +786,7 @@ These came up while structuring the project — open for discussion:
 - **EAN/barcode scan** for shopping-list items, so users can pre-build lists by scanning packages at home before going shopping.
 - **Recipe / meal planning** tied to stock predictions ("you have these items expiring, here are recipes").
 - **Personal inflation index** — IPCA-equivalent computed from the user's own basket. Genuinely interesting and shareable.
+- **E-commerce vs. mercado — onde compensa comprar** — comparar o preço por item no e-commerce (NF-e modelo 55) vs. no mercado físico (NFC-e modelo 65) e sugerir ao usuário quais itens valem mais a pena comprar online. Insumo natural: as NF-e 55 que entram junto no backfill por CPF (ver [`CPF_AUTOIMPORT.md`](./CPF_AUTOIMPORT.md)). Ideia de 2026-07-08.
 - **Receipt OCR fallback** for damaged or missing QR codes (post-MVP — Tesseract or a cloud OCR API).
 - **Auto-import de notas por CPF** — "CPF na nota" no caixa → compras aparecem sozinhas, sem scan. Spike feito (2026-07-07): viável só com credencial do titular (senha do portal estadual OU e-CPF), nunca com o CPF sozinho; polling não push; fragmentado por estado. Spec + achados em [`CPF_AUTOIMPORT.md`](./CPF_AUTOIMPORT.md).
 - **Group/household budget split** — when a household has multiple members, allocate the receipt total across them.
