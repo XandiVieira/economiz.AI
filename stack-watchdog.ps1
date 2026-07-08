@@ -47,9 +47,15 @@ if ($code -eq 200) {
 }
 
 # 3) Not healthy -> bring the stack up (idempotent; starts only what's down).
-Log "recover app not healthy (code=$code); running compose up"
+#    First `up -d` starts anything that's down (incl. db). Then force-recreate ONLY
+#    the app so it always re-reads the current .env — a bare recreate reuses the old
+#    container's env, which silently stranded CORS/captcha changes (env-drift). DB is
+#    left untouched (no --force-recreate on it) to avoid a needless data-layer restart.
+Log "recover app not healthy (code=$code); running compose up + app force-recreate"
 $out = & cmd /c "$compose up -d 2>&1"
 Log ("compose.up " + ($out -join " | "))
+$outApp = & cmd /c "$compose up -d --force-recreate --no-deps app 2>&1"
+Log ("compose.up.app " + ($outApp -join " | "))
 
 # 4) Re-check after a short boot wait.
 Start-Sleep -Seconds 12

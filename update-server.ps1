@@ -45,7 +45,9 @@ $pull = & git merge --ff-only "origin/$branch" 2>&1
 Log ("pull " + ($pull -join " | "))
 
 # 4) Rebuild + restart only the app (DB + volume untouched, data preserved).
-$out = & cmd /c "docker compose $envArg --profile server up -d --build 2>&1"
+#    --force-recreate so the app always re-reads the current .env (a bare recreate
+#    reuses the old container env → silently stranded CORS/captcha changes).
+$out = & cmd /c "docker compose $envArg --profile server up -d --build --force-recreate --no-deps app 2>&1"
 Log ("rebuild " + (($out | Select-Object -Last 3) -join " | "))
 
 # 5) Verify health came back.
