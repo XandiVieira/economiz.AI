@@ -787,6 +787,7 @@ These came up while structuring the project — open for discussion:
 - **Recipe / meal planning** tied to stock predictions ("you have these items expiring, here are recipes").
 - **Personal inflation index** — IPCA-equivalent computed from the user's own basket. Genuinely interesting and shareable.
 - **Receipt OCR fallback** for damaged or missing QR codes (post-MVP — Tesseract or a cloud OCR API).
+- **Auto-import de notas por CPF** — "CPF na nota" no caixa → compras aparecem sozinhas, sem scan. Spike feito (2026-07-07): viável só com credencial do titular (senha do portal estadual OU e-CPF), nunca com o CPF sozinho; polling não push; fragmentado por estado. Spec + achados em [`CPF_AUTOIMPORT.md`](./CPF_AUTOIMPORT.md).
 - **Group/household budget split** — when a household has multiple members, allocate the receipt total across them.
 - **Brand loyalty / cashback awareness** — surface that retailer X has a cashback app the user isn't using.
 - **LGPD compliance plumbing** — data export, account deletion, anonymization audit trail. Non-negotiable for a public Brazilian app handling financial data.
