@@ -83,8 +83,10 @@ economizai:
       # API and cache-through the result. Covers ANY country's products (BR, US,
       # AR…) without pre-importing gigabytes — the catalog fills with exactly what
       # users buy. OFF fair-use: descriptive UA, only for unseen barcodes, off the
-      # request thread, capped per receipt. OFF by default; enable on the server.
-      live-fallback-enabled: ${EAN_LIVE_FALLBACK_ENABLED:false}
+      # request thread, capped per receipt. ON by default in the dev/base profile
+      # (this is what the dev server runs); set EAN_LIVE_FALLBACK_ENABLED=false to
+      # disable, and revisit for prod (OFF-API rate limits at scale).
+      live-fallback-enabled: ${EAN_LIVE_FALLBACK_ENABLED:true}
       live-fallback-timeout-ms: ${EAN_LIVE_FALLBACK_TIMEOUT_MS:2500}
     sefaz:
       timeout-ms: 30000
