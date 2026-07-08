@@ -73,6 +73,10 @@ services:
       # enabled=false (default) → fallback off. Set both in .env to activate.
       INFOSIMPLES_ENABLED: ${INFOSIMPLES_ENABLED:-false}
       INFOSIMPLES_API_KEY: ${INFOSIMPLES_API_KEY:-}
+      # On-demand EAN catalog fill: unknown barcodes are looked up live in the
+      # Open Food/Beauty/Products Facts API and cached-through. ON for this dev
+      # server (covers any country's products without a giant pre-import).
+      EAN_LIVE_FALLBACK_ENABLED: ${EAN_LIVE_FALLBACK_ENABLED:-true}
       # comma-separated emails auto-promoted to ADMIN on signup/startup
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
       # OAuth audience allowlists — empty skips the aud check (dev only)
