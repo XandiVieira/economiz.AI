@@ -2,6 +2,7 @@ package com.relyon.economizai.service.sefaz;
 
 import com.relyon.economizai.exception.ReceiptParseException;
 import com.relyon.economizai.model.Household;
+import com.relyon.economizai.service.extraction.EanCatalogEnrichmentService;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.ReceiptStatus;
@@ -47,6 +48,7 @@ class ReceiptIngestionServiceTest {
     @Mock private ReceiptRepository receiptRepository;
     @Mock private SefazIngestionService sefazIngestionService;
     @Mock private TransactionTemplate transactionTemplate;
+    @Mock private EanCatalogEnrichmentService eanCatalogEnrichmentService;
 
     @InjectMocks private ReceiptIngestionService service;
 

@@ -77,6 +77,15 @@ economizai:
     # legitimate ingest (MS captcha wall-clock cap 3 min + fallback).
     processing-timeout-minutes: ${INGEST_PROCESSING_TIMEOUT_MINUTES:10}
     sweeper-delay-ms: ${INGEST_SWEEPER_DELAY_MS:60000}
+    ean-catalog:
+      # On-demand catalog fill: when a receipt item's barcode isn't in our
+      # imported catalog, look it up live in the Open Food/Beauty/Products Facts
+      # API and cache-through the result. Covers ANY country's products (BR, US,
+      # AR…) without pre-importing gigabytes — the catalog fills with exactly what
+      # users buy. OFF fair-use: descriptive UA, only for unseen barcodes, off the
+      # request thread, capped per receipt. OFF by default; enable on the server.
+      live-fallback-enabled: ${EAN_LIVE_FALLBACK_ENABLED:false}
+      live-fallback-timeout-ms: ${EAN_LIVE_FALLBACK_TIMEOUT_MS:2500}
     sefaz:
       timeout-ms: 30000
       user-agent: "economizai/0.1 (+https://github.com/XandiVieira/economiz.AI)"

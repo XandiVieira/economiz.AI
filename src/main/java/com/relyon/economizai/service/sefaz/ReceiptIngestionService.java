@@ -7,6 +7,7 @@ import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.repository.ReceiptRepository;
+import com.relyon.economizai.service.extraction.EanCatalogEnrichmentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -48,6 +49,7 @@ public class ReceiptIngestionService {
     private final ReceiptRepository receiptRepository;
     private final SefazIngestionService sefazIngestionService;
     private final TransactionTemplate transactionTemplate;
+    private final EanCatalogEnrichmentService eanCatalogEnrichmentService;
 
     /**
      * Fetch + parse the PROCESSING receipt, then transition it. Runs on the
@@ -65,6 +67,7 @@ public class ReceiptIngestionService {
             var fetched = sefazIngestionService.fetch(qrPayload);
             try {
                 var parsed = sefazIngestionService.parse(fetched);
+                warmEanCatalog(parsed);
                 persistParsed(receiptId, parsed);
             } catch (ReceiptParseException ex) {
                 persistParseFailure(receiptId, fetched, ex);
@@ -89,6 +92,26 @@ public class ReceiptIngestionService {
         return receiptRepository.findById(receiptId)
                 .map(receipt -> receipt.getStatus() == ReceiptStatus.PROCESSING)
                 .orElse(false);
+    }
+
+    /**
+     * Best-effort, UNTRANSACTED catalog warm-up: for item barcodes we don't yet
+     * know, fetch them live from the OFF-family API and cache-through, so this
+     * receipt (and future ones) can categorize by EAN. Runs before the persist
+     * tx opens — the HTTP must never sit inside a DB transaction — and never
+     * throws, so a lookup hiccup can't fail an otherwise-good ingest.
+     */
+    private void warmEanCatalog(ParsedReceipt parsed) {
+        if (!eanCatalogEnrichmentService.isEnabled()) return;
+        try {
+            var eans = parsed.items().stream()
+                    .map(ParsedReceiptItem::ean)
+                    .filter(ean -> ean != null && !ean.isBlank())
+                    .toList();
+            eanCatalogEnrichmentService.enrichMissing(eans);
+        } catch (RuntimeException ex) {
+            log.warn("ean_catalog.enrich failed (ignored) reason={}", ex.getClass().getSimpleName());
+        }
     }
 
     private void persistParsed(UUID receiptId, ParsedReceipt parsed) {
