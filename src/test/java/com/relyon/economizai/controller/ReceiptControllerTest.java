@@ -4,10 +4,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.relyon.economizai.config.SecurityConfig;
 import com.relyon.economizai.dto.request.SubmitReceiptRequest;
 import com.relyon.economizai.dto.request.UpdateReceiptItemRequest;
+import com.relyon.economizai.dto.response.ChaveExtractionResponse;
 import com.relyon.economizai.dto.response.ConfirmReceiptResponse;
 import com.relyon.economizai.dto.response.ReceiptItemResponse;
 import com.relyon.economizai.dto.response.ReceiptResponse;
 import com.relyon.economizai.dto.response.ReceiptSummaryResponse;
+import com.relyon.economizai.exception.InvalidReceiptPhotoException;
+import com.relyon.economizai.exception.OcrUnavailableException;
 import com.relyon.economizai.exception.ReceiptAlreadyIngestedException;
 import com.relyon.economizai.exception.ReceiptNotEditableException;
 import com.relyon.economizai.exception.ReceiptNotFoundException;
@@ -18,6 +21,8 @@ import com.relyon.economizai.model.enums.UnidadeFederativa;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.LocalizedMessageService;
 import com.relyon.economizai.service.ReceiptService;
+import com.relyon.economizai.service.scan.ChaveAcessoOcrService;
+import com.relyon.economizai.service.scan.QrCodePhotoDecoder;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -26,10 +31,12 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -41,6 +48,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -59,6 +67,12 @@ class ReceiptControllerTest {
 
     @MockitoBean
     private ReceiptService receiptService;
+
+    @MockitoBean
+    private QrCodePhotoDecoder qrCodePhotoDecoder;
+
+    @MockitoBean
+    private ChaveAcessoOcrService chaveAcessoOcrService;
 
     @MockitoBean
     private JwtService jwtService;
@@ -169,6 +183,70 @@ class ReceiptControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new SubmitReceiptRequest(CHAVE_RS))))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void submitPhoto_returns201WhenQrDecodes() throws Exception {
+        var user = buildUser();
+        var photo = new MockMultipartFile("file", "qr.png", "image/png", new byte[]{1, 2, 3});
+        when(qrCodePhotoDecoder.decode(any(MultipartFile.class))).thenReturn(CHAVE_RS + "|2|1");
+        when(receiptService.submit(any(User.class), any(SubmitReceiptRequest.class)))
+                .thenReturn(sampleReceipt(ReceiptStatus.PROCESSING));
+
+        mockMvc.perform(multipart("/api/v1/receipts/photo")
+                        .file(photo)
+                        .with(SecurityMockMvcRequestPostProcessors.user(user)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("PROCESSING"));
+    }
+
+    @Test
+    void submitPhoto_returns400WhenQrUnreadable() throws Exception {
+        var user = buildUser();
+        var photo = new MockMultipartFile("file", "blurry.png", "image/png", new byte[]{1, 2, 3});
+        when(qrCodePhotoDecoder.decode(any(MultipartFile.class)))
+                .thenThrow(new InvalidReceiptPhotoException("receipt.photo.qr.unreadable"));
+
+        mockMvc.perform(multipart("/api/v1/receipts/photo")
+                        .file(photo)
+                        .with(SecurityMockMvcRequestPostProcessors.user(user)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void submitPhoto_requiresAuth() throws Exception {
+        var photo = new MockMultipartFile("file", "qr.png", "image/png", new byte[]{1, 2, 3});
+
+        mockMvc.perform(multipart("/api/v1/receipts/photo").file(photo))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void extractChaveFromPhoto_returnsExtractedChave() throws Exception {
+        var user = buildUser();
+        var photo = new MockMultipartFile("file", "chave.png", "image/png", new byte[]{1, 2, 3});
+        when(chaveAcessoOcrService.extractChave(any(MultipartFile.class)))
+                .thenReturn(new ChaveExtractionResponse(CHAVE_RS, UnidadeFederativa.RS));
+
+        mockMvc.perform(multipart("/api/v1/receipts/chave/photo")
+                        .file(photo)
+                        .with(SecurityMockMvcRequestPostProcessors.user(user)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.chaveAcesso").value(CHAVE_RS))
+                .andExpect(jsonPath("$.uf").value("RS"));
+    }
+
+    @Test
+    void extractChaveFromPhoto_returns503WhenOcrUnavailable() throws Exception {
+        var user = buildUser();
+        var photo = new MockMultipartFile("file", "chave.png", "image/png", new byte[]{1, 2, 3});
+        when(chaveAcessoOcrService.extractChave(any(MultipartFile.class)))
+                .thenThrow(new OcrUnavailableException());
+
+        mockMvc.perform(multipart("/api/v1/receipts/chave/photo")
+                        .file(photo)
+                        .with(SecurityMockMvcRequestPostProcessors.user(user)))
+                .andExpect(status().isServiceUnavailable());
     }
 
     @Test

@@ -93,4 +93,39 @@ class ChaveAcessoParserTest {
     void extractCnpj_returnsCnpjFromChave() {
         assertEquals("12345678000190", ChaveAcessoParser.extractCnpj(CHAVE_RS));
     }
+
+    // DV precomputed with the NF-e mod-11 algorithm for this 43-digit prefix.
+    private static final String CHAVE_VALID_DV = "43260412345678000190650010000123451123456782";
+
+    @Test
+    void hasValidCheckDigit_trueForCorrectDv() {
+        assertTrue(ChaveAcessoParser.hasValidCheckDigit(CHAVE_VALID_DV));
+    }
+
+    @Test
+    void hasValidCheckDigit_falseForWrongDv() {
+        var prefix = CHAVE_VALID_DV.substring(0, 43);
+        for (var digit = 0; digit <= 9; digit++) {
+            if (digit == CHAVE_VALID_DV.charAt(43) - '0') {
+                continue;
+            }
+            assertFalse(ChaveAcessoParser.hasValidCheckDigit(prefix + digit), "dv=" + digit);
+        }
+    }
+
+    @Test
+    void hasValidCheckDigit_falseWhenAnyDigitMisread() {
+        // Single-digit OCR misreads must always break the DV.
+        var chars = CHAVE_VALID_DV.toCharArray();
+        var position = 10;
+        chars[position] = chars[position] == '9' ? '0' : (char) (chars[position] + 1);
+        assertFalse(ChaveAcessoParser.hasValidCheckDigit(new String(chars)));
+    }
+
+    @Test
+    void hasValidCheckDigit_falseForNullOrMalformed() {
+        assertFalse(ChaveAcessoParser.hasValidCheckDigit(null));
+        assertFalse(ChaveAcessoParser.hasValidCheckDigit("123"));
+        assertFalse(ChaveAcessoParser.hasValidCheckDigit(CHAVE_VALID_DV + "1"));
+    }
 }

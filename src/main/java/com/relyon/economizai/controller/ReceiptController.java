@@ -5,6 +5,7 @@ import com.relyon.economizai.dto.request.ConfirmReceiptRequest;
 import com.relyon.economizai.dto.request.SubmitReceiptRequest;
 import com.relyon.economizai.dto.request.UpdateItemCategoryRequest;
 import com.relyon.economizai.dto.request.UpdateReceiptItemRequest;
+import com.relyon.economizai.dto.response.ChaveExtractionResponse;
 import com.relyon.economizai.dto.response.ConfirmReceiptResponse;
 import com.relyon.economizai.dto.response.ReceiptResponse;
 import com.relyon.economizai.dto.response.ReceiptSummaryResponse;
@@ -12,6 +13,8 @@ import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.service.ReceiptService;
+import com.relyon.economizai.service.scan.ChaveAcessoOcrService;
+import com.relyon.economizai.service.scan.QrCodePhotoDecoder;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +35,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -44,11 +48,36 @@ import java.util.UUID;
 public class ReceiptController {
 
     private final ReceiptService receiptService;
+    private final QrCodePhotoDecoder qrCodePhotoDecoder;
+    private final ChaveAcessoOcrService chaveAcessoOcrService;
 
     @PostMapping
     public ResponseEntity<ReceiptResponse> submit(@AuthenticationPrincipal User user,
                                                   @Valid @RequestBody SubmitReceiptRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(receiptService.submit(user, request));
+    }
+
+    /**
+     * Submit from a PHOTO of the QR code (web upload / gallery picture) —
+     * decodes server-side and enters the exact same flow as a live scan.
+     */
+    @PostMapping("/photo")
+    public ResponseEntity<ReceiptResponse> submitPhoto(@AuthenticationPrincipal User user,
+                                                       @RequestParam("file") MultipartFile file) {
+        var qrPayload = qrCodePhotoDecoder.decode(file);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(receiptService.submit(user, new SubmitReceiptRequest(qrPayload)));
+    }
+
+    /**
+     * OCR the printed 44-digit chave off a photo (fallback for an unreadable
+     * QR). Returns the chave for the user to confirm — the FE then submits it
+     * through the normal endpoint, so misreads never auto-ingest.
+     */
+    @PostMapping("/chave/photo")
+    public ResponseEntity<ChaveExtractionResponse> extractChaveFromPhoto(@AuthenticationPrincipal User user,
+                                                                         @RequestParam("file") MultipartFile file) {
+        return ResponseEntity.ok(chaveAcessoOcrService.extractChave(file));
     }
 
     @GetMapping

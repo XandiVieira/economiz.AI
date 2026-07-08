@@ -1407,6 +1407,79 @@
 					"response": []
 				},
 				{
+					"name": "Submit NFC-e from QR photo (multipart, max 5MB, JPG/PNG)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept-Language",
+								"value": "pt"
+							}
+						],
+						"description": "Uploads a PHOTO of the QR code (web/gallery fallback). Decoded server-side with ZXing and fed into the same submit flow — returns 201 with a PROCESSING receipt, or 400 receipt.photo.qr.unreadable if no QR is found.",
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/receipts/photo",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"receipts",
+								"photo"
+							]
+						},
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": []
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Extract chave from photo via OCR (multipart, max 5MB, JPG/PNG)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept-Language",
+								"value": "pt"
+							}
+						],
+						"description": "OCRs the printed 44-digit chave de acesso (fallback when the QR is unreadable). Returns { chaveAcesso, uf } for the user to CONFIRM — then submit it via POST /api/v1/receipts. Validates the mod-11 check digit + UF prefix, so misreads come back as 400 receipt.photo.chave.unreadable. 503 receipt.ocr.unavailable when Tesseract isn't on the host.",
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/receipts/chave/photo",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"receipts",
+								"chave",
+								"photo"
+							]
+						},
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": []
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
 					"name": "List receipts (paginated)",
 					"request": {
 						"method": "GET",

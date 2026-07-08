@@ -278,6 +278,13 @@ economizai:
   profile-picture:
     local-dir: ${PROFILE_PICTURE_DIR:/tmp/economizai/profile-pics}   # dev: local disk. prod: see DEV_NOTES.md
     max-size-mb: 5
+  receipt-photo:
+    max-size-mb: 5            # QR-photo submit and chave-OCR uploads (multipart cap above must stay higher)
+  ocr:
+    # Tessdata dir for Tess4J (chave OCR). Blank = probe well-known install
+    # locations (homebrew/apt). If Tesseract isn't on the host, the OCR
+    # endpoint degrades to a localized 503 — everything else is unaffected.
+    tessdata-path: ${OCR_TESSDATA_PATH:}
   oauth:
     # Expected audiences (aud claim) for social-login ID tokens. Comma-separated;
     # may be empty in dev (then the aud check is skipped with a WARN log). In prod

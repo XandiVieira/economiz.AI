@@ -240,6 +240,52 @@ spaces/hyphens on submit, and validates length = 44 digits before sending. A
 grouped input (11 × 4-digit fields with auto-advance) reduces transcription
 errors but is optional — the backend handles both.
 
+### Submit from a PHOTO of the QR code
+
+For users who can't scan live (web version, or a saved picture in the gallery):
+
+```
+POST /api/v1/receipts/photo        (multipart/form-data, field "file")
+→ 201 ReceiptResponse with status="PROCESSING"   (same flow as a live scan)
+```
+
+JPG/PNG only, max 5 MB. The QR is decoded server-side (ZXing) and the payload
+enters the exact same submit pipeline — same polling, same error paths, same
+monthly cap and rate limit as `POST /receipts`. Extra error:
+
+| Response | When |
+|---|---|
+| 400 `receipt.photo.qr.unreadable` | No decodable QR in the photo (blur/glare/too far). Ask for a closer, well-lit retake. |
+| 400 `receipt.photo.invalid.type` / `receipt.photo.empty` / `receipt.photo.too.large` | Upload validation. |
+
+On mobile keep scanning client-side (faster, no upload) — this endpoint is the
+no-camera fallback.
+
+### Extract the chave from a PHOTO (OCR fallback)
+
+When the QR itself is damaged but the printed 44-digit "CHAVE DE ACESSO" is
+visible:
+
+```
+POST /api/v1/receipts/chave/photo  (multipart/form-data, field "file")
+→ 200 { "chaveAcesso": "5026...4086", "uf": "MS" }
+```
+
+This does **NOT** submit — OCR can misread, so show the extracted chave to the
+user (ideally in the grouped 11×4 layout) and let them confirm, then send it as
+`qrPayload` through the normal `POST /receipts`. The backend only returns a
+chave whose **mod-11 check digit and UF prefix are valid**, so garbage reads
+come back as an error, not a wrong chave:
+
+| Response | When |
+|---|---|
+| 400 `receipt.photo.chave.unreadable` | No valid 44-digit chave found in the photo. Offer manual typing. |
+| 503 `receipt.ocr.unavailable` | OCR engine not available on the host. Offer manual typing. |
+
+Note the existing per-state rule still applies at submit time: a bare chave
+from **RS** is rejected (`receipt.manual-chave.unsupported`) — the RS portal
+needs the QR's signature params.
+
 ### Error paths
 
 | Response | When |

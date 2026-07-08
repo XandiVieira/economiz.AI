@@ -22,6 +22,7 @@ GitHub repo: `economiz.AI` (https://github.com/XandiVieira/economiz.AI.git)
 - Lombok (boilerplate reduction)
 - SLF4J (logging)
 - ZXing (server-side QR decoding when needed)
+- Tess4J/Tesseract (OCR of the printed chave de acesso; native lib on the host — see DEV_NOTES.md)
 - Jsoup (HTML parsing of SEFAZ NFC-e pages)
 - springdoc-openapi (Swagger UI)
 

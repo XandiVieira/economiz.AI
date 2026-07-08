@@ -67,6 +67,27 @@ public final class ChaveAcessoParser {
         }
     }
 
+    /**
+     * Mod-11 check digit (position 44) as defined by the NF-e layout: weights
+     * 2..9 cycling from the rightmost of the first 43 digits; DV = 11 - (sum % 11),
+     * with remainders 0 and 1 mapping to DV 0. Used to reject OCR misreads —
+     * a single misread digit always breaks the DV.
+     */
+    public static boolean hasValidCheckDigit(String chave) {
+        if (chave == null || !CHAVE_PATTERN.matcher(chave).matches()) {
+            return false;
+        }
+        var sum = 0;
+        var weight = 2;
+        for (var position = 42; position >= 0; position--) {
+            sum += (chave.charAt(position) - '0') * weight;
+            weight = weight == 9 ? 2 : weight + 1;
+        }
+        var remainder = sum % 11;
+        var expectedDigit = remainder < 2 ? 0 : 11 - remainder;
+        return chave.charAt(43) - '0' == expectedDigit;
+    }
+
     public static String extractCnpj(String chave) {
         if (chave == null || !CHAVE_PATTERN.matcher(chave).matches()) {
             throw new InvalidQrPayloadException();

@@ -14,6 +14,28 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-07-08 — Foto do QR e OCR da chave: dois novos jeitos de entrar com a nota
+
+Dois endpoints novos para quando o scan ao vivo não é uma opção (versão web,
+foto salva na galeria, QR danificado):
+
+1. **`POST /api/v1/receipts/photo`** (multipart, campo `file`, JPG/PNG ≤ 5MB) —
+   envia uma **foto do QR code**; o backend decodifica (ZXing) e cai no mesmo
+   fluxo do submit normal → `201` com recibo `PROCESSING`, mesmo polling de
+   sempre. Erro novo: `400 receipt.photo.qr.unreadable` (foto sem QR legível).
+2. **`POST /api/v1/receipts/chave/photo`** (multipart, idem) — **OCR da chave
+   de acesso impressa** (44 dígitos). Retorna `200 { chaveAcesso, uf }` para o
+   usuário **confirmar** na tela — aí o FE manda pelo `POST /receipts` normal.
+   Não auto-submete (OCR pode errar dígito; só devolvemos chave com dígito
+   verificador mod-11 + UF válidos). Erros: `400 receipt.photo.chave.unreadable`,
+   `503 receipt.ocr.unavailable` (host sem Tesseract).
+
+Ambos contam no mesmo rate limit (30/h) e no cap mensal do plano FREE. A regra
+por estado continua valendo no submit: chave "nua" de **RS** é rejeitada
+(precisa do QR assinado). Detalhes e UX sugerida no [API.md](./API.md).
+
+---
+
 ## 2026-07-08 — Novo estado suportado: **CE** (Ceará), via Infosimples
 
 Notas de **CE** agora processam — por enquanto **via fallback Infosimples** (não temos

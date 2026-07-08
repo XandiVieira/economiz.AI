@@ -160,6 +160,18 @@ class RateLimitFilterTest {
     }
 
     @Test
+    void photoAndChaveOcrEndpointsShareTheSubmitBucket() throws Exception {
+        // 30 attempts spread across all three ingestion entry points must
+        // drain ONE shared budget, not three separate ones.
+        for (var attempt = 0; attempt < 10; attempt++) invokeSubmitRequest("7.7.7.7");
+        for (var attempt = 0; attempt < 10; attempt++) invokeSubmitRequest("7.7.7.7", "/api/v1/receipts/photo");
+        for (var attempt = 0; attempt < 10; attempt++) invokeSubmitRequest("7.7.7.7", "/api/v1/receipts/chave/photo");
+
+        var blocked = invokeSubmitRequest("7.7.7.7", "/api/v1/receipts/photo");
+        assertEquals(429, blocked.getStatus());
+    }
+
+    @Test
     void getOnReceiptsRouteIsNotLimited() throws Exception {
         for (var attempt = 0; attempt < 40; attempt++) {
             var request = new MockHttpServletRequest("GET", "/api/v1/receipts");
@@ -182,7 +194,11 @@ class RateLimitFilterTest {
     }
 
     private MockHttpServletResponse invokeSubmitRequest(String ip) throws Exception {
-        var request = new MockHttpServletRequest("POST", "/api/v1/receipts");
+        return invokeSubmitRequest(ip, "/api/v1/receipts");
+    }
+
+    private MockHttpServletResponse invokeSubmitRequest(String ip, String path) throws Exception {
+        var request = new MockHttpServletRequest("POST", path);
         request.setRemoteAddr(ip);
         var response = new MockHttpServletResponse();
         filter.doFilterInternal(request, response, chain);

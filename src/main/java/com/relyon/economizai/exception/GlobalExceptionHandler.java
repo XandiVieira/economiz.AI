@@ -62,7 +62,7 @@ public class GlobalExceptionHandler {
         return respond(ex, HttpStatus.NOT_FOUND, "Entity not found");
     }
 
-    @ExceptionHandler({InvalidInviteCodeException.class, InvalidQrPayloadException.class, UnsupportedStateException.class, ManualChaveUnsupportedException.class, ReceiptParseException.class, ReceiptNotEditableException.class, AlreadyInHouseholdException.class, InvalidLegalVersionException.class, InvalidProfilePictureException.class, InvalidAuthTokenException.class, InvalidShoppingListItemException.class, InvalidProductMergeException.class, InvalidCategoryMigrationException.class, InvalidNotificationRuleException.class, InvalidCnpjException.class, InvalidPhoneNumberException.class, InvalidPhoneVerificationException.class, InvalidNotificationEventException.class, InvalidConsentRequestException.class})
+    @ExceptionHandler({InvalidInviteCodeException.class, InvalidQrPayloadException.class, UnsupportedStateException.class, ManualChaveUnsupportedException.class, ReceiptParseException.class, ReceiptNotEditableException.class, AlreadyInHouseholdException.class, InvalidLegalVersionException.class, InvalidProfilePictureException.class, InvalidAuthTokenException.class, InvalidShoppingListItemException.class, InvalidProductMergeException.class, InvalidCategoryMigrationException.class, InvalidNotificationRuleException.class, InvalidCnpjException.class, InvalidPhoneNumberException.class, InvalidPhoneVerificationException.class, InvalidNotificationEventException.class, InvalidConsentRequestException.class, InvalidReceiptPhotoException.class})
     public ResponseEntity<ErrorResponse> handleBadRequest(DomainException ex) {
         return respond(ex, HttpStatus.BAD_REQUEST, "Bad request");
     }
@@ -85,6 +85,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(CaptchaUnavailableException.class)
     public ResponseEntity<ErrorResponse> handleCaptchaUnavailable(CaptchaUnavailableException ex) {
         return respond(ex, HttpStatus.SERVICE_UNAVAILABLE, "Captcha-gated state, no solver configured");
+    }
+
+    @ExceptionHandler(OcrUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleOcrUnavailable(OcrUnavailableException ex) {
+        return respond(ex, HttpStatus.SERVICE_UNAVAILABLE, "OCR engine not available on this host");
     }
 
     @ExceptionHandler(PaywallException.class)

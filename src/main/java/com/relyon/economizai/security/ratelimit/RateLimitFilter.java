@@ -20,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Predicate;
 
 /**
@@ -63,6 +64,15 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final LocalizedMessageService messageService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * Every ingestion entry point shares ONE bucket: plain submit, QR-photo
+     * submit and chave OCR all end in the same expensive downstream work
+     * (SEFAZ outbound HTTP / native OCR), so a split budget would just be
+     * 3x the intended limit.
+     */
+    private static final Set<String> SUBMIT_PATHS = Set.of(
+            "/api/v1/receipts", "/api/v1/receipts/photo", "/api/v1/receipts/chave/photo");
+
     private final List<Rule> rules = List.of(
             new Rule(
                     AUTH_POLICY,
@@ -70,7 +80,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
                     KeyStrategy.IP),
             new Rule(
                     SUBMIT_POLICY,
-                    req -> "POST".equals(req.getMethod()) && "/api/v1/receipts".equals(req.getRequestURI()),
+                    req -> "POST".equals(req.getMethod()) && SUBMIT_PATHS.contains(req.getRequestURI()),
                     KeyStrategy.USER_OR_IP)
     );
 
