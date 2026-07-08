@@ -34,15 +34,22 @@ public class EanCatalogEnrichmentService {
     }
 
     /**
-     * For each distinct EAN not already in the catalog, fetch it live and
-     * cache-through. Returns the number of new catalog rows written.
+     * For each distinct EAN we can't yet categorize — missing from the catalog OR
+     * present but with a null category (e.g. an old import that predates the pt:
+     * tag mapping) — fetch it live and cache-through, upserting the row. Returns
+     * the number of catalog rows written.
+     *
+     * <p>Re-fetching null-category rows lets the catalog self-heal: a row imported
+     * before we understood its OFF tags gets a category the next time the product
+     * is bought. Rows OFF genuinely can't categorize stay null and may be
+     * re-fetched on a later purchase — bounded by the per-receipt cap.
      */
     public int enrichMissing(Collection<String> eans) {
         if (!apiClient.isEnabled() || eans == null || eans.isEmpty()) return 0;
         var missing = eans.stream()
                 .filter(ean -> ean != null && !ean.isBlank())
                 .distinct()
-                .filter(ean -> eanCatalogService.lookup(ean).isEmpty())
+                .filter(this::needsCategory)
                 .limit(MAX_LOOKUPS_PER_RECEIPT)
                 .toList();
         if (missing.isEmpty()) return 0;
@@ -59,5 +66,11 @@ public class EanCatalogEnrichmentService {
         log.info("ean_catalog.enrich looked_up={} found={} written={}",
                 missing.size(), fetched.size(), outcome.imported());
         return outcome.imported();
+    }
+
+    /** True when the catalog has no usable category for this EAN yet. */
+    private boolean needsCategory(String ean) {
+        var existing = eanCatalogService.lookup(ean);
+        return existing.isEmpty() || existing.get().getCategory() == null;
     }
 }

@@ -1,6 +1,7 @@
 package com.relyon.economizai.service.extraction;
 
 import com.relyon.economizai.model.EanCatalogEntry;
+import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.service.extraction.EanCatalogService.BulkImportOutcome;
 import com.relyon.economizai.service.extraction.EanCatalogService.OpenFoodFactsRow;
 import org.junit.jupiter.api.Test;
@@ -37,14 +38,34 @@ class EanCatalogEnrichmentServiceTest {
     }
 
     @Test
-    void enrichMissing_skipsEansAlreadyInCatalog() {
+    void enrichMissing_skipsEansAlreadyCategorized() {
         when(apiClient.isEnabled()).thenReturn(true);
-        when(catalogService.lookup("111")).thenReturn(Optional.of(mock(EanCatalogEntry.class)));
+        var categorized = mock(EanCatalogEntry.class);
+        when(categorized.getCategory()).thenReturn(ProductCategory.GROCERIES);
+        when(catalogService.lookup("111")).thenReturn(Optional.of(categorized));
 
         assertEquals(0, service.enrichMissing(List.of("111")));
 
         verify(apiClient, never()).fetch("111");
         verify(catalogService, never()).bulkImportOpenFoodFacts(anyList());
+    }
+
+    @Test
+    void enrichMissing_reFetchesRowsWithNullCategory() {
+        // Self-heal: a row imported before the pt: mapping has a null category and
+        // must be re-fetched so it can be recovered.
+        when(apiClient.isEnabled()).thenReturn(true);
+        var uncategorized = mock(EanCatalogEntry.class);
+        when(uncategorized.getCategory()).thenReturn(null);
+        when(catalogService.lookup("neston")).thenReturn(Optional.of(uncategorized));
+        var row = new OpenFoodFactsRow("neston", "Neston", "Nestlé", "pt:cereais");
+        when(apiClient.fetch("neston")).thenReturn(Optional.of(row));
+        when(catalogService.bulkImportOpenFoodFacts(anyList())).thenReturn(new BulkImportOutcome(1, 0));
+
+        assertEquals(1, service.enrichMissing(List.of("neston")));
+
+        verify(apiClient).fetch("neston");
+        verify(catalogService).bulkImportOpenFoodFacts(List.of(row));
     }
 
     @Test
