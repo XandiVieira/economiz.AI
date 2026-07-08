@@ -1,13 +1,15 @@
 # Feature: Auto-import de notas por CPF ("CPF na nota" → aparece sozinho no app)
 
-**Status:** SPIKE (2026-07-07/08). **Inviável como feature de MASSA** (login gov.br tem
-captcha+MFA a cada consulta → não automatizável; OAuth gov.br só dá identidade; API de NF-e
-oficial é e-CNPJ/paga/empresa). **PORÉM, candidato a PREMIUM de nicho via certificado
-e-CPF (A1)**: com e-CPF há um caminho oficial automatizável (web service `NFeDistribuicaoDFe`
-consumido por pessoa física) — setup único, sem captcha. Barreira: o usuário precisa
-**possuir um e-CPF** (~R$120-250/ano) + guardamos o certificado dele (responsabilidade de
-segurança/LGPD alta). **Scan do QR permanece o fluxo principal.** Falta um spike real com um
-e-CPF pra confirmar que o DistribuicaoDFe devolve NFC-e (modelo 65) por CPF.
+**Status:** SPIKE (2026-07-07/08). Três desenhos avaliados:
+1. **Auto-import recorrente (polling)** — ❌ inviável (login gov.br tem captcha+MFA a cada
+   consulta; OAuth gov.br só dá identidade; API NF-e oficial é e-CNPJ/paga/empresa).
+2. **Premium via e-CPF (A1)** — candidato de nicho: `NFeDistribuicaoDFe` é automatizável, mas
+   o usuário precisa comprar um e-CPF (~R$120-250/ano) → adoção baixa; descartado pelo custo.
+3. **⭐ Backfill de onboarding via webview** — ✅ **VIÁVEL** (spike RS OK, 2026-07-08): usuário
+   loga 1× no webview (ele vence o captcha), e a API JSON `BuscaNotasNfg` devolve as notas por
+   CPF/período com a chave de cada uma. Zero custo pro usuário. **É o próximo candidato real.**
+
+**Scan do QR permanece o fluxo principal.**
 **Origem:** ideia de tester — em vez de escanear o QR, o usuário pede "CPF na nota"
 no caixa e as compras apareceriam automaticamente no app.
 
@@ -68,6 +70,46 @@ autenticando como o cidadão — que quase nenhum consumidor tem. Portanto o aut
 CPF **não é viável como feature escalável de consumidor** pelos canais oficiais. O **scan
 do QR permanece o caminho**. Revisitar só se o gov.br publicar um scope OAuth de documentos
 fiscais do cidadão.
+
+## ⭐ Backfill de onboarding via webview — SPIKE RS OK (2026-07-08)
+
+Variante mais promissora: **importar o histórico UMA VEZ no onboarding**, com o
+usuário logando ele mesmo (o captcha/MFA do gov.br deixa de ser problema nosso —
+é um passo único que o humano vence). Spike real feito no RS (Playwright abrindo
+o Chrome do usuário, ele logou via gov.br, capturamos a sessão):
+
+**Resultado: VIÁVEL.** O portal RS Pessoa Física expõe uma **API JSON interna limpa**:
+```
+GET https://www.sefaz.rs.gov.br/portal/Consultas/BuscaNotasNfg?dtIniPeriodo=YYYY/MM/DD&dtFimPeriodo=YYYY/MM/DD
+```
+retornando um array com, por nota: `nomeContrib` (emitente), `nomeMunicipio`,
+`dtEmiDoctoFormatada`, `nroDocto`, **`tipoDoctoOrig`** (55=NF-e, 65=NFC-e),
+**`chaAceNfeDocto`** (chave de acesso, 44 díg. com um espaço a remover), `vlrDocto`,
+`nomeNatOperDocto`. Além disso a tela tem **export CSV/Excel/PDF** (fallback robusto).
+
+**Desenho da feature:**
+1. Onboarding → webview abre o portal do estado; usuário loga via gov.br (1×, captcha/MFA).
+2. Na sessão autenticada, chamamos `BuscaNotasNfg` (ou export CSV) → lista das notas.
+3. Importamos por **chave** (resumo: loja/data/valor; opcionalmente item-a-item depois).
+4. Usuário já começa com histórico.
+
+**Confirmado / a confirmar:**
+- ✅ Mecanismo funciona: JSON por CPF, por período, com a chave de cada nota.
+- ✅ Login = gov.br + **hCaptcha**; OAuth só identidade (o usuário vence o captcha uma vez).
+- ⚠️ No teste, todas as notas eram **NF-e 55 (Amazon/e-commerce)** — o usuário deu CPF em
+  compras online, não no mercado. O campo `tipoDoctoOrig` suporta **65 (NFC-e)** e é a
+  mesma lista, mas **falta ver um CPF com NFC-e de mercado** pra confirmar 65.
+- ⚠️ Profundidade: a chamada veio com range ~60 dias — validar se aceita período maior.
+
+**Caveats gerais:** é **por estado** (isto é o portal do RS; SP/etc. têm endpoints
+próprios → integração 1 a 1); depende da **sessão do webview** (curta); **LGPD**
+(dado do próprio usuário, com consentimento → ok) + ToS do portal; e só aparecem notas
+**onde o CPF foi informado** (a premissa do produto — usuário passa a pedir CPF na nota).
+
+**Custo:** zero pro usuário (sem e-CPF, sem Infosimples) — só nosso esforço de dev por estado.
+
+**Veredito:** é o **caminho preferido** para "começar com histórico". Recomendo protótipo
+real de 1 estado (RS já mapeado) + testar um CPF que tenha NFC-e de mercado.
 
 ## Como PREMIUM (setup único) — o desenho que realmente fecha
 
