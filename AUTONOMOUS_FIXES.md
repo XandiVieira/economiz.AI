@@ -68,6 +68,21 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-07-08 18:05:05] [NEEDS-HUMAN] NO-REPRO (attempt 1x) - INFO  [req=    o.a.c.httpN.HttpNProcessor - Error parsing HT
+- **Error snippet:**
+```r
+2026-07-08 21:03:58.341 INFO  [req= user= rcpt= item=] o.a.c.http11.Http11Processor - Error parsing HTTP request header
+```
+- **Outcome:** could NOT reproduce the bug with a failing test; no code changed.
+- **Detail:** Confirmed ÔÇö that string exists nowhere in the codebase. It is emitted by Tomcat's `Http11Processor` (Coyote connector) at the socket/protocol layer when an inbound request has a malformed header line (bad chars, oversized header, invalid HTTP framing). This happens **before** any Spring filter, controller, or application code executes ÔÇö which is precisely why the MDC fields (`req= user= rcpt= item=`) are all empty: no `MdcContextFilter` ran.
+
+This is not an application-code bug. It's a client sending a malformed HTTP request (or a scanner/bot probing the port). There is no application code path a JUnit unit test could exercise to reproduce it ÔÇö the failure lives entirely inside Tomcat's protocol parser, and it's logged at INFO (Tomcat's normal, non-fatal handling of bad client input), not ERROR.
+
+Per the instructions, when the issue is not a reproducible code bug (environmental/external, inside the container's protocol layer), I make no changes.
+
+REPRO_FAIL "Error parsing HTTP request header" is emitted by Tomcat's Http11Processor at the connector/protocol layer for a malformed inbound request (empty MDC = ran before any app filter); no application code path exists to reproduce it in a unit test.
+- **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 ### [2026-07-08 16:33:41] [NEEDS-HUMAN] CLAUDE-TIMEOUT (attempt 1x) - java.lang.ArrayIndexOutOfBoundsException: Index N out of bou
 - **Error snippet:**
 ```r
@@ -556,6 +571,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
