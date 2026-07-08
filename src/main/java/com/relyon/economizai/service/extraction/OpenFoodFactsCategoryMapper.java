@@ -55,6 +55,15 @@ public final class OpenFoodFactsCategoryMapper {
             "en:medicines",
             "pt:suplementos", "pt:suplementos-alimentares", "pt:vitaminas",
             "pt:medicamentos", "pt:remedios")),
+        // Before the food rules — pet food carries en:meats / cereal tags that
+        // would otherwise bucket it as MEAT_DAIRY / GROCERIES.
+        new Rule(ProductCategory.PET_SUPPLIES, List.of(
+            "en:pet-food", "en:pet-foods", "en:foods-for-animals", "en:animal-feed",
+            "en:cat-food", "en:dog-food", "en:cats", "en:dogs",
+            "pt:racao", "pt:racoes", "pt:alimento-para-animais",
+            "pt:alimento-para-caes", "pt:alimento-para-gatos",
+            "pt:comida-para-caes", "pt:comida-para-gatos",
+            "pt:racao-para-caes", "pt:racao-para-gatos", "pt:petiscos-para-caes")),
         new Rule(ProductCategory.BEVERAGES, List.of(
             "en:beverages", "en:drinks", "en:waters", "en:juices", "en:sodas",
             "en:soft-drinks", "en:alcoholic-beverages", "en:beers", "en:wines",

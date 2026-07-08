@@ -9,5 +9,6 @@ public enum ProductCategory {
     CLEANING,
     PERSONAL_CARE,
     HEALTH,
+    PET_SUPPLIES,
     OTHER
 }

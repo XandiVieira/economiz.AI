@@ -14,6 +14,16 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-07-08 — Nova categoria de produto: **PET_SUPPLIES**
+
+Adicionada a categoria `PET_SUPPLIES` (ração/petiscos e itens de pet). **Ação do FE:**
+renderizar o novo valor na lista de categorias (rótulo sugerido: "Pet"). Itens de pet
+food passam a cair aí em vez de GROCERIES/MEAT_DAIRY. Valores atuais: GROCERIES,
+BEVERAGES, PRODUCE, MEAT_DAIRY, BAKERY, CLEANING, PERSONAL_CARE, HEALTH,
+**PET_SUPPLIES**, OTHER.
+
+---
+
 ## 2026-07-08 — Foto do QR e OCR da chave: dois novos jeitos de entrar com a nota
 
 Dois endpoints novos para quando o scan ao vivo não é uma opção (versão web,

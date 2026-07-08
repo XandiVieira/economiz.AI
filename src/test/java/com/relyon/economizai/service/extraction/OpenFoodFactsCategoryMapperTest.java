@@ -92,4 +92,12 @@ class OpenFoodFactsCategoryMapperTest {
         // pt:sucos (juice) must land in BEVERAGES, not PRODUCE via a fruit tag.
         assertEquals(ProductCategory.BEVERAGES, OpenFoodFactsCategoryMapper.map("pt:frutas,pt:sucos"));
     }
+
+    @Test
+    void petFood_mapsToPetSupplies_notFoodCategory() {
+        // Pet food carries meat/cereal tags; PET_SUPPLIES must win over MEAT_DAIRY.
+        assertEquals(ProductCategory.PET_SUPPLIES,
+                OpenFoodFactsCategoryMapper.map("en:meats,en:dog-food,en:pet-food"));
+        assertEquals(ProductCategory.PET_SUPPLIES, OpenFoodFactsCategoryMapper.map("pt:racao"));
+    }
 }
