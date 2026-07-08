@@ -1,10 +1,13 @@
 # Feature: Auto-import de notas por CPF ("CPF na nota" → aparece sozinho no app)
 
-**Status:** SPIKE concluído (2026-07-07). **Inviável como feature escalável de consumidor**
-pelos canais oficiais (login gov.br com captcha+MFA é inautomatizável; OAuth gov.br só dá
-identidade, não as notas; API oficial de NF-e exige e-CNPJ/paga/empresa). Único caminho
-programático = certificado e-CPF (A1), que quase nenhum consumidor tem. **Scan do QR
-permanece o caminho.**
+**Status:** SPIKE (2026-07-07/08). **Inviável como feature de MASSA** (login gov.br tem
+captcha+MFA a cada consulta → não automatizável; OAuth gov.br só dá identidade; API de NF-e
+oficial é e-CNPJ/paga/empresa). **PORÉM, candidato a PREMIUM de nicho via certificado
+e-CPF (A1)**: com e-CPF há um caminho oficial automatizável (web service `NFeDistribuicaoDFe`
+consumido por pessoa física) — setup único, sem captcha. Barreira: o usuário precisa
+**possuir um e-CPF** (~R$120-250/ano) + guardamos o certificado dele (responsabilidade de
+segurança/LGPD alta). **Scan do QR permanece o fluxo principal.** Falta um spike real com um
+e-CPF pra confirmar que o DistribuicaoDFe devolve NFC-e (modelo 65) por CPF.
 **Origem:** ideia de tester — em vez de escanear o QR, o usuário pede "CPF na nota"
 no caixa e as compras apareceriam automaticamente no app.
 
@@ -65,6 +68,21 @@ autenticando como o cidadão — que quase nenhum consumidor tem. Portanto o aut
 CPF **não é viável como feature escalável de consumidor** pelos canais oficiais. O **scan
 do QR permanece o caminho**. Revisitar só se o gov.br publicar um scope OAuth de documentos
 fiscais do cidadão.
+
+## Como PREMIUM (setup único) — o desenho que realmente fecha
+
+O usuário topou o setup. Então o critério vira "setup **uma vez**, depois roda sozinho":
+
+- **e-CPF (A1) + `NFeDistribuicaoDFe`** — usuário sobe o certificado uma vez; a gente
+  consome o web service oficial da SEFAZ como pessoa física e puxa os DFe/notas dele.
+  Automatizável, oficial, sem captcha. **Este é o candidato premium.**
+  - **Barreira de adoção:** o usuário precisa **comprar um e-CPF** (~R$120-250/ano, numa
+    autoridade certificadora) — poucos consumidores têm. Feature de nicho, não de massa.
+  - **Liability:** guardar o `.pfx` (chave privada = identidade digital legal do usuário)
+    exige cofre de segredos dedicado + consentimento LGPD explícito + escopo mínimo.
+  - **A confirmar num spike real:** se o DistribuicaoDFe retorna **NFC-e (65)** por CPF
+    (é sólido pra NF-e 55; pra NFC-e de consumidor precisa validar com um certificado real).
+- **gov.br senha** — descartado: captcha+MFA a cada consulta, não é "setup único".
 
 ## Desenhos viáveis (todos opt-in, com consentimento LGPD)
 
