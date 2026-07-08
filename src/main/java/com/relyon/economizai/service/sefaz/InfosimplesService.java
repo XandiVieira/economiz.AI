@@ -171,7 +171,11 @@ public class InfosimplesService {
             return ParsedReceiptItem.builder()
                     .lineNumber(lineNumber[0]++)
                     .rawDescription(firstNonBlank(produto.nome(), produto.descricao()))
-                    .ean(null)
+                    // Persist the barcode the merchant declared (packaged items carry it;
+                    // loose produce/meat sold by weight report "SEM GTIN"). It drives the
+                    // EAN-catalog category lookup + cross-receipt product dedup, so we keep
+                    // it even when today's catalog has no entry for it.
+                    .ean(extractGtin(produto.eanTributavel(), produto.eanComercial()))
                     .quantity(quantity)
                     .unit(produto.unidade())
                     .unitPrice(unitPrice)
@@ -183,6 +187,26 @@ public class InfosimplesService {
 
     private static String abbrev(String chave) {
         return chave == null || chave.length() < 8 ? chave : chave.substring(0, 8);
+    }
+
+    /**
+     * Normalizes a merchant-declared GTIN to the EAN-13 form the catalog stores.
+     * Infosimples reports the tributável GTIN as 13 digits ("7891000098950") and
+     * the comercial one zero-padded to 14 ("07891000098950"); the catalog is keyed
+     * by the 13-digit form, so a leading pad zero is dropped. "SEM GTIN" / blank /
+     * sub-8-digit codes (merchant-internal PLUs) are not real barcodes → null.
+     */
+    static String extractGtin(String... candidates) {
+        for (var candidate : candidates) {
+            if (candidate == null) continue;
+            var digits = candidate.replaceAll("\\D", "");
+            if (digits.length() < 8) continue;
+            if (digits.length() == 14 && digits.charAt(0) == '0') {
+                digits = digits.substring(1);
+            }
+            return digits;
+        }
+        return null;
     }
 
     @SafeVarargs
@@ -258,6 +282,8 @@ public class InfosimplesService {
             @JsonProperty("normalizado_valor_unitario") BigDecimal normalizadoValorUnitario,
             @JsonProperty("normalizado_valor_total_produto") BigDecimal normalizadoValorTotalProduto,
             @JsonProperty("normalizado_valor") BigDecimal normalizadoValor,
+            @JsonProperty("ean_comercial") String eanComercial,
+            @JsonProperty("ean_tributavel") String eanTributavel,
             String unidade
     ) {}
 }

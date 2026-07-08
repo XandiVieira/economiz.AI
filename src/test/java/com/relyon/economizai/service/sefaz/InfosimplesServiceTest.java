@@ -216,7 +216,26 @@ class InfosimplesServiceTest {
         assertTrue(parsed.marketName().contains("FRIOS"));
         assertEquals(0, new BigDecimal("196.17").compareTo(parsed.totalAmount()));
         assertEquals(26, parsed.items().size());
-        assertTrue(parsed.items().get(0).rawDescription().contains("PIMENTA DE CHEIRO"));
+
+        var first = parsed.items().get(0);
+        assertTrue(first.rawDescription().contains("PIMENTA DE CHEIRO"));
+        assertNull(first.ean(), "loose produce is 'SEM GTIN' — no barcode");
+
+        // Packaged items carry a real EAN, normalized to the catalog's 13-digit form.
+        var neston = parsed.items().stream()
+                .filter(item -> item.rawDescription().contains("NESTON")).findFirst().orElseThrow();
+        assertEquals("7891000098950", neston.ean());
+    }
+
+    @Test
+    void extractGtin_normalizesToEan13AndDropsNonBarcodes() {
+        assertEquals("7891000098950", InfosimplesService.extractGtin("7891000098950"));      // already 13
+        assertEquals("7891000098950", InfosimplesService.extractGtin("07891000098950"));     // 14, pad zero dropped
+        assertNull(InfosimplesService.extractGtin("SEM GTIN"));                                // not a barcode
+        assertNull(InfosimplesService.extractGtin((String) null));
+        assertNull(InfosimplesService.extractGtin("9669"));                                   // internal PLU, too short
+        assertEquals("7891000098950",
+                InfosimplesService.extractGtin("SEM GTIN", "07891000098950"));                // first valid wins
     }
 
     private static String fixture(String name) {
