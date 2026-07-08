@@ -1,6 +1,10 @@
 # Feature: Auto-import de notas por CPF ("CPF na nota" → aparece sozinho no app)
 
-**Status:** SPIKE feito (2026-07-07). Viável **condicionalmente** — NÃO com só o CPF.
+**Status:** SPIKE concluído (2026-07-07). **Inviável como feature escalável de consumidor**
+pelos canais oficiais (login gov.br com captcha+MFA é inautomatizável; OAuth gov.br só dá
+identidade, não as notas; API oficial de NF-e exige e-CNPJ/paga/empresa). Único caminho
+programático = certificado e-CPF (A1), que quase nenhum consumidor tem. **Scan do QR
+permanece o caminho.**
 **Origem:** ideia de tester — em vez de escanear o QR, o usuário pede "CPF na nota"
 no caixa e as compras apareceriam automaticamente no app.
 
@@ -35,6 +39,32 @@ Testado contra a API do Infosimples (que já integramos) e o catálogo SEFAZ:
 privacidade que (corretamente) não existe. Todo caminho exige a **credencial autenticada
 do titular**: senha do portal estadual OU certificado e-CPF. Isso é o mesmo muro gov.br
 que já batemos no RS, agora como mecanismo *primário*.
+
+## Spike RS ao vivo + checagem de API gov.br (2026-07-07)
+
+Testado o RS de ponta a ponta com um CPF real:
+
+- O login do **Nota Fiscal Gaúcha** (`nfg.sefaz.rs.gov.br`) **migrou pro gov.br SSO** —
+  não há mais form de CPF+senha próprio, só um botão `/govbr-redirect.aspx`.
+- O redirect cai em `sso.acesso.gov.br/login` com **captcha (reCAPTCHA) + CPF + token
+  (MFA)**. O titular **teve que logar manualmente** — confirmando que é **inautomatizável**
+  (captcha e 2FA existem exatamente pra barrar bot). Sessão fica no navegador do usuário.
+
+**O gov.br oferece alguma API?** Checado — **não para este caso**:
+
+- **Login Único (OAuth/OIDC)**: scopes só de identidade (`openid`, `profile`, `email`,
+  `phone`, `govbr_confiabilidades`). Prova **quem** é o usuário; **não** expõe notas.
+  Não existe scope "ler minhas NFC-e".
+- **API oficial de dados de NF-e** (SERPRO/Receita, via Loja Serpro / Conecta gov.br):
+  existe, mas exige **e-CNPJ (certificado)**, é **contratada/paga**, voltada a **empresas/
+  órgãos**, e é **NF-e** (modelo 55) — **não** a lista NFC-e-por-CPF do consumidor.
+- **Conecta gov.br** é barramento **governo-a-governo** (convênios), não aberto a app privado.
+
+**Conclusão:** o único caminho programático que resta é o **certificado e-CPF (A1)**
+autenticando como o cidadão — que quase nenhum consumidor tem. Portanto o auto-import por
+CPF **não é viável como feature escalável de consumidor** pelos canais oficiais. O **scan
+do QR permanece o caminho**. Revisitar só se o gov.br publicar um scope OAuth de documentos
+fiscais do cidadão.
 
 ## Desenhos viáveis (todos opt-in, com consentimento LGPD)
 
