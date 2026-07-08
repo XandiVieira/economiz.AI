@@ -68,6 +68,15 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-07-08 16:33:41] [NEEDS-HUMAN] CLAUDE-TIMEOUT (attempt 1x) - java.lang.ArrayIndexOutOfBoundsException: Index N out of bou
+- **Error snippet:**
+```r
+2026-07-08 19:25:26.977 ERROR [req=d9f3958f user=xandivieira@outlook.com rcpt= item=] c.r.e.e.GlobalExceptionHandler - Unexpected error: java.lang.ArrayIndexOutOfBoundsException: Index 0 out of bounds for length 0
+at com.relyon.economizai.service.extraction.EanCatalogService.firstBrand(EanCatalogService.java:161)
+```
+- **Outcome:** the fixer call exceeded 480s and was killed; partial edits discarded.
+- **Note for human:** bug still live; autonomous diagnosis timed out - needs eyes.
+
 ### [2026-07-03 16:47:46] [NEEDS-HUMAN] PUSH-FAILED (attempt 1x) - org.springframework.dao.DataIntegrityViolationException: cou
 - **Error snippet:**
 ```r
@@ -547,6 +556,7 @@ The WARN log is the verifier correctly rejecting a non-JWT token (no dot delimit
 
 REPRO_FAIL Log is correct rejection of a malformed (no-dot-delimiter) client token; verifier already catches the ParseException and throws InvalidOAuthTokenException ÔÇö repro test passes on current code, so there is no code bug to fix.
 - **Note for human:** this bug is still live and could not be auto-reproduced - needs eyes.
+
 
 
 
