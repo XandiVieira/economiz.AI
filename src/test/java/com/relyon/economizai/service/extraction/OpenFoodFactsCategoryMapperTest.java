@@ -94,6 +94,14 @@ class OpenFoodFactsCategoryMapperTest {
     }
 
     @Test
+    void beautyAndCleaningTags_mapCorrectly() {
+        assertEquals(ProductCategory.PERSONAL_CARE, OpenFoodFactsCategoryMapper.map("en:perfumes"));
+        assertEquals(ProductCategory.PERSONAL_CARE, OpenFoodFactsCategoryMapper.map("pt:protecao-solar"));
+        assertEquals(ProductCategory.CLEANING, OpenFoodFactsCategoryMapper.map("en:detergents"));
+        assertEquals(ProductCategory.CLEANING, OpenFoodFactsCategoryMapper.map("pt:inseticidas"));
+    }
+
+    @Test
     void petFood_mapsToPetSupplies_notFoodCategory() {
         // Pet food carries meat/cereal tags; PET_SUPPLIES must win over MEAT_DAIRY.
         assertEquals(ProductCategory.PET_SUPPLIES,
