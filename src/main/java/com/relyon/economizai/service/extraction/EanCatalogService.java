@@ -110,9 +110,16 @@ public class EanCatalogService {
      */
     @Transactional
     public BulkImportOutcome bulkImportOpenFoodFacts(List<OpenFoodFactsRow> rows) {
+        return bulkImportOpenFoodFacts(rows, EanCatalogSource.OPEN_FOOD_FACTS);
+    }
+
+    /** As {@link #bulkImportOpenFoodFacts(List)} but tags rows with the given source
+     *  (e.g. {@code LIVE_API} for on-demand fallback fetches). */
+    @Transactional
+    public BulkImportOutcome bulkImportOpenFoodFacts(List<OpenFoodFactsRow> rows, EanCatalogSource source) {
         if (rows == null || rows.isEmpty()) return new BulkImportOutcome(0, 0);
         var mapped = rows.stream()
-                .map(row -> parseOpenFoodFactsRow(row.code(), row.productName(), row.brands(), row.categoryTags()))
+                .map(row -> parseOpenFoodFactsRow(row.code(), row.productName(), row.brands(), row.categoryTags(), source))
                 .toList();
         return bulkImport(mapped);
     }
@@ -130,13 +137,19 @@ public class EanCatalogService {
 
     public static EanImportRequest parseOpenFoodFactsRow(String ean, String productName,
                                                           String brands, String categoryTags) {
+        return parseOpenFoodFactsRow(ean, productName, brands, categoryTags, EanCatalogSource.OPEN_FOOD_FACTS);
+    }
+
+    public static EanImportRequest parseOpenFoodFactsRow(String ean, String productName,
+                                                          String brands, String categoryTags,
+                                                          EanCatalogSource source) {
         var category = OpenFoodFactsCategoryMapper.map(categoryTags);
         return new EanImportRequest(
                 ean,
                 truncate(clean(productName), NAME_MAX),
                 truncate(firstBrand(brands), BRAND_MAX),
                 category == ProductCategory.OTHER ? null : category,  // null = unknown, not forced OTHER
-                EanCatalogSource.OPEN_FOOD_FACTS
+                source
         );
     }
 

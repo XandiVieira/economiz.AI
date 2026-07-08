@@ -1,22 +1,32 @@
 package com.relyon.economizai.service.extraction;
 
+import com.relyon.economizai.model.enums.EanCatalogSource;
 import com.relyon.economizai.service.extraction.EanCatalogService.OpenFoodFactsRow;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.Collection;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
- * Fills catalog gaps on demand: for barcodes our imported catalog doesn't know,
- * it queries the live OFF-family API ({@link OpenFoodFactsApiClient}) and
- * caches-through the result into the catalog, so the next lookup (and every
- * future receipt with that product) resolves locally.
+ * Fills catalog gaps on demand: for barcodes our imported catalog can't yet
+ * categorize, it queries the live OFF-family API ({@link OpenFoodFactsApiClient})
+ * and caches-through the result, so the next lookup (and every future receipt
+ * with that product) resolves locally.
  *
  * <p>Called from the UNTRANSACTED ingestion phase ({@code ReceiptIngestionService},
  * after parse, before persist) — the HTTP calls must never run inside a DB
  * transaction, and must never break ingest, so this is strictly best-effort.
+ *
+ * <p><b>Latency:</b> lookups run with bounded concurrency ({@link #FETCH_CONCURRENCY})
+ * so a 20-new-item receipt costs ~a few seconds, not ~20. <b>Waste:</b> every
+ * attempted barcode is written back tagged {@link EanCatalogSource#LIVE_API} —
+ * even when the API didn't know it or had no category — so it's marked "checked"
+ * and never re-queried on a later purchase.
  */
 @Slf4j
 @Service
@@ -25,52 +35,71 @@ public class EanCatalogEnrichmentService {
 
     /** Safety cap so a pathological receipt can't fan out into hundreds of API calls. */
     private static final int MAX_LOOKUPS_PER_RECEIPT = 40;
+    /** Concurrent OFF calls per receipt — bounded to stay within OFF fair-use. */
+    private static final int FETCH_CONCURRENCY = 6;
 
     private final OpenFoodFactsApiClient apiClient;
     private final EanCatalogService eanCatalogService;
+
+    private final ExecutorService fetchPool = Executors.newFixedThreadPool(FETCH_CONCURRENCY, runnable -> {
+        var thread = new Thread(runnable, "ean-enrich");
+        thread.setDaemon(true);
+        return thread;
+    });
+
+    @PreDestroy
+    void shutdown() {
+        fetchPool.shutdownNow();
+    }
 
     public boolean isEnabled() {
         return apiClient.isEnabled();
     }
 
     /**
-     * For each distinct EAN we can't yet categorize — missing from the catalog OR
-     * present but with a null category (e.g. an old import that predates the pt:
-     * tag mapping) — fetch it live and cache-through, upserting the row. Returns
-     * the number of catalog rows written.
-     *
-     * <p>Re-fetching null-category rows lets the catalog self-heal: a row imported
-     * before we understood its OFF tags gets a category the next time the product
-     * is bought. Rows OFF genuinely can't categorize stay null and may be
-     * re-fetched on a later purchase — bounded by the per-receipt cap.
+     * For each distinct EAN we can't yet categorize — missing, or present with a
+     * null category that hasn't been live-checked — fetch it live (concurrently)
+     * and upsert. Barcodes the API can't help with are still written as a
+     * LIVE_API "checked" marker so they aren't re-queried. Returns rows written.
      */
     public int enrichMissing(Collection<String> eans) {
         if (!apiClient.isEnabled() || eans == null || eans.isEmpty()) return 0;
-        var missing = eans.stream()
+        var toCheck = eans.stream()
                 .filter(ean -> ean != null && !ean.isBlank())
                 .distinct()
-                .filter(this::needsCategory)
+                .filter(this::needsLiveCheck)
                 .limit(MAX_LOOKUPS_PER_RECEIPT)
                 .toList();
-        if (missing.isEmpty()) return 0;
+        if (toCheck.isEmpty()) return 0;
 
-        var fetched = new ArrayList<OpenFoodFactsRow>();
-        for (var ean : missing) {
-            apiClient.fetch(ean).ifPresent(fetched::add);
-        }
-        if (fetched.isEmpty()) {
-            log.info("ean_catalog.enrich looked_up={} found=0", missing.size());
-            return 0;
-        }
-        var outcome = eanCatalogService.bulkImportOpenFoodFacts(fetched);
-        log.info("ean_catalog.enrich looked_up={} found={} written={}",
-                missing.size(), fetched.size(), outcome.imported());
+        // Fetch concurrently; a miss becomes a data-less row so the barcode is
+        // recorded as checked (and thus skipped next time).
+        var rows = toCheck.stream()
+                .map(ean -> CompletableFuture.supplyAsync(
+                        () -> apiClient.fetch(ean).orElseGet(() -> new OpenFoodFactsRow(ean, null, null, null)),
+                        fetchPool))
+                .toList()
+                .stream()
+                .map(CompletableFuture::join)
+                .toList();
+
+        var outcome = eanCatalogService.bulkImportOpenFoodFacts(rows, EanCatalogSource.LIVE_API);
+        var found = rows.stream().filter(row -> row.productName() != null || row.categoryTags() != null).count();
+        log.info("ean_catalog.enrich checked={} found={} written={}",
+                toCheck.size(), found, outcome.imported());
         return outcome.imported();
     }
 
-    /** True when the catalog has no usable category for this EAN yet. */
-    private boolean needsCategory(String ean) {
+    /**
+     * True when we should query the live API: the catalog has no row, OR a row
+     * with a null category that we haven't already live-checked (an old import
+     * that predates the pt: tag mapping). A row already sourced LIVE_API is left
+     * alone even if uncategorized — the API had nothing, so re-asking is waste.
+     */
+    private boolean needsLiveCheck(String ean) {
         var existing = eanCatalogService.lookup(ean);
-        return existing.isEmpty() || existing.get().getCategory() == null;
+        if (existing.isEmpty()) return true;
+        var entry = existing.get();
+        return entry.getCategory() == null && entry.getSource() != EanCatalogSource.LIVE_API;
     }
 }
