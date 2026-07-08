@@ -7934,7 +7934,7 @@
 								"exec": [
 									"pm.test('Returns 200', function () { pm.response.to.have.status(200); });",
 									"var list = pm.response.json();",
-									"pm.test('Has the 9 global enums', function () { pm.expect(list.filter(function(c){return !c.custom;}).length).to.eql(9); });",
+									"pm.test('Has the 10 global enums', function () { pm.expect(list.filter(function(c){return !c.custom;}).length).to.eql(10); });",
 									"pm.test('Includes the new custom category', function () { pm.expect(list.some(function(c){return c.custom && c.name==='Frutas E2E';})).to.eql(true); });"
 								]
 							}
