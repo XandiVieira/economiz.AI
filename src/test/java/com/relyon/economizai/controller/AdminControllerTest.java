@@ -42,6 +42,8 @@ import com.relyon.economizai.service.admin.AdminUserService;
 import com.relyon.economizai.service.extraction.CategorizationQualityService;
 import com.relyon.economizai.service.geo.MarketLocationService;
 import com.relyon.economizai.service.notifications.RelevanceReportService;
+import com.relyon.economizai.service.paidapi.CostReportService;
+import com.relyon.economizai.dto.response.CostReportResponse;
 import com.relyon.economizai.service.geo.MarketLocationService.SegmentClassificationSummary;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -94,6 +96,7 @@ class AdminControllerTest {
     @MockitoBean private CategorizationQualityService categorizationQualityService;
     @MockitoBean private MarketLocationService marketLocationService;
     @MockitoBean private RelevanceReportService relevanceReportService;
+    @MockitoBean private CostReportService costReportService;
     @MockitoBean private JwtService jwtService;
     @MockitoBean private UserDetailsService userDetailsService;
     @MockitoBean private LocalizedMessageService localizedMessageService;
@@ -171,6 +174,28 @@ class AdminControllerTest {
     @Test
     void listUsers_forbiddenForNonAdmin() throws Exception {
         mockMvc.perform(get("/api/v1/admin/users")
+                        .with(SecurityMockMvcRequestPostProcessors.user(regularUser())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void costReport_returnsSpendBreakdown() throws Exception {
+        var report = new CostReportResponse(30, 40L, 330L, new BigDecimal("3.30"),
+                5000L, new BigDecimal("1.20"),
+                List.of(new CostReportResponse.ServiceSpendLine("INFOSIMPLES", 10L, 2L, 240L, new BigDecimal("2.40"))),
+                List.of(new CostReportResponse.StateSpendLine("CE", 10L, 240L, new BigDecimal("2.40"))));
+        when(costReportService.report(30)).thenReturn(report);
+
+        mockMvc.perform(get("/api/v1/admin/costs")
+                        .with(SecurityMockMvcRequestPostProcessors.user(adminUser())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCostReais").value(3.30))
+                .andExpect(jsonPath("$.byState[0].uf").value("CE"));
+    }
+
+    @Test
+    void costReport_forbiddenForNonAdmin() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/costs")
                         .with(SecurityMockMvcRequestPostProcessors.user(regularUser())))
                 .andExpect(status().isForbidden());
     }

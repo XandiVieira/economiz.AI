@@ -24,8 +24,14 @@ novos `parseErrorReason`:
   automáticas (renderizar a `parseErrorMessage` e sugerir tentar amanhã).
 - `receipt.paid_api.circuit_open` — o serviço de consulta está temporariamente
   indisponível (sugerir tentar em alguns minutos).
+- `receipt.paid_api.budget_exhausted` — atingimos o teto global de processamento do
+  dia (kill-switch de custo); tratar como "tente novamente amanhã".
 
-Ambos já vêm com `parseErrorMessage` localizada — o FE nunca deve renderizar a chave crua.
+Todos já vêm com `parseErrorMessage` localizada — o FE nunca deve renderizar a chave crua.
+
+Admin: novo `GET /api/v1/admin/costs?days=30` (ADMIN) devolve o gasto total com serviços
+pagos (captcha + Infosimples), com quebra por serviço e por estado, e o gasto de hoje vs.
+o orçamento diário.
 
 ---
 

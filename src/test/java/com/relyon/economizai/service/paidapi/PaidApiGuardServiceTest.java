@@ -1,6 +1,7 @@
 package com.relyon.economizai.service.paidapi;
 
 import com.relyon.economizai.config.PaidApiGuardProperties;
+import com.relyon.economizai.exception.PaidApiBudgetExceededException;
 import com.relyon.economizai.exception.PaidApiQuotaExceededException;
 import com.relyon.economizai.exception.PaidApiUnavailableException;
 import com.relyon.economizai.model.PaidApiCall;
@@ -49,6 +50,7 @@ class PaidApiGuardServiceTest {
         properties.setInfosimplesFailureThreshold(3);
         properties.setBreakerWindowSeconds(600);
         properties.setBreakerCooldownSeconds(300);
+        properties.setDailyGlobalBudgetCents(1000);
         service = new PaidApiGuardService(properties, repository);
         service.useClock(Clock.fixed(T0, ZoneOffset.UTC));
     }
@@ -86,6 +88,32 @@ class PaidApiGuardServiceTest {
         properties.setInfosimplesDailyCapPerUser(0);
         assertDoesNotThrow(() -> service.assertWithinDailyCap(USER, PaidApiService.INFOSIMPLES));
         verify(repository, never()).countByUserIdAndServiceAndCreatedAtGreaterThanEqual(any(), any(), any());
+    }
+
+    @Test
+    void assertUnderGlobalBudget_belowCeiling_passes() {
+        when(repository.sumCostCentsSince(any())).thenReturn(999L);
+        assertDoesNotThrow(() -> service.assertUnderGlobalBudget());
+    }
+
+    @Test
+    void assertUnderGlobalBudget_atCeiling_throws() {
+        when(repository.sumCostCentsSince(any())).thenReturn(1000L);
+        assertThrows(PaidApiBudgetExceededException.class, () -> service.assertUnderGlobalBudget());
+    }
+
+    @Test
+    void assertUnderGlobalBudget_unlimitedBudget_skipsSum() {
+        properties.setDailyGlobalBudgetCents(0);
+        assertDoesNotThrow(() -> service.assertUnderGlobalBudget());
+        verify(repository, never()).sumCostCentsSince(any());
+    }
+
+    @Test
+    void assertUnderGlobalBudget_enforcementDisabled_skipsSum() {
+        properties.setEnabled(false);
+        assertDoesNotThrow(() -> service.assertUnderGlobalBudget());
+        verify(repository, never()).sumCostCentsSince(any());
     }
 
     @Test

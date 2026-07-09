@@ -1,6 +1,7 @@
 package com.relyon.economizai.service.paidapi;
 
 import com.relyon.economizai.config.PaidApiGuardProperties;
+import com.relyon.economizai.exception.PaidApiBudgetExceededException;
 import com.relyon.economizai.exception.PaidApiQuotaExceededException;
 import com.relyon.economizai.exception.PaidApiUnavailableException;
 import com.relyon.economizai.model.PaidApiCall;
@@ -74,6 +75,22 @@ public class PaidApiGuardService {
             log.warn("paid_api.cap_exceeded service={} user={} used={} cap={}",
                     service, abbrev(userId), used, cap);
             throw new PaidApiQuotaExceededException(service.name());
+        }
+    }
+
+    /**
+     * Throws {@link PaidApiBudgetExceededException} once today's total estimated
+     * spend across ALL users reaches the global ceiling — the kill-switch against
+     * a viral spike. No-op when enforcement is off or the budget is unlimited.
+     */
+    public void assertUnderGlobalBudget() {
+        if (!properties.isEnabled()) return;
+        var budget = properties.getDailyGlobalBudgetCents();
+        if (budget <= 0) return;
+        var spent = repository.sumCostCentsSince(startOfTodayUtc());
+        if (spent >= budget) {
+            log.warn("paid_api.budget_exhausted spentCents={} budgetCents={}", spent, budget);
+            throw new PaidApiBudgetExceededException();
         }
     }
 

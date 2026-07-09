@@ -119,7 +119,9 @@ public class SefazIngestionService {
             log.info("sefaz.fetch.bare_chave uf={} chave={} — routing to infosimples (no QR signature to scrape)", uf, abbrev(chave));
             return fetchViaInfosimples(chave, uf, userId);
         }
-        // Every scrape solves at least one captcha (paid). Cap the user before spending.
+        // Every scrape solves at least one captcha (paid). Global kill-switch first,
+        // then the per-user cap, before spending.
+        paidApiGuard.assertUnderGlobalBudget();
         paidApiGuard.assertWithinDailyCap(userId, PaidApiService.CAPTCHA_SOLVE);
         try {
             var html = adapter.fetchHtml(qrPayload);
@@ -151,6 +153,7 @@ public class SefazIngestionService {
      * success or failure — is written to the ledger. A failure trips the breaker.
      */
     private FetchedDocument fetchViaInfosimples(String chave, UnidadeFederativa uf, UUID userId) {
+        paidApiGuard.assertUnderGlobalBudget();
         paidApiGuard.assertCircuitClosed(PaidApiService.INFOSIMPLES);
         paidApiGuard.assertWithinDailyCap(userId, PaidApiService.INFOSIMPLES);
         try {

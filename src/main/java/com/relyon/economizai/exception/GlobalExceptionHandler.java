@@ -107,6 +107,11 @@ public class GlobalExceptionHandler {
         return respond(ex, HttpStatus.SERVICE_UNAVAILABLE, "Paid-API circuit breaker open");
     }
 
+    @ExceptionHandler(PaidApiBudgetExceededException.class)
+    public ResponseEntity<ErrorResponse> handlePaidApiBudget(PaidApiBudgetExceededException ex) {
+        return respond(ex, HttpStatus.SERVICE_UNAVAILABLE, "Paid-API global daily budget exhausted");
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
         var errors = ex.getBindingResult().getFieldErrors().stream()

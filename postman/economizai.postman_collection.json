@@ -8728,6 +8728,38 @@
 					"response": []
 				},
 				{
+					"name": "Cost report (paid-API spend)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{adminToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/costs?days=30",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"costs"
+							],
+							"query": [
+								{
+									"key": "days",
+									"value": "30"
+								}
+							]
+						},
+						"description": "Paid-API spend report (captcha + Infosimples): total cost/calls over the window, plus breakdown byService and byState, and today's spend vs the global daily budget. Reads the paid_api_call ledger. ADMIN only."
+					},
+					"response": []
+				},
+				{
 					"name": "List products (admin, paginated)",
 					"request": {
 						"method": "GET",

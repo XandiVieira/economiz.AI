@@ -7,6 +7,7 @@ import com.relyon.economizai.dto.request.UpdateSubscriptionTierRequest;
 import com.relyon.economizai.dto.response.AdminUserDetailResponse;
 import com.relyon.economizai.dto.response.BrandBackfillResponse;
 import com.relyon.economizai.dto.response.BrandCoverageReportResponse;
+import com.relyon.economizai.dto.response.CostReportResponse;
 import com.relyon.economizai.dto.response.UnmatchedReportResponse;
 import com.relyon.economizai.dto.response.AdminUserSummaryResponse;
 import com.relyon.economizai.dto.response.DuplicateProductGroupResponse;
@@ -30,6 +31,7 @@ import com.relyon.economizai.service.admin.AdminUserService;
 import com.relyon.economizai.service.extraction.CategorizationQualityService;
 import com.relyon.economizai.service.geo.MarketLocationService;
 import com.relyon.economizai.service.notifications.RelevanceReportService;
+import com.relyon.economizai.service.paidapi.CostReportService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -71,6 +73,7 @@ public class AdminController {
     private final CategorizationQualityService categorizationQualityService;
     private final MarketLocationService marketLocationService;
     private final RelevanceReportService relevanceReportService;
+    private final CostReportService costReportService;
 
     @PostMapping("/receipts/{id}/reparse")
     public ResponseEntity<ReceiptResponse> reparseReceipt(@PathVariable UUID id) {
@@ -128,6 +131,16 @@ public class AdminController {
     public ResponseEntity<RelevanceReportResponse> relevanceReport(
             @RequestParam(defaultValue = "30") int days) {
         return ResponseEntity.ok(relevanceReportService.report(Math.max(1, days)));
+    }
+
+    /**
+     * Paid-API cost report — total spend + breakdown by service (captcha vs
+     * Infosimples) and by state over the last {@code days}, plus today's spend
+     * against the global daily budget. Reads the paid_api_call ledger.
+     */
+    @GetMapping("/costs")
+    public ResponseEntity<CostReportResponse> costReport(@RequestParam(defaultValue = "30") int days) {
+        return ResponseEntity.ok(costReportService.report(days));
     }
 
     /** Full product catalog (paged) — dev tool for curating dictionary/brands. */

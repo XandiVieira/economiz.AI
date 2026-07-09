@@ -193,6 +193,65 @@ This trust is the entire product.
 
 ---
 
+## Cost Structure & Spend Controls (the COGS side)
+
+Revenue is only half of unit economics — the other half is what each scanned
+receipt *costs us* in paid external calls. Treated as a Day-1 concern too.
+
+### What a receipt costs (marginal, per scan)
+
+| Path | Cost/receipt | Why |
+|---|---|---|
+| RS / PR / SP / MS / SC scrape | ~R$0.03–0.09 | captcha solve only (1–3 solves) |
+| **CE** | **~R$0.24** | Infosimples paid API on **every** note (no native scraper yet) |
+| Any-state fallback | +R$0.24 | primary scraper failed → Infosimples rescue |
+| OFF product enrichment | R$0.00 | Open Food Facts is free/open data |
+
+The danger case: a heavy CE user scanning 40 notes/month costs ~R$9.60 — nearly
+the whole R$9.90 subscription. **The problem is not the price, it's that CE is
+structurally expensive.**
+
+### Pricing verdict: DO NOT price by state
+
+Technically possible (we own the paywall), but rejected:
+- Users don't think in states; "R$12 in CE, R$9.90 in SP" reads as arbitrary/unfair.
+- CE is expensive because *we* lack a native scraper, not because the CE user gets
+  more value. Charging them more punishes the customer for our infra gap.
+- Kills word-of-mouth and a national brand.
+
+The honest axis, if we ever meter cost to users, is **volume** (receipts/month) —
+which already *is* the PRO pitch ("unlimited scans"). Volume correlates with both
+cost and value. **State never does.**
+
+### The real fix is structural, not tariff
+
+Build native scrapers for the expensive states so marginal cost → ~R$0 (captcha
+only). **CE is the priority** — until then treat its Infosimples spend as a capped
+**customer-acquisition cost** (each scan also warms the B2B price index), not a
+repassable COGS.
+
+### Spend controls (implemented — see `service/paidapi/PaidApiGuardService`)
+
+Every money-spending call (captcha solve, Infosimples query) is metered:
+- **Per-user daily caps** — Infosimples 20/day, captcha 60/day (config
+  `economizai.paid-api.*`; tier-independent, a pure cost/abuse guard).
+- **Global daily kill-switch** — a spend ceiling across ALL users
+  (`daily-global-budget-cents`, default R$50/day). Once today's ledger total hits
+  it, every paid call fails fast until midnight UTC. This is the insurance against
+  a viral spike — the "scaled too fast" fear.
+- **Infosimples circuit breaker** — repeated failures open the circuit for a
+  cooldown, so we stop paying while the provider is down.
+- **Ledger** — every attempt (success/failure) is written to `paid_api_call` for
+  invoice reconciliation, and surfaced at **`GET /api/v1/admin/costs`** (spend
+  total + breakdown by service and by state, plus today's spend vs the budget).
+
+All enforcement toggles via `PAID_API_GUARD_ENABLED`; logging is always on. During
+the free warm-up we deliberately bank the cost — but bounded by the caps above, so
+coverage grows without unbounded spend. (Follow-ups tracked in DEV_NOTES: captcha
+metered per-scrape not per-solve; cap enforced async not fail-fast at submit.)
+
+---
+
 ## Implementation Roadmap
 
 ### Phase 1 — Build the Panel (current)

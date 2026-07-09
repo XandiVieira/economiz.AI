@@ -22,6 +22,13 @@ public class PaidApiGuardProperties {
     /** Max captcha solves per user per day. 0 or negative = unlimited. */
     private int captchaDailyCapPerUser = 60;
 
+    /**
+     * Global spend ceiling across ALL users per day, in cents (R$). The kill-switch
+     * against a viral spike: once today's ledger total reaches this, every paid call
+     * fails fast until midnight (UTC). 0 or negative = unlimited. Default R$50/day.
+     */
+    private int dailyGlobalBudgetCents = 5000;
+
     /** Consecutive/within-window Infosimples failures that trip the breaker. */
     private int infosimplesFailureThreshold = 5;
 
@@ -39,6 +46,9 @@ public class PaidApiGuardProperties {
 
     public int getCaptchaDailyCapPerUser() { return captchaDailyCapPerUser; }
     public void setCaptchaDailyCapPerUser(int captchaDailyCapPerUser) { this.captchaDailyCapPerUser = captchaDailyCapPerUser; }
+
+    public int getDailyGlobalBudgetCents() { return dailyGlobalBudgetCents; }
+    public void setDailyGlobalBudgetCents(int dailyGlobalBudgetCents) { this.dailyGlobalBudgetCents = dailyGlobalBudgetCents; }
 
     public int getInfosimplesFailureThreshold() { return infosimplesFailureThreshold; }
     public void setInfosimplesFailureThreshold(int infosimplesFailureThreshold) { this.infosimplesFailureThreshold = infosimplesFailureThreshold; }
