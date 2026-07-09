@@ -68,12 +68,12 @@ try {
         if ($code -eq 200) { $publicOk = $true }
     } catch { }
     if ($publicOk) {
-        Write-Host "public URL healthy — tunnel OK"
+        Write-Host "public URL healthy - tunnel OK"
     } else {
-        Write-Host "public URL unhealthy — restarting tunnel task '$tunnelTask'"
+        Write-Host "public URL unhealthy - restarting tunnel task '$tunnelTask'"
         Stop-ScheduledTask -TaskName $tunnelTask -ErrorAction SilentlyContinue
         Start-ScheduledTask -TaskName $tunnelTask -ErrorAction Stop
-        Write-Host "tunnel task started — waiting for the new origin to publish"
+        Write-Host "tunnel task started - waiting for the new origin to publish"
         Start-Sleep -Seconds 60
         $after = 0
         try { $after = (Invoke-WebRequest "https://economizai.economizai.workers.dev/actuator/health" -UseBasicParsing -TimeoutSec 15).StatusCode } catch { }
