@@ -23,7 +23,10 @@ import java.util.concurrent.Executors;
  * transaction, and must never break ingest, so this is strictly best-effort.
  *
  * <p><b>Latency:</b> lookups run with bounded concurrency ({@link #FETCH_CONCURRENCY})
- * so a 20-new-item receipt costs ~a few seconds, not ~20. <b>Waste:</b> every
+ * so a 20-new-item receipt costs ~a few seconds, not ~20. A scanned receipt is
+ * always enriched in full — there is no per-receipt lookup cap; the OFF API is
+ * free, and concurrency (not a count cap) is what keeps us within fair-use.
+ * <b>Waste:</b> every
  * attempted barcode is written back tagged {@link EanCatalogSource#LIVE_API} —
  * even when the API didn't know it or had no category — so it's marked "checked"
  * and never re-queried on a later purchase.
@@ -33,8 +36,6 @@ import java.util.concurrent.Executors;
 @RequiredArgsConstructor
 public class EanCatalogEnrichmentService {
 
-    /** Safety cap so a pathological receipt can't fan out into hundreds of API calls. */
-    private static final int MAX_LOOKUPS_PER_RECEIPT = 40;
     /** Concurrent OFF calls per receipt — bounded to stay within OFF fair-use. */
     private static final int FETCH_CONCURRENCY = 6;
 
@@ -68,7 +69,6 @@ public class EanCatalogEnrichmentService {
                 .filter(ean -> ean != null && !ean.isBlank())
                 .distinct()
                 .filter(this::needsLiveCheck)
-                .limit(MAX_LOOKUPS_PER_RECEIPT)
                 .toList();
         if (toCheck.isEmpty()) return 0;
 
