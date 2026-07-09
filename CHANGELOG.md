@@ -14,6 +14,20 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-07-09 — Unidades normalizadas (UND9→UN, KG9→KG) + códigos internos nunca viram EAN
+
+Verificado com uma nota real do **Sam's Club/WMS (SP)**, 28 itens:
+
+- **`unit` agora vem normalizada** em todas as vias de ingestão (scrapers e
+  Infosimples). ERPs imprimem a unidade com sufixos/grafias próprias
+  (`UND9`, `KG9`, `UND8`, `UND`, `UNID`) — agora chegam como `UN`/`KG` etc.
+  Se o FE tinha tratamento para essas variações, pode remover.
+- **Códigos internos alfanuméricos** no slot "(Código: …)" (ex.: `AR062620`
+  do WMS) nunca são gravados como `ean` — mercados como o WMS não imprimem
+  GTIN na NFC-e, então `ean: null` nesses itens é o dado real, não um bug do parser.
+
+---
+
 ## 2026-07-09 — Controle de custo: limite diário de consultas pagas
 
 Para proteger o custo com serviços pagos (captcha, Infosimples), toda NFC-e passou a ter

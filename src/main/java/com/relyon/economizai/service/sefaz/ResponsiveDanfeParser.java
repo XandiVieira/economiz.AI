@@ -119,7 +119,7 @@ public final class ResponsiveDanfeParser {
                     .rawDescription(trimmedDescription)
                     .ean(extractEan(ean))
                     .quantity(qty.signum() == 0 ? BigDecimal.ONE : qty)
-                    .unit(unit.isBlank() ? null : unit.toUpperCase())
+                    .unit(UnitNormalizer.normalize(unit))
                     .unitPrice(unitPrice)
                     .totalPrice(totalPrice)
                     .nfcePromoFlag(PromoMarkerDetector.isPromo(row, trimmedDescription))
@@ -203,20 +203,22 @@ public final class ResponsiveDanfeParser {
 
     /**
      * The "(Código: …)" slot carries a real GTIN/EAN (8-14 digits) at some
-     * merchants but a merchant-internal item code (shorter) at others —
-     * e.g. RaiaDrogasil/PR prints 6-7 digit internal codes. Internal codes
-     * must NOT be stored as EANs: the same number at another merchant is a
-     * different product, and a global EAN match would merge them. Below 8
-     * digits we return null and matching falls back to the description.
+     * merchants but a merchant-internal item code at others — RaiaDrogasil/PR
+     * prints 6-7 digit codes, WMS/Sam's Club prints alphanumeric ones
+     * ("AR062620"). Internal codes must NOT be stored as EANs: the same code
+     * at another merchant is a different product, and a global EAN match
+     * would merge them. Real GTINs are all-digit, so any letter in the code
+     * marks it internal — even when its digit run reaches 8+ — and short
+     * all-digit codes (<8) are internal too. Both return null and matching
+     * falls back to the description.
      */
     private static String extractEan(String raw) {
         if (raw == null || raw.isBlank()) return null;
-        var matcher = DIGITS.matcher(raw);
-        if (!matcher.find()) return null;
-        var digits = matcher.group();
-        if (digits.length() < 8) return null;
-        if (digits.length() > 14) digits = digits.substring(digits.length() - 14);
-        return digits;
+        var code = raw.replaceAll("[^A-Za-z0-9]", "");
+        if (!DIGITS.matcher(code).matches()) return null;
+        if (code.length() < 8) return null;
+        if (code.length() > 14) code = code.substring(code.length() - 14);
+        return code;
     }
 
     private static BigDecimal parseDecimalOrNull(String value) {

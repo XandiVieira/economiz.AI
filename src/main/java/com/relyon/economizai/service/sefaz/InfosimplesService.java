@@ -177,7 +177,7 @@ public class InfosimplesService {
                     // it even when today's catalog has no entry for it.
                     .ean(extractGtin(produto.eanTributavel(), produto.eanComercial()))
                     .quantity(quantity)
-                    .unit(produto.unidade())
+                    .unit(UnitNormalizer.normalize(produto.unidade()))
                     .unitPrice(unitPrice)
                     .totalPrice(totalPrice)
                     .nfcePromoFlag(false)
