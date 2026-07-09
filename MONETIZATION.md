@@ -187,9 +187,49 @@ This trust is the entire product.
 
 - **Family plan (R$19.90/month, up to 5 users)** — shared household, split
   budgets, individual dashboards.
-- **Small business plan (R$49.90/month)** — for tiny restaurants, snack bars,
-  food trucks who buy at the same supermarkets — track COGS via NFC-e, get
-  category benchmarks against the public index.
+
+#### Business plan — volume tier (allowance + overage)
+
+**Who:** micro/small businesses that buy at retail/atacado and get NFC-e in the
+owner's CPF — bars, food trucks, snack bars, padarias, buffets, cafés, daycares,
+small offices, small markets. They want to track COGS/expenses by category,
+compare prices across Atacadão/Assaí/markets, and feed accounting. Secondary:
+bookkeepers handling several small clients; corporate expense/reimbursement.
+
+**Why a normal PRO plan doesn't fit:** a business scans **dozens–hundreds of NF/
+month**, and *our cost scales with volume* (captcha ~R$0.03–0.09/scan, CE/fallback
+~R$0.24). A flat low price loses money on the heavy user. So the Business tier is
+**usage-based**, not flat — the one place where metering by **volume is honest**
+(volume = both our cost and their value; state is never the axis — see Cost
+Structure below).
+
+**Shape (v1, numbers to validate):**
+- **Base R$79/month → 300 NF/month included.**
+- **Overage R$0.40 per NF** above the allowance.
+- Included: up to 5 users, expense categories / cost centers, monthly COGS report,
+  accounting export (CSV/Parquet), benchmark vs. the public index.
+
+**Unit-economics guardrail:** set overage (R$0.40) **above the worst-case marginal
+cost** (R$0.24, CE) so every NF past the allowance is profitable *in any state*.
+The included 300 are priced on blended expected cost + the value features. Watch
+the thin-margin edge case — a 100%-CE business at the allowance costs us ~R$72 of
+the R$79; mitigate by (a) sizing the allowance on blended cost, (b) capping CE
+share of the allowance until a native CE scraper exists, or (c) accepting it
+because CE-only bulk businesses are rare and the data is worth it. Native scrapers
+(see Cost Structure) collapse this risk — every state added drives that state's
+marginal cost toward ~R$0.
+
+**What actually justifies the price** is the *features* (accounting export, cost
+centers, COGS report, multi-user), not raw scans — lead the pitch with those.
+
+**Engineering notes (when we build it):**
+- Paid-API caps are **global today**; the Business tier needs **tier-aware caps**
+  (a business must not hit the consumer 20/60-per-day guard). Wire through
+  `SubscriptionGateService` alongside the existing tier limits.
+- Need a **monthly NF-scan meter per account** (reuse the `paid_api_call` ledger or
+  the receipt counter) and an **overage-billing hook** onto the provider webhook.
+- Bulk businesses are **gold for the B2B index** (more data) — doubly valuable,
+  *only if* priced not to lose money.
 
 ---
 
@@ -270,6 +310,11 @@ metered per-scrape not per-solve; cap enforced async not fail-fast at submit.)
   - Subscription management page.
   - Ad slots on dashboard for free users.
 - **Revenue target:** R$1K–R$5K MRR.
+- **Validate before building (Business tier):** do NOT build the volume/Business
+  plan yet — first prove demand. Signal to watch: users who hammer the 5-scan free
+  cap, or scan dozens/month; then talk to 3–4 small-business owners. Only if the
+  signal is real does the Business tier (allowance + overage, see §5) move to
+  Phase 4. Keep it a hypothesis until then.
 
 ### Phase 3 — Open the B2B Channel (5K MAU, ≥3 cities)
 
@@ -287,7 +332,9 @@ metered per-scrape not per-solve; cap enforced async not fail-fast at submit.)
 - **Features:**
   - SEFAZ adapters for all major states.
   - Multi-region B2B reporting.
-  - Family plans + small-business plans.
+  - Family plan + **Business volume tier** (allowance + overage — §5), *only if*
+    Phase-2 validation showed real bulk-scan demand. Needs tier-aware paid-API
+    caps + a monthly scan meter + overage billing.
   - Affiliate-link program at scale.
 - **Revenue target:** R$80K+ MRR.
 
