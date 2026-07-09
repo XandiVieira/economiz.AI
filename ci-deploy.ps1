@@ -53,4 +53,27 @@ for ($i = 0; $i -lt 20; $i++) {
     Start-Sleep -Seconds 6
 }
 if (-not $ok) { Write-Host "::error::App did not become healthy after deploy"; exit 1 }
+
+# 4) Self-heal the public front door. cloudflared occasionally dies and its
+#    Scheduled Task only fires at logon, leaving the Worker's KV origin pointing
+#    at a dead *.trycloudflare.com host (Cloudflare 1016 for every client) even
+#    though the app is healthy locally. Since this script runs ON the box, check
+#    the PERMANENT public URL and (re)start the tunnel task when it's broken.
+#    Best-effort: a failure here must never fail an otherwise good deploy.
+$tunnelTask = "economizai - cloudflare tunnel"
+try {
+    $publicOk = $false
+    try {
+        $code = (Invoke-WebRequest "https://economizai.economizai.workers.dev/actuator/health" -UseBasicParsing -TimeoutSec 15).StatusCode
+        if ($code -eq 200) { $publicOk = $true }
+    } catch { }
+    if ($publicOk) {
+        Write-Host "public URL healthy — tunnel OK"
+    } else {
+        Write-Host "public URL unhealthy — restarting tunnel task '$tunnelTask'"
+        Stop-ScheduledTask -TaskName $tunnelTask -ErrorAction SilentlyContinue
+        Start-ScheduledTask -TaskName $tunnelTask -ErrorAction Stop
+        Write-Host "tunnel task started (start-tunnel.ps1 republishes the KV origin; allow ~1 min)"
+    }
+} catch { Write-Host "::warning::tunnel self-heal skipped: $_" }
 Write-Host "=== ci-deploy OK: dev server healthy on the new code ==="

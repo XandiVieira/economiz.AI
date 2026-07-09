@@ -133,6 +133,11 @@ the repo (so the watchdog can't clean them), at `C:\economizai-data\`:
   service, runs as `Xandi`, label `economizai-dev`). Dials OUT — nothing exposed.
 - **Does:** checkout pushed commit → `ci-deploy.ps1` (copy `.env`, `compose up -d --build`,
   verify health). Postgres volume untouched → data preserved. ~1–2 min, ~30–60s API blip.
+- **Tunnel self-heal (2026-07-09):** after the local health check, `ci-deploy.ps1` probes
+  the PERMANENT public URL; if it's down (dead quick-tunnel → Cloudflare 1016) it restarts
+  the "economizai - cloudflare tunnel" Scheduled Task, which republishes the KV origin.
+  Any push (or Actions → re-run of the last deploy) doubles as a remote tunnel restart —
+  no RDP needed. Best-effort: never fails an otherwise good deploy.
 - **Watch runs:** repo → Actions tab.
 - **Setup scripts:** `setup-github-runner.ps1` / `install-runner-service.ps1`.
 - **Quirks baked in (Windows):** uses `shell: cmd` (not PowerShell — avoids
