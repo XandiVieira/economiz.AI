@@ -71,10 +71,16 @@ mirror entries here.
   - **Apps:** set `REVENUECAT_WEBHOOK_AUTH`, and the app must set RevenueCat `app_user_id` = our user UUID (or email). That's it — env-var ready.
   - **Web:** NOT built yet — needs a Mercado Pago/Stripe **create-checkout endpoint** + a provider-specific webhook adapter (signature verify + event→activate/cancel mapping). Pending the provider choice (PIX-recurring vs one-off).
 
-## LGPD data-export is incomplete
-- **Now**: `UserService.exportData` covers the core account/receipt data but OMITS notification rules, watched markets, subscription, push token, manual purchases, and household market aliases / custom categories / category overrides.
-- **Why OK for dev**: no real right-of-access requests yet.
-- **Before prod**: extend `exportData` to include those entities for a complete, defensible LGPD export. ~half a day.
+## LGPD data-export — COMPLETE (2026-07-09)
+- `UserService.exportData` now returns every table attributable to the user: account
+  (incl. phone, profile-pic metadata, digest prefs, legal acceptances, auth provider,
+  push-token timestamp), household + members, receipts, notification rules + preferences
+  + telemetry events, watched markets, subscription, market/product aliases, custom
+  categories + overrides, brand preferences, manual purchases, consumption snoozes,
+  shopping lists **with items**, recently-viewed products, deal-surface state, and
+  data-share consents (as grantor + requester). `GET /api/v1/users/me/export`.
+- Remaining polish (optional): paginate very large sections (receipts/notifications/
+  recent-views currently capped at 500), and consider a downloadable file format.
 
 ## Relevance filter rollout — first telemetry CONSUMER (2026-06-12, in SHADOW)
 

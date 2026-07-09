@@ -14,6 +14,9 @@ import java.util.UUID;
 
 public interface NotificationEventRepository extends JpaRepository<NotificationEvent, UUID> {
 
+    /** All notification-telemetry events for a user — used by the LGPD data export. */
+    List<NotificationEvent> findAllByUserId(UUID userId);
+
     /**
      * North-star rollup (Phase D): total realized R$ savings and conversion count
      * from {@code CONVERTED} events across a household's users, optionally since a

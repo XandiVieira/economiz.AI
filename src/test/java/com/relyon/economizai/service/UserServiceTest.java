@@ -30,6 +30,14 @@ import com.relyon.economizai.repository.HouseholdProductCategoryOverrideReposito
 import com.relyon.economizai.repository.HouseholdRepository;
 import com.relyon.economizai.repository.ManualPurchaseRepository;
 import com.relyon.economizai.repository.NotificationRepository;
+import com.relyon.economizai.repository.NotificationPreferenceRepository;
+import com.relyon.economizai.repository.NotificationEventRepository;
+import com.relyon.economizai.repository.ConsumptionSnoozeRepository;
+import com.relyon.economizai.repository.ManualBrandPreferenceRepository;
+import com.relyon.economizai.repository.ProductRecentViewRepository;
+import com.relyon.economizai.repository.DealSurfaceStateRepository;
+import com.relyon.economizai.repository.HouseholdProductAliasRepository;
+import com.relyon.economizai.repository.DataShareConsentRepository;
 import com.relyon.economizai.repository.NotificationRuleRepository;
 import com.relyon.economizai.repository.ReceiptRepository;
 import com.relyon.economizai.repository.ShoppingListRepository;
@@ -123,6 +131,30 @@ class UserServiceTest {
 
     @Mock
     private NotificationRepository notificationRepository;
+
+    @Mock
+    private NotificationPreferenceRepository notificationPreferenceRepository;
+
+    @Mock
+    private NotificationEventRepository notificationEventRepository;
+
+    @Mock
+    private ConsumptionSnoozeRepository consumptionSnoozeRepository;
+
+    @Mock
+    private ManualBrandPreferenceRepository manualBrandPreferenceRepository;
+
+    @Mock
+    private ProductRecentViewRepository productRecentViewRepository;
+
+    @Mock
+    private DealSurfaceStateRepository dealSurfaceStateRepository;
+
+    @Mock
+    private HouseholdProductAliasRepository householdProductAliasRepository;
+
+    @Mock
+    private DataShareConsentRepository dataShareConsentRepository;
 
     @InjectMocks
     private UserService userService;

@@ -15,6 +15,9 @@ public interface DealSurfaceStateRepository extends JpaRepository<DealSurfaceSta
 
     Optional<DealSurfaceState> findByUserIdAndProductIdAndMarketCnpj(UUID userId, UUID productId, String marketCnpj);
 
+    /** All surface-state rows for a user — used by the LGPD data export. */
+    List<DealSurfaceState> findAllByUserId(UUID userId);
+
     /**
      * Attribution candidates (Phase D): surface rows for any of the buyer's
      * household users for this (product, market) that are still un-attributed

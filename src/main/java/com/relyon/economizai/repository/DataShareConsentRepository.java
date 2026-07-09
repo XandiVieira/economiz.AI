@@ -15,5 +15,8 @@ public interface DataShareConsentRepository extends JpaRepository<DataShareConse
 
     List<DataShareConsent> findByRequesterId(UUID requesterId);
 
+    /** All consents the user granted/denied (any status) — used by the LGPD data export. */
+    List<DataShareConsent> findByGrantorId(UUID grantorId);
+
     Optional<DataShareConsent> findByIdAndGrantorId(UUID id, UUID grantorId);
 }

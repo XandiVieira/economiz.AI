@@ -14,6 +14,18 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-07-09 — Export LGPD completo (`GET /users/me/export`)
+
+O export de dados pessoais agora inclui **tudo** que é atribuível ao usuário — o
+`UserDataExportResponse` ganhou novos campos: `notificationPreferences`, `productAliases`,
+`brandPreferences`, `consumptionSnoozes`, `recentlyViewedProducts`, `notificationEvents`,
+`dealSurfaceStates`, `dataShareConsents`; `shoppingLists` agora traz os **itens**; e
+`accountExtras` ganhou telefone, foto (metadados), preferências de digest, aceites legais e
+provedor de auth. **Ação do FE:** o payload do export cresceu (campos novos, aditivo — nada
+removido).
+
+---
+
 ## 2026-07-08 — Nova categoria de produto: **PET_SUPPLIES**
 
 Adicionada a categoria `PET_SUPPLIES` (ração/petiscos e itens de pet). **Ação do FE:**

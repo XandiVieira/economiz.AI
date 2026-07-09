@@ -18,7 +18,16 @@ import com.relyon.economizai.dto.response.UserDataExportResponse.CustomCategory;
 import com.relyon.economizai.dto.response.UserDataExportResponse.ManualPurchaseSummary;
 import com.relyon.economizai.dto.response.UserDataExportResponse.MarketAlias;
 import com.relyon.economizai.dto.response.UserDataExportResponse.ShoppingListSummary;
+import com.relyon.economizai.dto.response.UserDataExportResponse.ShoppingListItemSummary;
 import com.relyon.economizai.dto.response.UserDataExportResponse.SubscriptionSummary;
+import com.relyon.economizai.dto.response.UserDataExportResponse.NotificationPreferenceSummary;
+import com.relyon.economizai.dto.response.UserDataExportResponse.ProductAliasSummary;
+import com.relyon.economizai.dto.response.UserDataExportResponse.BrandPreferenceSummary;
+import com.relyon.economizai.dto.response.UserDataExportResponse.ConsumptionSnoozeSummary;
+import com.relyon.economizai.dto.response.UserDataExportResponse.RecentViewSummary;
+import com.relyon.economizai.dto.response.UserDataExportResponse.NotificationEventSummary;
+import com.relyon.economizai.dto.response.UserDataExportResponse.DealSurfaceStateSummary;
+import com.relyon.economizai.dto.response.UserDataExportResponse.DataShareConsentSummary;
 import com.relyon.economizai.dto.response.UserResponse;
 import com.relyon.economizai.exception.EmailAlreadyExistsException;
 import com.relyon.economizai.exception.InvalidCredentialsException;
@@ -38,6 +47,14 @@ import com.relyon.economizai.repository.ShoppingListRepository;
 import com.relyon.economizai.repository.SubscriptionRepository;
 import com.relyon.economizai.repository.UserRepository;
 import com.relyon.economizai.repository.UserWatchedMarketRepository;
+import com.relyon.economizai.repository.NotificationPreferenceRepository;
+import com.relyon.economizai.repository.NotificationEventRepository;
+import com.relyon.economizai.repository.ConsumptionSnoozeRepository;
+import com.relyon.economizai.repository.ManualBrandPreferenceRepository;
+import com.relyon.economizai.repository.ProductRecentViewRepository;
+import com.relyon.economizai.repository.DealSurfaceStateRepository;
+import com.relyon.economizai.repository.HouseholdProductAliasRepository;
+import com.relyon.economizai.repository.DataShareConsentRepository;
 import com.relyon.economizai.model.UserWatchedMarket;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.auth.EmailVerificationService;
@@ -52,8 +69,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 @Slf4j
 @Service
@@ -72,6 +91,14 @@ public class UserService {
     private final ManualPurchaseRepository manualPurchaseRepository;
     private final ShoppingListRepository shoppingListRepository;
     private final NotificationRepository notificationRepository;
+    private final NotificationPreferenceRepository notificationPreferenceRepository;
+    private final NotificationEventRepository notificationEventRepository;
+    private final ConsumptionSnoozeRepository consumptionSnoozeRepository;
+    private final ManualBrandPreferenceRepository manualBrandPreferenceRepository;
+    private final ProductRecentViewRepository productRecentViewRepository;
+    private final DealSurfaceStateRepository dealSurfaceStateRepository;
+    private final HouseholdProductAliasRepository householdProductAliasRepository;
+    private final DataShareConsentRepository dataShareConsentRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final HouseholdService householdService;
@@ -191,14 +218,22 @@ public class UserService {
                 HouseholdResponse.from(household, members),
                 purchaseData.receipts(),
                 accountData.notificationRules(),
+                accountData.notificationPreferences(),
                 accountData.watchedMarketCnpjs(),
                 accountData.subscription(),
                 customizations.marketAliases(),
                 customizations.customCategories(),
                 customizations.categoryOverrides(),
+                customizations.productAliases(),
+                customizations.brandPreferences(),
                 purchaseData.manualPurchases(),
+                customizations.consumptionSnoozes(),
                 purchaseData.shoppingLists(),
+                accountData.recentlyViewedProducts(),
                 accountData.notifications(),
+                accountData.notificationEvents(),
+                accountData.dealSurfaceStates(),
+                accountData.dataShareConsents(),
                 LocalDateTime.now()
         );
     }
@@ -206,12 +241,31 @@ public class UserService {
     private AccountData collectAccountData(User user, UUID userId) {
         var extras = new AccountExtras(
                 user.getPushDeviceToken(),
+                user.getPushTokenUpdatedAt(),
                 user.isEmailVerified(),
                 user.getEmailVerifiedAt(),
-                user.isContributionOptIn());
+                user.isContributionOptIn(),
+                user.getPhoneNumber(),
+                user.isPhoneVerified(),
+                user.getProfilePictureKey(),
+                user.getProfilePictureContentType(),
+                user.getProfilePictureUploadedAt(),
+                user.getDigestFrequency() == null ? null : user.getDigestFrequency().name(),
+                user.getDigestSendHour(),
+                user.getHomeSetAt(),
+                user.getAuthProvider() == null ? null : user.getAuthProvider().name(),
+                user.getProviderSubject(),
+                user.getAcceptedTermsVersion(),
+                user.getAcceptedPrivacyVersion(),
+                user.getAcceptedLegalAt());
 
         var notificationRules = notificationRuleRepository.findAllByUserId(userId).stream()
                 .map(NotificationRuleResponse::from)
+                .toList();
+
+        var notificationPreferences = notificationPreferenceRepository.findAllByUserId(userId).stream()
+                .map(preference -> new NotificationPreferenceSummary(
+                        preference.getType().name(), preference.getChannel().name()))
                 .toList();
 
         var watchedMarketCnpjs = userWatchedMarketRepository.findAllByUserId(userId).stream()
@@ -229,7 +283,31 @@ public class UserService {
                 .map(NotificationResponse::from)
                 .toList();
 
-        return new AccountData(extras, notificationRules, watchedMarketCnpjs, subscription, notifications);
+        var notificationEvents = notificationEventRepository.findAllByUserId(userId).stream()
+                .map(event -> new NotificationEventSummary(
+                        event.getEventType().name(), event.getProductId(), event.getMarketCnpj(),
+                        event.getChannel(), event.getSavingsAmount(), event.getOccurredAt()))
+                .toList();
+
+        var recentlyViewed = productRecentViewRepository.findRecentByUserId(userId, PageRequest.of(0, 500)).stream()
+                .map(view -> new RecentViewSummary(view.getProduct().getId(), view.getViewedAt()))
+                .toList();
+
+        var dealSurfaceStates = dealSurfaceStateRepository.findAllByUserId(userId).stream()
+                .map(state -> new DealSurfaceStateSummary(
+                        state.getProductId(), state.getMarketCnpj(), state.getLastSurfacedAt()))
+                .toList();
+
+        // Consents where the user is grantor OR requester (deduped by id).
+        var consentsById = new LinkedHashMap<UUID, DataShareConsentSummary>();
+        Stream.concat(dataShareConsentRepository.findByGrantorId(userId).stream(),
+                        dataShareConsentRepository.findByRequesterId(userId).stream())
+                .forEach(consent -> consentsById.putIfAbsent(consent.getId(), new DataShareConsentSummary(
+                        consent.getStatus().name(), consent.getScope().name(), consent.getResolvedAt())));
+        var dataShareConsents = List.copyOf(consentsById.values());
+
+        return new AccountData(extras, notificationRules, notificationPreferences, watchedMarketCnpjs,
+                subscription, notifications, notificationEvents, recentlyViewed, dealSurfaceStates, dataShareConsents);
     }
 
     private HouseholdCustomizations collectHouseholdCustomizations(UUID householdId) {
@@ -245,7 +323,21 @@ public class UserService {
                 .map(override -> new CategoryOverride(override.getProduct().getId(), override.effectiveLabel()))
                 .toList();
 
-        return new HouseholdCustomizations(marketAliases, customCategories, categoryOverrides);
+        var productAliases = householdProductAliasRepository.findAllByHouseholdId(householdId).stream()
+                .map(alias -> new ProductAliasSummary(alias.getProduct().getId(), alias.getFriendlyName()))
+                .toList();
+
+        var brandPreferences = manualBrandPreferenceRepository.findAllByHouseholdId(householdId).stream()
+                .map(preference -> new BrandPreferenceSummary(
+                        preference.getGenericName(), preference.getBrand(), preference.getStrength().name()))
+                .toList();
+
+        var consumptionSnoozes = consumptionSnoozeRepository.findAllByHouseholdId(householdId).stream()
+                .map(snooze -> new ConsumptionSnoozeSummary(snooze.getProduct().getId(), snooze.getSnoozedUntil()))
+                .toList();
+
+        return new HouseholdCustomizations(marketAliases, customCategories, categoryOverrides,
+                productAliases, brandPreferences, consumptionSnoozes);
     }
 
     private PurchaseData collectPurchaseData(UUID userId, UUID householdId) {
@@ -260,7 +352,12 @@ public class UserService {
                 .toList();
 
         var shoppingLists = shoppingListRepository.findAllByHouseholdIdOrderByCreatedAtDesc(householdId).stream()
-                .map(list -> new ShoppingListSummary(list.getId(), list.getName()))
+                .map(list -> new ShoppingListSummary(list.getId(), list.getName(),
+                        list.getItems().stream()
+                                .map(item -> new ShoppingListItemSummary(
+                                        item.getProduct() == null ? null : item.getProduct().getId(),
+                                        item.getFreeText(), item.getQuantity(), item.isChecked()))
+                                .toList()))
                 .toList();
 
         return new PurchaseData(receipts, manualPurchases, shoppingLists);
@@ -268,13 +365,21 @@ public class UserService {
 
     private record AccountData(AccountExtras extras,
                                List<NotificationRuleResponse> notificationRules,
+                               List<NotificationPreferenceSummary> notificationPreferences,
                                List<String> watchedMarketCnpjs,
                                SubscriptionSummary subscription,
-                               List<NotificationResponse> notifications) {}
+                               List<NotificationResponse> notifications,
+                               List<NotificationEventSummary> notificationEvents,
+                               List<RecentViewSummary> recentlyViewedProducts,
+                               List<DealSurfaceStateSummary> dealSurfaceStates,
+                               List<DataShareConsentSummary> dataShareConsents) {}
 
     private record HouseholdCustomizations(List<MarketAlias> marketAliases,
                                            List<CustomCategory> customCategories,
-                                           List<CategoryOverride> categoryOverrides) {}
+                                           List<CategoryOverride> categoryOverrides,
+                                           List<ProductAliasSummary> productAliases,
+                                           List<BrandPreferenceSummary> brandPreferences,
+                                           List<ConsumptionSnoozeSummary> consumptionSnoozes) {}
 
     private record PurchaseData(List<ReceiptResponse> receipts,
                                 List<ManualPurchaseSummary> manualPurchases,
