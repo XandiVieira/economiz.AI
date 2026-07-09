@@ -73,7 +73,18 @@ try {
         Write-Host "public URL unhealthy — restarting tunnel task '$tunnelTask'"
         Stop-ScheduledTask -TaskName $tunnelTask -ErrorAction SilentlyContinue
         Start-ScheduledTask -TaskName $tunnelTask -ErrorAction Stop
-        Write-Host "tunnel task started (start-tunnel.ps1 republishes the KV origin; allow ~1 min)"
+        Write-Host "tunnel task started — waiting for the new origin to publish"
+        Start-Sleep -Seconds 60
+        $after = 0
+        try { $after = (Invoke-WebRequest "https://economizai.economizai.workers.dev/actuator/health" -UseBasicParsing -TimeoutSec 15).StatusCode } catch { }
+        $taskState = (Get-ScheduledTask -TaskName $tunnelTask).State
+        $taskInfo = Get-ScheduledTaskInfo -TaskName $tunnelTask
+        Write-Host ("tunnel restart result: public={0} taskState={1} lastRun={2} lastResult={3}" -f $after, $taskState, $taskInfo.LastRunTime, $taskInfo.LastTaskResult)
+        $tunnelLog = Join-Path $dataRoot "logs\tunnel.log"
+        if (Test-Path $tunnelLog) {
+            Write-Host "--- tunnel.log tail ---"
+            Get-Content $tunnelLog -Tail 12 | ForEach-Object { Write-Host $_ }
+        }
     }
 } catch { Write-Host "::warning::tunnel self-heal skipped: $_" }
 Write-Host "=== ci-deploy OK: dev server healthy on the new code ==="

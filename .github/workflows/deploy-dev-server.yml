@@ -25,3 +25,10 @@ jobs:
       - name: Deploy (copy .env, rebuild, verify health)
         shell: cmd
         run: powershell -NoProfile -ExecutionPolicy Bypass -File ci-deploy.ps1 > C:\actions-runner\last-deploy.log 2>&1
+
+      # The deploy log lives only on the box — surface it in the Actions UI so
+      # remote sessions can diagnose failures (and the tunnel self-heal) without RDP.
+      - name: Show deploy log
+        if: always()
+        shell: cmd
+        run: powershell -NoProfile -Command "Get-Content C:\actions-runner\last-deploy.log -Tail 100"
