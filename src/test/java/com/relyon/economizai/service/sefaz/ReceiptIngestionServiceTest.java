@@ -32,6 +32,7 @@ import java.util.function.Consumer;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -102,7 +103,7 @@ class ReceiptIngestionServiceTest {
         var receipt = processingReceipt();
         var fetched = new SefazIngestionService.FetchedDocument(null, "<html/>", CHAVE_RS, UnidadeFederativa.RS, null);
         when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
-        when(sefazIngestionService.fetch(QR)).thenReturn(fetched);
+        when(sefazIngestionService.fetch(eq(QR), any())).thenReturn(fetched);
         when(sefazIngestionService.parse(fetched)).thenReturn(sampleParsed());
 
         service.ingest(receipt.getId(), QR);
@@ -119,7 +120,7 @@ class ReceiptIngestionServiceTest {
         var receipt = processingReceipt();
         var fetched = new SefazIngestionService.FetchedDocument(null, "<html/>", CHAVE_RS, UnidadeFederativa.RS, null);
         when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
-        when(sefazIngestionService.fetch(QR)).thenReturn(fetched);
+        when(sefazIngestionService.fetch(eq(QR), any())).thenReturn(fetched);
         when(sefazIngestionService.parse(fetched)).thenThrow(new ReceiptParseException("no items found"));
 
         service.ingest(receipt.getId(), QR);
@@ -132,7 +133,7 @@ class ReceiptIngestionServiceTest {
     void ingest_fetchThrows_marksFailedParse() {
         var receipt = processingReceipt();
         when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
-        when(sefazIngestionService.fetch(QR)).thenThrow(new RuntimeException("captcha timeout"));
+        when(sefazIngestionService.fetch(eq(QR), any())).thenThrow(new RuntimeException("captcha timeout"));
 
         service.ingest(receipt.getId(), QR);
 
@@ -156,7 +157,7 @@ class ReceiptIngestionServiceTest {
         var pgTermination = new PSQLException(
                 "FATAL: terminating connection due to administrator command",
                 PSQLState.CONNECTION_FAILURE);
-        when(sefazIngestionService.fetch(QR))
+        when(sefazIngestionService.fetch(eq(QR), any()))
                 .thenThrow(new TransientDataAccessResourceException("connection lost", pgTermination));
 
         service.ingest(receipt.getId(), QR);
@@ -188,7 +189,7 @@ class ReceiptIngestionServiceTest {
         when(receiptRepository.findById(receipt.getId()))
                 .thenReturn(Optional.of(receipt))
                 .thenReturn(Optional.of(confirmed));
-        when(sefazIngestionService.fetch(QR)).thenReturn(fetched);
+        when(sefazIngestionService.fetch(eq(QR), any())).thenReturn(fetched);
         when(sefazIngestionService.parse(fetched)).thenReturn(sampleParsed());
 
         service.ingest(receipt.getId(), QR);

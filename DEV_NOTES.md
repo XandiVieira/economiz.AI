@@ -10,6 +10,24 @@ mirror entries here.
 
 ---
 
+## Paid-API cost caps — in place, with two known follow-ups (2026-07-09)
+- **Now**: `PaidApiGuardService` meters every paid external call — per-user daily caps
+  (`economizai.paid-api.*`: Infosimples 20/day, captcha 60/day), an Infosimples circuit
+  breaker (5 failures/10min → open 5min), and a `paid_api_call` ledger for invoice
+  reconciliation. Enforcement toggles via `PAID_API_GUARD_ENABLED` (logging is always on).
+- **Follow-up 1 (accuracy)**: captcha is metered **per scrape**, not per solve. A scrape
+  can re-solve up to 3× on retry, so the ledger/cap under-counts captcha cost by up to 3×.
+  Fine as a coarse abuse guard; tighten to per-solve (meter inside the solver) if captcha
+  spend becomes material.
+- **Follow-up 2 (UX)**: the cap is enforced in the **async** ingest, so hitting it produces
+  a `FAILED_PARSE` (reason `receipt.paid_api.quota_exceeded`) instead of a fast 4xx at
+  submit. Consider a fail-fast check at `POST /receipts` once we're comfortable predicting
+  the paid service from the UF up front.
+- **Before prod**: also cap Twilio SMS/WhatsApp (currently PRO-only + off by default, so
+  lower risk) through the same ledger.
+
+---
+
 ## ⚠️ EAN catalog is NOT seeded by a migration — prod DB starts EMPTY (2026-07-04)
 - **Now**: `V51__create_ean_catalog.sql` creates the `ean_catalog` table but seeds NOTHING. The ~32k Brazilian products came from a one-off runtime import (stream the Open Food Facts CSV dump through `POST /api/v1/categorizer/ean-catalog/import-off` — see `scratchpad/stream_import.py` for the script: `curl -sL <OFF csv.gz> | gunzip | python3 stream_import.py`, filters BR rows, pushes in batches of 500).
 - **Why it matters for prod**: a fresh prod DB rebuilds schema from Flyway on an empty volume → the EAN catalog is **empty**, so barcode-scan (`/products/by-ean`) returns catalog-preview misses and category-for-EAN-items silently degrades to dictionary-only. No migration and (until this note) no checklist item = data-loss-on-migrate trap.

@@ -5,7 +5,9 @@ import com.relyon.economizai.exception.CaptchaUnavailableException;
 import com.relyon.economizai.exception.InvalidQrPayloadException;
 import com.relyon.economizai.exception.SefazFetchException;
 import com.relyon.economizai.exception.UnsupportedStateException;
+import com.relyon.economizai.model.enums.PaidApiService;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
+import com.relyon.economizai.service.paidapi.PaidApiGuardService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -13,6 +15,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -20,9 +23,11 @@ public class SefazIngestionService {
 
     private final Map<UnidadeFederativa, SefazAdapter> adapters;
     private final Optional<InfosimplesService> infosimples;
+    private final PaidApiGuardService paidApiGuard;
 
     public SefazIngestionService(List<SefazAdapter> adapters,
-                                 Optional<InfosimplesService> infosimples) {
+                                 Optional<InfosimplesService> infosimples,
+                                 PaidApiGuardService paidApiGuard) {
         var byState = new EnumMap<UnidadeFederativa, SefazAdapter>(UnidadeFederativa.class);
         for (var adapter : adapters) {
             for (var uf : adapter.supportedStates()) {
@@ -35,6 +40,7 @@ public class SefazIngestionService {
         }
         this.adapters = Map.copyOf(byState);
         this.infosimples = infosimples;
+        this.paidApiGuard = paidApiGuard;
         log.info("Registered SEFAZ adapters covering UFs: {} infosimples-fallback={}",
                 this.adapters.keySet(), infosimples.isPresent());
     }
@@ -85,6 +91,16 @@ public class SefazIngestionService {
      * {@link ParsedReceipt} so {@link #parse} returns it directly.
      */
     public FetchedDocument fetch(String qrPayload) {
+        return fetch(qrPayload, null);
+    }
+
+    /**
+     * As {@link #fetch(String)}, but attributes the paid calls it makes (captcha
+     * solves, Infosimples queries) to {@code userId} for the per-user daily cap
+     * and the reconciliation ledger. A null {@code userId} (admin reparse, tests)
+     * skips the cap but is still logged.
+     */
+    public FetchedDocument fetch(String qrPayload, UUID userId) {
         var chave = resolveChave(qrPayload);
         var uf = ChaveAcessoParser.extractUf(chave);
         var adapter = adapters.get(uf);
@@ -101,15 +117,23 @@ public class SefazIngestionService {
                 throw new SefazFetchException(uf.name());
             }
             log.info("sefaz.fetch.bare_chave uf={} chave={} — routing to infosimples (no QR signature to scrape)", uf, abbrev(chave));
-            var preParsed = infosimples.get().fetchParsed(chave, uf);
-            return new FetchedDocument(null, null, chave, uf, preParsed.sourceUrl(), preParsed);
+            return fetchViaInfosimples(chave, uf, userId);
         }
+        // Every scrape solves at least one captcha (paid). Cap the user before spending.
+        paidApiGuard.assertWithinDailyCap(userId, PaidApiService.CAPTCHA_SOLVE);
         try {
             var html = adapter.fetchHtml(qrPayload);
+            paidApiGuard.recordSuccess(userId, PaidApiService.CAPTCHA_SOLVE, uf.name(), null);
             var sanitized = CpfMasker.strip(html);
             var sourceUrl = qrPayload.trim().toLowerCase().startsWith("http") ? qrPayload.trim() : null;
             return new FetchedDocument(adapter, sanitized, chave, uf, sourceUrl, null);
         } catch (SefazFetchException | CaptchaUnavailableException | CaptchaSolveFailedException primaryEx) {
+            // A CaptchaUnavailableException means no solver was configured — no money
+            // was spent, so don't record a captcha cost. Any other failure here means
+            // a solve was attempted (and billed) but the portal still failed.
+            if (!(primaryEx instanceof CaptchaUnavailableException)) {
+                paidApiGuard.recordFailure(userId, PaidApiService.CAPTCHA_SOLVE, uf.name(), null);
+            }
             // Only failures Infosimples can plausibly rescue: portal down after
             // retries, no solver configured, or the solver itself failed. Every
             // query costs ~R$0.24, so deterministic failures (bad chave, invalid
@@ -117,10 +141,27 @@ public class SefazIngestionService {
             if (infosimples.isEmpty()) throw primaryEx;
             log.warn("sefaz.fetch.primary.failed uf={} chave={} reason={} — trying infosimples fallback",
                     uf, abbrev(chave), primaryEx.getMessage());
+            return fetchViaInfosimples(chave, uf, userId);
+        }
+    }
+
+    /**
+     * The paid by-chave fallback. Guarded by the Infosimples circuit breaker (skip
+     * when the provider is failing) and the per-user daily cap, and every attempt —
+     * success or failure — is written to the ledger. A failure trips the breaker.
+     */
+    private FetchedDocument fetchViaInfosimples(String chave, UnidadeFederativa uf, UUID userId) {
+        paidApiGuard.assertCircuitClosed(PaidApiService.INFOSIMPLES);
+        paidApiGuard.assertWithinDailyCap(userId, PaidApiService.INFOSIMPLES);
+        try {
             var preParsed = infosimples.get().fetchParsed(chave, uf);
+            paidApiGuard.recordSuccess(userId, PaidApiService.INFOSIMPLES, uf.name(), "infosimples");
             log.info("sefaz.fetch.infosimples.ok uf={} chave={} items={}",
                     uf, abbrev(chave), preParsed.items().size());
             return new FetchedDocument(null, null, chave, uf, preParsed.sourceUrl(), preParsed);
+        } catch (RuntimeException ex) {
+            paidApiGuard.recordFailure(userId, PaidApiService.INFOSIMPLES, uf.name(), "infosimples");
+            throw ex;
         }
     }
 

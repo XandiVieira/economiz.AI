@@ -2,6 +2,7 @@ package com.relyon.economizai.service.sefaz;
 
 import com.relyon.economizai.config.AsyncConfig;
 import com.relyon.economizai.config.MdcContextFilter;
+import com.relyon.economizai.exception.DomainException;
 import com.relyon.economizai.exception.ReceiptParseException;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.ReceiptItem;
@@ -60,11 +61,15 @@ public class ReceiptIngestionService {
     public void ingest(UUID receiptId, String qrPayload) {
         MDC.put(MdcContextFilter.RECEIPT_ID, abbrev(receiptId));
         try {
-            if (!isStillProcessing(receiptId)) {
+            var receipt = receiptRepository.findById(receiptId).orElse(null);
+            if (receipt == null || receipt.getStatus() != ReceiptStatus.PROCESSING) {
                 log.warn("ingest skipped: receipt {} missing or no longer PROCESSING", abbrev(receiptId));
                 return;
             }
-            var fetched = sefazIngestionService.fetch(qrPayload);
+            // Attribute the paid SEFAZ calls (captcha solve, Infosimples query) to the
+            // owner so the per-user daily cap and cost ledger can meter them.
+            var userId = receipt.getUser().getId();
+            var fetched = sefazIngestionService.fetch(qrPayload, userId);
             try {
                 var parsed = sefazIngestionService.parse(fetched);
                 warmEanCatalog(parsed);
@@ -86,12 +91,6 @@ public class ReceiptIngestionService {
         } finally {
             MDC.remove(MdcContextFilter.RECEIPT_ID);
         }
-    }
-
-    private boolean isStillProcessing(UUID receiptId) {
-        return receiptRepository.findById(receiptId)
-                .map(receipt -> receipt.getStatus() == ReceiptStatus.PROCESSING)
-                .orElse(false);
     }
 
     /**
@@ -160,7 +159,7 @@ public class ReceiptIngestionService {
             transactionTemplate.executeWithoutResult(txStatus ->
                     receiptRepository.findById(receiptId).ifPresent(receipt -> {
                         if (receipt.getStatus() == ReceiptStatus.PROCESSING) {
-                            receipt.setParseErrorReason("receipt.sefaz.fetch.failed:" + ex.getClass().getSimpleName());
+                            receipt.setParseErrorReason(failureReason(ex));
                             receipt.setStatus(ReceiptStatus.FAILED_PARSE);
                             receiptRepository.save(receipt);
                         }
@@ -169,6 +168,18 @@ public class ReceiptIngestionService {
             log.error("ingest failed AND could not mark FAILED_PARSE for receipt {}", abbrev(receiptId), inner);
         }
         log.warn("ingest fetch/solve failed status=FAILED_PARSE reason={}", ex.getMessage(), ex);
+    }
+
+    /**
+     * A DomainException (daily cap hit, circuit open, captcha unavailable) carries
+     * its own localizable key + args — surface it so the FE renders the real reason
+     * ("daily limit reached") instead of a generic fetch failure.
+     */
+    private static String failureReason(RuntimeException ex) {
+        if (ex instanceof DomainException domainEx) {
+            return domainEx.getMessageKey() + ":" + String.join(",", domainEx.getArguments());
+        }
+        return "receipt.sefaz.fetch.failed:" + ex.getClass().getSimpleName();
     }
 
     private void applyParsed(Receipt receipt, ParsedReceipt parsed) {

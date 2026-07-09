@@ -129,7 +129,7 @@ class ReceiptToPriceIndexIntegrationTest {
         var token = registerAndLogin("e2e-pi-1@test.com");
         var fetched = new SefazIngestionService.FetchedDocument(null, "<html/>", "00000000000000000000000000000000000000000000",
                 UnidadeFederativa.RS, null);
-        when(sefazIngestionService.fetch(any())).thenReturn(fetched);
+        when(sefazIngestionService.fetch(any(), any())).thenReturn(fetched);
         when(sefazIngestionService.parse(any())).thenReturn(fakeParsedReceipt(new BigDecimal("28.00")));
 
         // submit (PROCESSING) + drive the async ingestion to PENDING_CONFIRMATION
@@ -172,7 +172,7 @@ class ReceiptToPriceIndexIntegrationTest {
         var token = registerAndLogin("e2e-resubmit@test.com");
         var fetched = new SefazIngestionService.FetchedDocument(null, "<html/>", "00000000000000000000000000000000000000000000",
                 UnidadeFederativa.RS, null);
-        when(sefazIngestionService.fetch(any())).thenReturn(fetched);
+        when(sefazIngestionService.fetch(any(), any())).thenReturn(fetched);
         when(sefazIngestionService.parse(any())).thenReturn(fakeParsedReceipt(new BigDecimal("28.00")));
 
         // First submit — leaves a non-CONFIRMED (PROCESSING) row.
@@ -206,7 +206,7 @@ class ReceiptToPriceIndexIntegrationTest {
         var token = registerAndLogin("e2e-pi-optout@test.com");
         var fetched = new SefazIngestionService.FetchedDocument(null, "<html/>", "00000000000000000000000000000000000000000000",
                 UnidadeFederativa.RS, null);
-        when(sefazIngestionService.fetch(any())).thenReturn(fetched);
+        when(sefazIngestionService.fetch(any(), any())).thenReturn(fetched);
         when(sefazIngestionService.parse(any())).thenReturn(fakeParsedReceipt(new BigDecimal("28.00")));
 
         // opt out before submitting

@@ -75,7 +75,7 @@ class ConfirmRollbackOnAttributionFailureIntegrationTest {
         var fetched = new SefazIngestionService.FetchedDocument(
                 null, "<html/>", "00000000000000000000000000000000000000000000",
                 UnidadeFederativa.RS, null);
-        when(sefazIngestionService.fetch(any())).thenReturn(fetched);
+        when(sefazIngestionService.fetch(any(), any())).thenReturn(fetched);
         when(sefazIngestionService.parse(any())).thenReturn(fakeParsedReceipt(new BigDecimal("28.00")));
         // Force the best-effort attribution pass to blow up from INSIDE its own
         // @Transactional method, so the shared confirm transaction gets marked

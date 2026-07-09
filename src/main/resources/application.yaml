@@ -158,6 +158,18 @@ economizai:
     enabled: ${INFOSIMPLES_ENABLED:false}
     api-key: ${INFOSIMPLES_API_KEY:}
     base-url: ${INFOSIMPLES_BASE_URL:https://api.infosimples.com}
+  # Cost control for paid external calls (captcha solves + Infosimples). Every paid
+  # call is always logged to paid_api_call for invoice reconciliation. `enabled`
+  # gates enforcement: per-user daily caps (a hard cost/abuse guard, independent of
+  # subscription tier) and the Infosimples circuit breaker (stop paying while the
+  # provider is failing). Caps of 0 = unlimited.
+  paid-api:
+    enabled: ${PAID_API_GUARD_ENABLED:true}
+    infosimples-daily-cap-per-user: ${INFOSIMPLES_DAILY_CAP:20}
+    captcha-daily-cap-per-user: ${CAPTCHA_DAILY_CAP:60}
+    infosimples-failure-threshold: ${INFOSIMPLES_BREAKER_THRESHOLD:5}
+    breaker-window-seconds: ${INFOSIMPLES_BREAKER_WINDOW_S:600}
+    breaker-cooldown-seconds: ${INFOSIMPLES_BREAKER_COOLDOWN_S:300}
   subscription:
     # Master paywall switch. OFF by default — every feature is allowed for all users
     # and the FREE caps below are dormant. Set SUBSCRIPTION_ENFORCE=true to turn paywalls on.

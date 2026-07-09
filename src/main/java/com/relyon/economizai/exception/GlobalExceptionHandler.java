@@ -97,6 +97,16 @@ public class GlobalExceptionHandler {
         return respond(ex, HttpStatus.PAYMENT_REQUIRED, "Paywall: PRO feature blocked for FREE tier");
     }
 
+    @ExceptionHandler(PaidApiQuotaExceededException.class)
+    public ResponseEntity<ErrorResponse> handlePaidApiQuota(PaidApiQuotaExceededException ex) {
+        return respond(ex, HttpStatus.TOO_MANY_REQUESTS, "Paid-API daily cap reached for user");
+    }
+
+    @ExceptionHandler(PaidApiUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handlePaidApiUnavailable(PaidApiUnavailableException ex) {
+        return respond(ex, HttpStatus.SERVICE_UNAVAILABLE, "Paid-API circuit breaker open");
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
         var errors = ex.getBindingResult().getFieldErrors().stream()

@@ -14,6 +14,21 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-07-09 — Controle de custo: limite diário de consultas pagas
+
+Para proteger o custo com serviços pagos (captcha, Infosimples), toda NFC-e passou a ter
+limites por usuário/dia. Impacto no FE: uma NFC-e pode falhar (`FAILED_PARSE`) com dois
+novos `parseErrorReason`:
+
+- `receipt.paid_api.quota_exceeded` — usuário atingiu o limite diário de consultas
+  automáticas (renderizar a `parseErrorMessage` e sugerir tentar amanhã).
+- `receipt.paid_api.circuit_open` — o serviço de consulta está temporariamente
+  indisponível (sugerir tentar em alguns minutos).
+
+Ambos já vêm com `parseErrorMessage` localizada — o FE nunca deve renderizar a chave crua.
+
+---
+
 ## 2026-07-09 — Export LGPD completo (`GET /users/me/export`)
 
 O export de dados pessoais agora inclui **tudo** que é atribuível ao usuário — o
