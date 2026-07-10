@@ -11,6 +11,12 @@ import java.util.UUID;
 
 public interface PriceObservationAuditRepository extends JpaRepository<PriceObservationAudit, UUID> {
 
+    /** Community-scale gauge for onboarding: how many distinct households have ever
+     * contributed a (non-outlier) observation. Drives the collaborative cold-start
+     * lock — a coarse global signal, not a per-(product,market) k-anon guarantee. */
+    @Query("SELECT COUNT(DISTINCT a.householdId) FROM PriceObservationAudit a WHERE a.observation.outlier = false")
+    long countDistinctContributingHouseholds();
+
     /** K-anonymity helper: how many distinct households contributed observations
      * for a given (product, market) since the cutoff? */
     @Query("""

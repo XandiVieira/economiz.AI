@@ -37,6 +37,20 @@ Single round-trip returns:
 Each section silently degrades to empty/zero when there's nothing to show. Use this instead of fan-out calls on cold start (saves you ~5×30s on Render free tier).
 
 ```
+GET /api/v1/home/availability
+```
+
+Cold-start map so you can render a "disponível em breve" **blur/lock** (with a
+progress hint) on volume-gated sections instead of a bare empty screen. Returns
+`features[]`, each `{ feature, available, reason, have, need }`:
+- `feature` — `CONSUMPTION_PREDICTIONS | SUGGESTED_LIST | PERSONAL_PROMOS | PREFERENCES | COMMUNITY_DEALS | COMMUNITY_PROMOS | BEST_MARKETS | REFERENCE_PRICE`
+- `available` — `have >= need` (past cold-start; data may still be sparse per item)
+- `reason` — `AVAILABLE | NEEDS_MORE_RECEIPTS` (personal) `| NEEDS_COMMUNITY` (collaborative)
+- `have`/`need` — progress. Personal: `have` = your confirmed-receipt count. Collaborative: `have` = distinct households contributing to the index; `need` = the k-anonymity minimum.
+
+Use it to decide what's safe to show on day 1 vs. what to lock. Distinguishes "empty because you're new" (scan more) from "empty because the community is still growing".
+
+```
 GET /actuator/health   → public, returns `{"status":"UP"}` — for uptime monitors
 ```
 

@@ -14,6 +14,22 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-07-10 — Sinal de "disponível em breve" para telas gated (`GET /home/availability`)
+
+Novo endpoint pro FE mostrar **blur/cadeado** em seções que dependem de volume, em vez
+de uma tela vazia confusa no usuário novo. Retorna `features[]`, cada uma com
+`{ feature, available, reason, have, need }`:
+- `reason` distingue **`NEEDS_MORE_RECEIPTS`** (pessoal — escaneie mais notas) de
+  **`NEEDS_COMMUNITY`** (colaborativo — aguardando mais domicílios).
+- `have`/`need` = progresso pro FE renderizar "faltam X" (ex.: "2/3 domicílios").
+- `available = have >= need` (passou do cold-start; item específico ainda pode estar ralo).
+
+Cobre `CONSUMPTION_PREDICTIONS, SUGGESTED_LIST, PERSONAL_PROMOS, PREFERENCES,
+COMMUNITY_DEALS, COMMUNITY_PROMOS, BEST_MARKETS, REFERENCE_PRICE`. Os endpoints
+existentes **não mudaram** — este é aditivo.
+
+---
+
 ## 2026-07-09 — Unidades normalizadas (UND9→UN, KG9→KG) + códigos internos nunca viram EAN
 
 Verificado com uma nota real do **Sam's Club/WMS (SP)**, 28 itens:

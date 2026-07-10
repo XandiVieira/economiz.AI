@@ -4911,6 +4911,32 @@
 						}
 					},
 					"response": []
+				},
+				{
+					"name": "Home availability (blur/lock)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept-Language",
+								"value": "pt"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/home/availability",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"home",
+								"availability"
+							]
+						},
+						"description": "Cold-start feature availability for the home-screen blur/lock UI. Each feature: {available, reason (NEEDS_MORE_RECEIPTS | NEEDS_COMMUNITY), have, need}."
+					},
+					"response": []
 				}
 			]
 		},
