@@ -1,5 +1,10 @@
 # economizai — Dev Server Infrastructure
 
+> **Moving to a real 2-env host (dev + prod on Render):** step-by-step runbook in
+> [`RENDER_SETUP.md`](./RENDER_SETUP.md) — services, managed Postgres, per-env env
+> vars, the ephemeral-disk/profile-pic gotcha, and secret migration. This file
+> below documents the current self-hosted Windows box (to be retired).
+
 ## 🔗 Quick Links (dev environment)
 
 | What | Link | Notes |
