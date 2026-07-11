@@ -51,6 +51,16 @@ progress hint) on volume-gated sections instead of a bare empty screen. Returns
 Use it to decide what's safe to show on day 1 vs. what to lock. Distinguishes "empty because you're new" (scan more) from "empty because the community is still growing".
 
 ```
+POST /api/v1/contact   → 202 Accepted (public, no auth)
+```
+
+Contact / feedback form (doubt, criticism, suggestion, praise). Body:
+`{ "name", "email", "message" }` — all required (`email` must be valid, `message` ≤ 5000 chars).
+Emails the message to support with the sender's address as Reply-To. **Public**, but
+**rate-limited to 5/hour per IP** (429 with `Retry-After` beyond that). Returns `202`
+with no body on success.
+
+```
 GET /actuator/health   → public, returns `{"status":"UP"}` — for uptime monitors
 ```
 

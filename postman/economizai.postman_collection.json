@@ -164,6 +164,30 @@
 			"name": "Auth",
 			"item": [
 				{
+					"name": "Contact / feedback (public)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"name\": \"John Doe\", \"email\": \"john@test.com\", \"message\": \"Sugestao: adicionem modo escuro.\"}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/contact",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "contact"]
+						},
+						"description": "Public contact/feedback form (doubt, criticism, suggestion, praise). 202 Accepted; rate-limited 5/h per IP."
+					},
+					"response": []
+				},
+				{
 					"name": "Register new user",
 					"request": {
 						"method": "POST",

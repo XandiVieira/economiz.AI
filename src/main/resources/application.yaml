@@ -171,6 +171,10 @@ economizai:
     infosimples-failure-threshold: ${INFOSIMPLES_BREAKER_THRESHOLD:5}
     breaker-window-seconds: ${INFOSIMPLES_BREAKER_WINDOW_S:600}
     breaker-cooldown-seconds: ${INFOSIMPLES_BREAKER_COOLDOWN_S:300}
+  # Where the public contact/feedback form (POST /api/v1/contact) delivers messages.
+  # Blank + no SMTP → the message is logged (DEV-MODE) instead of emailed, never lost.
+  contact:
+    recipient: ${CONTACT_RECIPIENT:contato@economiz.ai}
   subscription:
     # Master paywall switch. OFF by default — every feature is allowed for all users
     # and the FREE caps below are dormant. Set SUBSCRIPTION_ENFORCE=true to turn paywalls on.

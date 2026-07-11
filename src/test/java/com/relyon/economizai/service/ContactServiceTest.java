@@ -1,0 +1,76 @@
+package com.relyon.economizai.service;
+
+import com.relyon.economizai.dto.request.ContactRequest;
+import jakarta.mail.Session;
+import jakarta.mail.internet.MimeMessage;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class ContactServiceTest {
+
+    @Mock private org.springframework.mail.javamail.JavaMailSender mailSender;
+
+    private ContactService configuredService() {
+        return new ContactService(Optional.of(mailSender), "noreply@economiz.ai", "support@economiz.ai", "smtp-user");
+    }
+
+    @Test
+    void submit_configured_sendsEmailToSupportWithReplyToSubmitter() throws Exception {
+        when(mailSender.createMimeMessage()).thenReturn(new MimeMessage((Session) null));
+        var service = configuredService();
+
+        service.submit(new ContactRequest("John Doe", "john@test.com", "Adorei o app, parabéns!"));
+
+        var captor = ArgumentCaptor.forClass(MimeMessage.class);
+        verify(mailSender).send(captor.capture());
+        var sent = captor.getValue();
+        assertEquals("[economizai contato] John Doe", sent.getSubject());
+        assertEquals("support@economiz.ai", sent.getAllRecipients()[0].toString());
+        assertEquals("john@test.com", sent.getReplyTo()[0].toString());
+        assertTrue(sent.getContent().toString().contains("Adorei o app"));
+    }
+
+    @Test
+    void submit_stripsNewlinesFromNameToBlockHeaderInjection() throws Exception {
+        when(mailSender.createMimeMessage()).thenReturn(new MimeMessage((Session) null));
+        var service = configuredService();
+
+        service.submit(new ContactRequest("Evil\r\nBcc: victim@x.com", "a@b.com", "hi"));
+
+        var captor = ArgumentCaptor.forClass(MimeMessage.class);
+        verify(mailSender).send(captor.capture());
+        assertFalse(captor.getValue().getSubject().contains("\n"));
+        assertFalse(captor.getValue().getSubject().contains("\r"));
+    }
+
+    @Test
+    void submit_smtpNotConfigured_doesNotSend() {
+        var service = new ContactService(Optional.of(mailSender), "noreply@economiz.ai", "support@economiz.ai", "");
+
+        service.submit(new ContactRequest("John", "john@test.com", "oi"));
+
+        verify(mailSender, never()).send(org.mockito.ArgumentMatchers.any(MimeMessage.class));
+    }
+
+    @Test
+    void submit_noRecipient_doesNotSend() {
+        var service = new ContactService(Optional.of(mailSender), "noreply@economiz.ai", "", "smtp-user");
+
+        service.submit(new ContactRequest("John", "john@test.com", "oi"));
+
+        verify(mailSender, never()).send(org.mockito.ArgumentMatchers.any(MimeMessage.class));
+    }
+}

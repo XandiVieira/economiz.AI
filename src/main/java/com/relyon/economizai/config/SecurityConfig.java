@@ -91,7 +91,7 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/auth/**", "/api/v1/legal/**", "/api/v1/webhooks/**", "/swagger-ui/**", "/v3/api-docs/**", "/actuator/health").permitAll()
+                        .requestMatchers("/api/v1/auth/**", "/api/v1/legal/**", "/api/v1/webhooks/**", "/api/v1/contact", "/swagger-ui/**", "/v3/api-docs/**", "/actuator/health").permitAll()
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         // Model-training / catalog-mutating categorizer endpoints are ADMIN-only.
                         // The read/debug ones (classify, ml/predict, status, benchmark, quality)

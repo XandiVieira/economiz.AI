@@ -1,0 +1,80 @@
+package com.relyon.economizai.service;
+
+import com.relyon.economizai.dto.request.ContactRequest;
+import com.relyon.economizai.service.privacy.LogMasker;
+import jakarta.mail.internet.MimeMessage;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.stereotype.Service;
+
+import java.nio.charset.StandardCharsets;
+import java.util.Optional;
+
+/**
+ * Delivers a contact / feedback message to our support inbox. Mirrors
+ * {@code AuthEmailSender}: sends via SMTP when configured, otherwise logs the
+ * message with a DEV-MODE marker so it's never silently lost. The submitter's
+ * address is set as Reply-To so we can answer them directly.
+ */
+@Slf4j
+@Service
+public class ContactService {
+
+    private final Optional<JavaMailSender> mailSender;
+    private final String from;
+    private final String recipient;
+    private final boolean smtpConfigured;
+
+    public ContactService(Optional<JavaMailSender> mailSender,
+                          @Value("${economizai.notifications.email.from:noreply@economiz.ai}") String from,
+                          @Value("${economizai.contact.recipient:}") String recipient,
+                          @Value("${spring.mail.username:}") String smtpUsername) {
+        this.mailSender = mailSender;
+        this.from = from;
+        this.recipient = recipient;
+        this.smtpConfigured = mailSender.isPresent() && smtpUsername != null && !smtpUsername.isBlank();
+    }
+
+    public void submit(ContactRequest request) {
+        var name = singleLine(request.name());
+        var subject = "[economizai contato] " + name;
+        var body = "Nome: " + name
+                + "\nE-mail: " + request.email()
+                + "\n\nMensagem:\n" + request.message();
+        deliver(subject, body, request.email());
+    }
+
+    private void deliver(String subject, String body, String replyTo) {
+        if (!smtpConfigured || recipient == null || recipient.isBlank()) {
+            // No SMTP or no recipient configured — log the whole message so support
+            // can still recover it from the logs (dev, or a misconfigured prod).
+            log.warn("[DEV-MODE] contact message NOT emailed (smtp={}, recipient set={}). from={} subject='{}'\n{}",
+                    smtpConfigured, recipient != null && !recipient.isBlank(), LogMasker.email(replyTo), subject, body);
+            return;
+        }
+        try {
+            var sender = mailSender.get();
+            MimeMessage message = sender.createMimeMessage();
+            var helper = new MimeMessageHelper(message, false, StandardCharsets.UTF_8.name());
+            helper.setFrom(from);
+            helper.setTo(recipient);
+            helper.setReplyTo(replyTo);
+            helper.setSubject(subject);
+            helper.setText(body, false);
+            sender.send(message);
+            log.info("contact.sent from={} recipient={}", LogMasker.email(replyTo), LogMasker.email(recipient));
+        } catch (Exception ex) {
+            // Don't fail the request over an SMTP hiccup — log the full message so
+            // it's recoverable, and let the user see a success.
+            log.error("contact.failed from={} {}: {} — message was:\n{}",
+                    LogMasker.email(replyTo), ex.getClass().getSimpleName(), ex.getMessage(), body);
+        }
+    }
+
+    /** Strip CR/LF so a crafted name can't inject extra email headers into the subject. */
+    private static String singleLine(String value) {
+        return value == null ? "" : value.replaceAll("[\\r\\n]", " ").trim();
+    }
+}

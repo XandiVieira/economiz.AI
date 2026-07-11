@@ -60,6 +60,14 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private static final RateLimitPolicy SUBMIT_POLICY =
             new RateLimitPolicy("submit", 30, Duration.ofHours(1));
 
+    /**
+     * 5 contact-form submissions per hour per IP. The endpoint is public and
+     * sends an email, so it's a spam target — this stops a bot from flooding the
+     * support inbox while leaving plenty of room for a genuine user.
+     */
+    private static final RateLimitPolicy CONTACT_POLICY =
+            new RateLimitPolicy("contact", 5, Duration.ofHours(1));
+
     private final RateLimitRegistry registry;
     private final LocalizedMessageService messageService;
     private final ObjectMapper objectMapper;
@@ -81,7 +89,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
             new Rule(
                     SUBMIT_POLICY,
                     req -> "POST".equals(req.getMethod()) && SUBMIT_PATHS.contains(req.getRequestURI()),
-                    KeyStrategy.USER_OR_IP)
+                    KeyStrategy.USER_OR_IP),
+            new Rule(
+                    CONTACT_POLICY,
+                    req -> "POST".equals(req.getMethod()) && "/api/v1/contact".equals(req.getRequestURI()),
+                    KeyStrategy.IP)
     );
 
     @Override

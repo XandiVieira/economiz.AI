@@ -14,6 +14,16 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-07-11 — Formulário de contato/feedback (`POST /api/v1/contact`)
+
+Endpoint **público** (sem auth) pra dúvida/crítica/sugestão/elogio. Body
+`{ name, email, message }` (todos obrigatórios; `email` válido; `message` ≤ 5000).
+Envia a mensagem por e-mail pro suporte com o e-mail do usuário como Reply-To.
+**Rate-limit: 5/hora por IP** (429 com `Retry-After` acima disso). Retorna `202`
+sem corpo. Sem SMTP configurado, a mensagem é logada (não se perde).
+
+---
+
 ## 2026-07-10 — Sinal de "disponível em breve" para telas gated (`GET /home/availability`)
 
 Novo endpoint pro FE mostrar **blur/cadeado** em seções que dependem de volume, em vez
