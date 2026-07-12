@@ -15,4 +15,6 @@ RUN apt-get update \
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
 EXPOSE 10000
-ENTRYPOINT ["java", "-jar", "app.jar", "--server.port=10000"]
+# Honor the platform-injected $PORT (Render/Fly/Railway set it; default 10000 keeps
+# the self-hosted box + compose port-mapping unchanged). Shell form so $PORT expands.
+ENTRYPOINT ["sh", "-c", "java -jar app.jar --server.port=${PORT:-10000}"]
