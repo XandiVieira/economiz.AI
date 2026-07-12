@@ -280,6 +280,60 @@ Plus the **GitHub runner** Windows service (`actions.runner.XandiVieira-economiz
 
 ---
 
+## Render setup (DEV) — click-by-click
+
+As of 2026-07-12 the DEV backend is moving OFF the home box TO Render. New
+topology: **Render runs the app + Postgres; the home box keeps ONLY the
+autonomous bug-fix watchdog** (headless Claude that watches CI/logs and pushes
+fixes). All app serving, the public URL, and the DB live on Render.
+
+Artifacts in the repo: **`render.yaml`** (Blueprint) and **`migrate-to-render.ps1`**
+(local→Render data copy). One env (dev) for now, ~US$14/mo (web + Postgres).
+Prod is added later by promoting to `SPRING_PROFILES_ACTIVE=prod` (see the
+migration map below) on a second service.
+
+**Steps (the dashboard clicks are yours; the code is ready):**
+1. **Create the Blueprint.** Render → New → Blueprint → connect `economiz.AI`,
+   branch `development`. Render reads `render.yaml` and provisions
+   `economizai-db` (Postgres 18) + `economizai-app` (Docker web).
+2. **Wire the DB env vars BY HAND** (the one manual gotcha). Open the Postgres
+   "Info" tab, then on the web service set:
+   - `DATABASE_URL` = `jdbc:postgresql://<HOST>:<PORT>/economizai`  ← **must have
+     the `jdbc:` prefix**. Render's own connection string is `postgresql://…`,
+     which the JDBC driver REJECTS — do not paste it raw.
+   - `DB_USERNAME` = the DB's user · `DB_PASSWORD` = the DB's password.
+3. **Fill the other `sync: false` secrets** on the web service: `CORS_ORIGINS`
+   (the FE origin(s) + the Render app URL, e.g.
+   `https://economizai-app.onrender.com`), `CAPTCHA_API_KEY`, `INFOSIMPLES_API_KEY`,
+   `SMTP_USERNAME/PASSWORD`, `EMAIL_FROM`, `ADMIN_EMAILS`. `JWT_SECRET` is
+   auto-generated. (Reuse the current working values from `C:\actions-runner\.env`.)
+4. **First deploy** builds from the Dockerfile and runs Flyway → all tables
+   created (DB empty otherwise).
+5. **Migrate the data** (brings accounts + the ~910k-row EAN catalog, skips the
+   40-min re-import): after the first healthy boot, on the home box run
+   `$env:RENDER_PG="postgresql://…external…"; .\migrate-to-render.ps1`. It
+   pg_dumps data-only from the local container and loads it into Render, then
+   verifies row counts.
+6. **Point the FE at Render.** New API base = `https://economizai-app.onrender.com/api/v1`.
+   Update the FE + `CORS_ORIGINS`. Retire the Cloudflare quick-tunnel + Worker + KV
+   (the flaky `trycloudflare` URL that kept dying) — Render gives a stable HTTPS URL.
+7. **Decommission on the home box** (keep ONLY the autofix watchdog): stop/disable
+   the `economizai - cloudflare tunnel`, `economizai - start Docker engine` (unless
+   the watchdog needs a local DB), the stack-watchdog, and the GitHub Actions
+   self-hosted runner + `deploy-dev-server.yml` (Render auto-deploys on push now).
+   The bug-fix watchdog task stays.
+
+**Gotchas:**
+- **Profile pics on Render `/tmp` are ephemeral** — `render.yaml` mounts a 1GB
+  persistent disk at `/data/profile-pics` and sets `PROFILE_PICTURE_DIR` to match,
+  so they survive deploys. (S3/Cloudinary is still the real prod fix — see DEV_NOTES.)
+- **Free tier is a trap:** free Postgres EXPIRES in 30 days (this is what killed
+  the old Render), free web sleeps after 15 min. `render.yaml` uses paid plans.
+- **Don't set `SPRING_PROFILES_ACTIVE`** for dev — unset → `dev` profile. Set it to
+  `prod` only when launching (that's the migration map below).
+
+---
+
 ## Going to prod — the migration map
 
 When the time comes, this is the dev→prod swap (most are "delete the home-box
