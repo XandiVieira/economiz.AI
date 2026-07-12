@@ -1,5 +1,6 @@
 package com.relyon.economizai.service;
 
+import com.relyon.economizai.dto.request.BetaSignupRequest;
 import com.relyon.economizai.dto.request.ContactRequest;
 import jakarta.mail.Session;
 import jakarta.mail.internet.MimeMessage;
@@ -24,7 +25,8 @@ class ContactServiceTest {
     @Mock private org.springframework.mail.javamail.JavaMailSender mailSender;
 
     private ContactService configuredService() {
-        return new ContactService(Optional.of(mailSender), "noreply@economiz.ai", "support@economiz.ai", "smtp-user");
+        // beta recipient blank → falls back to the contact recipient
+        return new ContactService(Optional.of(mailSender), "noreply@economiz.ai", "support@economiz.ai", "", "smtp-user");
     }
 
     @Test
@@ -58,7 +60,7 @@ class ContactServiceTest {
 
     @Test
     void submit_smtpNotConfigured_doesNotSend() {
-        var service = new ContactService(Optional.of(mailSender), "noreply@economiz.ai", "support@economiz.ai", "");
+        var service = new ContactService(Optional.of(mailSender), "noreply@economiz.ai", "support@economiz.ai", "", "");
 
         service.submit(new ContactRequest("John", "john@test.com", "oi"));
 
@@ -67,10 +69,52 @@ class ContactServiceTest {
 
     @Test
     void submit_noRecipient_doesNotSend() {
-        var service = new ContactService(Optional.of(mailSender), "noreply@economiz.ai", "", "smtp-user");
+        var service = new ContactService(Optional.of(mailSender), "noreply@economiz.ai", "", "", "smtp-user");
 
         service.submit(new ContactRequest("John", "john@test.com", "oi"));
 
         verify(mailSender, never()).send(org.mockito.ArgumentMatchers.any(MimeMessage.class));
+    }
+
+    @Test
+    void betaSignup_configured_sendsWithBetaSubjectAndReplyTo() throws Exception {
+        when(mailSender.createMimeMessage()).thenReturn(new MimeMessage((Session) null));
+        var service = configuredService();
+
+        service.submitBetaSignup(new BetaSignupRequest("Jane Beta", "jane@test.com"));
+
+        var captor = ArgumentCaptor.forClass(MimeMessage.class);
+        verify(mailSender).send(captor.capture());
+        var sent = captor.getValue();
+        assertEquals("[economizai beta tester] Jane Beta", sent.getSubject());
+        // beta recipient blank → falls back to the contact recipient
+        assertEquals("support@economiz.ai", sent.getAllRecipients()[0].toString());
+        assertEquals("jane@test.com", sent.getReplyTo()[0].toString());
+    }
+
+    @Test
+    void betaSignup_dedicatedRecipient_routesToBetaInbox() throws Exception {
+        when(mailSender.createMimeMessage()).thenReturn(new MimeMessage((Session) null));
+        var service = new ContactService(Optional.of(mailSender), "noreply@economiz.ai",
+                "support@economiz.ai", "beta@economiz.ai", "smtp-user");
+
+        service.submitBetaSignup(new BetaSignupRequest("Jane Beta", "jane@test.com"));
+
+        var captor = ArgumentCaptor.forClass(MimeMessage.class);
+        verify(mailSender).send(captor.capture());
+        assertEquals("beta@economiz.ai", captor.getValue().getAllRecipients()[0].toString());
+    }
+
+    @Test
+    void betaSignup_stripsNewlinesFromName() throws Exception {
+        when(mailSender.createMimeMessage()).thenReturn(new MimeMessage((Session) null));
+        var service = configuredService();
+
+        service.submitBetaSignup(new BetaSignupRequest("Evil\r\nBcc: victim@x.com", "a@b.com"));
+
+        var captor = ArgumentCaptor.forClass(MimeMessage.class);
+        verify(mailSender).send(captor.capture());
+        assertFalse(captor.getValue().getSubject().contains("\n"));
+        assertFalse(captor.getValue().getSubject().contains("\r"));
     }
 }

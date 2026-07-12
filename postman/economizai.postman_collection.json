@@ -184,6 +184,25 @@
 							"path": ["api", "v1", "contact"]
 						},
 						"description": "Public contact/feedback form (doubt, criticism, suggestion, praise). 202 Accepted; rate-limited 5/h per IP."
+						},
+						"response": []
+					},
+					{
+						"name": "Beta-tester signup (public)",
+						"request": {
+							"method": "POST",
+							"header": [ { "key": "Content-Type", "value": "application/json" } ],
+							"body": {
+								"mode": "raw",
+								"raw": "{\"name\": \"Jane Beta\", \"email\": \"jane@test.com\"}",
+								"options": { "raw": { "language": "json" } }
+							},
+							"url": {
+								"raw": "{{baseUrl}}/api/v1/beta-signup",
+								"host": ["{{baseUrl}}"],
+								"path": ["api", "v1", "beta-signup"]
+							},
+							"description": "Public beta-tester lead capture. Body {name,email} (no message). 202 Accepted; distinct email subject; rate-limited 5/h per IP (own bucket)."
 					},
 					"response": []
 				},

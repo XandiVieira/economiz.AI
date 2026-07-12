@@ -8,9 +8,33 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 `/swagger-ui` on whichever environment you're hitting.
 
 **Dev server (use from anywhere):**
-- API: `https://economizai.economizai.workers.dev/api/v1`
-- Swagger: `https://economizai.economizai.workers.dev/swagger-ui/index.html`
-- Health: `https://economizai.economizai.workers.dev/actuator/health`
+- API: `https://economiz-ai.onrender.com/api/v1` (new — Render; stable)
+- Also reachable at the old `https://economizai.economizai.workers.dev/api/v1`
+  (now proxies to Render), so the store build's URL keeps working.
+- Swagger: `https://economiz-ai.onrender.com/swagger-ui/index.html`
+- Health: `https://economiz-ai.onrender.com/actuator/health`
+
+---
+
+## 2026-07-12 — Captação de beta testers (`POST /api/v1/beta-signup`)
+
+Endpoint **público** (sem auth) pra captar interessados em ser beta tester —
+separado do `/contact`. Body `{ name, email }` (ambos obrigatórios; `email`
+válido; sem `message`). Retorna **202 Accepted**. Manda um email pra nossa caixa
+com assunto próprio (`[economizai beta tester] <nome>`), então é filtrável do
+contato normal. Rate-limited a **5/hora por IP** (bucket próprio, separado do
+`/contact`). Nada muda no `/contact` — o assunto de cada um é fixo no backend
+(não há campo `subject` no body de nenhum dos dois).
+
+## 2026-07-12 — Backend migrado pra Render (URL nova + a antiga segue viva)
+
+O backend de DEV saiu da máquina self-hosted e agora roda no **Render**
+(estável, sem o túnel que caía). **Novo API base:** `https://economiz-ai.onrender.com/api/v1`.
+A **URL antiga** (`economizai.economizai.workers.dev`) **continua funcionando** —
+agora ela encaminha pro Render — então o app já enviado às lojas com a URL antiga
+não quebra. Builds novos da FE devem apontar pro `onrender.com`. Dados (contas,
+notas, catálogo) foram migrados; **fotos de perfil ainda não** (usuários com foto
+veem o avatar de iniciais até re-subir).
 
 ---
 

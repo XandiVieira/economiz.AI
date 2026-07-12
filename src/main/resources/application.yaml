@@ -175,6 +175,10 @@ economizai:
   # Blank + no SMTP → the message is logged (DEV-MODE) instead of emailed, never lost.
   contact:
     recipient: ${CONTACT_RECIPIENT:contato@economiz.ai}
+  beta:
+    # Where beta-tester signups are emailed. Falls back to the contact recipient
+    # when unset, so leads are never dropped.
+    recipient: ${BETA_RECIPIENT:}
   subscription:
     # Master paywall switch. OFF by default — every feature is allowed for all users
     # and the FREE caps below are dormant. Set SUBSCRIPTION_ENFORCE=true to turn paywalls on.

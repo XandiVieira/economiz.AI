@@ -61,6 +61,16 @@ Emails the message to support with the sender's address as Reply-To. **Public**,
 with no body on success.
 
 ```
+POST /api/v1/beta-signup   → 202 Accepted (public, no auth)
+```
+
+Beta-tester lead capture. Body: `{ "name", "email" }` — both required (`email` must be
+valid); **no `message`**. Emails the lead to our beta inbox with a distinct subject
+(`[economizai beta tester] …`) so it's separable from `/contact`. **Public**,
+**rate-limited to 5/hour per IP** (own bucket, separate from `/contact`). Returns `202`
+with no body on success.
+
+```
 GET /actuator/health   → public, returns `{"status":"UP"}` — for uptime monitors
 ```
 

@@ -61,12 +61,16 @@ public class RateLimitFilter extends OncePerRequestFilter {
             new RateLimitPolicy("submit", 30, Duration.ofHours(1));
 
     /**
-     * 5 contact-form submissions per hour per IP. The endpoint is public and
-     * sends an email, so it's a spam target — this stops a bot from flooding the
-     * support inbox while leaving plenty of room for a genuine user.
+     * 5 submissions per hour per IP for the public email-sending forms (contact +
+     * beta signup). Both are public and email our inbox, so they're spam targets —
+     * this stops a bot from flooding it while leaving plenty of room for a genuine
+     * user. Each path gets its OWN bucket (policy name + IP key), so hitting the
+     * contact form doesn't consume the beta-signup budget.
      */
     private static final RateLimitPolicy CONTACT_POLICY =
             new RateLimitPolicy("contact", 5, Duration.ofHours(1));
+    private static final RateLimitPolicy BETA_POLICY =
+            new RateLimitPolicy("beta", 5, Duration.ofHours(1));
 
     private final RateLimitRegistry registry;
     private final LocalizedMessageService messageService;
@@ -93,6 +97,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
             new Rule(
                     CONTACT_POLICY,
                     req -> "POST".equals(req.getMethod()) && "/api/v1/contact".equals(req.getRequestURI()),
+                    KeyStrategy.IP),
+            new Rule(
+                    BETA_POLICY,
+                    req -> "POST".equals(req.getMethod()) && "/api/v1/beta-signup".equals(req.getRequestURI()),
                     KeyStrategy.IP)
     );
 

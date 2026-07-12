@@ -1,5 +1,6 @@
 package com.relyon.economizai.service;
 
+import com.relyon.economizai.dto.request.BetaSignupRequest;
 import com.relyon.economizai.dto.request.ContactRequest;
 import com.relyon.economizai.service.privacy.LogMasker;
 import jakarta.mail.internet.MimeMessage;
@@ -25,15 +26,20 @@ public class ContactService {
     private final Optional<JavaMailSender> mailSender;
     private final String from;
     private final String recipient;
+    private final String betaRecipient;
     private final boolean smtpConfigured;
 
     public ContactService(Optional<JavaMailSender> mailSender,
                           @Value("${economizai.notifications.email.from:noreply@economiz.ai}") String from,
                           @Value("${economizai.contact.recipient:}") String recipient,
+                          @Value("${economizai.beta.recipient:}") String betaRecipient,
                           @Value("${spring.mail.username:}") String smtpUsername) {
         this.mailSender = mailSender;
         this.from = from;
         this.recipient = recipient;
+        // Beta signups can go to a dedicated inbox; falls back to the contact inbox
+        // when not separately configured, so they're never dropped.
+        this.betaRecipient = (betaRecipient == null || betaRecipient.isBlank()) ? recipient : betaRecipient;
         this.smtpConfigured = mailSender.isPresent() && smtpUsername != null && !smtpUsername.isBlank();
     }
 
@@ -43,10 +49,24 @@ public class ContactService {
         var body = "Nome: " + name
                 + "\nE-mail: " + request.email()
                 + "\n\nMensagem:\n" + request.message();
-        deliver(subject, body, request.email());
+        deliver(subject, body, request.email(), recipient);
     }
 
-    private void deliver(String subject, String body, String replyTo) {
+    /**
+     * Beta-tester lead capture. Distinct fixed subject so it lands in / is
+     * filterable to the beta pile, and goes to the beta recipient (or the contact
+     * inbox as fallback). No user-controlled subject — the tag is set here.
+     */
+    public void submitBetaSignup(BetaSignupRequest request) {
+        var name = singleLine(request.name());
+        var subject = "[economizai beta tester] " + name;
+        var body = "Interessado(a) em ser beta tester:"
+                + "\n\nNome: " + name
+                + "\nE-mail: " + request.email();
+        deliver(subject, body, request.email(), betaRecipient);
+    }
+
+    private void deliver(String subject, String body, String replyTo, String recipient) {
         if (!smtpConfigured || recipient == null || recipient.isBlank()) {
             // No SMTP or no recipient configured — log the whole message so support
             // can still recover it from the logs (dev, or a misconfigured prod).
