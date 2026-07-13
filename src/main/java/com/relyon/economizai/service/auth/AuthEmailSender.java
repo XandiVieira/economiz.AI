@@ -30,7 +30,7 @@ public class AuthEmailSender {
     private final boolean smtpConfigured;
 
     public AuthEmailSender(Optional<JavaMailSender> mailSender,
-                           @Value("${economizai.notifications.email.from:noreply@economiz.ai}") String from,
+                           @Value("${economizai.notifications.email.from:noreply@economizaai.app}") String from,
                            @Value("${spring.mail.username:}") String smtpUsername) {
         this.mailSender = mailSender;
         this.from = from;

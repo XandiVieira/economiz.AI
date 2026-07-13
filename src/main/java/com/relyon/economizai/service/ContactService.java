@@ -30,7 +30,7 @@ public class ContactService {
     private final boolean smtpConfigured;
 
     public ContactService(Optional<JavaMailSender> mailSender,
-                          @Value("${economizai.notifications.email.from:noreply@economiz.ai}") String from,
+                          @Value("${economizai.notifications.email.from:noreply@economizaai.app}") String from,
                           @Value("${economizai.contact.recipient:}") String recipient,
                           @Value("${economizai.beta.recipient:}") String betaRecipient,
                           @Value("${spring.mail.username:}") String smtpUsername) {

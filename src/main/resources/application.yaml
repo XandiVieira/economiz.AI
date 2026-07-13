@@ -174,7 +174,7 @@ economizai:
   # Where the public contact/feedback form (POST /api/v1/contact) delivers messages.
   # Blank + no SMTP → the message is logged (DEV-MODE) instead of emailed, never lost.
   contact:
-    recipient: ${CONTACT_RECIPIENT:contato@economiz.ai}
+    recipient: ${CONTACT_RECIPIENT:contato@economizaai.app}
   beta:
     # Where beta-tester signups are emailed. Falls back to the contact recipient
     # when unset, so leads are never dropped.
@@ -263,7 +263,7 @@ economizai:
   notifications:
     email:
       enabled: ${NOTIFICATIONS_EMAIL_ENABLED:false}    # turn on once SMTP env vars (host/port/user/pass) are wired in Render
-      from: ${EMAIL_FROM:noreply@economiz.ai}
+      from: ${EMAIL_FROM:noreply@economizaai.app}
     push:
       expo:
         # Optional bearer token for the Expo Push API. Unauthenticated sends still

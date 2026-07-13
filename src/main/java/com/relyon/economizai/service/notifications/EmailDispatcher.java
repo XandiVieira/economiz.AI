@@ -25,7 +25,7 @@ public class EmailDispatcher implements NotificationDispatcher {
 
     private final JavaMailSender mailSender;
 
-    @Value("${economizai.notifications.email.from:noreply@economiz.ai}")
+    @Value("${economizai.notifications.email.from:noreply@economizaai.app}")
     private String from;
 
     @Override
