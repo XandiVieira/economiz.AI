@@ -42,6 +42,30 @@ class BetaSignupControllerTest {
     }
 
     @Test
+    void submit_withPhone_accepted() throws Exception {
+        var body = """
+                {"name":"Jane Beta","email":"jane@test.com","phone":"+55 51 99999-0000"}
+                """;
+
+        mockMvc.perform(post("/api/v1/beta-signup").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isAccepted());
+
+        verify(contactService).submitBetaSignup(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void submit_phoneTooLong_rejected() throws Exception {
+        var body = """
+                {"name":"Jane Beta","email":"jane@test.com","phone":"1234567890123456789012345678901"}
+                """;
+
+        mockMvc.perform(post("/api/v1/beta-signup").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest());
+
+        verify(contactService, never()).submitBetaSignup(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void submit_blankName_rejected() throws Exception {
         var body = """
                 {"name":"","email":"jane@test.com"}

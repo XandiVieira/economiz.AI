@@ -194,7 +194,7 @@
 							"header": [ { "key": "Content-Type", "value": "application/json" } ],
 							"body": {
 								"mode": "raw",
-								"raw": "{\"name\": \"Jane Beta\", \"email\": \"jane@test.com\"}",
+								"raw": "{\"name\": \"Jane Beta\", \"email\": \"jane@test.com\", \"phone\": \"+55 51 99999-0000\"}",
 								"options": { "raw": { "language": "json" } }
 							},
 							"url": {
@@ -202,7 +202,7 @@
 								"host": ["{{baseUrl}}"],
 								"path": ["api", "v1", "beta-signup"]
 							},
-							"description": "Public beta-tester lead capture. Body {name,email} (no message). 202 Accepted; distinct email subject; rate-limited 5/h per IP (own bucket)."
+							"description": "Public beta-tester lead capture. Body {name,email,phone?} (phone optional, max 30 chars; no message). 202 Accepted; distinct email subject; rate-limited 5/h per IP (own bucket)."
 					},
 					"response": []
 				},

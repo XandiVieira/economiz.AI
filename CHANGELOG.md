@@ -16,6 +16,15 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-07-13 — `phone` opcional no beta-signup
+
+`POST /api/v1/beta-signup` agora aceita um campo opcional `phone` (string livre,
+máx. 30 caracteres) além de `name` e `email`. Quando enviado, o telefone é
+incluído no e-mail de lead. Requests antigos sem `phone` continuam funcionando
+igual.
+
+---
+
 ## 2026-07-12 — Captação de beta testers (`POST /api/v1/beta-signup`)
 
 Endpoint **público** (sem auth) pra captar interessados em ser beta tester —

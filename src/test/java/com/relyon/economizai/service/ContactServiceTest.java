@@ -81,7 +81,7 @@ class ContactServiceTest {
         when(mailSender.createMimeMessage()).thenReturn(new MimeMessage((Session) null));
         var service = configuredService();
 
-        service.submitBetaSignup(new BetaSignupRequest("Jane Beta", "jane@test.com"));
+        service.submitBetaSignup(new BetaSignupRequest("Jane Beta", "jane@test.com", null));
 
         var captor = ArgumentCaptor.forClass(MimeMessage.class);
         verify(mailSender).send(captor.capture());
@@ -98,7 +98,7 @@ class ContactServiceTest {
         var service = new ContactService(Optional.of(mailSender), "noreply@economiz.ai",
                 "support@economiz.ai", "beta@economiz.ai", "smtp-user");
 
-        service.submitBetaSignup(new BetaSignupRequest("Jane Beta", "jane@test.com"));
+        service.submitBetaSignup(new BetaSignupRequest("Jane Beta", "jane@test.com", null));
 
         var captor = ArgumentCaptor.forClass(MimeMessage.class);
         verify(mailSender).send(captor.capture());
@@ -106,11 +106,35 @@ class ContactServiceTest {
     }
 
     @Test
+    void betaSignup_withPhone_includesPhoneInBody() throws Exception {
+        when(mailSender.createMimeMessage()).thenReturn(new MimeMessage((Session) null));
+        var service = configuredService();
+
+        service.submitBetaSignup(new BetaSignupRequest("Jane Beta", "jane@test.com", "+55 51 99999-0000"));
+
+        var captor = ArgumentCaptor.forClass(MimeMessage.class);
+        verify(mailSender).send(captor.capture());
+        assertTrue(captor.getValue().getContent().toString().contains("Telefone: +55 51 99999-0000"));
+    }
+
+    @Test
+    void betaSignup_withoutPhone_omitsPhoneLine() throws Exception {
+        when(mailSender.createMimeMessage()).thenReturn(new MimeMessage((Session) null));
+        var service = configuredService();
+
+        service.submitBetaSignup(new BetaSignupRequest("Jane Beta", "jane@test.com", null));
+
+        var captor = ArgumentCaptor.forClass(MimeMessage.class);
+        verify(mailSender).send(captor.capture());
+        assertFalse(captor.getValue().getContent().toString().contains("Telefone"));
+    }
+
+    @Test
     void betaSignup_stripsNewlinesFromName() throws Exception {
         when(mailSender.createMimeMessage()).thenReturn(new MimeMessage((Session) null));
         var service = configuredService();
 
-        service.submitBetaSignup(new BetaSignupRequest("Evil\r\nBcc: victim@x.com", "a@b.com"));
+        service.submitBetaSignup(new BetaSignupRequest("Evil\r\nBcc: victim@x.com", "a@b.com", null));
 
         var captor = ArgumentCaptor.forClass(MimeMessage.class);
         verify(mailSender).send(captor.capture());

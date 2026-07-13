@@ -60,9 +60,11 @@ public class ContactService {
     public void submitBetaSignup(BetaSignupRequest request) {
         var name = singleLine(request.name());
         var subject = "[economizai beta tester] " + name;
+        var phone = singleLine(request.phone());
         var body = "Interessado(a) em ser beta tester:"
                 + "\n\nNome: " + name
-                + "\nE-mail: " + request.email();
+                + "\nE-mail: " + request.email()
+                + (phone.isBlank() ? "" : "\nTelefone: " + phone);
         deliver(subject, body, request.email(), betaRecipient);
     }
 
