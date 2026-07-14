@@ -1049,6 +1049,7 @@ Each item is **either** linked to a canonical `Product` (auto-suggestion-friendl
 ```
 GET    /api/v1/admin/users?q=&page=&size=   → Page<AdminUserSummaryResponse>
 GET    /api/v1/admin/users/{id}              → AdminUserDetailResponse
+DELETE /api/v1/admin/users/{id}              → 204 (deletes account + data; 400 for ADMIN accounts)
 GET    /api/v1/admin/receipts?from=&to=&marketCnpj=&category=&q=&householdId=&page=&size=
                                               → Page<ReceiptSummaryResponse>
 GET    /api/v1/admin/receipts/{id}            → ReceiptResponse

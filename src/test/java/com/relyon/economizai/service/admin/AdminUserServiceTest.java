@@ -1,13 +1,16 @@
 package com.relyon.economizai.service.admin;
 
+import com.relyon.economizai.exception.AdminUserDeletionException;
 import com.relyon.economizai.exception.UserNotFoundException;
 import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.ReceiptStatus;
+import com.relyon.economizai.model.enums.Role;
 import com.relyon.economizai.model.enums.SubscriptionTier;
 import com.relyon.economizai.repository.InsightsRepository;
 import com.relyon.economizai.repository.ReceiptRepository;
 import com.relyon.economizai.repository.UserRepository;
+import com.relyon.economizai.service.UserService;
 import com.relyon.economizai.service.subscription.SubscriptionService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -42,8 +46,38 @@ class AdminUserServiceTest {
     @Mock private ReceiptRepository receiptRepository;
     @Mock private InsightsRepository insightsRepository;
     @Mock private SubscriptionService subscriptionService;
+    @Mock private UserService userService;
 
     @InjectMocks private AdminUserService service;
+
+    @Test
+    void delete_regularUser_delegatesToDeleteAccount() {
+        var user = User.builder().id(UUID.randomUUID()).name("Test").email("garbage@test.com")
+                .role(Role.USER).build();
+        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+
+        service.delete(user.getId());
+
+        verify(userService).deleteAccount(user);
+    }
+
+    @Test
+    void delete_adminAccount_refused() {
+        var admin = User.builder().id(UUID.randomUUID()).name("Admin").email("admin@test.com")
+                .role(Role.ADMIN).build();
+        when(userRepository.findById(admin.getId())).thenReturn(Optional.of(admin));
+
+        assertThrows(AdminUserDeletionException.class, () -> service.delete(admin.getId()));
+        verify(userService, never()).deleteAccount(any());
+    }
+
+    @Test
+    void delete_unknownUser_throwsNotFound() {
+        var unknownId = UUID.randomUUID();
+        when(userRepository.findById(unknownId)).thenReturn(Optional.empty());
+
+        assertThrows(UserNotFoundException.class, () -> service.delete(unknownId));
+    }
 
     @Test
     void setTierToPro_activatesAndReturnsDetail() {

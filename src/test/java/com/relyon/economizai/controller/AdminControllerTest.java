@@ -226,6 +226,19 @@ class AdminControllerTest {
                 .andExpect(status().isNotFound());
     }
 
+    // --- delete user ---
+
+    @Test
+    void deleteUser_returnsNoContent() throws Exception {
+        var id = UUID.randomUUID();
+
+        mockMvc.perform(delete("/api/v1/admin/users/" + id)
+                        .with(SecurityMockMvcRequestPostProcessors.user(adminUser())))
+                .andExpect(status().isNoContent());
+
+        verify(adminUserService).delete(id);
+    }
+
     // --- set subscription tier ---
 
     @Test

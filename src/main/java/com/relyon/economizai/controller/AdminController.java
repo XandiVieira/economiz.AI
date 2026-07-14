@@ -92,6 +92,13 @@ public class AdminController {
         return ResponseEntity.ok(adminUserService.get(id));
     }
 
+    /** Delete a user account and its dependents (test/garbage cleanup). Refuses ADMIN accounts. */
+    @DeleteMapping("/users/{id}")
+    public ResponseEntity<Void> deleteUser(@PathVariable UUID id) {
+        adminUserService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+
     /** Set a user's subscription tier (testing / promos / ops). PRO activates, FREE cancels. */
     @PutMapping("/users/{id}/subscription-tier")
     public ResponseEntity<AdminUserDetailResponse> setSubscriptionTier(

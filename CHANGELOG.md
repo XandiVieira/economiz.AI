@@ -16,6 +16,15 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-07-14 — `DELETE /api/v1/admin/users/{id}` (admin)
+
+Novo endpoint admin para excluir contas (limpeza de contas de teste). Reusa o
+cascade do `DELETE /users/me` (apaga a conta + household se ficar vazio).
+Retorna 204; recusa contas ADMIN com 400. Útil para a telinha interna de
+usuários.
+
+---
+
 ## 2026-07-13 — `phone` opcional no beta-signup
 
 `POST /api/v1/beta-signup` agora aceita um campo opcional `phone` (string livre,

@@ -8587,6 +8587,33 @@
 					"response": []
 				},
 				{
+					"name": "Delete user (admin)",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/users/{{userId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"users",
+								"{{userId}}"
+							]
+						},
+						"description": "Delete a user account + all its data (test/garbage cleanup). 204 No Content; 400 for ADMIN accounts (demote first)."
+					},
+					"response": []
+				},
+				{
 					"name": "Set subscription tier to PRO (admin)",
 					"request": {
 						"method": "PUT",

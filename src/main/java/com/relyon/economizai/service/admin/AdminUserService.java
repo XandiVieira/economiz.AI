@@ -3,13 +3,17 @@ package com.relyon.economizai.service.admin;
 import com.relyon.economizai.dto.response.AdminUserDetailResponse;
 import com.relyon.economizai.dto.response.AdminUserDetailResponse.ReceiptCounts;
 import com.relyon.economizai.dto.response.AdminUserSummaryResponse;
+import com.relyon.economizai.exception.AdminUserDeletionException;
 import com.relyon.economizai.exception.UserNotFoundException;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.ReceiptStatus;
+import com.relyon.economizai.model.enums.Role;
 import com.relyon.economizai.model.enums.SubscriptionTier;
 import com.relyon.economizai.repository.InsightsRepository;
 import com.relyon.economizai.repository.ReceiptRepository;
 import com.relyon.economizai.repository.UserRepository;
+import com.relyon.economizai.service.UserService;
+import com.relyon.economizai.service.privacy.LogMasker;
 import com.relyon.economizai.service.subscription.SubscriptionService;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
@@ -47,6 +51,7 @@ public class AdminUserService {
     private final ReceiptRepository receiptRepository;
     private final InsightsRepository insightsRepository;
     private final SubscriptionService subscriptionService;
+    private final UserService userService;
 
     @Transactional(readOnly = true)
     public Page<AdminUserSummaryResponse> list(String search, Pageable pageable) {
@@ -79,6 +84,21 @@ public class AdminUserService {
         }
         log.info("admin.user.set_tier userId={} tier={}", userId, tier);
         return detail(user);
+    }
+
+    /**
+     * Delete a user account and its dependents (test/garbage cleanup). Reuses
+     * the self-service deletion cascade. Refuses ADMIN accounts — demote first
+     * if one really has to go.
+     */
+    @Transactional
+    public void delete(UUID userId) {
+        var user = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException(userId.toString()));
+        if (user.getRole() == Role.ADMIN) {
+            throw new AdminUserDeletionException();
+        }
+        userService.deleteAccount(user);
+        log.info("admin.user.delete userId={} email={}", userId, LogMasker.email(user.getEmail()));
     }
 
     private AdminUserDetailResponse detail(User user) {
