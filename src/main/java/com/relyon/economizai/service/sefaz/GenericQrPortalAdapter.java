@@ -1,9 +1,11 @@
 package com.relyon.economizai.service.sefaz;
 
-import com.relyon.economizai.exception.CaptchaUnavailableException;
+import com.relyon.economizai.exception.ExperimentalCaptchaWallException;
+import com.relyon.economizai.exception.ExperimentalPortalFetchException;
 import com.relyon.economizai.exception.InvalidQrPayloadException;
 import com.relyon.economizai.exception.SefazFetchException;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
+import com.relyon.economizai.service.sefaz.captcha.CaptchaSolver;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -34,6 +36,11 @@ import java.util.stream.Collectors;
  * admin alert when every layer fails. Kill-switch:
  * {@code SEFAZ_EXPERIMENTAL_ENABLED}.
  *
+ * <p>Captcha walls get ONE best-effort solve (reCAPTCHA v2 / Turnstile, token
+ * resubmitted as a query param — a guess). If the portal rejects it, the
+ * failure carries the captcha type + sitekey + page snippet as evidence for
+ * building the dedicated adapter, and Infosimples rescues the receipt.
+ *
  * <p>SSRF guard: only hosts under the configured suffixes (default
  * {@code gov.br} — every SEFAZ portal lives there) are fetched, so a crafted
  * QR can't point the server at internal or arbitrary hosts.
@@ -44,16 +51,20 @@ public class GenericQrPortalAdapter implements SefazAdapter {
 
     private static final Pattern CAPTCHA_MARKER = Pattern.compile(
             "g-recaptcha|recaptcha/api\\.js|hcaptcha|cf-turnstile|challenge-form", Pattern.CASE_INSENSITIVE);
+    private static final Pattern SITE_KEY = Pattern.compile("data-sitekey=\"([^\"]+)\"", Pattern.CASE_INSENSITIVE);
     private static final Pattern URL_HOST = Pattern.compile(
             "^(https?)://([^/?#@\\\\]+?)(?::\\d+)?(?=[/?#]|$)", Pattern.CASE_INSENSITIVE);
+    private static final int EVIDENCE_SNIPPET_CHARS = 600;
 
     private final RestClient restClient;
+    private final CaptchaSolver captchaSolver;
     private final boolean enabled;
     private final int maxAttempts;
     private final long retryDelayMs;
     private final Set<String> allowedHostSuffixes;
 
     public GenericQrPortalAdapter(RestClient.Builder builder,
+                                  CaptchaSolver captchaSolver,
                                   @Value("${economizai.ingestion.sefaz.timeout-ms:30000}") int timeoutMs,
                                   @Value("${economizai.ingestion.sefaz.user-agent:economizai}") String userAgent,
                                   @Value("${economizai.ingestion.sefaz.experimental.enabled:true}") boolean enabled,
@@ -68,6 +79,7 @@ public class GenericQrPortalAdapter implements SefazAdapter {
                 .defaultHeader("Accept", "text/html,application/xhtml+xml")
                 .requestFactory(requestFactory)
                 .build();
+        this.captchaSolver = captchaSolver;
         this.enabled = enabled;
         this.maxAttempts = Math.max(1, maxAttempts);
         this.retryDelayMs = Math.max(0, retryDelayMs);
@@ -107,7 +119,8 @@ public class GenericQrPortalAdapter implements SefazAdapter {
             }
         }
         log.warn("sefaz.experimental.exhausted uf={} attempts={} url={}", uf, maxAttempts, url);
-        throw new SefazFetchException(uf.name());
+        throw new ExperimentalPortalFetchException(uf.name(),
+                "transient failures exhausted " + maxAttempts + " attempts (timeouts/5xx/empty body)");
     }
 
     private String fetchOnce(String url, int attempt, UnidadeFederativa uf) {
@@ -118,10 +131,7 @@ public class GenericQrPortalAdapter implements SefazAdapter {
                 throw new TransientFetchException("empty-body");
             }
             if (CAPTCHA_MARKER.matcher(html).find()) {
-                // Captcha-walled portal — this adapter can't solve it, but the
-                // Infosimples layer can rescue, so signal "rescuable" not "broken".
-                log.info("sefaz.experimental.captcha_wall uf={}", uf);
-                throw new CaptchaUnavailableException(uf.name());
+                return handleCaptchaWall(html, url, uf);
             }
             log.info("sefaz.experimental.fetch.ok uf={} bytes={}", uf, html.length());
             return html;
@@ -129,10 +139,91 @@ public class GenericQrPortalAdapter implements SefazAdapter {
             // 4xx — the portal exists but rejects this consult shape. Deterministic
             // for THIS layer; the chain may still rescue via Infosimples.
             log.warn("sefaz.experimental.client_error uf={} status={}", uf, ex.getStatusCode());
-            throw new SefazFetchException(uf.name());
+            throw new ExperimentalPortalFetchException(uf.name(),
+                    "portal returned " + ex.getStatusCode() + "\nresponse body (first chars):\n"
+                            + snippet(ex.getResponseBodyAsString()));
         } catch (RestClientException ex) {
             throw new TransientFetchException(ex.getClass().getSimpleName());
         }
+    }
+
+    /**
+     * Best-effort captcha attempt on an unknown portal: ONE solve (charged per
+     * token, ~R$0.03, even when the portal then rejects it) resubmitted as a
+     * query param — a guess, since only a dedicated adapter knows the portal's
+     * real form shape. Any failure falls through to the captcha-wall signal,
+     * which the chain rescues via Infosimples. Deliberately NOT the verified
+     * captcha adapters' re-solve retry loop: with an unverified resubmit shape,
+     * repeated solves would just burn money on a likely-wrong guess.
+     */
+    private String handleCaptchaWall(String captchaPageHtml, String url, UnidadeFederativa uf) {
+        var captchaType = detectCaptchaType(captchaPageHtml);
+        var siteKey = extractSiteKey(captchaPageHtml);
+        if (captchaSolver.isConfigured() && siteKey != null && captchaType.solvable()) {
+            try {
+                log.info("sefaz.experimental.captcha_solving uf={} type={}", uf, captchaType);
+                var token = captchaType == CaptchaType.RECAPTCHA_V2
+                        ? captchaSolver.solveRecaptchaV2(siteKey, url)
+                        : captchaSolver.solveCloudflareTurnstile(siteKey, url);
+                var separator = url.contains("?") ? "&" : "?";
+                var resubmitted = httpGet(url + separator + captchaType.responseParam() + "=" + token);
+                if (resubmitted != null && !resubmitted.isBlank() && !CAPTCHA_MARKER.matcher(resubmitted).find()) {
+                    log.info("sefaz.experimental.captcha_passed uf={} type={}", uf, captchaType);
+                    return resubmitted;
+                }
+                log.info("sefaz.experimental.captcha_resubmit_rejected uf={} type={}", uf, captchaType);
+            } catch (RuntimeException solveEx) {
+                log.warn("sefaz.experimental.captcha_solve_failed uf={} type={} {}",
+                        uf, captchaType, solveEx.getMessage());
+            }
+        } else {
+            log.info("sefaz.experimental.captcha_wall uf={} type={} solverConfigured={} siteKeyFound={}",
+                    uf, captchaType, captchaSolver.isConfigured(), siteKey != null);
+        }
+        throw new ExperimentalCaptchaWallException(uf.name(), captchaType.name(), siteKey,
+                snippet(captchaPageHtml));
+    }
+
+    private enum CaptchaType {
+        RECAPTCHA_V2("g-recaptcha-response"),
+        TURNSTILE("cf-turnstile-response"),
+        HCAPTCHA(null),
+        UNKNOWN_CHALLENGE(null);
+
+        private final String responseParam;
+
+        CaptchaType(String responseParam) {
+            this.responseParam = responseParam;
+        }
+
+        boolean solvable() {
+            return responseParam != null;
+        }
+
+        String responseParam() {
+            return responseParam;
+        }
+    }
+
+    private static CaptchaType detectCaptchaType(String html) {
+        var lower = html.toLowerCase();
+        if (lower.contains("g-recaptcha") || lower.contains("recaptcha/api.js")) return CaptchaType.RECAPTCHA_V2;
+        if (lower.contains("cf-turnstile")) return CaptchaType.TURNSTILE;
+        if (lower.contains("hcaptcha")) return CaptchaType.HCAPTCHA;
+        return CaptchaType.UNKNOWN_CHALLENGE;
+    }
+
+    private static String extractSiteKey(String html) {
+        var matcher = SITE_KEY.matcher(html);
+        return matcher.find() ? matcher.group(1) : null;
+    }
+
+    private static String snippet(String body) {
+        if (body == null) return "";
+        var sanitized = CpfMasker.strip(body);
+        return sanitized.length() <= EVIDENCE_SNIPPET_CHARS
+                ? sanitized
+                : sanitized.substring(0, EVIDENCE_SNIPPET_CHARS);
     }
 
     /** Raw HTTP GET — isolated as a seam so the retry loop is unit-testable. */

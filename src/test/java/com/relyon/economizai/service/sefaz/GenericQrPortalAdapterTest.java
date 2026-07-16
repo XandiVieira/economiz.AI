@@ -1,8 +1,12 @@
 package com.relyon.economizai.service.sefaz;
 
+import com.relyon.economizai.exception.CaptchaSolveFailedException;
 import com.relyon.economizai.exception.CaptchaUnavailableException;
+import com.relyon.economizai.exception.ExperimentalCaptchaWallException;
+import com.relyon.economizai.exception.ExperimentalPortalFetchException;
 import com.relyon.economizai.exception.InvalidQrPayloadException;
 import com.relyon.economizai.exception.SefazFetchException;
+import com.relyon.economizai.service.sefaz.captcha.CaptchaSolver;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpStatus;
@@ -25,14 +29,37 @@ class GenericQrPortalAdapterTest {
     private static final String QR_URL_BA = "https://nfe.sefaz.ba.gov.br/servicos/nfce/qrcode.aspx?p="
             + CHAVE_BA + "|2|1|1|deadbeef";
 
+    private static final CaptchaSolver NO_CAPTCHA = new CaptchaSolver() {
+        @Override public boolean isConfigured() { return false; }
+        @Override public String solveRecaptchaV2(String siteKey, String pageUrl) {
+            throw new UnsupportedOperationException("no captcha in tests");
+        }
+    };
+
+    private static CaptchaSolver solverReturning(String token) {
+        return new CaptchaSolver() {
+            @Override public boolean isConfigured() { return true; }
+            @Override public String solveRecaptchaV2(String siteKey, String pageUrl) { return token; }
+            @Override public String solveCloudflareTurnstile(String siteKey, String pageUrl) { return token; }
+        };
+    }
+
     private GenericQrPortalAdapter adapter(int maxAttempts, Function<String, String> http) {
-        return new GenericQrPortalAdapter(RestClient.builder(), 1000, "test", true, maxAttempts, 0, "gov.br") {
+        return adapter(maxAttempts, NO_CAPTCHA, http);
+    }
+
+    private GenericQrPortalAdapter adapter(int maxAttempts, CaptchaSolver captchaSolver,
+                                           Function<String, String> http) {
+        return new GenericQrPortalAdapter(RestClient.builder(), captchaSolver, 1000, "test", true, maxAttempts, 0, "gov.br") {
             @Override
             protected String httpGet(String url) {
                 return http.apply(url);
             }
         };
     }
+
+    private static final String CAPTCHA_PAGE =
+            "<html><div class=\"g-recaptcha\" data-sitekey=\"site-key-123\"></div></html>";
 
     @Test
     void resolveUrl_acceptsGovBrHostsOnly() {
@@ -87,10 +114,57 @@ class GenericQrPortalAdapterTest {
     }
 
     @Test
-    void fetchHtml_captchaWallSignalsRescuableCaptchaUnavailable() {
-        var adapter = adapter(1, url -> "<html><div class=\"g-recaptcha\" data-sitekey=\"x\"></div></html>");
+    void fetchHtml_captchaWall_noSolver_signalsRescuableWithEvidence() {
+        var adapter = adapter(1, url -> CAPTCHA_PAGE);
 
-        assertThrows(CaptchaUnavailableException.class, () -> adapter.fetchHtml(QR_URL_BA));
+        var thrown = assertThrows(ExperimentalCaptchaWallException.class, () -> adapter.fetchHtml(QR_URL_BA));
+
+        assertTrue(thrown instanceof CaptchaUnavailableException);
+        assertTrue(thrown.portalEvidence().contains("RECAPTCHA_V2"));
+        assertTrue(thrown.portalEvidence().contains("site-key-123"));
+    }
+
+    @Test
+    void fetchHtml_captchaWall_solverConfigured_solvesAndReturnsDanfe() {
+        var adapter = adapter(1, solverReturning("solved-token"),
+                url -> url.contains("g-recaptcha-response=solved-token") ? "<html>danfe</html>" : CAPTCHA_PAGE);
+
+        assertEquals("<html>danfe</html>", adapter.fetchHtml(QR_URL_BA));
+    }
+
+    @Test
+    void fetchHtml_captchaWall_portalRejectsSolvedToken_fallsToWallSignal() {
+        // Resubmit comes back as the captcha page again — the guessed resubmit
+        // shape didn't work; must degrade to the rescuable wall signal.
+        var adapter = adapter(1, solverReturning("solved-token"), url -> CAPTCHA_PAGE);
+
+        assertThrows(ExperimentalCaptchaWallException.class, () -> adapter.fetchHtml(QR_URL_BA));
+    }
+
+    @Test
+    void fetchHtml_captchaWall_solveThrows_fallsToWallSignal() {
+        var failingSolver = new CaptchaSolver() {
+            @Override public boolean isConfigured() { return true; }
+            @Override public String solveRecaptchaV2(String siteKey, String pageUrl) {
+                throw new CaptchaSolveFailedException("BA");
+            }
+        };
+        var adapter = adapter(1, failingSolver, url -> CAPTCHA_PAGE);
+
+        assertThrows(ExperimentalCaptchaWallException.class, () -> adapter.fetchHtml(QR_URL_BA));
+    }
+
+    @Test
+    void fetchHtml_clientErrorCarriesStatusAndBodyEvidence() {
+        var adapter = adapter(1, url -> {
+            throw HttpClientErrorException.create(HttpStatus.NOT_FOUND, "Not Found", null,
+                    "consulta indisponivel".getBytes(), null);
+        });
+
+        var thrown = assertThrows(ExperimentalPortalFetchException.class, () -> adapter.fetchHtml(QR_URL_BA));
+
+        assertTrue(thrown.portalEvidence().contains("404"));
+        assertTrue(thrown.portalEvidence().contains("consulta indisponivel"));
     }
 
     /**

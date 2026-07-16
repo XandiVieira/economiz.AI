@@ -2,6 +2,7 @@ package com.relyon.economizai.service.sefaz;
 
 import com.relyon.economizai.exception.CaptchaSolveFailedException;
 import com.relyon.economizai.exception.CaptchaUnavailableException;
+import com.relyon.economizai.exception.ExperimentalPortalEvidence;
 import com.relyon.economizai.exception.ExperimentalStateFailedException;
 import com.relyon.economizai.exception.InvalidQrPayloadException;
 import com.relyon.economizai.exception.PaidApiBudgetExceededException;
@@ -200,9 +201,11 @@ public class SefazIngestionService {
             }
             var experimental = isExperimental(adapter);
             var qrHost = StateCoverageService.hostOf(qrPayload);
+            var portalEvidence = primaryEx instanceof ExperimentalPortalEvidence evidenceCarrier
+                    ? evidenceCarrier.portalEvidence() : null;
             if (experimental) {
                 stateCoverage.recordFailure(uf, StateIngestionStrategy.QR_PORTAL,
-                        StateIngestionOutcome.FETCH_FAILED, qrHost, describe(primaryEx));
+                        StateIngestionOutcome.FETCH_FAILED, qrHost, joinDetail(describe(primaryEx), portalEvidence));
             }
             // Only failures Infosimples can plausibly rescue: portal down after
             // retries, no solver configured, or the solver itself failed. Every
@@ -211,7 +214,7 @@ public class SefazIngestionService {
             if (infosimples.isEmpty()) {
                 if (experimental) {
                     throw experimentalExhausted(uf, chave, sourceUrlOf(qrPayload),
-                            "QR_PORTAL: " + describe(primaryEx) + "; INFOSIMPLES: desabilitado", null);
+                            "QR_PORTAL: " + describe(primaryEx) + "; INFOSIMPLES: desabilitado", portalEvidence);
                 }
                 throw primaryEx;
             }
@@ -232,11 +235,16 @@ public class SefazIngestionService {
                     stateCoverage.recordFailure(uf, StateIngestionStrategy.INFOSIMPLES,
                             StateIngestionOutcome.FETCH_FAILED, qrHost, describe(fallbackEx));
                     throw experimentalExhausted(uf, chave, sourceUrlOf(qrPayload),
-                            "QR_PORTAL: " + describe(primaryEx) + "; INFOSIMPLES: " + describe(fallbackEx), null);
+                            "QR_PORTAL: " + describe(primaryEx) + "; INFOSIMPLES: " + describe(fallbackEx),
+                            portalEvidence);
                 }
                 throw fallbackEx;
             }
         }
+    }
+
+    private static String joinDetail(String description, String portalEvidence) {
+        return portalEvidence == null ? description : description + "\n" + portalEvidence;
     }
 
     /**

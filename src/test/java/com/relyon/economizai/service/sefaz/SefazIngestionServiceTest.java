@@ -10,6 +10,7 @@ import com.relyon.economizai.model.enums.StateIngestionOutcome;
 import com.relyon.economizai.model.enums.StateIngestionStrategy;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
 import com.relyon.economizai.service.paidapi.PaidApiGuardService;
+import com.relyon.economizai.service.sefaz.captcha.CaptchaSolver;
 import com.relyon.economizai.service.sefaz.SefazIngestionService.FetchedDocument;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -454,9 +455,16 @@ class SefazIngestionServiceTest {
     private static final String QR_URL_BA = "https://nfe.sefaz.ba.gov.br/servicos/nfce/qrcode.aspx?p="
             + CHAVE_BA + "|2|1|1|deadbeef";
 
+    private static final CaptchaSolver NO_CAPTCHA = new CaptchaSolver() {
+        @Override public boolean isConfigured() { return false; }
+        @Override public String solveRecaptchaV2(String siteKey, String pageUrl) {
+            throw new UnsupportedOperationException("no captcha in tests");
+        }
+    };
+
     /** Real generic adapter (so instanceof-based dispatch applies) with a stubbed HTTP layer. */
     private GenericQrPortalAdapter genericAdapter(String htmlOrNull) {
-        return new GenericQrPortalAdapter(RestClient.builder(), 1000, "test", true, 1, 0, "gov.br") {
+        return new GenericQrPortalAdapter(RestClient.builder(), NO_CAPTCHA, 1000, "test", true, 1, 0, "gov.br") {
             @Override
             protected String httpGet(String url) {
                 if (htmlOrNull == null) throw new RestClientException("portal down");
@@ -483,7 +491,7 @@ class SefazIngestionServiceTest {
     @Test
     void constructor_disabledGenericAdapterLeavesUfsUnsupported() {
         var rsAdapter = mockAdapterFor(UnidadeFederativa.RS);
-        var disabledGeneric = new GenericQrPortalAdapter(RestClient.builder(), 1000, "test", false, 1, 0, "gov.br");
+        var disabledGeneric = new GenericQrPortalAdapter(RestClient.builder(), NO_CAPTCHA, 1000, "test", false, 1, 0, "gov.br");
         var service = new SefazIngestionService(List.of(rsAdapter, disabledGeneric), Optional.empty(), paidApiGuard, stateCoverage);
 
         assertThrows(UnsupportedStateException.class, () -> service.requireSupported(UnidadeFederativa.BA));
@@ -492,7 +500,7 @@ class SefazIngestionServiceTest {
     @Test
     void parse_experimentalSuccess_recordsQrPortalTelemetry() {
         var expected = sampleParsed();
-        var generic = new GenericQrPortalAdapter(RestClient.builder(), 1000, "test", true, 1, 0, "gov.br") {
+        var generic = new GenericQrPortalAdapter(RestClient.builder(), NO_CAPTCHA, 1000, "test", true, 1, 0, "gov.br") {
             @Override
             public ParsedReceipt parseHtml(String html, String chaveAcesso, String sourceUrl) {
                 return expected;

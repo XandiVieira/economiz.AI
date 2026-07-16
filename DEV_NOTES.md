@@ -215,8 +215,12 @@ The report works identically in SHADOW and ON (computed purely from
 - **Promotion path**: when a UF succeeds via QR_PORTAL and a real user confirms the items,
   add it to `economizai.ingestion.sefaz.svrs.states` + its host to `allowed-url-hosts` — it
   becomes VERIFIED (dedicated adapter, no experimental telemetry).
-- **Watch before prod scale**: captcha-walled portals (AC, RN, TO…) will always burn one
-  portal GET then land on Infosimples (~R$0.24) — if an experimental state gets popular,
+- **Captcha walls get ONE best-effort solve** (reCAPTCHA v2 / Turnstile; token resubmitted
+  as a query param — a guess). Charged per solved token (~R$0.03) even when the portal
+  rejects it, hence a single attempt, then Infosimples. Failure evidence (captcha type,
+  sitekey, page snippet, HTTP status) rides the telemetry + admin email.
+- **Watch before prod scale**: captcha-walled portals (AC, RN, TO…) that reject the guessed
+  resubmit burn one solve + one Infosimples query per nota — if such a state gets popular,
   build its adapter (the telemetry tells you which).
 
 ## Multi-state SEFAZ coverage = 2 / 27 verified (PR added 2026-06-12; MS ready, needs solver)
