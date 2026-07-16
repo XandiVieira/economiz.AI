@@ -34,7 +34,7 @@ class ContactServiceTest {
         when(mailSender.createMimeMessage()).thenReturn(new MimeMessage((Session) null));
         var service = configuredService();
 
-        service.submit(new ContactRequest("John Doe", "john@test.com", "Adorei o app, parabéns!"));
+        service.submit(new ContactRequest("John Doe", "john@test.com", null, "Adorei o app, parabéns!"));
 
         var captor = ArgumentCaptor.forClass(MimeMessage.class);
         verify(mailSender).send(captor.capture());
@@ -46,11 +46,35 @@ class ContactServiceTest {
     }
 
     @Test
+    void submit_withPhone_includesPhoneInBody() throws Exception {
+        when(mailSender.createMimeMessage()).thenReturn(new MimeMessage((Session) null));
+        var service = configuredService();
+
+        service.submit(new ContactRequest("John Doe", "john@test.com", "+55 51 99999-0000", "oi"));
+
+        var captor = ArgumentCaptor.forClass(MimeMessage.class);
+        verify(mailSender).send(captor.capture());
+        assertTrue(captor.getValue().getContent().toString().contains("Telefone: +55 51 99999-0000"));
+    }
+
+    @Test
+    void submit_withoutPhone_omitsPhoneLine() throws Exception {
+        when(mailSender.createMimeMessage()).thenReturn(new MimeMessage((Session) null));
+        var service = configuredService();
+
+        service.submit(new ContactRequest("John Doe", "john@test.com", null, "oi"));
+
+        var captor = ArgumentCaptor.forClass(MimeMessage.class);
+        verify(mailSender).send(captor.capture());
+        assertFalse(captor.getValue().getContent().toString().contains("Telefone"));
+    }
+
+    @Test
     void submit_stripsNewlinesFromNameToBlockHeaderInjection() throws Exception {
         when(mailSender.createMimeMessage()).thenReturn(new MimeMessage((Session) null));
         var service = configuredService();
 
-        service.submit(new ContactRequest("Evil\r\nBcc: victim@x.com", "a@b.com", "hi"));
+        service.submit(new ContactRequest("Evil\r\nBcc: victim@x.com", "a@b.com", null, "hi"));
 
         var captor = ArgumentCaptor.forClass(MimeMessage.class);
         verify(mailSender).send(captor.capture());
@@ -62,7 +86,7 @@ class ContactServiceTest {
     void submit_smtpNotConfigured_doesNotSend() {
         var service = new ContactService(Optional.of(mailSender), "noreply@economiz.ai", "support@economiz.ai", "", "");
 
-        service.submit(new ContactRequest("John", "john@test.com", "oi"));
+        service.submit(new ContactRequest("John", "john@test.com", null, "oi"));
 
         verify(mailSender, never()).send(org.mockito.ArgumentMatchers.any(MimeMessage.class));
     }
@@ -71,7 +95,7 @@ class ContactServiceTest {
     void submit_noRecipient_doesNotSend() {
         var service = new ContactService(Optional.of(mailSender), "noreply@economiz.ai", "", "", "smtp-user");
 
-        service.submit(new ContactRequest("John", "john@test.com", "oi"));
+        service.submit(new ContactRequest("John", "john@test.com", null, "oi"));
 
         verify(mailSender, never()).send(org.mockito.ArgumentMatchers.any(MimeMessage.class));
     }

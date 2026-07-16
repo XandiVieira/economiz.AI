@@ -55,7 +55,8 @@ POST /api/v1/contact   → 202 Accepted (public, no auth)
 ```
 
 Contact / feedback form (doubt, criticism, suggestion, praise). Body:
-`{ "name", "email", "message" }` — all required (`email` must be valid, `message` ≤ 5000 chars).
+`{ "name", "email", "phone"?, "message" }` — `name`, `email` and `message` required
+(`email` must be valid, `message` ≤ 5000 chars), `phone` optional (max 30 chars, free-form).
 Emails the message to support with the sender's address as Reply-To. **Public**, but
 **rate-limited to 5/hour per IP** (429 with `Retry-After` beyond that). Returns `202`
 with no body on success.

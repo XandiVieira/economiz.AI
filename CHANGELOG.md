@@ -16,6 +16,15 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-07-16 — `phone` opcional no contato
+
+`POST /api/v1/contact` agora aceita um campo opcional `phone` (string livre,
+máx. 30 caracteres), igual ao beta-signup. Quando enviado, o telefone é
+incluído no e-mail de contato. Requests antigos sem `phone` continuam
+funcionando igual.
+
+---
+
 ## 2026-07-14 — `DELETE /api/v1/admin/users/{id}` (admin)
 
 Novo endpoint admin para excluir contas (limpeza de contas de teste). Reusa o

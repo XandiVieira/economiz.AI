@@ -175,7 +175,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\"name\": \"John Doe\", \"email\": \"john@test.com\", \"message\": \"Sugestao: adicionem modo escuro.\"}",
+							"raw": "{\"name\": \"John Doe\", \"email\": \"john@test.com\", \"phone\": \"+55 51 99999-0000\", \"message\": \"Sugestao: adicionem modo escuro.\"}",
 							"options": { "raw": { "language": "json" } }
 						},
 						"url": {
@@ -183,7 +183,7 @@
 							"host": ["{{baseUrl}}"],
 							"path": ["api", "v1", "contact"]
 						},
-						"description": "Public contact/feedback form (doubt, criticism, suggestion, praise). 202 Accepted; rate-limited 5/h per IP."
+						"description": "Public contact/feedback form (doubt, criticism, suggestion, praise). Body {name,email,phone?,message} (phone optional, max 30 chars). 202 Accepted; rate-limited 5/h per IP."
 						},
 						"response": []
 					},

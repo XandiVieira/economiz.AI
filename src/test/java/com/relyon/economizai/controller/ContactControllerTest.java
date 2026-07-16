@@ -42,6 +42,30 @@ class ContactControllerTest {
     }
 
     @Test
+    void submit_withPhone_accepted() throws Exception {
+        var body = """
+                {"name":"John Doe","email":"john@test.com","phone":"+55 51 99999-0000","message":"oi"}
+                """;
+
+        mockMvc.perform(post("/api/v1/contact").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isAccepted());
+
+        verify(contactService).submit(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void submit_phoneTooLong_rejected() throws Exception {
+        var body = """
+                {"name":"John Doe","email":"john@test.com","phone":"1234567890123456789012345678901","message":"oi"}
+                """;
+
+        mockMvc.perform(post("/api/v1/contact").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest());
+
+        verify(contactService, never()).submit(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void submit_blankMessage_rejected() throws Exception {
         var body = """
                 {"name":"John","email":"john@test.com","message":""}

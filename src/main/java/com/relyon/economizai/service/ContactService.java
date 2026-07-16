@@ -46,8 +46,10 @@ public class ContactService {
     public void submit(ContactRequest request) {
         var name = singleLine(request.name());
         var subject = "[economizai contato] " + name;
+        var phone = singleLine(request.phone());
         var body = "Nome: " + name
                 + "\nE-mail: " + request.email()
+                + (phone.isBlank() ? "" : "\nTelefone: " + phone)
                 + "\n\nMensagem:\n" + request.message();
         deliver(subject, body, request.email(), recipient);
     }
