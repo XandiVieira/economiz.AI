@@ -43,7 +43,10 @@ import com.relyon.economizai.service.extraction.CategorizationQualityService;
 import com.relyon.economizai.service.geo.MarketLocationService;
 import com.relyon.economizai.service.notifications.RelevanceReportService;
 import com.relyon.economizai.service.paidapi.CostReportService;
+import com.relyon.economizai.service.sefaz.SefazIngestionService;
+import com.relyon.economizai.service.sefaz.StateCoverageService;
 import com.relyon.economizai.dto.response.CostReportResponse;
+import com.relyon.economizai.dto.response.StateCoverageResponse;
 import com.relyon.economizai.service.geo.MarketLocationService.SegmentClassificationSummary;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,7 +63,10 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -97,6 +103,8 @@ class AdminControllerTest {
     @MockitoBean private MarketLocationService marketLocationService;
     @MockitoBean private RelevanceReportService relevanceReportService;
     @MockitoBean private CostReportService costReportService;
+    @MockitoBean private StateCoverageService stateCoverageService;
+    @MockitoBean private SefazIngestionService sefazIngestionService;
     @MockitoBean private JwtService jwtService;
     @MockitoBean private UserDetailsService userDetailsService;
     @MockitoBean private LocalizedMessageService localizedMessageService;
@@ -196,6 +204,31 @@ class AdminControllerTest {
     @Test
     void costReport_forbiddenForNonAdmin() throws Exception {
         mockMvc.perform(get("/api/v1/admin/costs")
+                        .with(SecurityMockMvcRequestPostProcessors.user(regularUser())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void stateCoverage_returnsPerUfMap() throws Exception {
+        var report = new StateCoverageResponse(List.of(new StateCoverageResponse.StateCoverageEntry(
+                UnidadeFederativa.BA, "EXPERIMENTAL", 7, 5, 2, LocalDateTime.now().atOffset(ZoneOffset.UTC),
+                Map.of("QR_PORTAL", new StateCoverageResponse.StateCoverageEntry.StrategyStats(5, 2)))));
+        when(sefazIngestionService.getVerifiedStates()).thenReturn(Set.of(UnidadeFederativa.RS));
+        when(sefazIngestionService.experimentalStates()).thenReturn(Set.of(UnidadeFederativa.BA));
+        when(stateCoverageService.report(Set.of(UnidadeFederativa.RS), Set.of(UnidadeFederativa.BA)))
+                .thenReturn(report);
+
+        mockMvc.perform(get("/api/v1/admin/state-coverage")
+                        .with(SecurityMockMvcRequestPostProcessors.user(adminUser())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.states[0].uf").value("BA"))
+                .andExpect(jsonPath("$.states[0].mode").value("EXPERIMENTAL"))
+                .andExpect(jsonPath("$.states[0].strategies.QR_PORTAL.successes").value(5));
+    }
+
+    @Test
+    void stateCoverage_forbiddenForNonAdmin() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/state-coverage")
                         .with(SecurityMockMvcRequestPostProcessors.user(regularUser())))
                 .andExpect(status().isForbidden());
     }

@@ -203,6 +203,22 @@ The report works identically in SHADOW and ON (computed purely from
 - **Post-captcha layout VERIFIED (2026-06-12)**: a real MS DANFE (C.VALE/Caarapó, saved from a browser after the user solved the captcha) parses correctly — `RealMsFixtureTest` locks all 9 items + R$61,79 total. MS uses `span.txtTit` (not `txtTit2`), 7-digit internal codes (→ ean null), single IBPT total (→ tax null); all handled by the shared parser. So the only thing still **VERIFY ON FIRST REAL SOLVE** is the HTTP transport that exchanges a solved token for the DANFE: `MsDfePortalAdapter.consultUrl` params + `fetchAuthorizedDanfe`'s resubmit shape (isolated for a quick fix — the page is reached via a form POST from the captcha page; capture it in DevTools Network during the first real solve). Cost when live: ~US$1-3 / 1000 solves.
 - **Other captcha states**: each has its own portal, so they need their own adapter (reusing `CaptchaSolver` + `ResponsiveDanfeParser`); `economizai.ingestion.sefaz.captcha.states` lists which UFs the MS adapter claims (MS only for now).
 
+## Experimental all-states fallback chain — LIVE (2026-07-16), learning on demand
+- **Now**: every UF without a dedicated adapter is gap-filled with `GenericQrPortalAdapter`:
+  GET the QR's own portal URL (SSRF-bounded to `gov.br` hosts) → shared `ResponsiveDanfeParser`
+  → Infosimples rescue on fetch OR parse failure (when enabled). All 27 UFs accepted at submit.
+  Kill-switch: `SEFAZ_EXPERIMENTAL_ENABLED=false` restores the old fail-fast 400.
+- **Learning loop**: every layer attempt on an experimental UF is a `state_ingestion_attempts`
+  row (strategy, outcome, qr_host, evidence). `GET /admin/state-coverage` is the per-UF map.
+  Admin inbox gets: (a) first-ever success per UF ("capture fixture, promote to svrs.states"),
+  (b) total chain failure with chave + QR URL + portal snippet, deduped 1/UF/day.
+- **Promotion path**: when a UF succeeds via QR_PORTAL and a real user confirms the items,
+  add it to `economizai.ingestion.sefaz.svrs.states` + its host to `allowed-url-hosts` — it
+  becomes VERIFIED (dedicated adapter, no experimental telemetry).
+- **Watch before prod scale**: captcha-walled portals (AC, RN, TO…) will always burn one
+  portal GET then land on Infosimples (~R$0.24) — if an experimental state gets popular,
+  build its adapter (the telemetry tells you which).
+
 ## Multi-state SEFAZ coverage = 2 / 27 verified (PR added 2026-06-12; MS ready, needs solver)
 - **Now**: RS + **PR** have working end-to-end ingestion. PR has its own portal
   (`www.fazenda.pr.gov.br/nfce/qrcode`) but renders the SAME responsive-DANFE

@@ -17,6 +17,7 @@ import com.relyon.economizai.dto.response.ProductMergeResultResponse;
 import com.relyon.economizai.dto.response.RecategorizeReportResponse;
 import com.relyon.economizai.dto.response.RecategorizeResultResponse;
 import com.relyon.economizai.dto.response.RelevanceReportResponse;
+import com.relyon.economizai.dto.response.StateCoverageResponse;
 import com.relyon.economizai.dto.response.ProductResponse;
 import com.relyon.economizai.dto.response.ReceiptResponse;
 import com.relyon.economizai.dto.response.ReceiptSummaryResponse;
@@ -32,6 +33,8 @@ import com.relyon.economizai.service.extraction.CategorizationQualityService;
 import com.relyon.economizai.service.geo.MarketLocationService;
 import com.relyon.economizai.service.notifications.RelevanceReportService;
 import com.relyon.economizai.service.paidapi.CostReportService;
+import com.relyon.economizai.service.sefaz.SefazIngestionService;
+import com.relyon.economizai.service.sefaz.StateCoverageService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -74,6 +77,8 @@ public class AdminController {
     private final MarketLocationService marketLocationService;
     private final RelevanceReportService relevanceReportService;
     private final CostReportService costReportService;
+    private final StateCoverageService stateCoverageService;
+    private final SefazIngestionService sefazIngestionService;
 
     @PostMapping("/receipts/{id}/reparse")
     public ResponseEntity<ReceiptResponse> reparseReceipt(@PathVariable UUID id) {
@@ -148,6 +153,18 @@ public class AdminController {
     @GetMapping("/costs")
     public ResponseEntity<CostReportResponse> costReport(@RequestParam(defaultValue = "30") int days) {
         return ResponseEntity.ok(costReportService.report(days));
+    }
+
+    /**
+     * Multi-state rollout map: per UF, whether ingestion is VERIFIED (dedicated
+     * adapter) or EXPERIMENTAL (QR-portal + Infosimples fallback chain), and the
+     * per-layer success/failure telemetry from real users' scans — the data for
+     * deciding which state adapter to build next.
+     */
+    @GetMapping("/state-coverage")
+    public ResponseEntity<StateCoverageResponse> stateCoverage() {
+        return ResponseEntity.ok(stateCoverageService.report(
+                sefazIngestionService.getVerifiedStates(), sefazIngestionService.experimentalStates()));
     }
 
     /** Full product catalog (paged) — dev tool for curating dictionary/brands. */

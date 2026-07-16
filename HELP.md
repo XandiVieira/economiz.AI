@@ -943,3 +943,28 @@ return Swagger UI.
 
 **Tests: 78 → 110 passing.**
 - New: `DescriptionNormalizerTest` (5), `CanonicalizationServiceTest` (6), `ProductServiceTest` (6), `ProductControllerTest` (7), `InsightsControllerTest` (4), `InsightsRepositoryTest` (4, integration `@DataJpaTest`).
+
+### Session (2026-07-16) — Prod-readiness hardening + experimental all-states rollout
+
+**Contact/beta parity:** optional `phone` on `POST /contact` (mirrors beta-signup).
+
+**Prod-readiness (from the DEV_NOTES gap review):**
+- Auth codes (password reset / email verify / phone OTP) are never logged in prod:
+  `economizai.auth.dev-code-log-enabled`, hard `false` in `application-prod.yaml`.
+- Twilio SMS/WhatsApp metered through the paid-API guard (`TWILIO_MESSAGE`, ~R$0.30):
+  per-user daily cap (`TWILIO_DAILY_CAP`, default 10) + global budget + ledger. The OTP
+  endpoint returns a localized 429 when over cap.
+- Render disk for profile pics verified live (mount `/data/profile-pics` matches
+  `PROFILE_PICTURE_DIR`; a picture + pre-deploy JWT survived a redeploy).
+
+**Experimental all-states fallback chain (release unblocker):**
+- All 27 UFs accepted at submit. Unclaimed UFs gap-fill to `GenericQrPortalAdapter`:
+  GET the QR's own portal URL (SSRF-bounded to gov.br) → shared `ResponsiveDanfeParser`
+  → Infosimples rescue on fetch OR parse failure. Kill-switch `SEFAZ_EXPERIMENTAL_ENABLED`.
+- On-demand learning: `state_ingestion_attempts` telemetry per layer/outcome,
+  `GET /admin/state-coverage` per-UF map, admin email on first success per UF
+  (promotion instructions) and on total chain failure (evidence bundle, deduped 1/UF/day).
+- User-facing terminal failure: `receipt.state.experimental_failed` ("estamos
+  trabalhando nisso"); raw HTML kept on the FAILED_PARSE row when the portal responded.
+- Bare-chave fail-fast generalized: rejected at submit for ANY state that needs the QR
+  signature and has no paid fallback enabled (was RS-only).

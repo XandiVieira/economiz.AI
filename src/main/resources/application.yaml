@@ -107,6 +107,14 @@ economizai:
       # the host matches one of these suffixes (e.g. svrs.rs.gov.br admits
       # dfe-portal.svrs.rs.gov.br). Extend when onboarding new state portals.
       allowed-url-hosts: ${SEFAZ_ALLOWED_URL_HOSTS:svrs.rs.gov.br,sefaz.rs.gov.br,fazenda.pr.gov.br,sef.sc.gov.br,fazenda.sp.gov.br}
+      # Experimental catch-all for UFs without a dedicated adapter: fetch the QR's
+      # own portal URL (gov.br hosts only) + shared responsive-DANFE parser, then
+      # Infosimples when enabled. Attempts are recorded (admin: /state-coverage)
+      # and total failures alert the admin inbox with the evidence (1/UF/day).
+      experimental:
+        enabled: ${SEFAZ_EXPERIMENTAL_ENABLED:true}
+        allowed-host-suffixes: ${SEFAZ_EXPERIMENTAL_ALLOWED_HOSTS:gov.br}
+        max-attempts: ${SEFAZ_EXPERIMENTAL_MAX_ATTEMPTS:3}
       svrs:
         # UFs whose NFC-e consult page renders the shared responsive-DANFE
         # layout the adapter parses. RS proven since day one; PR verified

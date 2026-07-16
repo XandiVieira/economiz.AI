@@ -318,16 +318,30 @@ come back as an error, not a wrong chave:
 | 400 `receipt.photo.chave.unreadable` | No valid 44-digit chave found in the photo. Offer manual typing. |
 | 503 `receipt.ocr.unavailable` | OCR engine not available on the host. Offer manual typing. |
 
-Note the existing per-state rule still applies at submit time: a bare chave
-from **RS** is rejected (`receipt.manual-chave.unsupported`) — the RS portal
-needs the QR's signature params.
+Note the existing per-state rule still applies at submit time: a bare chave is
+rejected (`receipt.manual-chave.unsupported`) for any state that can't be
+consulted without the QR's signature params — always RS, and every
+signature-gated or experimental state while the paid by-chave fallback is off.
+
+### State coverage — every UF is accepted
+
+Since 2026-07-16 **all 27 UFs are accepted at submit**. Verified states
+(RS, PR, SP, SC, MS — plus CE when Infosimples is on) use their dedicated
+adapters; every other state goes through an **experimental fallback chain**
+(GET the QR's own portal URL + shared DANFE parser, then Infosimples when
+enabled). If every layer fails, the receipt lands in `status=FAILED_PARSE`
+with `parseErrorReason=receipt.state.experimental_failed:<UF>` and a localized
+"ainda não conseguimos processar notas desse estado, estamos trabalhando
+nisso" in `parseErrorMessage` — render that; the team is auto-notified with
+the evidence needed to add support.
 
 ### Error paths
 
 | Response | When |
 |---|---|
 | 400 `receipt.qr.invalid` | Couldn't extract a 44-digit chave from the input |
-| 400 `receipt.state.unsupported` | Chave is from a state we don't have a SEFAZ adapter for |
+| 400 `receipt.state.unsupported` | Only if the experimental chain is disabled server-side (kill-switch) |
+| — `receipt.state.experimental_failed` | Via polling (`FAILED_PARSE`): experimental state, every fallback layer failed. Team auto-notified. |
 | 503 `receipt.captcha.unavailable` | State requires CAPTCHA but solver isn't enabled (shouldn't happen in prod) |
 | 502 `receipt.captcha.failed` | CAPTCHA solver ran but failed after retries (e.g. balance exhausted) |
 | 502 `receipt.sefaz.fetch.failed` | SEFAZ portal didn't respond / 5xx'd — **only after the server already retried** (up to 5 attempts: immediate, then 5s/5s/5s). Call can take up to ~15s+ when the portal is down. |
@@ -1067,6 +1081,7 @@ POST   /api/v1/admin/products/refresh-brands       → BrandBackfillResponse (fi
 POST   /api/v1/admin/markets/classify-segments     → SegmentClassificationSummary (CNAE-classify pending markets)
 DELETE /api/v1/admin/products/{id}?force=false     → 200 ProductDeletionResponse (prune test/junk catalog rows)
 GET    /api/v1/admin/costs?days=30                 → CostReportResponse (paid-API spend: total + by service + by state + today vs budget)
+GET    /api/v1/admin/state-coverage                → StateCoverageResponse (per-UF: VERIFIED/EXPERIMENTAL + per-layer success/failure telemetry from real scans)
 ```
 
 - **Delete product** — removes a product and its CASCADE dependents (aliases, observations, category overrides, alerts, snoozes, shopping-list items). Receipt items that referenced it are detached (`product_id` → null), so confirmed purchase history survives as unmatched rows. Refuses with `409 product.deletion.referenced` when the product still backs confirmed purchases unless `force=true`. Returns `{ productId, receiptItemsDetached }`.

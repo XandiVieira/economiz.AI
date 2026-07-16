@@ -70,6 +70,15 @@ public class ContactService {
         deliver(subject, body, request.email(), betaRecipient);
     }
 
+    /**
+     * Internal ops alert to the contact inbox — state-coverage events and the
+     * like. Distinct subject prefix so it's filterable from user mail. Never
+     * throws (deliver logs failures), so an alert can't break the caller's flow.
+     */
+    public void notifyAdmin(String subject, String body) {
+        deliver("[economizai admin] " + subject, body, from, recipient);
+    }
+
     private void deliver(String subject, String body, String replyTo, String recipient) {
         if (!smtpConfigured || recipient == null || recipient.isBlank()) {
             // No SMTP or no recipient configured — log the whole message so support

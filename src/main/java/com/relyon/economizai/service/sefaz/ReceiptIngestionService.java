@@ -71,7 +71,7 @@ public class ReceiptIngestionService {
             var userId = receipt.getUser().getId();
             var fetched = sefazIngestionService.fetch(qrPayload, userId);
             try {
-                var parsed = sefazIngestionService.parse(fetched);
+                var parsed = sefazIngestionService.parse(fetched, userId);
                 warmEanCatalog(parsed);
                 persistParsed(receiptId, parsed);
             } catch (ReceiptParseException ex) {

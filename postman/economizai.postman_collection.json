@@ -8856,6 +8856,32 @@
 					"response": []
 				},
 				{
+					"name": "State coverage (multi-state rollout map)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{adminToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/state-coverage",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"state-coverage"
+							]
+						},
+						"description": "Per-UF ingestion coverage: mode (VERIFIED = dedicated adapter / EXPERIMENTAL = QR-portal+Infosimples fallback chain / UNSUPPORTED = chain disabled), attempts/successes/failures per chain layer from real users' scans, and lastAttemptAt. The data for deciding which state adapter to build next. ADMIN only."
+					},
+					"response": []
+				},
+				{
 					"name": "List products (admin, paginated)",
 					"request": {
 						"method": "GET",

@@ -2,19 +2,28 @@ package com.relyon.economizai.service.sefaz;
 
 import com.relyon.economizai.exception.CaptchaSolveFailedException;
 import com.relyon.economizai.exception.CaptchaUnavailableException;
+import com.relyon.economizai.exception.ExperimentalStateFailedException;
 import com.relyon.economizai.exception.InvalidQrPayloadException;
+import com.relyon.economizai.exception.PaidApiBudgetExceededException;
+import com.relyon.economizai.exception.PaidApiQuotaExceededException;
+import com.relyon.economizai.exception.PaidApiUnavailableException;
+import com.relyon.economizai.exception.ReceiptParseException;
 import com.relyon.economizai.exception.SefazFetchException;
 import com.relyon.economizai.exception.UnsupportedStateException;
 import com.relyon.economizai.model.enums.PaidApiService;
+import com.relyon.economizai.model.enums.StateIngestionOutcome;
+import com.relyon.economizai.model.enums.StateIngestionStrategy;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
 import com.relyon.economizai.service.paidapi.PaidApiGuardService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -22,12 +31,15 @@ import java.util.UUID;
 public class SefazIngestionService {
 
     private final Map<UnidadeFederativa, SefazAdapter> adapters;
+    private final Set<UnidadeFederativa> verifiedStates;
     private final Optional<InfosimplesService> infosimples;
     private final PaidApiGuardService paidApiGuard;
+    private final StateCoverageService stateCoverage;
 
     public SefazIngestionService(List<SefazAdapter> adapters,
                                  Optional<InfosimplesService> infosimples,
-                                 PaidApiGuardService paidApiGuard) {
+                                 PaidApiGuardService paidApiGuard,
+                                 StateCoverageService stateCoverage) {
         var byState = new EnumMap<UnidadeFederativa, SefazAdapter>(UnidadeFederativa.class);
         for (var adapter : adapters) {
             for (var uf : adapter.supportedStates()) {
@@ -38,11 +50,44 @@ public class SefazIngestionService {
                 }
             }
         }
+        this.verifiedStates = Set.copyOf(byState.keySet());
+        // Every UF no dedicated adapter claims falls to the experimental
+        // catch-all: fetch the QR's own portal URL, shared parser, Infosimples
+        // rescue. Gap-fill only — it never competes with a verified adapter.
+        adapters.stream()
+                .filter(GenericQrPortalAdapter.class::isInstance)
+                .map(GenericQrPortalAdapter.class::cast)
+                .filter(GenericQrPortalAdapter::isEnabled)
+                .findFirst()
+                .ifPresent(generic -> {
+                    for (var uf : UnidadeFederativa.values()) {
+                        byState.putIfAbsent(uf, generic);
+                    }
+                });
         this.adapters = Map.copyOf(byState);
         this.infosimples = infosimples;
         this.paidApiGuard = paidApiGuard;
-        log.info("Registered SEFAZ adapters covering UFs: {} infosimples-fallback={}",
-                this.adapters.keySet(), infosimples.isPresent());
+        this.stateCoverage = stateCoverage;
+        log.info("Registered SEFAZ adapters: verified={} experimental={} infosimples-fallback={}",
+                verifiedStates, experimentalStates(), infosimples.isPresent());
+    }
+
+    /** UFs served by a dedicated, fixture-verified adapter. */
+    public Set<UnidadeFederativa> getVerifiedStates() {
+        return verifiedStates;
+    }
+
+    /** UFs served only by the experimental fallback chain. */
+    public Set<UnidadeFederativa> experimentalStates() {
+        var experimental = EnumSet.noneOf(UnidadeFederativa.class);
+        adapters.forEach((uf, adapter) -> {
+            if (isExperimental(adapter)) experimental.add(uf);
+        });
+        return experimental;
+    }
+
+    private static boolean isExperimental(SefazAdapter adapter) {
+        return adapter instanceof GenericQrPortalAdapter;
     }
 
     public ParsedReceipt ingest(String qrPayload) {
@@ -59,6 +104,19 @@ public class SefazIngestionService {
         if (!adapters.containsKey(uf)) {
             throw new UnsupportedStateException(uf.name());
         }
+    }
+
+    /**
+     * Whether a bare 44-digit chave (manual entry — no QR signature) can be
+     * ingested for this UF. RS is a hard no (its SEFAZ needs a gov.br login to
+     * consult by chave; not even Infosimples rescues it). Portals that require
+     * the QR signature are served by the paid by-chave fallback when enabled.
+     */
+    public boolean supportsBareChave(UnidadeFederativa uf) {
+        if (uf == UnidadeFederativa.RS) return false;
+        var adapter = adapters.get(uf);
+        if (adapter == null) return false;
+        return !adapter.requiresQrSignature() || infosimples.isPresent();
     }
 
     /**
@@ -117,7 +175,11 @@ public class SefazIngestionService {
                 throw new SefazFetchException(uf.name());
             }
             log.info("sefaz.fetch.bare_chave uf={} chave={} — routing to infosimples (no QR signature to scrape)", uf, abbrev(chave));
-            return fetchViaInfosimples(chave, uf, userId);
+            var rescued = fetchViaInfosimples(chave, uf, userId);
+            if (isExperimental(adapter)) {
+                stateCoverage.recordSuccess(uf, StateIngestionStrategy.INFOSIMPLES, null);
+            }
+            return rescued;
         }
         // Every scrape solves at least one captcha (paid). Global kill-switch first,
         // then the per-user cap, before spending.
@@ -136,14 +198,44 @@ public class SefazIngestionService {
             if (!(primaryEx instanceof CaptchaUnavailableException)) {
                 paidApiGuard.recordFailure(userId, PaidApiService.CAPTCHA_SOLVE, uf.name(), null);
             }
+            var experimental = isExperimental(adapter);
+            var qrHost = StateCoverageService.hostOf(qrPayload);
+            if (experimental) {
+                stateCoverage.recordFailure(uf, StateIngestionStrategy.QR_PORTAL,
+                        StateIngestionOutcome.FETCH_FAILED, qrHost, describe(primaryEx));
+            }
             // Only failures Infosimples can plausibly rescue: portal down after
             // retries, no solver configured, or the solver itself failed. Every
             // query costs ~R$0.24, so deterministic failures (bad chave, invalid
             // QR, missing sitekey/viewstate) propagate without spending.
-            if (infosimples.isEmpty()) throw primaryEx;
+            if (infosimples.isEmpty()) {
+                if (experimental) {
+                    throw experimentalExhausted(uf, chave, sourceUrlOf(qrPayload),
+                            "QR_PORTAL: " + describe(primaryEx) + "; INFOSIMPLES: desabilitado", null);
+                }
+                throw primaryEx;
+            }
             log.warn("sefaz.fetch.primary.failed uf={} chave={} reason={} — trying infosimples fallback",
                     uf, abbrev(chave), primaryEx.getMessage());
-            return fetchViaInfosimples(chave, uf, userId);
+            try {
+                var rescued = fetchViaInfosimples(chave, uf, userId);
+                if (experimental) {
+                    stateCoverage.recordSuccess(uf, StateIngestionStrategy.INFOSIMPLES, qrHost);
+                }
+                return rescued;
+            } catch (PaidApiQuotaExceededException | PaidApiBudgetExceededException | PaidApiUnavailableException guardEx) {
+                // A cap/budget/breaker block is not evidence the state is broken —
+                // surface the real (localized) reason instead of "unsupported state".
+                throw guardEx;
+            } catch (RuntimeException fallbackEx) {
+                if (experimental) {
+                    stateCoverage.recordFailure(uf, StateIngestionStrategy.INFOSIMPLES,
+                            StateIngestionOutcome.FETCH_FAILED, qrHost, describe(fallbackEx));
+                    throw experimentalExhausted(uf, chave, sourceUrlOf(qrPayload),
+                            "QR_PORTAL: " + describe(primaryEx) + "; INFOSIMPLES: " + describe(fallbackEx), null);
+                }
+                throw fallbackEx;
+            }
         }
     }
 
@@ -173,8 +265,69 @@ public class SefazIngestionService {
      * when the fetch was served by the Infosimples fallback.
      */
     public ParsedReceipt parse(FetchedDocument fetched) {
+        return parse(fetched, null);
+    }
+
+    /**
+     * As {@link #parse(FetchedDocument)}, attributing any paid rescue to
+     * {@code userId}. For experimental states an unparseable layout (portal
+     * responded but not with the responsive DANFE) is retried via Infosimples
+     * before giving up — the last chain layer.
+     */
+    public ParsedReceipt parse(FetchedDocument fetched, UUID userId) {
         if (fetched.preParsed() != null) return fetched.preParsed();
-        return fetched.adapter().parseHtml(fetched.html(), fetched.chave(), fetched.sourceUrl());
+        var experimental = isExperimental(fetched.adapter());
+        var qrHost = StateCoverageService.hostOf(fetched.sourceUrl());
+        try {
+            var parsed = fetched.adapter().parseHtml(fetched.html(), fetched.chave(), fetched.sourceUrl());
+            if (experimental) {
+                stateCoverage.recordSuccess(fetched.uf(), StateIngestionStrategy.QR_PORTAL, qrHost);
+            }
+            return parsed;
+        } catch (ReceiptParseException parseEx) {
+            if (!experimental) throw parseEx;
+            stateCoverage.recordFailure(fetched.uf(), StateIngestionStrategy.QR_PORTAL,
+                    StateIngestionOutcome.PARSE_FAILED, qrHost, describe(parseEx));
+            var infosimplesNote = "desabilitado";
+            if (infosimples.isPresent()) {
+                log.warn("sefaz.parse.experimental.failed uf={} chave={} reason={} — trying infosimples fallback",
+                        fetched.uf(), abbrev(fetched.chave()), parseEx.getMessageKey());
+                try {
+                    var rescued = fetchViaInfosimples(fetched.chave(), fetched.uf(), userId);
+                    stateCoverage.recordSuccess(fetched.uf(), StateIngestionStrategy.INFOSIMPLES, qrHost);
+                    return rescued.preParsed();
+                } catch (PaidApiQuotaExceededException | PaidApiBudgetExceededException | PaidApiUnavailableException guardEx) {
+                    throw guardEx;
+                } catch (RuntimeException fallbackEx) {
+                    stateCoverage.recordFailure(fetched.uf(), StateIngestionStrategy.INFOSIMPLES,
+                            StateIngestionOutcome.FETCH_FAILED, qrHost, describe(fallbackEx));
+                    infosimplesNote = describe(fallbackEx);
+                }
+            }
+            throw experimentalExhausted(fetched.uf(), fetched.chave(), fetched.sourceUrl(),
+                    "QR_PORTAL (parse): " + describe(parseEx) + "; INFOSIMPLES: " + infosimplesNote,
+                    fetched.html());
+        }
+    }
+
+    /**
+     * Terminal failure of the experimental chain: record + alert the admin with
+     * the evidence, and surface the user-facing "not supported yet" key.
+     */
+    private ExperimentalStateFailedException experimentalExhausted(UnidadeFederativa uf, String chave,
+                                                                   String sourceUrl, String failureSummary,
+                                                                   String htmlSnippet) {
+        stateCoverage.reportExhausted(uf, chave, sourceUrl, failureSummary, htmlSnippet);
+        return new ExperimentalStateFailedException(uf.name());
+    }
+
+    private static String describe(RuntimeException ex) {
+        return ex.getClass().getSimpleName() + (ex.getMessage() == null ? "" : " " + ex.getMessage());
+    }
+
+    private static String sourceUrlOf(String qrPayload) {
+        var trimmed = qrPayload == null ? null : qrPayload.trim();
+        return trimmed != null && trimmed.toLowerCase().startsWith("http") ? trimmed : null;
     }
 
     /**

@@ -105,11 +105,11 @@ public class ReceiptService {
         // would only surface a raw FAILED_PARSE key after polling.
         var uf = ChaveAcessoParser.extractUf(chave);
         sefazIngestionService.requireSupported(uf);
-        // A manually-typed bare chave has no QR signature. RS's SEFAZ needs a
-        // gov.br login to look up by chave (Infosimples can't rescue it either),
-        // so reject up front instead of spending a doomed paid fallback async.
-        if (uf == UnidadeFederativa.RS && ChaveAcessoParser.isBareChave(qrPayload)) {
-            log.info("submit rejected reason=manual_chave_unsupported uf=RS");
+        // A manually-typed bare chave has no QR signature. Portals that require it
+        // can only be served by the paid by-chave fallback — and RS not even by that
+        // (gov.br wall). Reject up front instead of failing (or spending) async.
+        if (ChaveAcessoParser.isBareChave(qrPayload) && !sefazIngestionService.supportsBareChave(uf)) {
+            log.info("submit rejected reason=manual_chave_unsupported uf={}", uf);
             throw new ManualChaveUnsupportedException(uf.name());
         }
         enforceMonthlyReceiptCap(user);

@@ -1,16 +1,21 @@
 package com.relyon.economizai.service.sefaz;
 
 import com.relyon.economizai.exception.CaptchaUnavailableException;
+import com.relyon.economizai.exception.ExperimentalStateFailedException;
 import com.relyon.economizai.exception.InvalidQrPayloadException;
 import com.relyon.economizai.exception.ReceiptParseException;
 import com.relyon.economizai.exception.SefazFetchException;
 import com.relyon.economizai.exception.UnsupportedStateException;
+import com.relyon.economizai.model.enums.StateIngestionOutcome;
+import com.relyon.economizai.model.enums.StateIngestionStrategy;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
 import com.relyon.economizai.service.paidapi.PaidApiGuardService;
 import com.relyon.economizai.service.sefaz.SefazIngestionService.FetchedDocument;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -30,6 +35,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -44,6 +50,8 @@ class SefazIngestionServiceTest {
 
     /** Metering is verified separately in PaidApiGuardServiceTest; here it's a no-op collaborator. */
     private final PaidApiGuardService paidApiGuard = mock(PaidApiGuardService.class);
+    /** Telemetry is verified in the experimental tests below and in StateCoverageServiceTest. */
+    private final StateCoverageService stateCoverage = mock(StateCoverageService.class);
 
     /** A simple in-test adapter so the constructor's duplicate guard can be exercised. */
     private static class FakeAdapter implements SefazAdapter {
@@ -92,7 +100,7 @@ class SefazIngestionServiceTest {
         var rsAdapter = mockAdapterFor(UnidadeFederativa.RS, UnidadeFederativa.SC);
         var spAdapter = mockAdapterFor(UnidadeFederativa.SP);
 
-        var service = new SefazIngestionService(List.of(rsAdapter, spAdapter), Optional.empty(), paidApiGuard);
+        var service = new SefazIngestionService(List.of(rsAdapter, spAdapter), Optional.empty(), paidApiGuard, stateCoverage);
 
         // RS routes to the RS adapter via fetch.
         when(rsAdapter.fetchHtml(anyString())).thenReturn("<html>rs</html>");
@@ -108,7 +116,7 @@ class SefazIngestionServiceTest {
         List<SefazAdapter> adapters = List.of(first, second);
 
         var error = assertThrows(IllegalStateException.class,
-                () -> new SefazIngestionService(adapters, Optional.empty(), paidApiGuard));
+                () -> new SefazIngestionService(adapters, Optional.empty(), paidApiGuard, stateCoverage));
         assertTrue(error.getMessage().contains("RS"));
     }
 
@@ -117,7 +125,7 @@ class SefazIngestionServiceTest {
         var shared = mockAdapterFor(UnidadeFederativa.RS);
 
         // Same instance reappearing must not trip the guard (prior == adapter).
-        var service = new SefazIngestionService(List.of(shared, shared), Optional.empty(), paidApiGuard);
+        var service = new SefazIngestionService(List.of(shared, shared), Optional.empty(), paidApiGuard, stateCoverage);
 
         when(shared.fetchHtml(anyString())).thenReturn("<html>ok</html>");
         var fetched = service.fetch(CHAVE_RS);
@@ -130,7 +138,7 @@ class SefazIngestionServiceTest {
         var httpPayload = "https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx?p=" + CHAVE_RS;
         when(rsAdapter.fetchHtml(httpPayload))
                 .thenReturn("<html>cliente 123.456.789-00 fim</html>");
-        var service = new SefazIngestionService(List.of(rsAdapter), Optional.empty(), paidApiGuard);
+        var service = new SefazIngestionService(List.of(rsAdapter), Optional.empty(), paidApiGuard, stateCoverage);
 
         var fetched = service.fetch(httpPayload);
 
@@ -146,7 +154,7 @@ class SefazIngestionServiceTest {
     void fetch_setsNullSourceUrlForNonHttpPayload() {
         var rsAdapter = mockAdapterFor(UnidadeFederativa.RS);
         when(rsAdapter.fetchHtml(anyString())).thenReturn("<html>ok</html>");
-        var service = new SefazIngestionService(List.of(rsAdapter), Optional.empty(), paidApiGuard);
+        var service = new SefazIngestionService(List.of(rsAdapter), Optional.empty(), paidApiGuard, stateCoverage);
 
         var fetched = service.fetch(CHAVE_RS);
 
@@ -159,7 +167,7 @@ class SefazIngestionServiceTest {
         var securityUrl = "https://sat.sef.sc.gov.br/tax.NET/SecurityVerify.aspx?rq=abc";
         when(scAdapter.preflightChave(securityUrl)).thenReturn(Optional.of(CHAVE_SC));
         when(scAdapter.fetchHtml(securityUrl)).thenReturn("<html>sc</html>");
-        var service = new SefazIngestionService(List.of(scAdapter), Optional.empty(), paidApiGuard);
+        var service = new SefazIngestionService(List.of(scAdapter), Optional.empty(), paidApiGuard, stateCoverage);
 
         var fetched = service.fetch(securityUrl);
 
@@ -172,7 +180,7 @@ class SefazIngestionServiceTest {
     @Test
     void fetch_throwsUnsupportedStateWhenNoAdapterForUf() {
         var rsAdapter = mockAdapterFor(UnidadeFederativa.RS);
-        var service = new SefazIngestionService(List.of(rsAdapter), Optional.empty(), paidApiGuard);
+        var service = new SefazIngestionService(List.of(rsAdapter), Optional.empty(), paidApiGuard, stateCoverage);
 
         assertThrows(UnsupportedStateException.class, () -> service.fetch(CHAVE_SP));
     }
@@ -180,7 +188,7 @@ class SefazIngestionServiceTest {
     @Test
     void fetch_throwsInvalidQrPayloadForGarbageInput() {
         var rsAdapter = mockAdapterFor(UnidadeFederativa.RS);
-        var service = new SefazIngestionService(List.of(rsAdapter), Optional.empty(), paidApiGuard);
+        var service = new SefazIngestionService(List.of(rsAdapter), Optional.empty(), paidApiGuard, stateCoverage);
 
         assertThrows(InvalidQrPayloadException.class, () -> service.fetch("not-a-chave"));
     }
@@ -194,7 +202,7 @@ class SefazIngestionServiceTest {
         when(rsAdapter.parseHtml("<html>x</html>", CHAVE_RS, "https://example/src"))
                 .thenReturn(expected);
 
-        var service = new SefazIngestionService(List.of(mockAdapterFor(UnidadeFederativa.RS)), Optional.empty(), paidApiGuard);
+        var service = new SefazIngestionService(List.of(mockAdapterFor(UnidadeFederativa.RS)), Optional.empty(), paidApiGuard, stateCoverage);
         var parsed = service.parse(fetched);
 
         assertSame(expected, parsed);
@@ -207,7 +215,7 @@ class SefazIngestionServiceTest {
         var expected = sampleParsed();
         when(rsAdapter.parseHtml(eq("<html>raw</html>"), eq(CHAVE_RS), any()))
                 .thenReturn(expected);
-        var service = new SefazIngestionService(List.of(rsAdapter), Optional.empty(), paidApiGuard);
+        var service = new SefazIngestionService(List.of(rsAdapter), Optional.empty(), paidApiGuard, stateCoverage);
 
         var parsed = service.ingest(CHAVE_RS);
 
@@ -221,7 +229,7 @@ class SefazIngestionServiceTest {
         var expected = sampleParsed();
         when(rsAdapter.parseHtml("<html>stored</html>", CHAVE_RS, "src"))
                 .thenReturn(expected);
-        var service = new SefazIngestionService(List.of(rsAdapter), Optional.empty(), paidApiGuard);
+        var service = new SefazIngestionService(List.of(rsAdapter), Optional.empty(), paidApiGuard, stateCoverage);
 
         var parsed = service.reparseStored(UnidadeFederativa.RS, "<html>stored</html>", CHAVE_RS, "src");
 
@@ -231,7 +239,7 @@ class SefazIngestionServiceTest {
     @Test
     void reparseStored_throwsUnsupportedStateWhenNoAdapter() {
         var rsAdapter = mockAdapterFor(UnidadeFederativa.RS);
-        var service = new SefazIngestionService(List.of(rsAdapter), Optional.empty(), paidApiGuard);
+        var service = new SefazIngestionService(List.of(rsAdapter), Optional.empty(), paidApiGuard, stateCoverage);
 
         assertThrows(UnsupportedStateException.class,
                 () -> service.reparseStored(UnidadeFederativa.SP, "<html>x</html>", CHAVE_SP, null));
@@ -246,7 +254,7 @@ class SefazIngestionServiceTest {
         var infosimples = mock(InfosimplesService.class);
         var preParsed = sampleParsed();
         when(infosimples.fetchParsed(eq(CHAVE_RS), eq(UnidadeFederativa.RS))).thenReturn(preParsed);
-        var service = new SefazIngestionService(List.of(rsAdapter), Optional.of(infosimples), paidApiGuard);
+        var service = new SefazIngestionService(List.of(rsAdapter), Optional.of(infosimples), paidApiGuard, stateCoverage);
 
         var fetched = service.fetch(CHAVE_RS);
 
@@ -265,7 +273,7 @@ class SefazIngestionServiceTest {
         var preParsed = sampleParsed();
         var chaveMs = "50260777863223012709650180004455861342485537";
         when(infosimples.fetchParsed(eq(chaveMs), eq(UnidadeFederativa.MS))).thenReturn(preParsed);
-        var service = new SefazIngestionService(List.of(msAdapter), Optional.of(infosimples), paidApiGuard);
+        var service = new SefazIngestionService(List.of(msAdapter), Optional.of(infosimples), paidApiGuard, stateCoverage);
 
         var fetched = service.fetch(chaveMs);
 
@@ -278,7 +286,7 @@ class SefazIngestionServiceTest {
         var deterministicEx = new ReceiptParseException("captcha-sitekey-missing");
         when(rsAdapter.fetchHtml(anyString())).thenThrow(deterministicEx);
         var infosimples = mock(InfosimplesService.class);
-        var service = new SefazIngestionService(List.of(rsAdapter), Optional.of(infosimples), paidApiGuard);
+        var service = new SefazIngestionService(List.of(rsAdapter), Optional.of(infosimples), paidApiGuard, stateCoverage);
 
         var thrown = assertThrows(ReceiptParseException.class, () -> service.fetch(CHAVE_RS));
 
@@ -293,7 +301,7 @@ class SefazIngestionServiceTest {
         var infosimples = mock(InfosimplesService.class);
         var preParsed = sampleParsed();
         when(infosimples.fetchParsed(eq(CHAVE_SP), eq(UnidadeFederativa.SP))).thenReturn(preParsed);
-        var service = new SefazIngestionService(List.of(spAdapter), Optional.of(infosimples), paidApiGuard);
+        var service = new SefazIngestionService(List.of(spAdapter), Optional.of(infosimples), paidApiGuard, stateCoverage);
 
         var fetched = service.fetch(CHAVE_SP); // bare chave, no QR signature
 
@@ -308,7 +316,7 @@ class SefazIngestionServiceTest {
     void fetch_bareChaveWithSignatureRequiringAdapter_noInfosimples_throwsWithoutScraping() {
         var spAdapter = mockAdapterFor(UnidadeFederativa.SP);
         when(spAdapter.requiresQrSignature()).thenReturn(true);
-        var service = new SefazIngestionService(List.of(spAdapter), Optional.empty(), paidApiGuard);
+        var service = new SefazIngestionService(List.of(spAdapter), Optional.empty(), paidApiGuard, stateCoverage);
 
         assertThrows(SefazFetchException.class, () -> service.fetch(CHAVE_SP));
         verify(spAdapter, never()).fetchHtml(anyString());
@@ -322,7 +330,7 @@ class SefazIngestionServiceTest {
         var chaveMs = "50260777863223012709650180004455861342485537";
         when(msAdapter.fetchHtml(chaveMs)).thenReturn("<html>ms</html>");
         var infosimples = mock(InfosimplesService.class);
-        var service = new SefazIngestionService(List.of(msAdapter), Optional.of(infosimples), paidApiGuard);
+        var service = new SefazIngestionService(List.of(msAdapter), Optional.of(infosimples), paidApiGuard, stateCoverage);
 
         var fetched = service.fetch(chaveMs); // bare chave
 
@@ -337,7 +345,7 @@ class SefazIngestionServiceTest {
         var httpUrl = "https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx?p=" + CHAVE_RS + "|2|1|1|hash";
         when(rsAdapter.fetchHtml(httpUrl)).thenReturn("<html>rs</html>");
         var infosimples = mock(InfosimplesService.class);
-        var service = new SefazIngestionService(List.of(rsAdapter), Optional.of(infosimples), paidApiGuard);
+        var service = new SefazIngestionService(List.of(rsAdapter), Optional.of(infosimples), paidApiGuard, stateCoverage);
 
         var fetched = service.fetch(httpUrl); // full signed URL — scrapeable
 
@@ -347,14 +355,14 @@ class SefazIngestionServiceTest {
 
     @Test
     void requireSupported_passesForRegisteredUf() {
-        var service = new SefazIngestionService(List.of(mockAdapterFor(UnidadeFederativa.RS)), Optional.empty(), paidApiGuard);
+        var service = new SefazIngestionService(List.of(mockAdapterFor(UnidadeFederativa.RS)), Optional.empty(), paidApiGuard, stateCoverage);
 
         service.requireSupported(UnidadeFederativa.RS);
     }
 
     @Test
     void requireSupported_throwsForUnregisteredUf() {
-        var service = new SefazIngestionService(List.of(mockAdapterFor(UnidadeFederativa.RS)), Optional.empty(), paidApiGuard);
+        var service = new SefazIngestionService(List.of(mockAdapterFor(UnidadeFederativa.RS)), Optional.empty(), paidApiGuard, stateCoverage);
 
         assertThrows(UnsupportedStateException.class,
                 () -> service.requireSupported(UnidadeFederativa.SP));
@@ -365,7 +373,7 @@ class SefazIngestionServiceTest {
         var rsAdapter = mockAdapterFor(UnidadeFederativa.RS);
         when(rsAdapter.fetchHtml(anyString())).thenReturn("<html>ok</html>");
         var infosimples = mock(InfosimplesService.class);
-        var service = new SefazIngestionService(List.of(rsAdapter), Optional.of(infosimples), paidApiGuard);
+        var service = new SefazIngestionService(List.of(rsAdapter), Optional.of(infosimples), paidApiGuard, stateCoverage);
 
         service.fetch(CHAVE_RS);
 
@@ -377,7 +385,7 @@ class SefazIngestionServiceTest {
         var rsAdapter = mockAdapterFor(UnidadeFederativa.RS);
         var primaryEx = new SefazFetchException("RS");
         when(rsAdapter.fetchHtml(anyString())).thenThrow(primaryEx);
-        var service = new SefazIngestionService(List.of(rsAdapter), Optional.empty(), paidApiGuard);
+        var service = new SefazIngestionService(List.of(rsAdapter), Optional.empty(), paidApiGuard, stateCoverage);
 
         var thrown = assertThrows(SefazFetchException.class, () -> service.fetch(CHAVE_RS));
 
@@ -390,7 +398,7 @@ class SefazIngestionServiceTest {
         when(rsAdapter.fetchHtml(anyString())).thenThrow(new SefazFetchException("RS"));
         var infosimples = mock(InfosimplesService.class);
         when(infosimples.fetchParsed(any(), any())).thenThrow(new ReceiptParseException("infosimples.error"));
-        var service = new SefazIngestionService(List.of(rsAdapter), Optional.of(infosimples), paidApiGuard);
+        var service = new SefazIngestionService(List.of(rsAdapter), Optional.of(infosimples), paidApiGuard, stateCoverage);
 
         assertThrows(ReceiptParseException.class, () -> service.fetch(CHAVE_RS));
     }
@@ -399,7 +407,7 @@ class SefazIngestionServiceTest {
     void parse_returnsPreParsedReceiptDirectly() {
         var preParsed = sampleParsed();
         var fetched = new FetchedDocument(null, null, CHAVE_RS, UnidadeFederativa.RS, null, preParsed);
-        var service = new SefazIngestionService(List.of(mockAdapterFor(UnidadeFederativa.RS)), Optional.empty(), paidApiGuard);
+        var service = new SefazIngestionService(List.of(mockAdapterFor(UnidadeFederativa.RS)), Optional.empty(), paidApiGuard, stateCoverage);
 
         var result = service.parse(fetched);
 
@@ -414,7 +422,7 @@ class SefazIngestionServiceTest {
         var expected = sampleParsed();
         when(rsAdapter.parseHtml("<html>x</html>", CHAVE_RS, "https://example/src"))
                 .thenReturn(expected);
-        var service = new SefazIngestionService(List.of(mockAdapterFor(UnidadeFederativa.RS)), Optional.empty(), paidApiGuard);
+        var service = new SefazIngestionService(List.of(mockAdapterFor(UnidadeFederativa.RS)), Optional.empty(), paidApiGuard, stateCoverage);
 
         var parsed = service.parse(fetched);
 
@@ -431,12 +439,161 @@ class SefazIngestionServiceTest {
         var infosimples = mock(InfosimplesService.class);
         var preParsed = sampleParsed();
         when(infosimples.fetchParsed(eq(chaveMs), eq(UnidadeFederativa.MS))).thenReturn(preParsed);
-        var service = new SefazIngestionService(List.of(msAdapter), Optional.of(infosimples), paidApiGuard);
+        var service = new SefazIngestionService(List.of(msAdapter), Optional.of(infosimples), paidApiGuard, stateCoverage);
 
         var fetched = service.fetch(chaveMs);
 
         assertSame(preParsed, fetched.preParsed());
         assertEquals(UnidadeFederativa.MS, fetched.uf());
+    }
+
+    // ── Experimental fallback chain (states without a dedicated adapter) ──────
+
+    // UF code 29 → BA (no dedicated adapter — served by the experimental chain).
+    private static final String CHAVE_BA = "29260412345678000190650010000123451123456780";
+    private static final String QR_URL_BA = "https://nfe.sefaz.ba.gov.br/servicos/nfce/qrcode.aspx?p="
+            + CHAVE_BA + "|2|1|1|deadbeef";
+
+    /** Real generic adapter (so instanceof-based dispatch applies) with a stubbed HTTP layer. */
+    private GenericQrPortalAdapter genericAdapter(String htmlOrNull) {
+        return new GenericQrPortalAdapter(RestClient.builder(), 1000, "test", true, 1, 0, "gov.br") {
+            @Override
+            protected String httpGet(String url) {
+                if (htmlOrNull == null) throw new RestClientException("portal down");
+                return htmlOrNull;
+            }
+        };
+    }
+
+    @Test
+    void constructor_gapFillsUnclaimedUfsWithGenericAdapter() {
+        var rsAdapter = mockAdapterFor(UnidadeFederativa.RS);
+        var generic = genericAdapter("<html>ba</html>");
+        var service = new SefazIngestionService(List.of(rsAdapter, generic), Optional.empty(), paidApiGuard, stateCoverage);
+
+        var fetched = service.fetch(QR_URL_BA);
+
+        assertSame(generic, fetched.adapter());
+        assertEquals(UnidadeFederativa.BA, fetched.uf());
+        assertTrue(service.getVerifiedStates().contains(UnidadeFederativa.RS));
+        assertTrue(service.experimentalStates().contains(UnidadeFederativa.BA));
+        assertTrue(!service.experimentalStates().contains(UnidadeFederativa.RS));
+    }
+
+    @Test
+    void constructor_disabledGenericAdapterLeavesUfsUnsupported() {
+        var rsAdapter = mockAdapterFor(UnidadeFederativa.RS);
+        var disabledGeneric = new GenericQrPortalAdapter(RestClient.builder(), 1000, "test", false, 1, 0, "gov.br");
+        var service = new SefazIngestionService(List.of(rsAdapter, disabledGeneric), Optional.empty(), paidApiGuard, stateCoverage);
+
+        assertThrows(UnsupportedStateException.class, () -> service.requireSupported(UnidadeFederativa.BA));
+    }
+
+    @Test
+    void parse_experimentalSuccess_recordsQrPortalTelemetry() {
+        var expected = sampleParsed();
+        var generic = new GenericQrPortalAdapter(RestClient.builder(), 1000, "test", true, 1, 0, "gov.br") {
+            @Override
+            public ParsedReceipt parseHtml(String html, String chaveAcesso, String sourceUrl) {
+                return expected;
+            }
+        };
+        var service = new SefazIngestionService(List.of(generic), Optional.empty(), paidApiGuard, stateCoverage);
+        var fetched = new FetchedDocument(generic, "<html>ba</html>", CHAVE_BA, UnidadeFederativa.BA, QR_URL_BA);
+
+        var parsed = service.parse(fetched);
+
+        assertSame(expected, parsed);
+        verify(stateCoverage).recordSuccess(eq(UnidadeFederativa.BA), eq(StateIngestionStrategy.QR_PORTAL), anyString());
+    }
+
+    @Test
+    void parse_experimentalParseFailure_noInfosimples_reportsExhaustedAndThrowsExperimentalKey() {
+        var generic = genericAdapter("<html>weird layout</html>");
+        var service = new SefazIngestionService(List.of(generic), Optional.empty(), paidApiGuard, stateCoverage);
+        var fetched = new FetchedDocument(generic, "<html>weird layout</html>", CHAVE_BA, UnidadeFederativa.BA, QR_URL_BA);
+
+        var thrown = assertThrows(ExperimentalStateFailedException.class, () -> service.parse(fetched));
+
+        assertEquals("receipt.state.experimental_failed", thrown.getMessageKey());
+        verify(stateCoverage).recordFailure(eq(UnidadeFederativa.BA), eq(StateIngestionStrategy.QR_PORTAL),
+                eq(StateIngestionOutcome.PARSE_FAILED), anyString(), anyString());
+        verify(stateCoverage).reportExhausted(eq(UnidadeFederativa.BA), eq(CHAVE_BA), eq(QR_URL_BA),
+                anyString(), anyString());
+    }
+
+    @Test
+    void parse_experimentalParseFailure_infosimplesRescues() {
+        var generic = genericAdapter("<html>weird layout</html>");
+        var infosimples = mock(InfosimplesService.class);
+        var preParsed = sampleParsed();
+        when(infosimples.fetchParsed(eq(CHAVE_BA), eq(UnidadeFederativa.BA))).thenReturn(preParsed);
+        var service = new SefazIngestionService(List.of(generic), Optional.of(infosimples), paidApiGuard, stateCoverage);
+        var fetched = new FetchedDocument(generic, "<html>weird layout</html>", CHAVE_BA, UnidadeFederativa.BA, QR_URL_BA);
+
+        var parsed = service.parse(fetched);
+
+        assertSame(preParsed, parsed);
+        verify(stateCoverage).recordSuccess(eq(UnidadeFederativa.BA), eq(StateIngestionStrategy.INFOSIMPLES), anyString());
+    }
+
+    @Test
+    void fetch_experimentalFetchFailure_noInfosimples_reportsExhaustedAndThrowsExperimentalKey() {
+        var generic = genericAdapter(null); // portal unreachable
+        var service = new SefazIngestionService(List.of(generic), Optional.empty(), paidApiGuard, stateCoverage);
+
+        var thrown = assertThrows(ExperimentalStateFailedException.class, () -> service.fetch(QR_URL_BA));
+
+        assertEquals("receipt.state.experimental_failed", thrown.getMessageKey());
+        verify(stateCoverage).recordFailure(eq(UnidadeFederativa.BA), eq(StateIngestionStrategy.QR_PORTAL),
+                eq(StateIngestionOutcome.FETCH_FAILED), anyString(), anyString());
+        verify(stateCoverage).reportExhausted(eq(UnidadeFederativa.BA), eq(CHAVE_BA), eq(QR_URL_BA),
+                anyString(), any());
+    }
+
+    @Test
+    void fetch_experimentalFetchFailure_infosimplesRescues() {
+        var generic = genericAdapter(null);
+        var infosimples = mock(InfosimplesService.class);
+        var preParsed = sampleParsed();
+        when(infosimples.fetchParsed(eq(CHAVE_BA), eq(UnidadeFederativa.BA))).thenReturn(preParsed);
+        var service = new SefazIngestionService(List.of(generic), Optional.of(infosimples), paidApiGuard, stateCoverage);
+
+        var fetched = service.fetch(QR_URL_BA);
+
+        assertSame(preParsed, fetched.preParsed());
+        verify(stateCoverage).recordSuccess(eq(UnidadeFederativa.BA), eq(StateIngestionStrategy.INFOSIMPLES), anyString());
+    }
+
+    @Test
+    void fetch_verifiedStateFailure_neverTouchesStateCoverage() {
+        var rsAdapter = mockAdapterFor(UnidadeFederativa.RS);
+        when(rsAdapter.fetchHtml(anyString())).thenThrow(new SefazFetchException("RS"));
+        var service = new SefazIngestionService(List.of(rsAdapter), Optional.empty(), paidApiGuard, stateCoverage);
+
+        assertThrows(SefazFetchException.class, () -> service.fetch(CHAVE_RS));
+
+        verifyNoInteractions(stateCoverage);
+    }
+
+    @Test
+    void supportsBareChave_rsAlwaysFalse_signatureStatesNeedInfosimples_nativeStatesTrue() {
+        var rsAdapter = mockAdapterFor(UnidadeFederativa.RS);
+        var spAdapter = mockAdapterFor(UnidadeFederativa.SP);
+        when(spAdapter.requiresQrSignature()).thenReturn(true);
+        var msAdapter = mockAdapterFor(UnidadeFederativa.MS);
+
+        var withoutInfosimples = new SefazIngestionService(
+                List.of(rsAdapter, spAdapter, msAdapter), Optional.empty(), paidApiGuard, stateCoverage);
+        assertTrue(!withoutInfosimples.supportsBareChave(UnidadeFederativa.RS));
+        assertTrue(!withoutInfosimples.supportsBareChave(UnidadeFederativa.SP));
+        assertTrue(withoutInfosimples.supportsBareChave(UnidadeFederativa.MS));
+        assertTrue(!withoutInfosimples.supportsBareChave(UnidadeFederativa.BA));
+
+        var withInfosimples = new SefazIngestionService(
+                List.of(rsAdapter, spAdapter, msAdapter), Optional.of(mock(InfosimplesService.class)), paidApiGuard, stateCoverage);
+        assertTrue(!withInfosimples.supportsBareChave(UnidadeFederativa.RS));
+        assertTrue(withInfosimples.supportsBareChave(UnidadeFederativa.SP));
     }
 
     @Test

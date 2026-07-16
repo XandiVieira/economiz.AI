@@ -16,6 +16,25 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-07-16 — Todas as 27 UFs aceitas no scan (cadeia experimental)
+
+`POST /receipts` agora aceita nota de **qualquer estado**. Estados verificados
+(RS, PR, SP, SC, MS, e CE com Infosimples) seguem iguais; os demais passam por
+uma cadeia de fallback experimental (portal do próprio QR → Infosimples). Se
+tudo falhar, a nota vira `FAILED_PARSE` com
+`parseErrorReason=receipt.state.experimental_failed:<UF>` e `parseErrorMessage`
+localizada ("ainda não conseguimos processar notas desse estado…") — renderize
+essa mensagem; o time é notificado automaticamente com as evidências.
+`receipt.state.unsupported` (400 no submit) agora só ocorre se a cadeia estiver
+desligada no servidor. A digitação manual de chave passa a ser rejeitada no
+submit (`receipt.manual-chave.unsupported`) para QUALQUER estado que dependa da
+assinatura do QR sem fallback pago ativo — antes só RS.
+
+Admin: novo `GET /api/v1/admin/state-coverage` (mapa por UF: modo + telemetria
+por camada, alimentado pelos scans reais).
+
+---
+
 ## 2026-07-16 — Cap diário de SMS/WhatsApp (Twilio)
 
 Envios via Twilio (notificações SMS/WhatsApp e o OTP de verificação de telefone)
