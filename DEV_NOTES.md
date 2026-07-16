@@ -219,18 +219,45 @@ The report works identically in SHADOW and ON (computed purely from
   as a query param — a guess). Charged per solved token (~R$0.03) even when the portal
   rejects it, hence a single attempt, then Infosimples. Failure evidence (captcha type,
   sitekey, page snippet, HTTP status) rides the telemetry + admin email.
-- **RJ is parser-ready, blocked only by Imperva** (2026-07-16): a real RJ DANFE
-  (`consultadfe.fazenda.rj.gov.br`) renders the SAME responsive-DANFE layout the shared
-  parser handles — proven by `RealRioDeJaneiroFixtureTest` on a real captured fixture. RJ's
-  portal sits behind an Imperva/Incapsula anti-bot **JS challenge** our JS-less RestClient
-  can't pass, so the scrape never reaches the DANFE (falls to Infosimples). To promote RJ to
-  a verified adapter: add a headless-browser step (or a JS-challenge-solving fetch) to obtain
-  the Imperva cookie — then reuse SvrsSharedPortalAdapter/ResponsiveDanfeParser as-is, NO
-  parser work. Tracked; not built (needs the headless-browser infra decision).
 - **MG needs captcha + JSF postback** (`portalsped.fazenda.mg.gov.br`): PrimeFaces/ViewState
   portal, reCAPTCHA, DANFE delivered via an AJAX postback — needs a real post-solve fixture
   (DevTools capture) before an adapter can be built without guessing component IDs. Infosimples
   covers it meanwhile.
+
+### JS-anti-bot-walled portals (RJ / F5 BIG-IP) — parser-ready, needs an unlocker fetch
+- **Problem**: some SEFAZ portals sit behind a client-side **JavaScript anti-bot challenge**.
+  Our fetch layer is a plain `RestClient` GET with **no JS engine**, so it never gets past the
+  wall to the DANFE. Confirmed case: **RJ** (`consultadfe.fazenda.rj.gov.br`) runs **F5 BIG-IP
+  ASM** — fingerprinted by the `TS0…`/`TSPD` + `BIGipServer…` cookies it sets and the obfuscated
+  JS it serves instead of the receipt. A real browser solves the challenge invisibly (verified —
+  the user opened the URL and saw the full receipt); our server gets only the challenge page.
+  (MG's `ERR_CONNECTION_RESET` may be a related network-level bot defense; unconfirmed.)
+- **NOT a parser problem**: RJ renders the SAME responsive-DANFE layout the shared parser
+  already handles — proven by `RealRioDeJaneiroFixtureTest` on a real captured fixture (market,
+  R$65,00 total, item all extracted). So once something gets past the wall, `ResponsiveDanfeParser`
+  works UNCHANGED — zero parsing work to onboard RJ (and likely other F5/Imperva/Cloudflare states).
+- **Works TODAY via Infosimples** (`INFOSIMPLES_ENABLED=true`): the paid by-chave fallback
+  handles RJ fine (~R$0.24/nota). So nothing is broken — this note is about making it FREE-ish.
+- **Solution options** (to move JS-walled states off the paid fallback):
+  1. **Web-unlocker API** (RECOMMENDED — Bright Data Unlocker / ZenRows / ScrapingBee / Scrapfly).
+     Send the URL, they run the JS challenge + rotating proxies server-side, return the HTML.
+     Fits our stack perfectly: it's one HTTP call, drops in as a chain layer exactly where
+     Infosimples sits, metered through `PaidApiGuardService`. ~R$0.008–0.015/nota (≈US$1.5/1k) —
+     roughly **30× cheaper than Infosimples**, and covers ALL JS-walled vendors (F5/Imperva/
+     Cloudflare/DataDome), not just RJ. Downside: a new paid vendor with a ~US$50–70/mo floor
+     (or pay-as-you-go, no floor but higher per-call).
+  2. **Self-hosted headless browser** (Playwright/Chromium): runs the challenge in-house.
+     REJECTED for now — Chromium needs ~300–500 MB + system libs on top of the JVM's ~1 GB;
+     tight on the Render Standard 2 GB box, big image, slow cold start, fragile.
+  3. **Reverse-engineer the F5 TS-cookie generator in Java**: brittle, high maintenance (F5
+     rotates the challenge JS). REJECTED.
+- **Recommendation / when to build**: DON'T build yet — Infosimples covers RJ today. Add the
+  unlocker layer when `/admin/state-coverage` shows JS-walled states crossing ~1–2k notas/month
+  (that's roughly the break-even vs a US$69/mo plan at ~R$0.23 saved/nota). Build = one
+  `UnlockerFetchClient` wired before Infosimples for the affected UFs, metered like the other
+  paid layers. Parser side is already done + fixture-guarded.
+- Refs: [Scrapfly F5 bypass](https://scrapfly.io/bypass/f5), [ZenRows F5 (2026)](https://www.zenrows.com/blog/bypass-f5),
+  [Bright Data Web Unlocker pricing](https://brightdata.com/pricing/web-unlocker).
 - **Watch before prod scale**: captcha-walled portals (AC, RN, TO…) that reject the guessed
   resubmit burn one solve + one Infosimples query per nota — if such a state gets popular,
   build its adapter (the telemetry tells you which).
