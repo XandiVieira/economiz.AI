@@ -176,33 +176,58 @@
 						"body": {
 							"mode": "raw",
 							"raw": "{\"name\": \"John Doe\", \"email\": \"john@test.com\", \"phone\": \"+55 51 99999-0000\", \"message\": \"Sugestao: adicionem modo escuro.\"}",
-							"options": { "raw": { "language": "json" } }
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/v1/contact",
-							"host": ["{{baseUrl}}"],
-							"path": ["api", "v1", "contact"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"contact"
+							]
 						},
 						"description": "Public contact/feedback form (doubt, criticism, suggestion, praise). Body {name,email,phone?,message} (phone optional, max 30 chars). 202 Accepted; rate-limited 5/h per IP."
-						},
-						"response": []
 					},
-					{
-						"name": "Beta-tester signup (public)",
-						"request": {
-							"method": "POST",
-							"header": [ { "key": "Content-Type", "value": "application/json" } ],
-							"body": {
-								"mode": "raw",
-								"raw": "{\"name\": \"Jane Beta\", \"email\": \"jane@test.com\", \"phone\": \"+55 51 99999-0000\"}",
-								"options": { "raw": { "language": "json" } }
-							},
-							"url": {
-								"raw": "{{baseUrl}}/api/v1/beta-signup",
-								"host": ["{{baseUrl}}"],
-								"path": ["api", "v1", "beta-signup"]
-							},
-							"description": "Public beta-tester lead capture. Body {name,email,phone?} (phone optional, max 30 chars; no message). 202 Accepted; distinct email subject; rate-limited 5/h per IP (own bucket)."
+					"response": []
+				},
+				{
+					"name": "Beta-tester signup (public)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"name\": \"Jane Beta\", \"email\": \"jane@test.com\", \"phone\": \"+55 51 99999-0000\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/beta-signup",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"beta-signup"
+							]
+						},
+						"description": "Public beta-tester lead capture. Body {name,email,phone?} (phone optional, max 30 chars; no message). 202 Accepted; distinct email subject; rate-limited 5/h per IP (own bucket)."
 					},
 					"response": []
 				},
@@ -8289,6 +8314,49 @@
 					]
 				},
 				{
+					"name": "49b2. Admin: fila de merchants cinzentos responde 200",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{adminToken}}"
+							},
+							{
+								"key": "Accept-Language",
+								"value": "pt"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/merchants/grey",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"merchants",
+								"grey"
+							]
+						}
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"if (!pm.collectionVariables.get('adminToken')) { pm.test.skip('Sem admin — pulando'); return; }",
+									"pm.test('GET /admin/merchants/grey -> 200', function () { pm.response.to.have.status(200); });",
+									"pm.test('resposta e uma lista', function () { pm.expect(pm.response.json()).to.be.an('array'); });"
+								]
+							}
+						}
+					]
+				},
+				{
 					"name": "49c. Admin: a conta deletada nao existe mais (404)",
 					"request": {
 						"method": "GET",
@@ -9143,6 +9211,69 @@
 								"classify-segments"
 							]
 						}
+					},
+					"response": []
+				},
+				{
+					"name": "List grey-zone merchants (admin, review queue)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept-Language",
+								"value": "pt"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/merchants/grey",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"merchants",
+								"grey"
+							]
+						},
+						"description": "Merchants scanned by real users but outside every supported segment (OTHER/UNKNOWN, no override), ranked by scan volume. Their receipts are ingested for the user but held out of the collaborative price index until a verdict."
+					},
+					"response": []
+				},
+				{
+					"name": "Set merchant support override (admin, promote/block)",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Accept-Language",
+								"value": "pt"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"override\": \"SUPPORTED\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/merchants/{{merchantCnpj}}/support",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"merchants",
+								"{{merchantCnpj}}",
+								"support"
+							]
+						},
+						"description": "Verdict on a grey merchant. SUPPORTED promotes it into the collaborative index (backfilling observations from its already-confirmed receipts); BLOCKED rejects future scans with a localized 400/failed-parse; null clears the override back to segment-driven gating."
 					},
 					"response": []
 				},

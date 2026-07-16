@@ -13,6 +13,7 @@ import com.relyon.economizai.exception.ReceiptAlreadyIngestedException;
 import com.relyon.economizai.exception.ReceiptItemNotFoundException;
 import com.relyon.economizai.exception.ReceiptNotEditableException;
 import com.relyon.economizai.exception.ReceiptNotFoundException;
+import com.relyon.economizai.exception.UnsupportedMerchantException;
 import com.relyon.economizai.config.MdcContextFilter;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.ReceiptItem;
@@ -27,6 +28,7 @@ import com.relyon.economizai.service.cache.HouseholdCacheGen;
 import com.relyon.economizai.service.canonicalization.CanonicalizationService;
 import com.relyon.economizai.service.geo.MarketLocationService;
 import com.relyon.economizai.service.geo.MarketNameService;
+import com.relyon.economizai.service.geo.MerchantSupportGate;
 import com.relyon.economizai.service.notifications.NotificationPayload;
 import com.relyon.economizai.service.notifications.NotificationRuleService;
 import com.relyon.economizai.service.notifications.NotificationService;
@@ -74,6 +76,7 @@ public class ReceiptService {
     private final PriceIndexService priceIndexService;
     private final PromoDetector promoDetector;
     private final MarketLocationService marketLocationService;
+    private final MerchantSupportGate merchantSupportGate;
     private final NotificationService notificationService;
     private final NotificationRuleService notificationRuleService;
     private final HouseholdProductAliasService householdProductAliasService;
@@ -111,6 +114,14 @@ public class ReceiptService {
         if (ChaveAcessoParser.isBareChave(qrPayload) && !sefazIngestionService.supportsBareChave(uf)) {
             log.info("submit rejected reason=manual_chave_unsupported uf={}", uf);
             throw new ManualChaveUnsupportedException(uf.name());
+        }
+        // A CNPJ we've already classified as food service (or admin-blocked) fails
+        // right here with the localized message — nothing is stored at all. The
+        // chave embeds the CNPJ, so no fetch is needed. First-time merchants pass
+        // through and are gated during async ingestion instead.
+        if (merchantSupportGate.isKnownBlockedCnpj(ChaveAcessoParser.extractCnpj(chave))) {
+            log.info("submit rejected reason=merchant_unsupported cnpj={}", ChaveAcessoParser.extractCnpj(chave));
+            throw new UnsupportedMerchantException();
         }
         enforceMonthlyReceiptCap(user);
         replaceStalePriorOrRejectConfirmedDuplicate(user, chave);

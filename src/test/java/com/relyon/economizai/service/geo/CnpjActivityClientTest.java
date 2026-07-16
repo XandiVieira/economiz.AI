@@ -74,8 +74,37 @@ class CnpjActivityClientTest {
     }
 
     @Test
+    void foodRetailCnaes() {
+        assertEquals(MerchantSegment.FOOD_RETAIL, CnpjActivityClient.segmentFromCnae(List.of("4721102"))); // padaria
+        assertEquals(MerchantSegment.FOOD_RETAIL, CnpjActivityClient.segmentFromCnae(List.of("4722901"))); // açougue
+        assertEquals(MerchantSegment.FOOD_RETAIL, CnpjActivityClient.segmentFromCnae(List.of("4723700"))); // bebidas
+        assertEquals(MerchantSegment.FOOD_RETAIL, CnpjActivityClient.segmentFromCnae(List.of("4724500"))); // hortifrúti
+        assertEquals(MerchantSegment.FOOD_RETAIL, CnpjActivityClient.segmentFromCnae(List.of("4729602"))); // conveniência
+    }
+
+    @Test
+    void gasStationWithConvenienceSecondaryIsFoodRetail() {
+        // posto (4731) whose CNPJ lists the loja de conveniência as secondary activity
+        assertEquals(MerchantSegment.FOOD_RETAIL,
+                CnpjActivityClient.segmentFromCnae(List.of("4731800", "4729602")));
+    }
+
+    @Test
+    void foodServiceCnaesAreFoodService() {
+        assertEquals(MerchantSegment.FOOD_SERVICE, CnpjActivityClient.segmentFromCnae(List.of("5611201"))); // restaurante
+        assertEquals(MerchantSegment.FOOD_SERVICE, CnpjActivityClient.segmentFromCnae(List.of("5611203"))); // lanchonete
+    }
+
+    @Test
+    void retailCnaeWinsOverFoodService() {
+        // padaria that also serves café da manhã: retail wins, stays supported
+        assertEquals(MerchantSegment.FOOD_RETAIL,
+                CnpjActivityClient.segmentFromCnae(List.of("5611203", "4721102")));
+    }
+
+    @Test
     void otherActivityIsOther() {
-        assertEquals(MerchantSegment.OTHER, CnpjActivityClient.segmentFromCnae(List.of("5611201")));
+        assertEquals(MerchantSegment.OTHER, CnpjActivityClient.segmentFromCnae(List.of("4731800"))); // posto sem conveniência
     }
 
     @Test

@@ -8,6 +8,7 @@ import com.relyon.economizai.model.enums.MerchantSegment;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.repository.MarketLocationRepository;
 import com.relyon.economizai.repository.ProductRepository;
+import com.relyon.economizai.service.ContactService;
 import com.relyon.economizai.service.geo.NominatimGeocoder.GeocodeResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,12 +41,14 @@ class MarketLocationServiceTest {
     @Mock private NominatimGeocoder geocoder;
     @Mock private CnpjActivityClient cnpjActivityClient;
     @Mock private ProductRepository productRepository;
+    @Mock private ContactService contactService;
 
     private MarketLocationService service;
 
     @BeforeEach
     void setUp() {
-        service = new MarketLocationService(repository, geocoder, cnpjActivityClient, productRepository);
+        service = new MarketLocationService(repository, geocoder, cnpjActivityClient, productRepository,
+                contactService);
     }
 
     // ---------- registerMarketFromReceipt ----------
@@ -220,10 +223,10 @@ class MarketLocationServiceTest {
         when(cnpjActivityClient.isEnabled()).thenReturn(true);
         when(repository.findAllBySegmentAndSegmentAttemptsLessThan(eq(MerchantSegment.UNKNOWN), anyInt()))
                 .thenReturn(List.of(pharmacyMarket, supermarketMarket, otherMarket, unknownMarket));
-        when(cnpjActivityClient.lookup("p")).thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.PHARMACY, null));
-        when(cnpjActivityClient.lookup("s")).thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.SUPERMARKET, null));
-        when(cnpjActivityClient.lookup("o")).thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.OTHER, null));
-        when(cnpjActivityClient.lookup("u")).thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.UNKNOWN, null));
+        when(cnpjActivityClient.lookup("p")).thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.PHARMACY, null, List.of("4771701")));
+        when(cnpjActivityClient.lookup("s")).thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.SUPERMARKET, null, List.of("4711302")));
+        when(cnpjActivityClient.lookup("o")).thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.OTHER, null, List.of("9999999")));
+        when(cnpjActivityClient.lookup("u")).thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.UNKNOWN, null, List.of()));
         when(productRepository.findOtherCategoryProductsByMerchant("p")).thenReturn(List.of());
 
         var summary = service.classifyPendingSegments();
@@ -241,7 +244,7 @@ class MarketLocationServiceTest {
     void classifySegmentOne_setsSegmentWhenResolved() {
         var market = MarketLocation.builder().cnpj("c").cnpjRoot("cccccccc")
                 .segment(MerchantSegment.UNKNOWN).segmentAttempts(0).build();
-        when(cnpjActivityClient.lookup("c")).thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.SUPERMARKET, null));
+        when(cnpjActivityClient.lookup("c")).thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.SUPERMARKET, null, List.of("4711302")));
 
         service.classifySegmentOne(market);
 
@@ -256,7 +259,7 @@ class MarketLocationServiceTest {
     void classifySegmentOne_leavesUnknownWhenUnresolved() {
         var market = MarketLocation.builder().cnpj("c").cnpjRoot("cccccccc")
                 .segment(MerchantSegment.UNKNOWN).segmentAttempts(2).build();
-        when(cnpjActivityClient.lookup("c")).thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.UNKNOWN, null));
+        when(cnpjActivityClient.lookup("c")).thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.UNKNOWN, null, List.of()));
 
         service.classifySegmentOne(market);
 
@@ -274,7 +277,7 @@ class MarketLocationServiceTest {
                 .category(ProductCategory.OTHER).categorizationSource(CategorizationSource.NONE).build();
         var productTwo = Product.builder().normalizedName("paracetamol")
                 .category(ProductCategory.OTHER).categorizationSource(CategorizationSource.NONE).build();
-        when(cnpjActivityClient.lookup("ph")).thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.PHARMACY, null));
+        when(cnpjActivityClient.lookup("ph")).thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.PHARMACY, null, List.of("4771701")));
         when(productRepository.findOtherCategoryProductsByMerchant("ph"))
                 .thenReturn(List.of(productOne, productTwo));
 
@@ -290,7 +293,7 @@ class MarketLocationServiceTest {
     void classifySegmentOne_pharmacyWithNoProducts_doesNotSaveAll() {
         var market = MarketLocation.builder().cnpj("ph").cnpjRoot("pppppppp")
                 .segment(MerchantSegment.UNKNOWN).segmentAttempts(0).build();
-        when(cnpjActivityClient.lookup("ph")).thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.PHARMACY, null));
+        when(cnpjActivityClient.lookup("ph")).thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.PHARMACY, null, List.of("4771701")));
         when(productRepository.findOtherCategoryProductsByMerchant("ph")).thenReturn(List.of());
 
         service.classifySegmentOne(market);
@@ -299,11 +302,97 @@ class MarketLocationServiceTest {
     }
 
     @Test
+    void classifySegmentOne_persistsCnaeCodes() {
+        var market = MarketLocation.builder().cnpj("c").cnpjRoot("cccccccc")
+                .segment(MerchantSegment.UNKNOWN).segmentAttempts(0).build();
+        when(cnpjActivityClient.lookup("c")).thenReturn(
+                new CnpjActivityClient.CnpjLookup(MerchantSegment.SUPERMARKET, null, List.of("4711302", "4729699")));
+
+        service.classifySegmentOne(market);
+
+        assertThat(market.getCnaeCodes()).isEqualTo("4711302,4729699");
+    }
+
+    @Test
+    void classifySegmentOne_greyMerchant_notifiesAdminOnce() {
+        var market = MarketLocation.builder().cnpj("g").cnpjRoot("gggggggg")
+                .segment(MerchantSegment.UNKNOWN).segmentAttempts(0).build();
+        when(cnpjActivityClient.lookup("g")).thenReturn(
+                new CnpjActivityClient.CnpjLookup(MerchantSegment.OTHER, null, List.of("9999999")));
+
+        service.classifySegmentOne(market);
+
+        assertThat(market.getSegment()).isEqualTo(MerchantSegment.OTHER);
+        assertThat(market.getGraySightingNotifiedAt()).isNotNull();
+        verify(contactService).notifyAdmin(any(), any());
+    }
+
+    @Test
+    void classifySegmentOne_greyMerchantAlreadyNotified_doesNotNotifyAgain() {
+        var market = MarketLocation.builder().cnpj("g").cnpjRoot("gggggggg")
+                .segment(MerchantSegment.UNKNOWN).segmentAttempts(1)
+                .graySightingNotifiedAt(LocalDateTime.now().minusDays(1)).build();
+        when(cnpjActivityClient.lookup("g")).thenReturn(
+                new CnpjActivityClient.CnpjLookup(MerchantSegment.OTHER, null, List.of("9999999")));
+
+        service.classifySegmentOne(market);
+
+        verifyNoInteractions(contactService);
+    }
+
+    @Test
+    void classifySegmentOne_foodServiceMerchant_doesNotNotifyAdmin() {
+        var market = MarketLocation.builder().cnpj("f").cnpjRoot("ffffffff")
+                .segment(MerchantSegment.UNKNOWN).segmentAttempts(0).build();
+        when(cnpjActivityClient.lookup("f")).thenReturn(
+                new CnpjActivityClient.CnpjLookup(MerchantSegment.FOOD_SERVICE, null, List.of("5611203")));
+
+        service.classifySegmentOne(market);
+
+        assertThat(market.getSegment()).isEqualTo(MerchantSegment.FOOD_SERVICE);
+        verifyNoInteractions(contactService);
+    }
+
+    // ---------- resolveForIngest ----------
+
+    @Test
+    void resolveForIngest_nullCnpj_returnsNull() {
+        assertThat(service.resolveForIngest(null, "Bar", "Rua B")).isNull();
+        verifyNoInteractions(repository);
+    }
+
+    @Test
+    void resolveForIngest_knownClassifiedMarket_skipsLookup() {
+        var market = MarketLocation.builder().cnpj("11111111000111").cnpjRoot("11111111")
+                .segment(MerchantSegment.SUPERMARKET).build();
+        when(repository.findByCnpj("11111111000111")).thenReturn(Optional.of(market));
+
+        var resolved = service.resolveForIngest("11111111000111", "Zaffari", "Av Brasil");
+
+        assertThat(resolved).isSameAs(market);
+        verify(cnpjActivityClient, never()).lookup(any());
+    }
+
+    @Test
+    void resolveForIngest_newMarket_registersAndClassifiesInline() {
+        when(repository.findByCnpj("22222222000122")).thenReturn(Optional.empty());
+        when(repository.save(any(MarketLocation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(cnpjActivityClient.isEnabled()).thenReturn(true);
+        when(cnpjActivityClient.lookup("22222222000122")).thenReturn(
+                new CnpjActivityClient.CnpjLookup(MerchantSegment.FOOD_SERVICE, null, List.of("5611203")));
+
+        var resolved = service.resolveForIngest("22222222000122", "Bar do Zé", "Rua B");
+
+        assertThat(resolved.getSegment()).isEqualTo(MerchantSegment.FOOD_SERVICE);
+        assertThat(resolved.getName()).isEqualTo("Bar do Zé");
+    }
+
+    @Test
     void classifySegmentOne_capturesIbgeCityCode() {
         var market = MarketLocation.builder().cnpj("c").cnpjRoot("cccccccc")
                 .segment(MerchantSegment.UNKNOWN).segmentAttempts(0).build();
         when(cnpjActivityClient.lookup("c"))
-                .thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.SUPERMARKET, "4314902"));
+                .thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.SUPERMARKET, "4314902", List.of("4711302")));
 
         service.classifySegmentOne(market);
 
@@ -317,7 +406,7 @@ class MarketLocationServiceTest {
                 .segment(MerchantSegment.UNKNOWN).segmentAttempts(0)
                 .ibgeCityCode("4314902").build();
         when(cnpjActivityClient.lookup("c"))
-                .thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.SUPERMARKET, "9999999"));
+                .thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.SUPERMARKET, "9999999", List.of("4711302")));
 
         service.classifySegmentOne(market);
 
@@ -336,7 +425,7 @@ class MarketLocationServiceTest {
                 eq(MerchantSegment.UNKNOWN), anyInt()))
                 .thenReturn(List.of(classified));
         when(cnpjActivityClient.lookup("b"))
-                .thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.SUPERMARKET, "4314902"));
+                .thenReturn(new CnpjActivityClient.CnpjLookup(MerchantSegment.SUPERMARKET, "4314902", List.of("4711302")));
 
         var summary = service.classifyPendingSegments();
 

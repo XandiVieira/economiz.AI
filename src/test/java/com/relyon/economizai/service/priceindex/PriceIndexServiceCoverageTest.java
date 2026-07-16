@@ -12,6 +12,7 @@ import com.relyon.economizai.repository.PriceObservationAuditRepository;
 import com.relyon.economizai.repository.PriceObservationAuditRepository.MarketHouseholdCount;
 import com.relyon.economizai.repository.PriceObservationRepository;
 import com.relyon.economizai.service.geo.MarketLocationService;
+import com.relyon.economizai.service.geo.MerchantSupportGate;
 import com.relyon.economizai.service.notifications.NotificationRuleEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -53,6 +55,7 @@ class PriceIndexServiceCoverageTest {
     @Mock private PriceObservationRepository observationRepository;
     @Mock private PriceObservationAuditRepository auditRepository;
     @Mock private MarketLocationService marketLocationService;
+    @Mock private MerchantSupportGate merchantSupportGate;
     @Mock private NotificationRuleEngine notificationRuleEngine;
 
     private CollaborativeProperties properties;
@@ -62,7 +65,8 @@ class PriceIndexServiceCoverageTest {
     void setUp() {
         properties = new CollaborativeProperties();
         service = new PriceIndexService(observationRepository, auditRepository, properties,
-                marketLocationService, notificationRuleEngine);
+                marketLocationService, merchantSupportGate, notificationRuleEngine);
+        lenient().when(merchantSupportGate.contributesToIndex(any())).thenReturn(true);
     }
 
     private Receipt receiptWith(String cnpj, ReceiptItem... items) {

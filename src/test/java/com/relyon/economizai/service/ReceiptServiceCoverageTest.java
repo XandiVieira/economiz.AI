@@ -22,6 +22,7 @@ import com.relyon.economizai.service.cache.HouseholdCacheGen;
 import com.relyon.economizai.service.canonicalization.CanonicalizationService;
 import com.relyon.economizai.service.geo.MarketLocationService;
 import com.relyon.economizai.service.geo.MarketNameService;
+import com.relyon.economizai.service.geo.MerchantSupportGate;
 import com.relyon.economizai.service.notifications.NotificationPayload;
 import com.relyon.economizai.service.notifications.NotificationRuleService;
 import com.relyon.economizai.service.notifications.NotificationService;
@@ -102,6 +103,7 @@ class ReceiptServiceCoverageTest {
     @Mock private MarketNameService marketNameService;
     @Mock private SubscriptionGateService subscriptionGate;
     @Mock private SavingsAttributionService savingsAttributionService;
+    @Mock private MerchantSupportGate merchantSupportGate;
 
     @InjectMocks private ReceiptService receiptService;
 

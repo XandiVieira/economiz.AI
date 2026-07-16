@@ -8,6 +8,7 @@ import com.relyon.economizai.exception.ReceiptAlreadyIngestedException;
 import com.relyon.economizai.exception.ReceiptItemNotFoundException;
 import com.relyon.economizai.exception.ReceiptNotEditableException;
 import com.relyon.economizai.exception.ReceiptNotFoundException;
+import com.relyon.economizai.exception.UnsupportedMerchantException;
 import com.relyon.economizai.model.Household;
 import com.relyon.economizai.dto.response.ReceiptItemResponse;
 import com.relyon.economizai.model.Product;
@@ -25,6 +26,7 @@ import com.relyon.economizai.service.cache.HouseholdCacheGen;
 import com.relyon.economizai.service.canonicalization.CanonicalizationService;
 import com.relyon.economizai.service.geo.MarketLocationService;
 import com.relyon.economizai.service.geo.MarketNameService;
+import com.relyon.economizai.service.geo.MerchantSupportGate;
 import com.relyon.economizai.service.notifications.SavingsAttributionService;
 import com.relyon.economizai.service.priceindex.PriceIndexService;
 import com.relyon.economizai.service.priceindex.PromoDetector;
@@ -87,6 +89,7 @@ class ReceiptServiceTest {
     @Mock private SubscriptionGateService subscriptionGate;
     @Mock private SavingsAttributionService savingsAttributionService;
     @Mock private LocalizedMessageService localizedMessageService;
+    @Mock private MerchantSupportGate merchantSupportGate;
 
     @InjectMocks private ReceiptService receiptService;
 
@@ -241,6 +244,18 @@ class ReceiptServiceTest {
         verify(sefazIngestionService, never()).fetch(any());
         // the slow ingestion is handed off to the background service
         verify(receiptIngestionService).ingest(eq(response.id()), eq(QR_RS));
+    }
+
+    @Test
+    void submit_rejectsKnownBlockedMerchantWithoutStoringAnything() {
+        var user = buildUser();
+        when(merchantSupportGate.isKnownBlockedCnpj("12345678000190")).thenReturn(true);
+
+        assertThrows(UnsupportedMerchantException.class,
+                () -> receiptService.submit(user, new SubmitReceiptRequest(QR_RS)));
+
+        verify(receiptRepository, never()).save(any());
+        verify(receiptIngestionService, never()).ingest(any(), any());
     }
 
     @Test

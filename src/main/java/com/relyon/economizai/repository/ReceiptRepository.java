@@ -58,6 +58,12 @@ public interface ReceiptRepository extends JpaRepository<Receipt, UUID>, JpaSpec
 
     long countByHouseholdIdAndStatusAndConfirmedAtAfter(UUID householdId, ReceiptStatus status, LocalDateTime since);
 
+    // Merchant support gate: scan volume per grey merchant (review queue ranking)
+    // and the confirmed receipts to backfill into the index on promotion.
+    long countByCnpjEmitente(String cnpjEmitente);
+
+    List<Receipt> findAllByCnpjEmitenteAndStatus(String cnpjEmitente, ReceiptStatus status);
+
     /** Total R$ of the household's confirmed receipts confirmed at/after the given instant. */
     @Query("""
         SELECT COALESCE(SUM(r.totalAmount), 0) FROM Receipt r

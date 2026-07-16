@@ -94,4 +94,7 @@ public interface PriceObservationAuditRepository extends JpaRepository<PriceObse
     """)
     boolean existsContributionForChaveFromOtherHousehold(@Param("chaveAcesso") String chaveAcesso,
                                                          @Param("currentHouseholdId") UUID currentHouseholdId);
+
+    /** Promotion backfill guard: has this receipt already contributed observations? */
+    boolean existsByReceiptId(UUID receiptId);
 }

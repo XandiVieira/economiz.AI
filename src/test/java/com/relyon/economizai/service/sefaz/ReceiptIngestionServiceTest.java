@@ -2,12 +2,16 @@ package com.relyon.economizai.service.sefaz;
 
 import com.relyon.economizai.exception.ReceiptParseException;
 import com.relyon.economizai.model.Household;
+import com.relyon.economizai.model.MarketLocation;
+import com.relyon.economizai.model.enums.MerchantSegment;
 import com.relyon.economizai.service.extraction.EanCatalogEnrichmentService;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
 import com.relyon.economizai.repository.ReceiptRepository;
+import com.relyon.economizai.service.geo.MarketLocationService;
+import com.relyon.economizai.service.geo.MerchantSupportGate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,6 +34,7 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -50,6 +55,8 @@ class ReceiptIngestionServiceTest {
     @Mock private SefazIngestionService sefazIngestionService;
     @Mock private TransactionTemplate transactionTemplate;
     @Mock private EanCatalogEnrichmentService eanCatalogEnrichmentService;
+    @Mock private MarketLocationService marketLocationService;
+    @Mock private MerchantSupportGate merchantSupportGate;
 
     @InjectMocks private ReceiptIngestionService service;
 
@@ -127,6 +134,50 @@ class ReceiptIngestionServiceTest {
 
         assertEquals(ReceiptStatus.FAILED_PARSE, receipt.getStatus());
         verify(receiptRepository).save(receipt);
+    }
+
+    @Test
+    void ingest_blockedMerchant_marksFailedWithoutStoringItemsOrHtml() {
+        var receipt = processingReceipt();
+        var fetched = new SefazIngestionService.FetchedDocument(null, "<html/>", CHAVE_RS, UnidadeFederativa.RS, null);
+        var barMarket = MarketLocation.builder()
+                .cnpj("12345678000190").cnpjRoot("12345678")
+                .segment(MerchantSegment.FOOD_SERVICE).build();
+        when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+        when(sefazIngestionService.fetch(eq(QR), any())).thenReturn(fetched);
+        when(sefazIngestionService.parse(eq(fetched), any())).thenReturn(sampleParsed());
+        when(marketLocationService.resolveForIngest("12345678000190", "Mercado X", "Rua Y, 123"))
+                .thenReturn(barMarket);
+        when(merchantSupportGate.isBlocked(barMarket)).thenReturn(true);
+
+        service.ingest(receipt.getId(), QR);
+
+        assertEquals(ReceiptStatus.FAILED_PARSE, receipt.getStatus());
+        assertEquals("receipt.merchant.unsupported:", receipt.getParseErrorReason());
+        // store-nothing tombstone: market identification only
+        assertEquals("12345678000190", receipt.getCnpjEmitente());
+        assertEquals("Mercado X", receipt.getMarketName());
+        assertTrue(receipt.getItems().isEmpty());
+        assertNull(receipt.getRawHtml());
+        verify(receiptRepository).save(receipt);
+    }
+
+    @Test
+    void ingest_supportedMerchant_proceedsNormally() {
+        var receipt = processingReceipt();
+        var fetched = new SefazIngestionService.FetchedDocument(null, "<html/>", CHAVE_RS, UnidadeFederativa.RS, null);
+        var market = MarketLocation.builder()
+                .cnpj("12345678000190").cnpjRoot("12345678")
+                .segment(MerchantSegment.SUPERMARKET).build();
+        when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+        when(sefazIngestionService.fetch(eq(QR), any())).thenReturn(fetched);
+        when(sefazIngestionService.parse(eq(fetched), any())).thenReturn(sampleParsed());
+        when(marketLocationService.resolveForIngest(any(), any(), any())).thenReturn(market);
+        when(merchantSupportGate.isBlocked(market)).thenReturn(false);
+
+        service.ingest(receipt.getId(), QR);
+
+        assertEquals(ReceiptStatus.PENDING_CONFIRMATION, receipt.getStatus());
     }
 
     @Test

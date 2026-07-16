@@ -1,6 +1,7 @@
 package com.relyon.economizai.controller;
 
 import com.relyon.economizai.dto.request.MergeProductRequest;
+import com.relyon.economizai.dto.request.MerchantSupportOverrideRequest;
 import com.relyon.economizai.dto.request.SendTestNotificationRequest;
 import com.relyon.economizai.dto.request.SetProductBrandRequest;
 import com.relyon.economizai.dto.request.UpdateSubscriptionTierRequest;
@@ -11,6 +12,7 @@ import com.relyon.economizai.dto.response.CostReportResponse;
 import com.relyon.economizai.dto.response.UnmatchedReportResponse;
 import com.relyon.economizai.dto.response.AdminUserSummaryResponse;
 import com.relyon.economizai.dto.response.DuplicateProductGroupResponse;
+import com.relyon.economizai.dto.response.GreyMerchantResponse;
 import com.relyon.economizai.dto.response.MissingBrandProductResponse;
 import com.relyon.economizai.dto.response.ProductDeletionResponse;
 import com.relyon.economizai.dto.response.ProductMergeResultResponse;
@@ -25,6 +27,7 @@ import com.relyon.economizai.model.enums.CategorizationQualityTrigger;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
 import com.relyon.economizai.service.ReceiptService;
+import com.relyon.economizai.service.admin.AdminMerchantService;
 import com.relyon.economizai.service.admin.AdminNotificationService;
 import com.relyon.economizai.service.admin.AdminProductService;
 import com.relyon.economizai.service.admin.AdminReceiptService;
@@ -72,6 +75,7 @@ public class AdminController {
     private final AdminUserService adminUserService;
     private final AdminReceiptService adminReceiptService;
     private final AdminNotificationService adminNotificationService;
+    private final AdminMerchantService adminMerchantService;
     private final AdminProductService adminProductService;
     private final CategorizationQualityService categorizationQualityService;
     private final MarketLocationService marketLocationService;
@@ -180,6 +184,27 @@ public class AdminController {
     @PostMapping("/markets/classify-segments")
     public ResponseEntity<MarketLocationService.SegmentClassificationSummary> classifyMarketSegments() {
         return ResponseEntity.ok(marketLocationService.classifyPendingSegments());
+    }
+
+    /**
+     * Review queue: merchants scanned by real users but outside every supported
+     * segment (grey zone), ranked by scan volume. Their receipts are ingested
+     * for the user but held out of the collaborative index pending a verdict.
+     */
+    @GetMapping("/merchants/grey")
+    public ResponseEntity<List<GreyMerchantResponse>> greyMerchants() {
+        return ResponseEntity.ok(adminMerchantService.listGreyMerchants());
+    }
+
+    /**
+     * Verdict on a grey merchant: SUPPORTED promotes it (and backfills the index
+     * from its confirmed receipts), BLOCKED rejects future scans, null override
+     * reverts to segment-driven gating.
+     */
+    @PutMapping("/merchants/{cnpj}/support")
+    public ResponseEntity<AdminMerchantService.SupportOverrideResult> setMerchantSupport(
+            @PathVariable String cnpj, @RequestBody MerchantSupportOverrideRequest request) {
+        return ResponseEntity.ok(adminMerchantService.setSupportOverride(cnpj, request.override()));
     }
 
     /** Re-run brand extraction to fill products missing a brand (after registry edits). */

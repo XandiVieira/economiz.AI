@@ -48,8 +48,15 @@ class CnpjActivityClientHttpTest {
 
     @Test
     void unrelatedCnae_classifiesOther() {
-        var body = "{\"cnae_fiscal\":5611201,\"cnaes_secundarios\":[]}";
+        // posto de gasolina without a conveniência CNAE — outside every bucket
+        var body = "{\"cnae_fiscal\":4731800,\"cnaes_secundarios\":[]}";
         assertEquals(MerchantSegment.OTHER, clientReturning(body).classify(CNPJ));
+    }
+
+    @Test
+    void restaurantCnae_classifiesFoodService() {
+        var body = "{\"cnae_fiscal\":5611201,\"cnaes_secundarios\":[]}";
+        assertEquals(MerchantSegment.FOOD_SERVICE, clientReturning(body).classify(CNPJ));
     }
 
     @Test

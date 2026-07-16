@@ -20,7 +20,11 @@ import java.util.List;
  * enrichment, never a hard requirement on the ingestion flow.
  *
  * <p>CNAE → segment: {@code 4771*} = pharmacy, {@code 4711*}/{@code 4712*} =
- * supermarket. Checks the primary CNAE first, then the secondary list.
+ * supermarket, {@code 4721*}-{@code 4724*}/{@code 4729*} = food retail
+ * (padarias, açougues, bebidas, hortifrúti, conveniência), {@code 56*} = food
+ * service (restaurantes/bares — rejected by the support gate). A supported
+ * retail CNAE anywhere in the list (primary or secondary) wins, so a posto de
+ * gasolina whose CNPJ lists the conveniência as a secondary activity counts.
  */
 @Slf4j
 @Service
@@ -75,16 +79,17 @@ public class CnpjActivityClient {
         if (body == null) return CnpjLookup.empty();
         try {
             var json = objectMapper.readTree(body);
-            return new CnpjLookup(segmentFromCnae(parseCnaes(json)), parseIbgeCityCode(json));
+            var cnaes = parseCnaes(json);
+            return new CnpjLookup(segmentFromCnae(cnaes), parseIbgeCityCode(json), cnaes);
         } catch (Exception ex) {
             log.warn("merchant.classify.parse_failed cnpj={} {}: {}", cnpj, ex.getClass().getSimpleName(), ex.getMessage());
             return CnpjLookup.empty();
         }
     }
 
-    public record CnpjLookup(MerchantSegment segment, String ibgeCityCode) {
+    public record CnpjLookup(MerchantSegment segment, String ibgeCityCode, List<String> cnaeCodes) {
         static CnpjLookup empty() {
-            return new CnpjLookup(MerchantSegment.UNKNOWN, null);
+            return new CnpjLookup(MerchantSegment.UNKNOWN, null, List.of());
         }
     }
 
@@ -124,12 +129,25 @@ public class CnpjActivityClient {
         return digits.length() == 7 ? digits : null;
     }
 
-    /** Pure mapping (CNAE prefixes → segment), extracted for testability. */
+    private static final List<String> FOOD_RETAIL_PREFIXES =
+            List.of("4721", "4722", "4723", "4724", "4729");
+
+    /**
+     * Pure mapping (CNAE prefixes → segment), extracted for testability. Any
+     * supported retail CNAE in the list wins over food service, so a mixed
+     * CNPJ (posto + conveniência, padaria + café) stays supported.
+     */
     static MerchantSegment segmentFromCnae(List<String> cnaes) {
         if (cnaes.stream().anyMatch(code -> code.startsWith("4771"))) return MerchantSegment.PHARMACY;
         if (cnaes.stream().anyMatch(code -> code.startsWith("4711") || code.startsWith("4712"))) {
             return MerchantSegment.SUPERMARKET;
         }
+        if (cnaes.stream().anyMatch(CnpjActivityClient::isFoodRetailCnae)) return MerchantSegment.FOOD_RETAIL;
+        if (cnaes.stream().anyMatch(code -> code.startsWith("56"))) return MerchantSegment.FOOD_SERVICE;
         return cnaes.isEmpty() ? MerchantSegment.UNKNOWN : MerchantSegment.OTHER;
+    }
+
+    private static boolean isFoodRetailCnae(String code) {
+        return FOOD_RETAIL_PREFIXES.stream().anyMatch(code::startsWith);
     }
 }

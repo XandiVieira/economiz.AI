@@ -4,11 +4,14 @@ import com.relyon.economizai.config.AsyncConfig;
 import com.relyon.economizai.config.MdcContextFilter;
 import com.relyon.economizai.exception.DomainException;
 import com.relyon.economizai.exception.ReceiptParseException;
+import com.relyon.economizai.exception.UnsupportedMerchantException;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.repository.ReceiptRepository;
 import com.relyon.economizai.service.extraction.EanCatalogEnrichmentService;
+import com.relyon.economizai.service.geo.MarketLocationService;
+import com.relyon.economizai.service.geo.MerchantSupportGate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -51,6 +54,8 @@ public class ReceiptIngestionService {
     private final SefazIngestionService sefazIngestionService;
     private final TransactionTemplate transactionTemplate;
     private final EanCatalogEnrichmentService eanCatalogEnrichmentService;
+    private final MarketLocationService marketLocationService;
+    private final MerchantSupportGate merchantSupportGate;
 
     /**
      * Fetch + parse the PROCESSING receipt, then transition it. Runs on the
@@ -72,6 +77,9 @@ public class ReceiptIngestionService {
             var fetched = sefazIngestionService.fetch(qrPayload, userId);
             try {
                 var parsed = sefazIngestionService.parse(fetched, userId);
+                if (rejectUnsupportedMerchant(receiptId, parsed)) {
+                    return;
+                }
                 warmEanCatalog(parsed);
                 persistParsed(receiptId, parsed);
             } catch (ReceiptParseException ex) {
@@ -111,6 +119,36 @@ public class ReceiptIngestionService {
         } catch (RuntimeException ex) {
             log.warn("ean_catalog.enrich failed (ignored) reason={}", ex.getClass().getSimpleName());
         }
+    }
+
+    /**
+     * Merchant support gate, applied UNTRANSACTED right after parse: registers
+     * the market (first sighting) and inline-classifies its CNAE, so a
+     * food-service merchant is rejected on the very first scan. A blocked
+     * merchant leaves only a content-free tombstone — market identification and
+     * the localized reason for the FE poll, but NO items and NO raw HTML — the
+     * product deliberately stores nothing from unsupported receipts. Grey-zone
+     * merchants pass through (their index exclusion happens at confirm time).
+     */
+    private boolean rejectUnsupportedMerchant(UUID receiptId, ParsedReceipt parsed) {
+        var market = marketLocationService.resolveForIngest(
+                parsed.cnpjEmitente(), parsed.marketName(), parsed.marketAddress());
+        if (!merchantSupportGate.isBlocked(market)) {
+            return false;
+        }
+        var reason = new UnsupportedMerchantException();
+        transactionTemplate.executeWithoutResult(txStatus -> {
+            var receipt = loadIfProcessing(receiptId);
+            if (receipt == null) return;
+            receipt.setCnpjEmitente(parsed.cnpjEmitente());
+            receipt.setMarketName(parsed.marketName());
+            receipt.setParseErrorReason(reason.getMessageKey() + ":");
+            receipt.setStatus(ReceiptStatus.FAILED_PARSE);
+            receiptRepository.save(receipt);
+        });
+        log.info("ingest rejected reason=merchant_unsupported segment={} cnpj={} market='{}'",
+                market.getSegment(), parsed.cnpjEmitente(), parsed.marketName());
+        return true;
     }
 
     private void persistParsed(UUID receiptId, ParsedReceipt parsed) {

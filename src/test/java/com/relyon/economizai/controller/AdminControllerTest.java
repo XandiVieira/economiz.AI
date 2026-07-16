@@ -35,6 +35,7 @@ import com.relyon.economizai.model.enums.UnidadeFederativa;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.LocalizedMessageService;
 import com.relyon.economizai.service.ReceiptService;
+import com.relyon.economizai.service.admin.AdminMerchantService;
 import com.relyon.economizai.service.admin.AdminNotificationService;
 import com.relyon.economizai.service.admin.AdminProductService;
 import com.relyon.economizai.service.admin.AdminReceiptService;
@@ -98,6 +99,7 @@ class AdminControllerTest {
     @MockitoBean private AdminUserService adminUserService;
     @MockitoBean private AdminReceiptService adminReceiptService;
     @MockitoBean private AdminNotificationService adminNotificationService;
+    @MockitoBean private AdminMerchantService adminMerchantService;
     @MockitoBean private AdminProductService adminProductService;
     @MockitoBean private CategorizationQualityService categorizationQualityService;
     @MockitoBean private MarketLocationService marketLocationService;
@@ -471,7 +473,7 @@ class AdminControllerTest {
     @Test
     void classifyMarketSegments_returnsSummary() throws Exception {
         when(marketLocationService.classifyPendingSegments())
-                .thenReturn(new SegmentClassificationSummary(10, 3, 5, 1, 1));
+                .thenReturn(new SegmentClassificationSummary(10, 3, 4, 1, 0, 1, 1));
 
         mockMvc.perform(post("/api/v1/admin/markets/classify-segments")
                         .with(SecurityMockMvcRequestPostProcessors.user(adminUser())))

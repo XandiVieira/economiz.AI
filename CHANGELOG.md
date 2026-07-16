@@ -16,6 +16,37 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-07-16 — Restaurantes/bares rejeitados; padarias, açougues e conveniências aceitos
+
+Nova regra de estabelecimento no scan (varejo recorrente de alimentos vs.
+refeição avulsa):
+
+- **Suportados** (fluxo normal): mercados, farmácias e agora todo varejo de
+  alimentos — padarias, açougues, bebidas, hortifrútis e **lojas de
+  conveniência** (posto de gasolina com conveniência conta).
+- **Rejeitados**: restaurantes, bares e lanchonetes (CNAE 56xx). CNPJ já
+  conhecido → `POST /receipts` responde **400** com
+  `receipt.merchant.unsupported` (mensagem localizada). CNPJ novo → a nota entra
+  em PROCESSING e falha com `parseErrorReason=receipt.merchant.unsupported:` —
+  sem itens e sem rawHtml (nada da nota é armazenado).
+- **Zona cinzenta** (outros CNAEs, ex. padaria informal): a nota é processada
+  normalmente para o usuário, mas os preços ficam FORA do índice colaborativo
+  até revisão do admin (que é notificado por e-mail).
+
+Novos motivos de falha que o FE pode receber ao pollar `GET /receipts/{id}`:
+- `receipt.merchant.unsupported` — estabelecimento não suportado.
+- `receipt.contingency.pending` — nota emitida em contingência ainda não
+  disponível na SEFAZ (tentar de novo mais tarde). Antes aparecia como o
+  enganoso `no-items-found`.
+- `receipt.sefaz.rejected_qr:<código>` — SEFAZ recusou o QR (ex. 227).
+
+Admin: `GET /api/v1/admin/merchants/grey` (fila de revisão, ordenada por volume
+de scans) e `PUT /api/v1/admin/merchants/{cnpj}/support` com
+`{"override":"SUPPORTED"|"BLOCKED"|null}` — SUPPORTED retroalimenta o índice com
+as notas já confirmadas do estabelecimento.
+
+---
+
 ## 2026-07-16 — Todas as 27 UFs aceitas no scan (cadeia experimental)
 
 `POST /receipts` agora aceita nota de **qualquer estado**. Estados verificados

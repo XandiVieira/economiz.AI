@@ -1,6 +1,7 @@
 package com.relyon.economizai.model;
 
 import com.relyon.economizai.model.enums.MerchantSegment;
+import com.relyon.economizai.model.enums.MerchantSupportOverride;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -80,6 +81,19 @@ public class MarketLocation extends BaseEntity {
     @Column(name = "segment_attempts", nullable = false)
     @lombok.Builder.Default
     private int segmentAttempts = 0;
+
+    /** Raw CNAE codes (comma-separated) from the registry lookup — kept so grey-zone merchants can be reviewed without re-querying. */
+    @Column(name = "cnae_codes", columnDefinition = "TEXT")
+    private String cnaeCodes;
+
+    /** Admin verdict on a grey-zone merchant; null means "go by segment". */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "support_override", length = 20)
+    private MerchantSupportOverride supportOverride;
+
+    /** When the admin was emailed about this grey-zone merchant (dedup — one alert per CNPJ, ever). */
+    @Column(name = "gray_sighting_notified_at")
+    private LocalDateTime graySightingNotifiedAt;
 
     public boolean hasCoordinates() {
         return latitude != null && longitude != null;

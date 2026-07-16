@@ -7,6 +7,7 @@ import com.relyon.economizai.model.enums.MerchantSegment;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.repository.MarketLocationRepository;
 import com.relyon.economizai.repository.ProductRepository;
+import com.relyon.economizai.service.ContactService;
 import com.relyon.economizai.service.priceindex.PriceIndexService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -45,6 +46,7 @@ public class MarketLocationService {
     private final NominatimGeocoder geocoder;
     private final CnpjActivityClient cnpjActivityClient;
     private final ProductRepository productRepository;
+    private final ContactService contactService;
 
     // Self-reference so per-item @Transactional calls go through the Spring proxy
     // (a direct call would bypass it). Defaults to `this` for plain unit tests;
@@ -60,17 +62,41 @@ public class MarketLocationService {
     @Transactional
     public void registerMarketFromReceipt(Receipt receipt) {
         if (receipt.getCnpjEmitente() == null) return;
-        var existing = repository.findByCnpj(receipt.getCnpjEmitente());
-        if (existing.isPresent()) return;
+        register(receipt.getCnpjEmitente(), receipt.getMarketName(), receipt.getMarketAddress());
+    }
+
+    @Transactional
+    public MarketLocation register(String cnpj, String name, String address) {
+        var existing = repository.findByCnpj(cnpj);
+        if (existing.isPresent()) return existing.get();
         var location = MarketLocation.builder()
-                .cnpj(receipt.getCnpjEmitente())
-                .cnpjRoot(PriceIndexService.cnpjRoot(receipt.getCnpjEmitente()))
-                .name(receipt.getMarketName())
-                .address(receipt.getMarketAddress())
+                .cnpj(cnpj)
+                .cnpjRoot(PriceIndexService.cnpjRoot(cnpj))
+                .name(name)
+                .address(address)
                 .build();
-        repository.save(location);
-        log.info("market_location.registered cnpj={} name='{}'",
-                receipt.getCnpjEmitente(), receipt.getMarketName());
+        var saved = repository.save(location);
+        log.info("market_location.registered cnpj={} name='{}'", cnpj, name);
+        return saved;
+    }
+
+    /**
+     * Ingest-time resolution for the merchant support gate: find-or-register the
+     * market and, for a never-classified one, attempt the CNAE lookup right away
+     * so a food-service merchant is rejected on its FIRST scan, not its second.
+     * Called UNTRANSACTED from the ingestion pipeline (the lookup is an outbound
+     * HTTP call); a lookup failure just leaves the segment UNKNOWN — the
+     * scheduled classifier retries later and ingestion carries on.
+     */
+    public MarketLocation resolveForIngest(String cnpj, String name, String address) {
+        if (cnpj == null || cnpj.isBlank()) return null;
+        var market = self.register(cnpj, name, address);
+        if (market.getSegment() == MerchantSegment.UNKNOWN
+                && market.getSegmentAttempts() < MAX_SEGMENT_ATTEMPTS
+                && cnpjActivityClient.isEnabled()) {
+            self.classifySegmentOne(market);
+        }
+        return market;
     }
 
     @Scheduled(fixedDelayString = "${economizai.geo.geocode-interval-ms:600000}",
@@ -129,7 +155,7 @@ public class MarketLocationService {
      * admin-triggered backfill entry point. Returns a per-segment summary.
      */
     public SegmentClassificationSummary classifyPendingSegments() {
-        if (!cnpjActivityClient.isEnabled()) return new SegmentClassificationSummary(0, 0, 0, 0, 0);
+        if (!cnpjActivityClient.isEnabled()) return new SegmentClassificationSummary(0, 0, 0, 0, 0, 0, 0);
         var pending = new ArrayList<>(repository.findAllBySegmentAndSegmentAttemptsLessThan(
                 MerchantSegment.UNKNOWN, MAX_SEGMENT_ATTEMPTS));
         // Backfill: rows classified before we captured the IBGE code. Bounded by
@@ -137,10 +163,12 @@ public class MarketLocationService {
         // returns the code can't be polled forever.
         pending.addAll(repository.findAllByIbgeCityCodeIsNullAndSegmentNotAndSegmentAttemptsLessThan(
                 MerchantSegment.UNKNOWN, MAX_SEGMENT_ATTEMPTS + MAX_IBGE_BACKFILL_ATTEMPTS));
-        if (pending.isEmpty()) return new SegmentClassificationSummary(0, 0, 0, 0, 0);
+        if (pending.isEmpty()) return new SegmentClassificationSummary(0, 0, 0, 0, 0, 0, 0);
         log.info("merchant.classify.batch.start pending={}", pending.size());
         var pharmacy = 0;
         var supermarket = 0;
+        var foodRetail = 0;
+        var foodService = 0;
         var other = 0;
         var unknown = 0;
         for (var market : pending) {
@@ -148,17 +176,20 @@ public class MarketLocationService {
             switch (market.getSegment()) {
                 case PHARMACY -> pharmacy++;
                 case SUPERMARKET -> supermarket++;
+                case FOOD_RETAIL -> foodRetail++;
+                case FOOD_SERVICE -> foodService++;
                 case OTHER -> other++;
                 case UNKNOWN -> unknown++;
             }
         }
-        log.info("merchant.classify.batch.done attempted={} pharmacy={} supermarket={} other={} stillUnknown={}",
-                pending.size(), pharmacy, supermarket, other, unknown);
-        return new SegmentClassificationSummary(pending.size(), pharmacy, supermarket, other, unknown);
+        log.info("merchant.classify.batch.done attempted={} pharmacy={} supermarket={} foodRetail={} foodService={} other={} stillUnknown={}",
+                pending.size(), pharmacy, supermarket, foodRetail, foodService, other, unknown);
+        return new SegmentClassificationSummary(pending.size(), pharmacy, supermarket, foodRetail, foodService,
+                other, unknown);
     }
 
-    public record SegmentClassificationSummary(int attempted, int pharmacy, int supermarket,
-                                               int other, int stillUnknown) {}
+    public record SegmentClassificationSummary(int attempted, int pharmacy, int supermarket, int foodRetail,
+                                               int foodService, int other, int stillUnknown) {}
 
     @Transactional
     public void classifySegmentOne(MarketLocation market) {
@@ -168,15 +199,54 @@ public class MarketLocationService {
         if (segment != MerchantSegment.UNKNOWN) {
             market.setSegment(segment);
             market.setSegmentClassifiedAt(LocalDateTime.now());
+            market.setCnaeCodes(String.join(",", lookup.cnaeCodes()));
             log.info("merchant.classify.ok cnpj={} segment={} ibgeCityCode={} name='{}'",
                     market.getCnpj(), segment, lookup.ibgeCityCode(), market.getName());
         }
         if (market.getIbgeCityCode() == null && lookup.ibgeCityCode() != null) {
             market.setIbgeCityCode(lookup.ibgeCityCode());
         }
+        if (segment == MerchantSegment.OTHER && market.getGraySightingNotifiedAt() == null) {
+            market.setGraySightingNotifiedAt(LocalDateTime.now());
+            notifyGraySighting(market);
+        }
         repository.save(market);
         if (segment == MerchantSegment.PHARMACY) {
             backfillPharmacyProducts(market.getCnpj());
+        }
+    }
+
+    /**
+     * A merchant classified outside every known segment (grey zone — maybe an
+     * informal padaria worth supporting, maybe not) needs a human decision: its
+     * receipts are ingested for the user but held out of the collaborative index
+     * until the admin promotes or blocks it. One alert per CNPJ, ever.
+     */
+    private void notifyGraySighting(MarketLocation market) {
+        log.warn("merchant.gray_sighting cnpj={} name='{}' cnaes={}",
+                market.getCnpj(), market.getName(), market.getCnaeCodes());
+        try {
+            contactService.notifyAdmin(
+                    "novo estabelecimento fora dos segmentos suportados: " + market.getName(),
+                    """
+                    Um usuário escaneou uma nota de um estabelecimento que não é mercado, \
+                    farmácia nem varejo de alimentos. A nota FOI processada para o usuário, \
+                    mas os preços estão FORA do índice colaborativo até você decidir.
+
+                    - CNPJ: %s
+                    - Nome: %s
+                    - CNAEs: %s
+                    - Cidade/UF: %s/%s
+
+                    Para decidir: GET /api/v1/admin/merchants/grey lista os pendentes; \
+                    PUT /api/v1/admin/merchants/{cnpj}/support com {"override":"SUPPORTED"} \
+                    promove (e retroalimenta o índice) ou {"override":"BLOCKED"} passa a \
+                    rejeitar novas notas.
+                    """.formatted(market.getCnpj(), market.getName(), market.getCnaeCodes(),
+                            market.getCity(), market.getState()));
+        } catch (RuntimeException ex) {
+            log.warn("merchant.gray_sighting.notify_failed cnpj={} reason={}",
+                    market.getCnpj(), ex.getClass().getSimpleName());
         }
     }
 

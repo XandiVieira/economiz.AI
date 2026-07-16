@@ -944,6 +944,38 @@ return Swagger UI.
 **Tests: 78 → 110 passing.**
 - New: `DescriptionNormalizerTest` (5), `CanonicalizationServiceTest` (6), `ProductServiceTest` (6), `ProductControllerTest` (7), `InsightsControllerTest` (4), `InsightsRepositoryTest` (4, integration `@DataJpaTest`).
 
+### Session (2026-07-16b) — Merchant support gate (retail vs. food service)
+
+Triggered by a real scan: a bar's NFC-e failed with the misleading
+`no-items-found` — it was actually a **contingency-issued** note (tpEmis=9) the
+SVRS portal rejected with cStat 227. Two changes shipped:
+
+**Merchant support gate** — product rule: recurring food/essentials RETAIL is
+in, one-off food SERVICE is out.
+- CNAE → segment map extended: `FOOD_RETAIL` (4721-4724, 4729 — padarias,
+  açougues, bebidas, hortifrúti, conveniência) and `FOOD_SERVICE` (56xx).
+  Any supported retail CNAE (primary or secondary) wins, so posto+conveniência
+  counts.
+- `MerchantSupportGate` (single decision point): SUPPORTED (retail segments or
+  admin override) / BLOCKED (food service or admin override) / GREY (OTHER,
+  UNKNOWN). Blocked: known CNPJ → 400 at submit, store nothing; new CNPJ →
+  inline CNAE classify during ingest, FAILED_PARSE tombstone without items or
+  rawHtml. Grey: full ingest for the user, but PriceObservations held out of
+  the collaborative index until reviewed; admin emailed once per CNPJ; queue at
+  `GET /admin/merchants/grey`, verdict via `PUT /admin/merchants/{cnpj}/support`
+  (SUPPORTED backfills the index from already-confirmed receipts).
+- Wrong-CNAE restaurants slipping into grey are acceptable — the user picks
+  which items to persist at confirm, and the review queue catches the merchant.
+
+**SEFAZ error-page classification** — `ResponsiveDanfeParser` now detects the
+SVRS `alert-danger` rejection page: contingency chave → `receipt.contingency.pending`
+("tente mais tarde"); otherwise `receipt.sefaz.rejected_qr:<cStat>`. Real 227
+fixture saved under `fixtures/sefaz/rs/`.
+
+**Future (user request):** eventually support gas-station FUEL purchases
+themselves (recurring spend, price-comparable per liter) — postos today
+classify OTHER (grey) unless they carry a conveniência CNAE.
+
 ### Session (2026-07-16) — Prod-readiness hardening + experimental all-states rollout
 
 **Contact/beta parity:** optional `phone` on `POST /contact` (mirrors beta-signup).

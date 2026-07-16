@@ -10,6 +10,19 @@ mirror entries here.
 
 ---
 
+## Merchant support gate — two scale follow-ups (2026-07-16)
+- **Now**: grey-merchant promotion (`PUT /admin/merchants/{cnpj}/support` →
+  SUPPORTED) backfills the price index from ALL of the merchant's confirmed
+  receipts in one synchronous transaction.
+- **Why OK for dev**: a grey merchant has at most a handful of receipts today.
+- **Before prod/scale**: page the backfill (or push it to the async pool) once a
+  merchant can have hundreds of confirmed receipts — the admin request would
+  otherwise hold a long transaction.
+- **Also**: when CNAE classification is disabled (`economizai.merchant.classify.enabled=false`),
+  the index gate FAILS OPEN for unclassified merchants (deliberate, so dev
+  environments aren't index-starved). Prod must keep classification enabled or
+  every unclassified merchant contributes unreviewed. Effort: small.
+
 ## Paid-API cost caps — in place, with two known follow-ups (2026-07-09)
 - **Now**: `PaidApiGuardService` meters every paid external call — per-user daily caps
   (`economizai.paid-api.*`: Infosimples 20/day, captcha 60/day), an Infosimples circuit

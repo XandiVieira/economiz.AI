@@ -335,12 +335,31 @@ with `parseErrorReason=receipt.state.experimental_failed:<UF>` and a localized
 nisso" in `parseErrorMessage` — render that; the team is auto-notified with
 the evidence needed to add support.
 
+### Merchant support — recurring food retail only
+
+Since 2026-07-16 the product gates by establishment type (from the CNPJ's CNAE):
+
+- **Supported**: supermercados/minimercados, farmácias, and food retail —
+  padarias, açougues, bebidas, hortifrútis, lojas de conveniência (a posto de
+  gasolina whose CNPJ lists the conveniência counts).
+- **Blocked**: restaurantes, bares, lanchonetes (CNAE 56xx). Known CNPJ →
+  submit returns **400 `receipt.merchant.unsupported`**; first-ever scan →
+  the receipt fails during processing with
+  `parseErrorReason=receipt.merchant.unsupported:` and stores **no items and
+  no rawHtml** (only the market name/CNPJ so the message makes sense).
+- **Grey zone** (any other CNAE, e.g. an informal padaria): processed normally
+  for the user, but its prices stay out of the collaborative index until an
+  admin reviews the merchant (admin is notified automatically).
+
 ### Error paths
 
 | Response | When |
 |---|---|
 | 400 `receipt.qr.invalid` | Couldn't extract a 44-digit chave from the input |
 | 400 `receipt.state.unsupported` | Only if the experimental chain is disabled server-side (kill-switch) |
+| 400 `receipt.merchant.unsupported` | Known restaurant/bar CNPJ (or admin-blocked). Also arrives via polling for first-time merchants. |
+| — `receipt.contingency.pending` | Via polling (`FAILED_PARSE`): the note was issued in contingency (printed "EMITIDA EM CONTINGÊNCIA") and SEFAZ doesn't have it yet — user should rescan later. |
+| — `receipt.sefaz.rejected_qr:<code>` | Via polling (`FAILED_PARSE`): SEFAZ portal refused the QR with a numbered rejection (e.g. 227 DigestValue mismatch). |
 | — `receipt.state.experimental_failed` | Via polling (`FAILED_PARSE`): experimental state, every fallback layer failed. Team auto-notified. |
 | 503 `receipt.captcha.unavailable` | State requires CAPTCHA but solver isn't enabled (shouldn't happen in prod) |
 | 502 `receipt.captcha.failed` | CAPTCHA solver ran but failed after retries (e.g. balance exhausted) |
@@ -1079,6 +1098,8 @@ GET    /api/v1/admin/products/recategorize        → RecategorizeReportResponse
 POST   /api/v1/admin/products/recategorize?includeMl=false → RecategorizeResultResponse (apply)
 POST   /api/v1/admin/products/refresh-brands       → BrandBackfillResponse (fill missing brands)
 POST   /api/v1/admin/markets/classify-segments     → SegmentClassificationSummary (CNAE-classify pending markets)
+GET    /api/v1/admin/merchants/grey                → List<GreyMerchantResponse> (grey-zone review queue, ranked by scan volume)
+PUT    /api/v1/admin/merchants/{cnpj}/support      → SupportOverrideResult — body {"override":"SUPPORTED"|"BLOCKED"|null}; SUPPORTED backfills the price index from the merchant's confirmed receipts
 DELETE /api/v1/admin/products/{id}?force=false     → 200 ProductDeletionResponse (prune test/junk catalog rows)
 GET    /api/v1/admin/costs?days=30                 → CostReportResponse (paid-API spend: total + by service + by state + today vs budget)
 GET    /api/v1/admin/state-coverage                → StateCoverageResponse (per-UF: VERIFIED/EXPERIMENTAL + per-layer success/failure telemetry from real scans)

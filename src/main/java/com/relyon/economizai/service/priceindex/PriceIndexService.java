@@ -12,6 +12,7 @@ import com.relyon.economizai.service.privacy.LogMasker;
 import com.relyon.economizai.repository.PriceObservationRepository;
 import com.relyon.economizai.service.geo.DistanceCalculator;
 import com.relyon.economizai.service.geo.MarketLocationService;
+import com.relyon.economizai.service.geo.MerchantSupportGate;
 import com.relyon.economizai.service.notifications.NotificationRuleEngine;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -60,6 +61,7 @@ public class PriceIndexService {
     private final PriceObservationAuditRepository auditRepository;
     private final CollaborativeProperties properties;
     private final MarketLocationService marketLocationService;
+    private final MerchantSupportGate merchantSupportGate;
     private final NotificationRuleEngine notificationRuleEngine;
 
     @Transactional
@@ -106,6 +108,15 @@ public class PriceIndexService {
                         receipt.getChaveAcesso(), receipt.getHousehold().getId())) {
             log.warn("price_index.write.skipped reason=duplicate_chave_other_household receipt={} chave={}",
                     receipt.getId(), LogMasker.chave(receipt.getChaveAcesso()));
+            return true;
+        }
+        var market = marketLocationService.findByCnpjs(List.of(receipt.getCnpjEmitente()))
+                .get(receipt.getCnpjEmitente());
+        if (!merchantSupportGate.contributesToIndex(market)) {
+            // Grey-zone merchant: the receipt stays in the user's history, but its
+            // prices wait for admin review before feeding the shared index.
+            log.info("price_index.write.skipped reason=merchant_not_supported segment={} receipt={}",
+                    market == null ? "UNREGISTERED" : market.getSegment(), receipt.getId());
             return true;
         }
         return false;
