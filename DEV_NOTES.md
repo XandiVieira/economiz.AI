@@ -219,6 +219,18 @@ The report works identically in SHADOW and ON (computed purely from
   as a query param — a guess). Charged per solved token (~R$0.03) even when the portal
   rejects it, hence a single attempt, then Infosimples. Failure evidence (captcha type,
   sitekey, page snippet, HTTP status) rides the telemetry + admin email.
+- **RJ is parser-ready, blocked only by Imperva** (2026-07-16): a real RJ DANFE
+  (`consultadfe.fazenda.rj.gov.br`) renders the SAME responsive-DANFE layout the shared
+  parser handles — proven by `RealRioDeJaneiroFixtureTest` on a real captured fixture. RJ's
+  portal sits behind an Imperva/Incapsula anti-bot **JS challenge** our JS-less RestClient
+  can't pass, so the scrape never reaches the DANFE (falls to Infosimples). To promote RJ to
+  a verified adapter: add a headless-browser step (or a JS-challenge-solving fetch) to obtain
+  the Imperva cookie — then reuse SvrsSharedPortalAdapter/ResponsiveDanfeParser as-is, NO
+  parser work. Tracked; not built (needs the headless-browser infra decision).
+- **MG needs captcha + JSF postback** (`portalsped.fazenda.mg.gov.br`): PrimeFaces/ViewState
+  portal, reCAPTCHA, DANFE delivered via an AJAX postback — needs a real post-solve fixture
+  (DevTools capture) before an adapter can be built without guessing component IDs. Infosimples
+  covers it meanwhile.
 - **Watch before prod scale**: captcha-walled portals (AC, RN, TO…) that reject the guessed
   resubmit burn one solve + one Infosimples query per nota — if such a state gets popular,
   build its adapter (the telemetry tells you which).
