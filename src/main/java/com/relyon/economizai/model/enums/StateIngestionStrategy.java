@@ -10,5 +10,12 @@ public enum StateIngestionStrategy {
     QR_PORTAL,
 
     /** Paid Infosimples by-chave lookup (works for every UF). */
-    INFOSIMPLES
+    INFOSIMPLES,
+
+    /**
+     * A state's dedicated/verified adapter (SVRS-shared, MS, SC, …). Only its
+     * PARSE_FAILED outcomes are recorded — the regression signal that a
+     * previously-working portal changed its HTML format.
+     */
+    VERIFIED_ADAPTER
 }

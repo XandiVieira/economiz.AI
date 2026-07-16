@@ -17,6 +17,9 @@ public interface StateIngestionAttemptRepository extends JpaRepository<StateInge
 
     boolean existsByUfAndAdminNotifiedTrueAndCreatedAtGreaterThanEqual(UnidadeFederativa uf, OffsetDateTime since);
 
+    long countByUfAndStrategyAndOutcomeAndCreatedAtGreaterThanEqual(
+            UnidadeFederativa uf, StateIngestionStrategy strategy, StateIngestionOutcome outcome, OffsetDateTime since);
+
     @Query("""
             select attempt.uf as uf, attempt.strategy as strategy, attempt.outcome as outcome,
                    count(attempt) as attempts, max(attempt.createdAt) as lastAttemptAt

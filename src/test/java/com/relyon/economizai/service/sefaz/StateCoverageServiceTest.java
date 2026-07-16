@@ -37,7 +37,13 @@ class StateCoverageServiceTest {
     @Mock private StateIngestionAttemptRepository repository;
     @Mock private ContactService contactService;
 
-    @InjectMocks private StateCoverageService service;
+    private StateCoverageService service;
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        // min-failures=5, window-hours=6 (mirrors the config defaults)
+        service = new StateCoverageService(repository, contactService, 5, 6);
+    }
 
     @Test
     void recordSuccess_firstEverForUf_alertsAdmin() {
@@ -130,6 +136,57 @@ class StateCoverageServiceTest {
         assertEquals("VERIFIED", riograndedosul.mode());
         assertEquals(0, riograndedosul.attempts());
         assertNull(riograndedosul.lastAttemptAt());
+    }
+
+    @Test
+    void verifiedParseFailure_belowThreshold_recordsButNoAlert() {
+        when(repository.countByUfAndStrategyAndOutcomeAndCreatedAtGreaterThanEqual(
+                eq(UnidadeFederativa.RS), eq(StateIngestionStrategy.VERIFIED_ADAPTER),
+                eq(StateIngestionOutcome.PARSE_FAILED), any())).thenReturn(3L);
+
+        service.recordVerifiedParseFailure(UnidadeFederativa.RS, "43xx...", "https://sefaz.rs.gov.br/x",
+                "receipt.parse.failed:no-items-found", "<html>new layout</html>");
+
+        verify(repository).save(any());
+        verify(contactService, never()).notifyAdmin(anyString(), anyString());
+    }
+
+    @Test
+    void verifiedParseFailure_atThreshold_alertsAdminWithHtml() {
+        when(repository.countByUfAndStrategyAndOutcomeAndCreatedAtGreaterThanEqual(
+                eq(UnidadeFederativa.RS), eq(StateIngestionStrategy.VERIFIED_ADAPTER),
+                eq(StateIngestionOutcome.PARSE_FAILED), any())).thenReturn(5L);
+        when(repository.existsByUfAndAdminNotifiedTrueAndCreatedAtGreaterThanEqual(eq(UnidadeFederativa.RS), any()))
+                .thenReturn(false);
+
+        service.recordVerifiedParseFailure(UnidadeFederativa.RS, "43sample", "https://sefaz.rs.gov.br/x",
+                "receipt.parse.failed:no-items-found", "<html>PORTAL CHANGED</html>");
+
+        var bodyCaptor = ArgumentCaptor.forClass(String.class);
+        verify(contactService).notifyAdmin(contains("RS"), bodyCaptor.capture());
+        assertTrue(bodyCaptor.getValue().contains("PORTAL CHANGED"));
+        assertTrue(bodyCaptor.getValue().contains("43sample"));
+    }
+
+    @Test
+    void verifiedParseFailure_atThresholdButAlreadyAlertedToday_staysSilent() {
+        when(repository.countByUfAndStrategyAndOutcomeAndCreatedAtGreaterThanEqual(
+                eq(UnidadeFederativa.RS), eq(StateIngestionStrategy.VERIFIED_ADAPTER),
+                eq(StateIngestionOutcome.PARSE_FAILED), any())).thenReturn(9L);
+        when(repository.existsByUfAndAdminNotifiedTrueAndCreatedAtGreaterThanEqual(eq(UnidadeFederativa.RS), any()))
+                .thenReturn(true);
+
+        service.recordVerifiedParseFailure(UnidadeFederativa.RS, "43sample", null,
+                "receipt.parse.failed:no-items-found", "<html>x</html>");
+
+        verify(contactService, never()).notifyAdmin(anyString(), anyString());
+    }
+
+    @Test
+    void verifiedParseFailure_neverPropagates() {
+        doThrow(new RuntimeException("db down")).when(repository).save(any());
+        assertDoesNotThrow(() -> service.recordVerifiedParseFailure(
+                UnidadeFederativa.RS, "43x", null, "reason", "<html>x</html>"));
     }
 
     @Test

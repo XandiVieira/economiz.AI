@@ -115,6 +115,14 @@ economizai:
         enabled: ${SEFAZ_EXPERIMENTAL_ENABLED:true}
         allowed-host-suffixes: ${SEFAZ_EXPERIMENTAL_ALLOWED_HOSTS:gov.br}
         max-attempts: ${SEFAZ_EXPERIMENTAL_MAX_ATTEMPTS:3}
+      # Regression watch for VERIFIED states: when a portal we already support
+      # changes its DANFE format, its parser starts failing. min-failures parse
+      # failures within window-hours on the same UF triggers ONE admin alert
+      # (per UF per day) carrying the raw HTML to fix the adapter. Kept modest so
+      # a burst of aged-out/bad scans doesn't false-alarm; tune per real traffic.
+      regression:
+        min-failures: ${SEFAZ_REGRESSION_MIN_FAILURES:5}
+        window-hours: ${SEFAZ_REGRESSION_WINDOW_HOURS:6}
       svrs:
         # UFs whose NFC-e consult page renders the shared responsive-DANFE
         # layout the adapter parses. RS proven since day one; PR verified

@@ -293,7 +293,14 @@ public class SefazIngestionService {
             }
             return parsed;
         } catch (ReceiptParseException parseEx) {
-            if (!experimental) throw parseEx;
+            if (!experimental) {
+                // A verified state's parser failed on real HTML — the regression
+                // signature (portal changed its DANFE format). Record it; a burst
+                // of these alerts the admin with the HTML to fix the adapter.
+                stateCoverage.recordVerifiedParseFailure(fetched.uf(), fetched.chave(), fetched.sourceUrl(),
+                        parseEx.getMessageKey() + ":" + String.join(",", parseEx.getArguments()), fetched.html());
+                throw parseEx;
+            }
             stateCoverage.recordFailure(fetched.uf(), StateIngestionStrategy.QR_PORTAL,
                     StateIngestionOutcome.PARSE_FAILED, qrHost, describe(parseEx));
             var infosimplesNote = "desabilitado";

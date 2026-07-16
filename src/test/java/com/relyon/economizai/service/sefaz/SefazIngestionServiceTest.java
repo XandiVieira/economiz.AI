@@ -498,6 +498,34 @@ class SefazIngestionServiceTest {
     }
 
     @Test
+    void parse_verifiedStateParseFailure_recordsRegressionAndRethrows() {
+        var rsAdapter = mockAdapterFor(UnidadeFederativa.RS);
+        var parseEx = new ReceiptParseException("no-items-found");
+        when(rsAdapter.parseHtml(anyString(), anyString(), any())).thenThrow(parseEx);
+        var service = new SefazIngestionService(List.of(rsAdapter), Optional.empty(), paidApiGuard, stateCoverage);
+        var fetched = new FetchedDocument(rsAdapter, "<html>changed layout</html>", CHAVE_RS,
+                UnidadeFederativa.RS, "https://sefaz.rs.gov.br/x");
+
+        var thrown = assertThrows(ReceiptParseException.class, () -> service.parse(fetched));
+
+        assertSame(parseEx, thrown);
+        verify(stateCoverage).recordVerifiedParseFailure(eq(UnidadeFederativa.RS), eq(CHAVE_RS),
+                eq("https://sefaz.rs.gov.br/x"), anyString(), eq("<html>changed layout</html>"));
+    }
+
+    @Test
+    void parse_verifiedStateSuccess_recordsNoRegression() {
+        var rsAdapter = mockAdapterFor(UnidadeFederativa.RS);
+        when(rsAdapter.parseHtml(anyString(), anyString(), any())).thenReturn(sampleParsed());
+        var service = new SefazIngestionService(List.of(rsAdapter), Optional.empty(), paidApiGuard, stateCoverage);
+        var fetched = new FetchedDocument(rsAdapter, "<html>ok</html>", CHAVE_RS, UnidadeFederativa.RS, null);
+
+        service.parse(fetched);
+
+        verify(stateCoverage, never()).recordVerifiedParseFailure(any(), any(), any(), any(), any());
+    }
+
+    @Test
     void parse_experimentalSuccess_recordsQrPortalTelemetry() {
         var expected = sampleParsed();
         var generic = new GenericQrPortalAdapter(RestClient.builder(), NO_CAPTCHA, 1000, "test", true, 1, 0, "gov.br") {

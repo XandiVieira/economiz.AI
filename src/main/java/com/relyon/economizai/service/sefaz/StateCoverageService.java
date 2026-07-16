@@ -9,8 +9,8 @@ import com.relyon.economizai.model.enums.StateIngestionStrategy;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
 import com.relyon.economizai.repository.StateIngestionAttemptRepository;
 import com.relyon.economizai.service.ContactService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.OffsetDateTime;
@@ -31,13 +31,18 @@ import java.util.regex.Pattern;
  * fixture from the receipt's rawHtml, promote the UF to a verified adapter)
  * and total chain failure (build support; the email carries the evidence).
  *
+ * <p>Also watches VERIFIED states for REGRESSION: a portal we already support
+ * can change its HTML format and silently start failing. When a verified UF's
+ * parser fails on enough distinct receipts in a short window, the admin is
+ * alerted with the raw HTML so the adapter can be fixed (see
+ * {@link #recordVerifiedParseFailure}).
+ *
  * <p>All methods are best-effort: telemetry or an alert must never break an
  * otherwise-recoverable ingest. Failure alerts are deduped to one per UF per
  * day (UTC) via the {@code admin_notified} flag on the EXHAUSTED row.
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class StateCoverageService {
 
     private static final int DETAIL_MAX_CHARS = 2000;
@@ -47,6 +52,19 @@ public class StateCoverageService {
 
     private final StateIngestionAttemptRepository repository;
     private final ContactService contactService;
+    private final int regressionMinFailures;
+    private final long regressionWindowHours;
+
+    public StateCoverageService(
+            StateIngestionAttemptRepository repository,
+            ContactService contactService,
+            @Value("${economizai.ingestion.sefaz.regression.min-failures:5}") int regressionMinFailures,
+            @Value("${economizai.ingestion.sefaz.regression.window-hours:6}") long regressionWindowHours) {
+        this.repository = repository;
+        this.contactService = contactService;
+        this.regressionMinFailures = regressionMinFailures;
+        this.regressionWindowHours = regressionWindowHours;
+    }
 
     /** Records a successful layer; the first-ever success for the UF alerts the admin. */
     public void recordSuccess(UnidadeFederativa uf, StateIngestionStrategy strategy, String qrHost) {
@@ -80,6 +98,51 @@ public class StateCoverageService {
             log.info("state_coverage.failure uf={} strategy={} outcome={}", uf, strategy, outcome);
         } catch (RuntimeException ex) {
             log.warn("state_coverage.record_failed uf={} reason={}", uf, ex.getClass().getSimpleName());
+        }
+    }
+
+    /**
+     * A VERIFIED state's parser failed on a fetched DANFE — the signature of a
+     * portal that changed its HTML format. Records the failure, and once enough
+     * DISTINCT-receipt failures pile up in the regression window (default 5 in
+     * 6h) alerts the admin ONCE per UF per day with the raw HTML so the adapter
+     * can be fixed. A single parse failure is normal noise (aged-out nota, bad
+     * scan); a burst on a state we already support is the real signal.
+     */
+    public void recordVerifiedParseFailure(UnidadeFederativa uf, String chave, String sourceUrl,
+                                           String reason, String htmlSnippet) {
+        try {
+            var detail = reason + (htmlSnippet == null ? "" : "\n---\n" + truncate(htmlSnippet, SNIPPET_MAX_CHARS));
+            persist(uf, StateIngestionStrategy.VERIFIED_ADAPTER, StateIngestionOutcome.PARSE_FAILED,
+                    hostOf(sourceUrl), truncate(detail, DETAIL_MAX_CHARS), false);
+            var windowStart = OffsetDateTime.now(ZoneOffset.UTC).minusHours(regressionWindowHours);
+            var recentFailures = repository.countByUfAndStrategyAndOutcomeAndCreatedAtGreaterThanEqual(
+                    uf, StateIngestionStrategy.VERIFIED_ADAPTER, StateIngestionOutcome.PARSE_FAILED, windowStart);
+            log.warn("state_coverage.verified_parse_failed uf={} recent={}/{} reason={}",
+                    uf, recentFailures, regressionMinFailures, reason);
+            if (recentFailures < regressionMinFailures) return;
+            if (repository.existsByUfAndAdminNotifiedTrueAndCreatedAtGreaterThanEqual(uf, startOfTodayUtc())) return;
+            persist(uf, StateIngestionStrategy.VERIFIED_ADAPTER, StateIngestionOutcome.PARSE_FAILED,
+                    hostOf(sourceUrl), "regression alert marker", true);
+            contactService.notifyAdmin(
+                    "REGRESSÃO de portal: " + uf + " parou de parsear",
+                    """
+                    O adapter VERIFICADO de %s falhou ao parsear %d+ notas nas últimas %dh. \
+                    Provavelmente o portal mudou o layout do DANFE e o parser precisa de ajuste.
+
+                    - chave (amostra): %s
+                    - URL: %s
+                    - Motivo do parser: %s
+                    - Ação: atualize o adapter/parser da UF (ou crie um novo) e regrave a fixture \
+                    em src/test/resources/fixtures/sefaz/%s/ com este HTML.
+
+                    Primeiros %d chars do HTML que não parseou mais (CPF já removido):
+                    %s
+                    """.formatted(uf, regressionMinFailures, regressionWindowHours, chave,
+                            sourceUrl == null ? "(sem URL)" : sourceUrl, reason, uf.name().toLowerCase(),
+                            SNIPPET_MAX_CHARS, htmlSnippet == null ? "(sem HTML)" : truncate(htmlSnippet, SNIPPET_MAX_CHARS)));
+        } catch (RuntimeException ex) {
+            log.warn("state_coverage.verified_regression_failed uf={} reason={}", uf, ex.getClass().getSimpleName());
         }
     }
 
