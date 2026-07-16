@@ -2,11 +2,14 @@ package com.relyon.economizai.service.auth;
 
 import com.relyon.economizai.exception.InvalidPhoneNumberException;
 import com.relyon.economizai.exception.InvalidPhoneVerificationException;
+import com.relyon.economizai.exception.PaidApiQuotaExceededException;
 import com.relyon.economizai.model.PhoneVerificationToken;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.PaidApiService;
 import com.relyon.economizai.repository.PhoneVerificationTokenRepository;
 import com.relyon.economizai.repository.UserRepository;
 import com.relyon.economizai.service.notifications.twilio.TwilioMessageClient;
+import com.relyon.economizai.service.paidapi.PaidApiGuardService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -38,13 +42,15 @@ class PhoneVerificationServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private PhoneVerificationTokenRepository tokenRepository;
     @Mock private TwilioMessageClient twilioMessageClient;
+    @Mock private PaidApiGuardService paidApiGuardService;
 
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private PhoneVerificationService service;
 
     @BeforeEach
     void setUp() {
-        service = new PhoneVerificationService(userRepository, tokenRepository, passwordEncoder, twilioMessageClient);
+        service = new PhoneVerificationService(userRepository, tokenRepository, passwordEncoder,
+                twilioMessageClient, paidApiGuardService, true);
     }
 
     private User user() {
@@ -74,13 +80,41 @@ class PhoneVerificationServiceTest {
     }
 
     @Test
-    void setPhone_sendsViaTwilioWhenConfigured() {
+    void setPhone_sendsViaTwilioWhenConfiguredAndRecordsPaidCall() {
         var user = user();
         when(twilioMessageClient.isConfigured(false)).thenReturn(true);
 
         service.setPhoneAndSendOtp(user, "+5551999999999");
 
         verify(twilioMessageClient).sendSms(eq("+5551999999999"), anyString());
+        verify(paidApiGuardService).assertWithinDailyCap(user.getId(), PaidApiService.TWILIO_MESSAGE);
+        verify(paidApiGuardService).recordSuccess(user.getId(), PaidApiService.TWILIO_MESSAGE, null, "twilio");
+    }
+
+    @Test
+    void setPhone_smsQuotaExceeded_rejectsBeforePersistingAnything() {
+        var user = user();
+        when(twilioMessageClient.isConfigured(false)).thenReturn(true);
+        doThrow(new PaidApiQuotaExceededException(PaidApiService.TWILIO_MESSAGE.name()))
+                .when(paidApiGuardService).assertWithinDailyCap(user.getId(), PaidApiService.TWILIO_MESSAGE);
+
+        var thrown = assertThrows(PaidApiQuotaExceededException.class,
+                () -> service.setPhoneAndSendOtp(user, "+5551999999999"));
+
+        assertEquals("phone.otp.quota_exceeded", thrown.getMessageKey());
+        verify(userRepository, never()).save(any());
+        verify(tokenRepository, never()).save(any());
+        verify(twilioMessageClient, never()).sendSms(anyString(), anyString());
+    }
+
+    @Test
+    void setPhone_quotaNotCheckedWhenTwilioNotConfigured() {
+        var user = user();
+        when(twilioMessageClient.isConfigured(false)).thenReturn(false);
+
+        service.setPhoneAndSendOtp(user, "+5551999999999");
+
+        verify(paidApiGuardService, never()).assertWithinDailyCap(any(), any());
     }
 
     @Test

@@ -172,6 +172,12 @@ economizai:
     infosimples-failure-threshold: ${INFOSIMPLES_BREAKER_THRESHOLD:5}
     breaker-window-seconds: ${INFOSIMPLES_BREAKER_WINDOW_S:600}
     breaker-cooldown-seconds: ${INFOSIMPLES_BREAKER_COOLDOWN_S:300}
+  auth:
+    # Dev convenience: when SMTP/Twilio aren't configured, the auth code (password
+    # reset, email verify, phone OTP) is logged so the flow can be finished from the
+    # logs. Hard-disabled in application-prod.yaml — a code in the logs is an
+    # account-takeover vector.
+    dev-code-log-enabled: ${AUTH_DEV_CODE_LOG_ENABLED:true}
   # Where the public contact/feedback form (POST /api/v1/contact) delivers messages.
   # Blank + no SMTP → the message is logged (DEV-MODE) instead of emailed, never lost.
   contact:

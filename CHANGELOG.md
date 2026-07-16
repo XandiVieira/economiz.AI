@@ -16,6 +16,16 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-07-16 — Cap diário de SMS/WhatsApp (Twilio)
+
+Envios via Twilio (notificações SMS/WhatsApp e o OTP de verificação de telefone)
+agora contam no controle de custos: cap por usuário/dia (default 10). Ao exceder,
+`PATCH /users/me/phone` retorna **429** com mensagem localizada ("limite diário de
+envios de SMS"); notificações SMS/WhatsApp apenas registram falha de entrega
+(`twilio_quota_exceeded`) sem erro pro usuário. Sem Twilio configurado (dev), nada muda.
+
+---
+
 ## 2026-07-16 — `phone` opcional no contato
 
 `POST /api/v1/contact` agora aceita um campo opcional `phone` (string livre,

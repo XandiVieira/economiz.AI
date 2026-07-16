@@ -23,8 +23,11 @@ mirror entries here.
   a `FAILED_PARSE` (reason `receipt.paid_api.quota_exceeded`) instead of a fast 4xx at
   submit. Consider a fail-fast check at `POST /receipts` once we're comfortable predicting
   the paid service from the UF up front.
-- **Before prod**: also cap Twilio SMS/WhatsApp (currently PRO-only + off by default, so
-  lower risk) through the same ledger.
+- ~~**Before prod**: also cap Twilio SMS/WhatsApp through the same ledger~~ — DONE
+  (2026-07-16): every Twilio send (SMS/WhatsApp notifications + phone OTP) is metered as
+  `TWILIO_MESSAGE` (~R$0.30) with a per-user daily cap (`TWILIO_DAILY_CAP`, default 10)
+  and the global budget. Dispatchers degrade to a `twilio_quota_exceeded` audit row;
+  the OTP endpoint returns a localized 429.
 
 ---
 
@@ -236,7 +239,11 @@ The report works identically in SHADOW and ON (computed purely from
   2. `AuthEmailSender` (password reset + email verification) — always loaded; if SMTP isn't configured, **logs the link with `[DEV-MODE]` prefix** instead of sending. The reset/verify endpoints still return 204, so the FE flow works in dev — the developer copies the token from server logs.
 - **Why OK for dev**: no SMTP creds, FE end-to-end testing still works (manually grab the link).
 - **Why NOT OK for prod**: real users won't see a `[DEV-MODE]` log line. They get NO password-reset / verification email at all.
-- **⚠️ Security gap**: in DEV-MODE the reset/verify **token is written in plaintext** to the persistent app log (`C:\economizai-data\logs\app\app.log`) and is visible in Dozzle. Anyone with log access can hijack any account mid-reset. Acceptable only because this is a single-owner dev box — but the DEV-MODE fallback must be **disabled in prod** (not just "SMTP configured"): once real email works, `AuthEmailSender` should never log the link. Tighten before prod.
+- ~~**⚠️ Security gap**: DEV-MODE logs the reset/verify token in plaintext~~ — CLOSED
+  (2026-07-16): `economizai.auth.dev-code-log-enabled` gates every auth-code log line
+  (password reset, email verify, phone OTP). Default `true` for dev; **hard `false` in
+  `application-prod.yaml`** (no env override) — a misconfigured prod logs the failure,
+  never the code.
 - **Fix before prod**: set SMTP creds in env (`SMTP_HOST/PORT/USERNAME/PASSWORD`) and flip `NOTIFICATIONS_EMAIL_ENABLED=true`. Recommend SES, Mailgun, or Postmark — Gmail SMTP rate-limits hard. ~30 min.
 
 ---
@@ -394,8 +401,9 @@ Helper scripts at repo root (run each in an **Administrator** PowerShell once):
 - **Fix / revisit**: once `mlCategoryAccuracyPct` (shadow) is consistently high — after the catalog has thousands of trusted labels — flip `ML_CATEGORY_APPLY_ENABLED=true` and watch the benchmark. Track via `/categorizer/quality/history`.
 
 ### User corrections are global (should be per-household) — see HELP.md "Planned"
-- **Now**: `PATCH /products/{id}` mutates the shared canonical product; any authenticated user changes categories/brand for everyone, and it's not admin-gated.
-- **Fix before real multi-user volume**: household-scoped overrides + corrections-as-votes (design in HELP.md). Interim: gate `PATCH /products/**` to ADMIN.
+- **Now**: `PATCH /products/{id}` mutates the shared canonical product, but it IS
+  **ADMIN-gated** in `SecurityConfig` (the interim fix is in place).
+- **Fix before real multi-user volume**: household-scoped overrides + corrections-as-votes (design in HELP.md) so regular users can correct their own view again.
 
 ### Cross-household chave dedup breaks if a receipt ever has no chave
 - **Now**: the same-chave double-count guard is solid for the only ingestion path we have (QR scan → 44-digit chave always present). Same household, same chave: CONFIRMED → 409, non-final → replaced. Different households, same chave: the second household keeps its own personal receipt, but `PriceIndexService.recordContributions` skips the community write (`existsContributionForChaveFromOtherHousehold`) and logs `price_index.write.skipped reason=duplicate_chave_other_household`. This is exactly the desired behavior.

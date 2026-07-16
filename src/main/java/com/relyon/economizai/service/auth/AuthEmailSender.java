@@ -28,13 +28,16 @@ public class AuthEmailSender {
     private final Optional<JavaMailSender> mailSender;
     private final String from;
     private final boolean smtpConfigured;
+    private final boolean devCodeLogEnabled;
 
     public AuthEmailSender(Optional<JavaMailSender> mailSender,
                            @Value("${economizai.notifications.email.from:noreply@economizaai.app}") String from,
-                           @Value("${spring.mail.username:}") String smtpUsername) {
+                           @Value("${spring.mail.username:}") String smtpUsername,
+                           @Value("${economizai.auth.dev-code-log-enabled:true}") boolean devCodeLogEnabled) {
         this.mailSender = mailSender;
         this.from = from;
         this.smtpConfigured = mailSender.isPresent() && smtpUsername != null && !smtpUsername.isBlank();
+        this.devCodeLogEnabled = devCodeLogEnabled;
     }
 
     public void sendPasswordResetCode(String email, String code, int ttlMinutes) {
@@ -64,11 +67,18 @@ public class AuthEmailSender {
 
     private void send(String to, String subject, String text, String html, String purpose) {
         if (!smtpConfigured) {
-            // DEV-MODE: SMTP creds not wired. Log the would-be email so the
-            // developer can copy the code/link and continue the flow. Documented
-            // in DEV_NOTES.md as a "wire SMTP before prod" item.
-            log.warn("[DEV-MODE] {} email NOT sent to {} (SMTP not configured). body:\n{}",
-                    purpose, LogMasker.email(to), text);
+            if (devCodeLogEnabled) {
+                // DEV-MODE: SMTP creds not wired. Log the would-be email so the
+                // developer can copy the code/link and continue the flow. Documented
+                // in DEV_NOTES.md as a "wire SMTP before prod" item.
+                log.warn("[DEV-MODE] {} email NOT sent to {} (SMTP not configured). body:\n{}",
+                        purpose, LogMasker.email(to), text);
+            } else {
+                // Prod: a reset/verify code in the logs is an account-takeover
+                // vector — record the misconfiguration, never the code.
+                log.error("auth_email.not_sent purpose={} to={} reason=smtp_not_configured",
+                        purpose, LogMasker.email(to));
+            }
             return;
         }
         try {

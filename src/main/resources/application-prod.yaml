@@ -42,6 +42,11 @@ jwt:
 economizai:
   cors:
     allowed-origins: ${CORS_ORIGINS}
+  auth:
+    # NEVER log auth codes (password reset, email verify, phone OTP) in prod —
+    # if SMTP/Twilio are misconfigured we log the failure, not the code. No env
+    # override on purpose.
+    dev-code-log-enabled: false
 
 # No API docs in production — the surface is documented for the FE in API.md
 # and the Postman collection; swagger on a public host only helps attackers map
