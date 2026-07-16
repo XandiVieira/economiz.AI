@@ -11,7 +11,10 @@ public enum PaidApiService {
     INFOSIMPLES(24),
 
     /** A single captcha solve via CapSolver/2Captcha (~R$0.03). Every scrape solves at least one. */
-    CAPTCHA_SOLVE(3);
+    CAPTCHA_SOLVE(3),
+
+    /** One Twilio SMS/WhatsApp message to Brazil (~R$0.30). OTPs and SMS/WhatsApp notifications. */
+    TWILIO_MESSAGE(30);
 
     private final int defaultCostCents;
 

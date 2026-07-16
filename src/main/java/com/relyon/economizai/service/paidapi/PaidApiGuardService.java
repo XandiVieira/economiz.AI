@@ -162,6 +162,7 @@ public class PaidApiGuardService {
         return switch (service) {
             case INFOSIMPLES -> properties.getInfosimplesDailyCapPerUser();
             case CAPTCHA_SOLVE -> properties.getCaptchaDailyCapPerUser();
+            case TWILIO_MESSAGE -> properties.getTwilioDailyCapPerUser();
         };
     }
 

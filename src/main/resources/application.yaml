@@ -167,6 +167,7 @@ economizai:
     enabled: ${PAID_API_GUARD_ENABLED:true}
     infosimples-daily-cap-per-user: ${INFOSIMPLES_DAILY_CAP:20}
     captcha-daily-cap-per-user: ${CAPTCHA_DAILY_CAP:60}
+    twilio-daily-cap-per-user: ${TWILIO_DAILY_CAP:10}
     daily-global-budget-cents: ${PAID_API_DAILY_BUDGET_CENTS:5000}   # R$50/day kill-switch; 0 = unlimited
     infosimples-failure-threshold: ${INFOSIMPLES_BREAKER_THRESHOLD:5}
     breaker-window-seconds: ${INFOSIMPLES_BREAKER_WINDOW_S:600}

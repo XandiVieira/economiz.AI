@@ -22,6 +22,9 @@ public class PaidApiGuardProperties {
     /** Max captcha solves per user per day. 0 or negative = unlimited. */
     private int captchaDailyCapPerUser = 60;
 
+    /** Max Twilio SMS/WhatsApp messages per user per day. 0 or negative = unlimited. */
+    private int twilioDailyCapPerUser = 10;
+
     /**
      * Global spend ceiling across ALL users per day, in cents (R$). The kill-switch
      * against a viral spike: once today's ledger total reaches this, every paid call
@@ -46,6 +49,9 @@ public class PaidApiGuardProperties {
 
     public int getCaptchaDailyCapPerUser() { return captchaDailyCapPerUser; }
     public void setCaptchaDailyCapPerUser(int captchaDailyCapPerUser) { this.captchaDailyCapPerUser = captchaDailyCapPerUser; }
+
+    public int getTwilioDailyCapPerUser() { return twilioDailyCapPerUser; }
+    public void setTwilioDailyCapPerUser(int twilioDailyCapPerUser) { this.twilioDailyCapPerUser = twilioDailyCapPerUser; }
 
     public int getDailyGlobalBudgetCents() { return dailyGlobalBudgetCents; }
     public void setDailyGlobalBudgetCents(int dailyGlobalBudgetCents) { this.dailyGlobalBudgetCents = dailyGlobalBudgetCents; }

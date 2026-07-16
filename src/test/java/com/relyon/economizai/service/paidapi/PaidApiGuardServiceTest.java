@@ -47,6 +47,7 @@ class PaidApiGuardServiceTest {
         properties = new PaidApiGuardProperties();
         properties.setInfosimplesDailyCapPerUser(3);
         properties.setCaptchaDailyCapPerUser(5);
+        properties.setTwilioDailyCapPerUser(2);
         properties.setInfosimplesFailureThreshold(3);
         properties.setBreakerWindowSeconds(600);
         properties.setBreakerCooldownSeconds(300);
@@ -68,6 +69,14 @@ class PaidApiGuardServiceTest {
                 .thenReturn(3L);
         assertThrows(PaidApiQuotaExceededException.class,
                 () -> service.assertWithinDailyCap(USER, PaidApiService.INFOSIMPLES));
+    }
+
+    @Test
+    void assertWithinDailyCap_twilioAtCap_throws() {
+        when(repository.countByUserIdAndServiceAndCreatedAtGreaterThanEqual(eq(USER), eq(PaidApiService.TWILIO_MESSAGE), any()))
+                .thenReturn(2L);
+        assertThrows(PaidApiQuotaExceededException.class,
+                () -> service.assertWithinDailyCap(USER, PaidApiService.TWILIO_MESSAGE));
     }
 
     @Test

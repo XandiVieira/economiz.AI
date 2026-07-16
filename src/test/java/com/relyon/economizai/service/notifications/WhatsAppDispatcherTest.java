@@ -1,10 +1,13 @@
 package com.relyon.economizai.service.notifications;
 
+import com.relyon.economizai.exception.PaidApiQuotaExceededException;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.NotificationChannel;
 import com.relyon.economizai.model.enums.NotificationType;
+import com.relyon.economizai.model.enums.PaidApiService;
 import com.relyon.economizai.service.notifications.twilio.TwilioMessageClient;
 import com.relyon.economizai.service.notifications.twilio.TwilioMessageException;
+import com.relyon.economizai.service.paidapi.PaidApiGuardService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -18,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -29,6 +33,7 @@ import static org.mockito.Mockito.when;
 class WhatsAppDispatcherTest {
 
     @Mock private TwilioMessageClient twilioMessageClient;
+    @Mock private PaidApiGuardService paidApiGuardService;
 
     @InjectMocks private WhatsAppDispatcher whatsAppDispatcher;
 
@@ -56,6 +61,20 @@ class WhatsAppDispatcherTest {
         assertTrue(result.delivered());
         assertNull(result.failureReason());
         verify(twilioMessageClient).sendWhatsApp("+5551999999999", "Body text");
+        verify(paidApiGuardService).recordSuccess(any(), eq(PaidApiService.TWILIO_MESSAGE), eq(null), eq("twilio"));
+    }
+
+    @Test
+    void dispatchFailsGracefullyWhenTwilioQuotaExceeded() {
+        when(twilioMessageClient.isConfigured(true)).thenReturn(true);
+        doThrow(new PaidApiQuotaExceededException(PaidApiService.TWILIO_MESSAGE.name()))
+                .when(paidApiGuardService).assertWithinDailyCap(any(), eq(PaidApiService.TWILIO_MESSAGE));
+
+        var result = whatsAppDispatcher.dispatch(payload(true, "+5551999999999"));
+
+        assertFalse(result.delivered());
+        assertEquals("twilio_quota_exceeded", result.failureReason());
+        verify(twilioMessageClient, never()).sendWhatsApp(anyString(), anyString());
     }
 
     @Test
