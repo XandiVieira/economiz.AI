@@ -94,4 +94,17 @@ public final class ChaveAcessoParser {
         }
         return chave.substring(6, 20);
     }
+
+    /**
+     * True when the note was NOT issued in normal mode (tpEmis, position 35 of
+     * the chave, != 1) — e.g. 9 = NFC-e offline contingency. A contingency note
+     * may take up to 24h to reach SEFAZ, so a portal rejection for it means
+     * "not available yet", not "broken receipt".
+     */
+    public static boolean isContingencyEmission(String chave) {
+        if (chave == null || !CHAVE_PATTERN.matcher(chave).matches()) {
+            return false;
+        }
+        return chave.charAt(34) != '1';
+    }
 }

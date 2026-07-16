@@ -128,4 +128,22 @@ class ChaveAcessoParserTest {
         assertFalse(ChaveAcessoParser.hasValidCheckDigit("123"));
         assertFalse(ChaveAcessoParser.hasValidCheckDigit(CHAVE_VALID_DV + "1"));
     }
+
+    @Test
+    void isContingencyEmission_trueForOfflineContingency() {
+        // Real bar receipt printed "EMITIDA EM CONTINGÊNCIA": tpEmis (position 35) = 9
+        assertTrue(ChaveAcessoParser.isContingencyEmission("43260735254422000178650090001371069852732246"));
+    }
+
+    @Test
+    void isContingencyEmission_falseForNormalEmission() {
+        // CHAVE_RS has tpEmis = 1 (normal)
+        assertFalse(ChaveAcessoParser.isContingencyEmission(CHAVE_RS));
+    }
+
+    @Test
+    void isContingencyEmission_falseForNullOrMalformed() {
+        assertFalse(ChaveAcessoParser.isContingencyEmission(null));
+        assertFalse(ChaveAcessoParser.isContingencyEmission("123"));
+    }
 }

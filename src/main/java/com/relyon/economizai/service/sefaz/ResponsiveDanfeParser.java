@@ -1,6 +1,7 @@
 package com.relyon.economizai.service.sefaz;
 
 import com.relyon.economizai.exception.ReceiptParseException;
+import com.relyon.economizai.exception.SefazPortalRejectionException;
 import com.relyon.economizai.service.privacy.LogMasker;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
@@ -38,6 +39,8 @@ public final class ResponsiveDanfeParser {
             "Trib(?:utos)?\\s*+aprox(?:imados)?\\s*+R\\$?\\s*+([\\d.,]++)\\s*+Federal\\s*+[,;]?\\s*+R\\$?\\s*+([\\d.,]++)\\s*+Estadual",
             Pattern.CASE_INSENSITIVE);
     private static final Pattern DIGITS = Pattern.compile("\\d+");
+    // SEFAZ rejection pages lead with the numeric cStat: "227 - DigestValue ..."
+    private static final Pattern SEFAZ_REJECTION_CODE = Pattern.compile("^(\\d{3})\\s*-");
 
     private ResponsiveDanfeParser() {
     }
@@ -46,6 +49,7 @@ public final class ResponsiveDanfeParser {
         var document = Jsoup.parse(html);
         var items = parseItems(document);
         if (items.isEmpty()) {
+            rejectIfPortalErrorPage(document, chaveAcesso);
             log.warn("Parser found no items in SEFAZ HTML for chave {}", LogMasker.chave(chaveAcesso));
             throw new ReceiptParseException("no-items-found");
         }
@@ -68,6 +72,27 @@ public final class ResponsiveDanfeParser {
                 parsed.marketName(), parsed.totalAmount(), items.size(),
                 parsed.approxTaxFederal(), parsed.approxTaxEstadual());
         return parsed;
+    }
+
+    /**
+     * SVRS answers some QR consults with a Bootstrap error page instead of the
+     * DANFE — e.g. "227 - DigestValue informado no QR Code inconsistente com
+     * dado constante da NFCe" for a contingency note SEFAZ hasn't received (or
+     * whose QR digest mismatches). Surfacing the real story beats the
+     * misleading generic "no-items-found" (real case: a contingency NFC-e from
+     * a bar, 2026-07-16 — fixture qrcode-error-227-digest-mismatch.html).
+     */
+    private static void rejectIfPortalErrorPage(Document document, String chaveAcesso) {
+        var alert = document.selectFirst("div.alert-danger");
+        if (alert == null) return;
+        var message = alert.text().trim();
+        if (message.isEmpty()) return;
+        var codeMatcher = SEFAZ_REJECTION_CODE.matcher(message);
+        var rejectionCode = codeMatcher.find() ? codeMatcher.group(1) : "unknown";
+        var contingency = ChaveAcessoParser.isContingencyEmission(chaveAcesso);
+        log.warn("Portal returned rejection page for chave {}: contingency={} message='{}'",
+                LogMasker.chave(chaveAcesso), contingency, message);
+        throw new SefazPortalRejectionException(rejectionCode, contingency);
     }
 
     /**
