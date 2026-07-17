@@ -351,7 +351,11 @@ economizai:
       # override (e.g. a separate real-prod project).
       client-ids: ${GOOGLE_OAUTH_CLIENT_IDS:283784305460-feu6m74o668bd4n7s0obufv68muj80qc.apps.googleusercontent.com,283784305460-m5q87ihkef9i8r3lcsfborli3oc8vmb0.apps.googleusercontent.com}
     apple:
-      client-ids: ${APPLE_OAUTH_CLIENT_IDS:}     # Apple app bundle id and/or Service ID (Sign in with Apple)
+      # Native iOS Sign in with Apple → the token's aud is the app Bundle ID
+      # (PUBLIC — it's in the app's Info.plist). Baked as default so Apple login
+      # works without a Render env var; set APPLE_OAUTH_CLIENT_IDS to override or
+      # to add a Service ID (comma-separated) for web/Android Sign in with Apple.
+      client-ids: ${APPLE_OAUTH_CLIENT_IDS:com.economizaaiapp.economizaai}
 
 springdoc:
   swagger-ui:
