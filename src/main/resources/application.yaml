@@ -345,7 +345,11 @@ economizai:
     # may be empty in dev (then the aud check is skipped with a WARN log). In prod
     # set these so a token minted for another app can't be replayed against us.
     google:
-      client-ids: ${GOOGLE_OAUTH_CLIENT_IDS:}    # Google OAuth client IDs (web/iOS/Android), e.g. xxxx.apps.googleusercontent.com
+      # Web + Android OAuth client IDs (PUBLIC values — safe to commit; the client
+      # SECRET is never used by the identity-token flow). Baked as the default so
+      # Google login works without a Render env var; set GOOGLE_OAUTH_CLIENT_IDS to
+      # override (e.g. a separate real-prod project).
+      client-ids: ${GOOGLE_OAUTH_CLIENT_IDS:283784305460-feu6m74o668bd4n7s0obufv68muj80qc.apps.googleusercontent.com,283784305460-m5q87ihkef9i8r3lcsfborli3oc8vmb0.apps.googleusercontent.com}
     apple:
       client-ids: ${APPLE_OAUTH_CLIENT_IDS:}     # Apple app bundle id and/or Service ID (Sign in with Apple)
 
