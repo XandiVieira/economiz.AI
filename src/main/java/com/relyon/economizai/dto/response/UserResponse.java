@@ -15,6 +15,8 @@ public record UserResponse(
         Role role,
         SubscriptionTier subscriptionTier,
         boolean contributionOptIn,
+        boolean emailVerified,
+        LocalDateTime emailVerifiedAt,
         BigDecimal homeLatitude,
         BigDecimal homeLongitude,
         LocalDateTime createdAt
@@ -27,6 +29,8 @@ public record UserResponse(
                 user.getRole(),
                 user.getSubscriptionTier(),
                 user.isContributionOptIn(),
+                user.isEmailVerified(),
+                user.getEmailVerifiedAt(),
                 user.getHomeLatitude(),
                 user.getHomeLongitude(),
                 user.getCreatedAt()

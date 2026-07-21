@@ -77,6 +77,8 @@ class AuthControllerTest {
                 Role.USER,
                 SubscriptionTier.FREE,
                 true,
+                true,
+                LocalDateTime.now(),
                 null,
                 null,
                 LocalDateTime.now()
@@ -144,7 +146,10 @@ class AuthControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").value("jwt-token"))
-                .andExpect(jsonPath("$.refreshToken").value("refresh-token"));
+                .andExpect(jsonPath("$.refreshToken").value("refresh-token"))
+                // FE-facing user shape carries verification state (added for social login).
+                .andExpect(jsonPath("$.user.emailVerified").value(true))
+                .andExpect(jsonPath("$.user.emailVerifiedAt").exists());
     }
 
     @Test

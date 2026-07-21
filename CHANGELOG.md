@@ -16,6 +16,22 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-07-21 — Login social (Google + Apple) no ar; `emailVerified`/`emailVerifiedAt` na resposta
+
+Google e Apple login estão **configurados e no ar** (audience/client-ids do backend
+prontos: Google web+android client IDs, Apple bundle `com.economizaaiapp.economizaai`).
+Contrato: `POST /auth/google {idToken}` e `POST /auth/apple {identityToken, name?}` →
+`{ token, refreshToken, user }`, igual ao login por e-mail. Apple só manda o `name` no
+**primeiro** login — o backend persiste; nos próximos manda só `{ identityToken }`.
+
+O `user` (UserResponse) agora **de fato inclui** `emailVerified` (boolean) e
+`emailVerifiedAt` (ISO ou null) — antes estavam documentados mas não retornavam. Dá pra
+gate de features por `emailVerified === true`. Usuários social nascem com
+`emailVerified=true`. Política de conta: casa por `sub` do provedor; se o e-mail bate com
+conta LOCAL já verificada, **vincula**; se não verificada, rejeita (anti-takeover).
+
+---
+
 ## 2026-07-16 — Restaurantes/bares rejeitados; padarias, açougues e conveniências aceitos
 
 Nova regra de estabelecimento no scan (varejo recorrente de alimentos vs.

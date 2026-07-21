@@ -84,7 +84,7 @@ class UserControllerCoverageTest {
 
     private UserResponse userResponse() {
         return new UserResponse(UUID.randomUUID(), "John Doe", "john@test.com",
-                Role.USER, SubscriptionTier.FREE, true,
+                Role.USER, SubscriptionTier.FREE, true, true, LocalDateTime.now(),
                 new BigDecimal("-30.0277"), new BigDecimal("-51.2287"), LocalDateTime.now());
     }
 

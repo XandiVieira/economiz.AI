@@ -123,6 +123,8 @@ class UserControllerTest {
                 user.getRole(),
                 user.getSubscriptionTier(),
                 user.isContributionOptIn(),
+                user.isEmailVerified(),
+                user.getEmailVerifiedAt(),
                 user.getHomeLatitude(),
                 user.getHomeLongitude(),
                 user.getCreatedAt()
@@ -208,7 +210,8 @@ class UserControllerTest {
         var user = buildUser();
         var request = new UpdateContributionRequest(false);
         var response = new UserResponse(user.getId(), user.getName(), user.getEmail(),
-                user.getRole(), user.getSubscriptionTier(), false, null, null, user.getCreatedAt());
+                user.getRole(), user.getSubscriptionTier(), false, true, user.getEmailVerifiedAt(),
+                null, null, user.getCreatedAt());
         when(userService.updateContribution(any(User.class), any(UpdateContributionRequest.class)))
                 .thenReturn(response);
 
@@ -224,7 +227,8 @@ class UserControllerTest {
     void exportData_returns200WithJson() throws Exception {
         var user = buildUser();
         var ur = new UserResponse(user.getId(), user.getName(), user.getEmail(),
-                user.getRole(), user.getSubscriptionTier(), true, null, null, user.getCreatedAt());
+                user.getRole(), user.getSubscriptionTier(), true, true, user.getEmailVerifiedAt(),
+                null, null, user.getCreatedAt());
         var hr = new HouseholdResponse(
                 UUID.randomUUID(), "ABC123", LocalDateTime.now().plusHours(48),
                 List.of(new HouseholdResponse.HouseholdMember(user.getId(), user.getName(), user.getEmail())),
