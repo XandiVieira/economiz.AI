@@ -132,6 +132,7 @@ GitHub repo: `economiz.AI` (https://github.com/XandiVieira/economiz.AI.git)
 - Never touch the global git config
 
 ## Git Workflow
+- **Deploy windows (2026-07-22): pushing `development` auto-deploys the dev server and blips availability for real users.** Commit locally as work completes, but DO NOT push during the day without an explicit go-ahead. Urgent bug fixes may ship anytime; features/docs/refactors batch up and deploy at night (or when the owner says so). One push = one downtime blip — batch commits into a single push.
 - **ALWAYS pull before push.** Before any `git push`, run `git pull --rebase origin <branch>` first so the push lands on the current tip. This repo has an autonomous watchdog that also pushes — racing it causes rejected pushes and rebase conflicts. Pull-rebase-then-push every time.
 - Before reviewing or analyzing a branch, ALWAYS run `git fetch` and confirm with the user which branch to work on if there's any ambiguity.
 - Do NOT propose code fixes when the user is asking for understanding/diagnosis only — wait for explicit fix request.
