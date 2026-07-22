@@ -15,6 +15,7 @@ import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.service.ReceiptExportService;
 import com.relyon.economizai.service.ReceiptService;
+import com.relyon.economizai.service.report.ReportEmailService;
 import com.relyon.economizai.service.scan.ChaveAcessoOcrService;
 import com.relyon.economizai.service.scan.QrCodePhotoDecoder;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -55,6 +56,7 @@ public class ReceiptController {
 
     private final ReceiptService receiptService;
     private final ReceiptExportService receiptExportService;
+    private final ReportEmailService reportEmailService;
     private final QrCodePhotoDecoder qrCodePhotoDecoder;
     private final ChaveAcessoOcrService chaveAcessoOcrService;
 
@@ -101,25 +103,35 @@ public class ReceiptController {
     }
 
     /**
-     * Download of the household's confirmed purchase history (one row per
-     * item, includes the chave de acesso) as CSV (default, Brazilian-Excel
-     * friendly) or XLSX ({@code ?format=xlsx}, typed cells). PRO-gated
-     * (dormant while subscription enforcement is off); FREE history window
-     * applies.
+     * The household's confirmed purchase history as CSV (default, flat
+     * Brazilian-Excel-friendly), XLSX (multi-sheet report with native charts)
+     * or PDF (styled report with charts). {@code delivery=download} (default)
+     * streams the file; {@code delivery=email} sends it as an attachment to
+     * the account's own e-mail and returns 202. PRO-gated (dormant while
+     * subscription enforcement is off); FREE history window applies.
      */
     @GetMapping("/export")
     public ResponseEntity<byte[]> export(
             @AuthenticationPrincipal User user,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
-            @RequestParam(defaultValue = "csv") String format) {
-        var file = receiptExportService.exportPurchaseHistory(user, from, to, parseFormat(format));
+            @RequestParam(defaultValue = "csv") String format,
+            @RequestParam(defaultValue = "download") String delivery) {
+        var exportFormat = parseFormat(format);
+        var exportDelivery = parseDelivery(delivery);
+        var file = receiptExportService.exportPurchaseHistory(user, from, to, exportFormat);
         var filename = "economizai-historico-" + LocalDate.now() + "." + file.fileExtension();
+        if (exportDelivery == Delivery.EMAIL) {
+            reportEmailService.sendToOwnEmail(user, file, filename);
+            return ResponseEntity.accepted().build();
+        }
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
                 .contentType(MediaType.parseMediaType(file.mediaType()))
                 .body(file.content());
     }
+
+    private enum Delivery { DOWNLOAD, EMAIL }
 
     /** Case-insensitive — MVC's enum binding is case-sensitive and would 400 on "csv"/"xlsx". */
     private static ReceiptExportService.ExportFormat parseFormat(String format) {
@@ -127,6 +139,14 @@ public class ReceiptController {
             return ReceiptExportService.ExportFormat.valueOf(format.trim().toUpperCase());
         } catch (IllegalArgumentException ex) {
             throw new InvalidExportFormatException(format);
+        }
+    }
+
+    private static Delivery parseDelivery(String delivery) {
+        try {
+            return Delivery.valueOf(delivery.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new InvalidExportFormatException(delivery);
         }
     }
 

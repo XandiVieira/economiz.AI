@@ -101,6 +101,11 @@ public class GlobalExceptionHandler {
         return respond(ex, HttpStatus.SERVICE_UNAVAILABLE, "Captcha-gated state, no solver configured");
     }
 
+    @ExceptionHandler(ReportEmailUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleReportEmailUnavailable(ReportEmailUnavailableException ex) {
+        return respond(ex, HttpStatus.SERVICE_UNAVAILABLE, "Report e-mail delivery unavailable");
+    }
+
     @ExceptionHandler(OcrUnavailableException.class)
     public ResponseEntity<ErrorResponse> handleOcrUnavailable(OcrUnavailableException ex) {
         return respond(ex, HttpStatus.SERVICE_UNAVAILABLE, "OCR engine not available on this host");

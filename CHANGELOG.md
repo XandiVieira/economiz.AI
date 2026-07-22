@@ -59,6 +59,23 @@ conta LOCAL já verificada, **vincula**; se não verificada, rejeita (anti-takeo
 
 ---
 
+## 2026-07-22 — Relatórios de compras: XLSX com gráficos, PDF bonito e envio por e-mail
+
+`GET /receipts/export` cresceu para um relatório completo:
+- `format=xlsx`: planilha multi-abas — dashboard **Resumo** (KPIs: total gasto,
+  notas, itens, ticket médio + 3 gráficos nativos do Excel: evolução mensal,
+  pizza por categoria, barras dos mercados), aba **Compras** estilizada
+  (cabeçalho verde, filtro, painel congelado) e abas de dados.
+- `format=pdf`: relatório A4 com identidade visual — cards de KPI, gráficos
+  renderizados e tabela de itens com cabeçalho repetido.
+- `format=csv`: continua o arquivo plano amigável ao Excel BR.
+- **`delivery=email`**: envia o arquivo como anexo para o e-mail da própria
+  conta (202; 503 se SMTP indisponível). `delivery=download` (padrão) baixa
+  direto. Nunca envia para e-mail de terceiros.
+- Categorias agora têm rótulos localizados (`category.*`) nos relatórios.
+
+---
+
 ## 2026-07-22 — GO virou estado verificado (scan gratuito)
 
 Goiás saiu da cadeia experimental: adapter dedicado no portal

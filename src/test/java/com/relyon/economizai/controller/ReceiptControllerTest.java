@@ -22,6 +22,7 @@ import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.LocalizedMessageService;
 import com.relyon.economizai.service.ReceiptExportService;
 import com.relyon.economizai.service.ReceiptService;
+import com.relyon.economizai.service.report.ReportEmailService;
 import com.relyon.economizai.service.scan.ChaveAcessoOcrService;
 import com.relyon.economizai.service.scan.QrCodePhotoDecoder;
 import org.junit.jupiter.api.Test;
@@ -46,8 +47,10 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.hamcrest.Matchers.containsString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -73,6 +76,9 @@ class ReceiptControllerTest {
 
     @MockitoBean
     private ReceiptExportService receiptExportService;
+
+    @MockitoBean
+    private ReportEmailService reportEmailService;
 
     @MockitoBean
     private QrCodePhotoDecoder qrCodePhotoDecoder;
@@ -309,8 +315,29 @@ class ReceiptControllerTest {
     }
 
     @Test
+    void export_emailDelivery_returns202AndSendsToOwnEmail() throws Exception {
+        var user = buildUser();
+        when(receiptExportService.exportPurchaseHistory(any(), any(), any(), eq(ReceiptExportService.ExportFormat.PDF)))
+                .thenReturn(new ReceiptExportService.ExportFile("%PDF-".getBytes(), "application/pdf", "pdf"));
+
+        mockMvc.perform(get("/api/v1/receipts/export")
+                        .param("format", "pdf").param("delivery", "email")
+                        .with(SecurityMockMvcRequestPostProcessors.user(user)))
+                .andExpect(status().isAccepted());
+
+        verify(reportEmailService).sendToOwnEmail(any(), any(), contains(".pdf"));
+    }
+
+    @Test
+    void export_unknownDelivery_returns400() throws Exception {
+        mockMvc.perform(get("/api/v1/receipts/export").param("delivery", "pombo-correio")
+                        .with(SecurityMockMvcRequestPostProcessors.user(buildUser())))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void export_unknownFormat_returns400() throws Exception {
-        mockMvc.perform(get("/api/v1/receipts/export").param("format", "pdf")
+        mockMvc.perform(get("/api/v1/receipts/export").param("format", "docx")
                         .with(SecurityMockMvcRequestPostProcessors.user(buildUser())))
                 .andExpect(status().isBadRequest());
     }

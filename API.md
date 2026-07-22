@@ -387,7 +387,7 @@ They can:
 
 ```
 GET    /api/v1/receipts/{id}                         → full receipt with items
-GET    /api/v1/receipts/export?from=&to=&format=     → CSV (default) or XLSX download of CONFIRMED history (one row per
+GET    /api/v1/receipts/export?from=&to=&format=&delivery= → CSV (flat) | XLSX (charted multi-sheet report) | PDF (styled report) of CONFIRMED history (one row per
                                                         non-excluded item; includes chave de acesso;
                                                         `;` separator + comma decimals + UTF-8 BOM for
                                                         pt-BR Excel; localized headers; PRO-gated —

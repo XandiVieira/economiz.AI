@@ -1884,7 +1884,7 @@
 					"response": []
 				},
 				{
-					"name": "Export purchase history (CSV / XLSX)",
+					"name": "Export purchase history (CSV / XLSX / PDF, download or email)",
 					"request": {
 						"method": "GET",
 						"header": [
@@ -1924,12 +1924,18 @@
 								{
 									"key": "format",
 									"value": "xlsx",
-									"description": "csv (default) or xlsx",
+									"description": "csv (default) | xlsx (charted report) | pdf (styled report)",
+									"disabled": true
+								},
+								{
+									"key": "delivery",
+									"value": "email",
+									"description": "download (default) | email (sends to the account's own address, 202)",
 									"disabled": true
 								}
 							]
 						},
-						"description": "Download of the household's CONFIRMED purchase history — one row per non-excluded item, includes chave de acesso. format=csv (default; semicolon separator, comma decimals, UTF-8 BOM for Brazilian Excel) or format=xlsx (typed date/number cells). PRO-gated (dormant while enforcement off); FREE history window applies."
+						"description": "The household's CONFIRMED purchase history. format=csv (flat, pt-BR Excel-friendly), format=xlsx (multi-sheet report: KPI dashboard + native charts + styled item table), format=pdf (branded report with charts). delivery=download streams the file; delivery=email sends it as attachment to the user's own e-mail (202; 503 if SMTP off). PRO-gated (dormant while enforcement off); FREE history window applies."
 					},
 					"response": []
 				}
@@ -5876,6 +5882,55 @@
 									"    var body = pm.response.text();",
 									"    pm.expect(body).to.include('Chave de acesso');",
 									"    pm.expect(body.split('\\n').length).to.be.above(1);",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "13c. Export PDF report",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Accept-Language",
+								"value": "pt"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/receipts/export?format=pdf",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"receipts",
+								"export"
+							],
+							"query": [
+								{
+									"key": "format",
+									"value": "pdf"
+								}
+							]
+						}
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('GET /receipts/export?format=pdf -> 200 application/pdf', function () {",
+									"    pm.response.to.have.status(200);",
+									"    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/pdf');",
 									"});"
 								]
 							}

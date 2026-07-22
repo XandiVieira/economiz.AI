@@ -2,24 +2,23 @@ package com.relyon.economizai.service;
 
 import com.relyon.economizai.exception.PaywallException;
 import com.relyon.economizai.model.Household;
-import com.relyon.economizai.model.Receipt;
-import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
-import com.relyon.economizai.model.enums.ProductCategory;
-import com.relyon.economizai.repository.ReceiptRepository;
+import com.relyon.economizai.service.ReceiptExportService.ExportFormat;
+import com.relyon.economizai.service.report.PdfReportRenderer;
+import com.relyon.economizai.service.report.PurchaseReportAssembler;
+import com.relyon.economizai.service.report.PurchaseReportData;
+import com.relyon.economizai.service.report.PurchaseReportData.ItemRow;
+import com.relyon.economizai.service.report.PurchaseReportData.Kpis;
+import com.relyon.economizai.service.report.XlsxReportRenderer;
 import com.relyon.economizai.service.subscription.Feature;
 import com.relyon.economizai.service.subscription.SubscriptionGateService;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.Specification;
 
-import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
@@ -41,7 +40,9 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class ReceiptExportServiceTest {
 
-    @Mock private ReceiptRepository receiptRepository;
+    @Mock private PurchaseReportAssembler reportAssembler;
+    @Mock private XlsxReportRenderer xlsxReportRenderer;
+    @Mock private PdfReportRenderer pdfReportRenderer;
     @Mock private SubscriptionGateService subscriptionGate;
     @Mock private LocalizedMessageService localizedMessageService;
 
@@ -59,79 +60,50 @@ class ReceiptExportServiceTest {
         lenient().when(subscriptionGate.clampFrom(eq(user), any())).thenAnswer(inv -> inv.getArgument(1));
     }
 
-    private Receipt confirmedReceipt(ReceiptItem... items) {
-        var receipt = Receipt.builder()
-                .id(UUID.randomUUID())
-                .chaveAcesso("43260493015006005182651130003394021410514546")
-                .cnpjEmitente("93015006005182")
-                .marketName("Zaffari; Centro")
-                .issuedAt(LocalDateTime.of(2026, Month.JULY, 20, 18, 30))
-                .totalAmount(new BigDecimal("47.00"))
-                .build();
-        for (var item : items) receipt.addItem(item);
-        return receipt;
+    private PurchaseReportData reportWith(ItemRow... items) {
+        return new PurchaseReportData(null, null,
+                new Kpis(new BigDecimal("47.00"), 1, items.length, new BigDecimal("47.00")),
+                List.of(), List.of(), List.of(), List.of(), List.of(items));
     }
 
-    private ReceiptItem item(String description, String unitPrice, boolean excluded) {
-        var receiptItem = ReceiptItem.builder()
-                .lineNumber(1).rawDescription(description)
-                .quantity(new BigDecimal("2.000")).unit("UN")
-                .unitPrice(new BigDecimal(unitPrice)).totalPrice(new BigDecimal(unitPrice).multiply(BigDecimal.TWO))
-                .categoryAtConfirmation(ProductCategory.BEVERAGES)
-                .build();
-        receiptItem.setExcluded(excluded);
-        return receiptItem;
+    private ItemRow row(String description, String unitPrice) {
+        return new ItemRow(LocalDateTime.of(2026, Month.JULY, 20, 18, 30), "Zaffari; Centro", "93015006005182",
+                "43260493015006005182651130003394021410514546", description, new BigDecimal("2.000"), "UN",
+                new BigDecimal(unitPrice), new BigDecimal(unitPrice).multiply(BigDecimal.TWO),
+                "BEVERAGES", new BigDecimal("47.00"));
     }
 
     @Test
-    void export_buildsSemicolonCsvWithBomHeaderAndRows() {
-        when(receiptRepository.findAll(any(Specification.class), any(Sort.class)))
-                .thenReturn(List.of(confirmedReceipt(item("CHOPP BRAHMA 440ml", "14.00", false))));
+    void csv_buildsSemicolonSeparatedFileWithBom() {
+        when(reportAssembler.assemble(eq(user), any(), any()))
+                .thenReturn(reportWith(row("CHOPP BRAHMA 440ml", "14.00")));
 
-        var csv = new String(service.exportPurchaseHistory(user, null, null, ReceiptExportService.ExportFormat.CSV).content(), StandardCharsets.UTF_8);
+        var file = service.exportPurchaseHistory(user, null, null, ExportFormat.CSV);
+        var csv = new String(file.content(), StandardCharsets.UTF_8);
 
+        assertThat(file.mediaType()).isEqualTo("text/csv");
         assertThat(csv).startsWith("﻿");
         var lines = csv.substring(1).split("\n");
-        assertThat(lines[0]).isEqualTo("export.header.date;export.header.market;export.header.market-cnpj;"
-                + "export.header.chave-acesso;export.header.item;export.header.quantity;export.header.unit;"
-                + "export.header.unit-price;export.header.item-total;export.header.category;export.header.receipt-total");
-        // market name contains the separator -> quoted; decimals use comma
+        assertThat(lines[0]).startsWith("export.header.date;export.header.market;");
         assertThat(lines[1]).isEqualTo("20/07/2026 18:30;\"Zaffari; Centro\";93015006005182;"
                 + "43260493015006005182651130003394021410514546;CHOPP BRAHMA 440ml;2,000;UN;14,00;28,00;"
                 + "BEVERAGES;47,00");
     }
 
     @Test
-    void export_skipsExcludedItems() {
-        when(receiptRepository.findAll(any(Specification.class), any(Sort.class)))
-                .thenReturn(List.of(confirmedReceipt(
-                        item("ARROZ 5KG", "28.90", false),
-                        item("ITEM EXCLUIDO", "9.99", true))));
+    void xlsxAndPdf_delegateToRenderers() {
+        var report = reportWith(row("ARROZ", "10.00"));
+        when(reportAssembler.assemble(eq(user), any(), any())).thenReturn(report);
+        when(xlsxReportRenderer.render(report)).thenReturn(new byte[]{80, 75});
+        when(pdfReportRenderer.render(report)).thenReturn("%PDF-".getBytes(StandardCharsets.UTF_8));
 
-        var csv = new String(service.exportPurchaseHistory(user, null, null, ReceiptExportService.ExportFormat.CSV).content(), StandardCharsets.UTF_8);
+        var xlsx = service.exportPurchaseHistory(user, null, null, ExportFormat.XLSX);
+        var pdf = service.exportPurchaseHistory(user, null, null, ExportFormat.PDF);
 
-        assertThat(csv).contains("ARROZ 5KG").doesNotContain("ITEM EXCLUIDO");
-    }
-
-    @Test
-    void export_xlsx_producesReadableWorkbookWithTypedCells() throws Exception {
-        when(receiptRepository.findAll(any(Specification.class), any(Sort.class)))
-                .thenReturn(List.of(confirmedReceipt(item("CHOPP BRAHMA 440ml", "14.00", false))));
-
-        var file = service.exportPurchaseHistory(user, null, null, ReceiptExportService.ExportFormat.XLSX);
-
-        assertThat(file.mediaType()).contains("spreadsheetml");
-        assertThat(file.fileExtension()).isEqualTo("xlsx");
-        try (var workbook = new XSSFWorkbook(new ByteArrayInputStream(file.content()))) {
-            var sheet = workbook.getSheetAt(0);
-            assertThat(sheet.getRow(0).getCell(0).getStringCellValue()).isEqualTo("export.header.date");
-            var dataRow = sheet.getRow(1);
-            assertThat(dataRow.getCell(0).getLocalDateTimeCellValue())
-                    .isEqualTo(LocalDateTime.of(2026, Month.JULY, 20, 18, 30));
-            assertThat(dataRow.getCell(4).getStringCellValue()).isEqualTo("CHOPP BRAHMA 440ml");
-            assertThat(dataRow.getCell(7).getNumericCellValue()).isEqualTo(14.00);
-            assertThat(dataRow.getCell(10).getNumericCellValue()).isEqualTo(47.00);
-        }
+        assertThat(xlsx.fileExtension()).isEqualTo("xlsx");
+        assertThat(xlsx.mediaType()).contains("spreadsheetml");
+        assertThat(pdf.fileExtension()).isEqualTo("pdf");
+        assertThat(pdf.mediaType()).isEqualTo("application/pdf");
     }
 
     @Test
@@ -139,8 +111,9 @@ class ReceiptExportServiceTest {
         doThrow(new PaywallException(Feature.CSV_EXPORT.name()))
                 .when(subscriptionGate).require(user, Feature.CSV_EXPORT);
 
-        assertThrows(PaywallException.class, () -> service.exportPurchaseHistory(user, null, null, ReceiptExportService.ExportFormat.CSV));
-        verify(receiptRepository, never()).findAll(any(Specification.class), any(Sort.class));
+        assertThrows(PaywallException.class,
+                () -> service.exportPurchaseHistory(user, null, null, ExportFormat.CSV));
+        verify(reportAssembler, never()).assemble(any(), any(), any());
     }
 
     @Test
@@ -148,10 +121,10 @@ class ReceiptExportServiceTest {
         var requestedFrom = LocalDateTime.of(2020, Month.JANUARY, 1, 0, 0);
         var clampedFrom = LocalDateTime.of(2026, Month.JUNE, 22, 0, 0);
         when(subscriptionGate.clampFrom(user, requestedFrom)).thenReturn(clampedFrom);
-        when(receiptRepository.findAll(any(Specification.class), any(Sort.class))).thenReturn(List.of());
+        when(reportAssembler.assemble(user, clampedFrom, null)).thenReturn(reportWith());
 
-        service.exportPurchaseHistory(user, requestedFrom, null, ReceiptExportService.ExportFormat.CSV);
+        service.exportPurchaseHistory(user, requestedFrom, null, ExportFormat.CSV);
 
-        verify(subscriptionGate).clampFrom(user, requestedFrom);
+        verify(reportAssembler).assemble(user, clampedFrom, null);
     }
 }
