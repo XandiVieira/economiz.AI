@@ -129,7 +129,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
         var errors = ex.getBindingResult().getFieldErrors().stream()
-                .collect(Collectors.toMap(FieldError::getField, f -> f.getDefaultMessage() != null ? f.getDefaultMessage() : "invalid"));
+                .collect(Collectors.toMap(FieldError::getField, this::localizedFieldError, (first, second) -> first));
         var message = messageService.translate(VALIDATION_FAILED_KEY);
         log.warn("Validation failed: {}", errors);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -174,6 +174,13 @@ public class GlobalExceptionHandler {
         log.error("Unexpected error: {}: {}", ex.getClass().getName(), ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR.value(), message, LocalDateTime.now()));
+    }
+
+    /** Localize a field error via the message bundle; never null (falls back to the raw default). */
+    private String localizedFieldError(FieldError fieldError) {
+        var localized = messageService.resolve(fieldError);
+        if (localized != null) return localized;
+        return fieldError.getDefaultMessage() != null ? fieldError.getDefaultMessage() : "invalid";
     }
 
     private ResponseEntity<ErrorResponse> respond(DomainException ex, HttpStatus status, String logContext) {
