@@ -944,6 +944,18 @@ return Swagger UI.
 **Tests: 78 → 110 passing.**
 - New: `DescriptionNormalizerTest` (5), `CanonicalizationServiceTest` (6), `ProductServiceTest` (6), `ProductControllerTest` (7), `InsightsControllerTest` (4), `InsightsRepositoryTest` (4, integration `@DataJpaTest`).
 
+### Roadmap note (2026-07-22) — rich data exports
+
+Shipped today: `GET /receipts/export` (CSV + XLSX, direct download). The full
+vision (user-validated by an organic suggestion + owner direction):
+- Export basically ANY filterable data set (receipts, items, categories,
+  date/market filters) — not just the fixed purchase history.
+- A beautiful spreadsheet (charts/pivots baked into the XLSX).
+- A pretty PDF report (tables + charts — monthly summary, category breakdown,
+  savings vs. index). PDF as designed report, not raw table dump.
+- Delivery choice: direct download OR send via e-mail.
+Natural PRO surface (Feature.CSV_EXPORT already gates the endpoint).
+
 ### Session (2026-07-16b) — Merchant support gate (retail vs. food service)
 
 Triggered by a real scan: a bar's NFC-e failed with the misleading
