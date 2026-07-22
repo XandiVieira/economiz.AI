@@ -15,6 +15,9 @@ public interface PaidApiCallRepository extends JpaRepository<PaidApiCall, UUID> 
     /** How many calls a user has made to a paid service since {@code since} — the daily-cap counter. */
     long countByUserIdAndServiceAndCreatedAtGreaterThanEqual(UUID userId, PaidApiService service, OffsetDateTime since);
 
+    /** Global (all-users) daily count for a service — caps system workers like LLM enrichment. */
+    long countByServiceAndCreatedAtGreaterThanEqual(PaidApiService service, OffsetDateTime since);
+
     /** Total estimated spend (cents) across all users since {@code since} — the global kill-switch gauge. */
     @Query("SELECT COALESCE(SUM(call.estimatedCostCents), 0) FROM PaidApiCall call WHERE call.createdAt >= :since")
     long sumCostCentsSince(@Param("since") OffsetDateTime since);

@@ -14,7 +14,13 @@ public enum PaidApiService {
     CAPTCHA_SOLVE(3),
 
     /** One Twilio SMS/WhatsApp message to Brazil (~R$0.30). OTPs and SMS/WhatsApp notifications. */
-    TWILIO_MESSAGE(30);
+    TWILIO_MESSAGE(30),
+
+    /** One batched LLM enrichment call (category/brand/pack for ~25 products, ~R$0.02). */
+    LLM_ENRICH(2),
+
+    /** One LLM vision extraction of a photographed receipt (~R$0.10). */
+    LLM_VISION(10);
 
     private final int defaultCostCents;
 

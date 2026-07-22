@@ -9,4 +9,6 @@ import java.util.UUID;
 public interface CuratedDictionaryEntryRepository extends JpaRepository<CuratedDictionaryEntry, UUID> {
 
     Optional<CuratedDictionaryEntry> findByKeyword(String keyword);
+
+    long countByOrigin(String origin);
 }

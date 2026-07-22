@@ -10,11 +10,57 @@ import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.util.Collection;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 public interface ProductRepository extends JpaRepository<Product, UUID> {
+
+    /**
+     * Products the strong (free) layers left wanting: unmatched/weak category
+     * source, category OTHER, or missing brand/pack — the LLM teacher queue.
+     * Attempt-capped so hopeless rows stop consuming paid calls.
+     */
+    @Query("""
+        SELECT p FROM Product p
+        WHERE p.llmEnrichmentAttempts < :maxAttempts
+          AND p.llmEnrichedAt IS NULL
+          AND (p.categorizationSource IN ('NONE', 'ML', 'LEARNED_DICTIONARY')
+               OR p.category = 'OTHER'
+               OR p.brand IS NULL
+               OR p.packSize IS NULL)
+        ORDER BY p.createdAt DESC
+    """)
+    List<Product> findEnrichmentCandidates(@Param("maxAttempts") int maxAttempts, Pageable pageable);
+
+    @Query("""
+        SELECT COUNT(p) FROM Product p
+        WHERE p.llmEnrichmentAttempts < :maxAttempts
+          AND p.llmEnrichedAt IS NULL
+          AND (p.categorizationSource IN ('NONE', 'ML', 'LEARNED_DICTIONARY')
+               OR p.category = 'OTHER'
+               OR p.brand IS NULL
+               OR p.packSize IS NULL)
+    """)
+    long countEnrichmentCandidates(@Param("maxAttempts") int maxAttempts);
+
+    /**
+     * Nightly-audit sample: machine-labeled products (human truth excluded),
+     * volume-weighted so a wrong label on a daily staple outranks a one-off,
+     * and not re-audited within the cooldown.
+     */
+    @Query("""
+        SELECT p FROM Product p
+        WHERE p.categorizationSource IN ('LLM', 'LEARNED_DICTIONARY', 'ML', 'DICTIONARY')
+          AND (p.llmAuditedAt IS NULL OR p.llmAuditedAt < :auditedBefore)
+        ORDER BY (SELECT COUNT(ri) FROM ReceiptItem ri WHERE ri.product = p) DESC
+    """)
+    List<Product> findAuditSample(@Param("auditedBefore") LocalDateTime auditedBefore, Pageable pageable);
+
+    long countByCategorizationSource(CategorizationSource categorizationSource);
+
+
 
     Optional<Product> findByEan(String ean);
 

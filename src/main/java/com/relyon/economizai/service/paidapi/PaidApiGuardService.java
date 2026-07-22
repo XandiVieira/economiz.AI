@@ -83,6 +83,21 @@ public class PaidApiGuardService {
      * spend across ALL users reaches the global ceiling — the kill-switch against
      * a viral spike. No-op when enforcement is off or the budget is unlimited.
      */
+    /**
+     * Daily cap for a SYSTEM worker (no user attribution) — counts all of today's
+     * calls for the service. Used by the LLM enrichment/auditor batch jobs.
+     */
+    public void assertWithinServiceDailyCap(PaidApiService service) {
+        if (!properties.isEnabled()) return;
+        var cap = dailyCap(service);
+        if (cap <= 0) return;
+        var today = repository.countByServiceAndCreatedAtGreaterThanEqual(service, startOfTodayUtc());
+        if (today >= cap) {
+            log.warn("paid_api.service_cap_hit service={} today={} cap={}", service, today, cap);
+            throw new PaidApiQuotaExceededException(service.name());
+        }
+    }
+
     public void assertUnderGlobalBudget() {
         if (!properties.isEnabled()) return;
         var budget = properties.getDailyGlobalBudgetCents();
@@ -163,6 +178,8 @@ public class PaidApiGuardService {
             case INFOSIMPLES -> properties.getInfosimplesDailyCapPerUser();
             case CAPTCHA_SOLVE -> properties.getCaptchaDailyCapPerUser();
             case TWILIO_MESSAGE -> properties.getTwilioDailyCapPerUser();
+            case LLM_ENRICH -> properties.getLlmEnrichDailyCapPerUser();
+            case LLM_VISION -> properties.getLlmVisionDailyCapPerUser();
         };
     }
 

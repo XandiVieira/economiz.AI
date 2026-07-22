@@ -17,5 +17,6 @@ public enum CategorizationSource {
     ML,                  // multinomial NB inference (Phase 2.5b)
     MERCHANT,            // inferred from the merchant type (e.g. pharmacy) when otherwise OTHER
     USER,                // explicit PATCH/create from an admin user
-    CONSENSUS            // graduated by ConsensusPromotionService (≥N households agreed)
+    CONSENSUS,           // graduated by ConsensusPromotionService (≥N households agreed)
+    LLM                  // enriched by the LLM teacher layer (LlmEnrichmentService)
 }

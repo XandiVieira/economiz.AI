@@ -36,4 +36,9 @@ public class CuratedDictionaryEntry extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private ProductCategory category;
+
+    /** ADMIN (hand-curated / seeded) or LLM (written back by the enrichment layer — auditable, purgeable). */
+    @Column(nullable = false, length = 10)
+    @lombok.Builder.Default
+    private String origin = "ADMIN";
 }

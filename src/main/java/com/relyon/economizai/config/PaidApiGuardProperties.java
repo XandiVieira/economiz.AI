@@ -25,6 +25,12 @@ public class PaidApiGuardProperties {
     /** Max Twilio SMS/WhatsApp messages per user per day. 0 or negative = unlimited. */
     private int twilioDailyCapPerUser = 10;
 
+    /** Max LLM enrichment batch calls per day (global worker, keyed on the system user row = null). */
+    private int llmEnrichDailyCapPerUser = 200;
+
+    /** Max LLM vision photo-extractions per user per day. 0 or negative = unlimited. */
+    private int llmVisionDailyCapPerUser = 5;
+
     /**
      * Global spend ceiling across ALL users per day, in cents (R$). The kill-switch
      * against a viral spike: once today's ledger total reaches this, every paid call
@@ -52,6 +58,12 @@ public class PaidApiGuardProperties {
 
     public int getTwilioDailyCapPerUser() { return twilioDailyCapPerUser; }
     public void setTwilioDailyCapPerUser(int twilioDailyCapPerUser) { this.twilioDailyCapPerUser = twilioDailyCapPerUser; }
+
+    public int getLlmEnrichDailyCapPerUser() { return llmEnrichDailyCapPerUser; }
+    public void setLlmEnrichDailyCapPerUser(int llmEnrichDailyCapPerUser) { this.llmEnrichDailyCapPerUser = llmEnrichDailyCapPerUser; }
+
+    public int getLlmVisionDailyCapPerUser() { return llmVisionDailyCapPerUser; }
+    public void setLlmVisionDailyCapPerUser(int llmVisionDailyCapPerUser) { this.llmVisionDailyCapPerUser = llmVisionDailyCapPerUser; }
 
     public int getDailyGlobalBudgetCents() { return dailyGlobalBudgetCents; }
     public void setDailyGlobalBudgetCents(int dailyGlobalBudgetCents) { this.dailyGlobalBudgetCents = dailyGlobalBudgetCents; }

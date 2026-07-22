@@ -14,6 +14,7 @@ import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "products")
@@ -53,4 +54,15 @@ public class Product extends BaseEntity {
     @Column(name = "categorization_source", nullable = false, length = 30)
     @lombok.Builder.Default
     private CategorizationSource categorizationSource = CategorizationSource.NONE;
+
+    /** LLM teacher-layer bookkeeping — attempts capped so a failing product isn't retried forever. */
+    @Column(name = "llm_enrichment_attempts", nullable = false)
+    @lombok.Builder.Default
+    private int llmEnrichmentAttempts = 0;
+
+    @Column(name = "llm_enriched_at")
+    private LocalDateTime llmEnrichedAt;
+
+    @Column(name = "llm_audited_at")
+    private LocalDateTime llmAuditedAt;
 }

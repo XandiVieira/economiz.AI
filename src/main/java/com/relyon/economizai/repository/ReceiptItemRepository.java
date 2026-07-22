@@ -8,9 +8,14 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface ReceiptItemRepository extends JpaRepository<ReceiptItem, UUID> {
+
+    /** Latest real purchase of a product — price-math sanity input for LLM pack-size enrichment. */
+    Optional<ReceiptItem> findFirstByProductIdOrderByCreatedAtDesc(UUID productId);
+
 
     @Query("""
         SELECT ri FROM ReceiptItem ri
