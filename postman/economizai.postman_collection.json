@@ -5585,7 +5585,7 @@
 							"script": {
 								"type": "text/javascript",
 								"exec": [
-									"var qr = pm.collectionVariables.get('qrPayload');",
+									"var qr = pm.variables.get('qrPayload');",
 									"if (!qr || qr.indexOf('PASTE_REAL') === 0) {",
 									"    pm.test.skip('qrPayload not set — skipping receipt steps');",
 									"    return;",
@@ -6012,7 +6012,7 @@
 							"script": {
 								"type": "text/javascript",
 								"exec": [
-									"var qr = pm.collectionVariables.get('qrPayload');",
+									"var qr = pm.variables.get('qrPayload');",
 									"if (!qr || qr.indexOf('PASTE_REAL') === 0) { pm.test.skip('qrPayload not set — skipping'); return; }",
 									"pm.test('Duplicate returns 409', function () { pm.response.to.have.status(409); });"
 								]
