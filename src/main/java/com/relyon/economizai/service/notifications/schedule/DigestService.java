@@ -1,4 +1,5 @@
 package com.relyon.economizai.service.notifications.schedule;
+import com.relyon.economizai.service.LocalizedMessageService;
 
 import com.relyon.economizai.model.enums.NotificationType;
 import com.relyon.economizai.model.enums.ReceiptStatus;
@@ -30,6 +31,7 @@ public class DigestService {
     private final NotificationRuleRepository ruleRepository;
     private final ReceiptRepository receiptRepository;
     private final NotificationService notificationService;
+    private final LocalizedMessageService messageService;
 
     @Scheduled(cron = "${economizai.notifications.digest.cron:0 0 8 * * MON}",
             zone = "${economizai.notifications.digest.zone:America/Sao_Paulo}")
@@ -46,11 +48,12 @@ public class DigestService {
                     household.getId(), ReceiptStatus.CONFIRMED, since);
             if (receipts == 0) continue;
             var spend = receiptRepository.sumConfirmedTotalSince(household.getId(), since);
+            var locale = LocalizedMessageService.toLocale(rule.getUser().getLocale());
             notificationService.notify(new NotificationPayload(
                     rule.getUser(), NotificationType.DIGEST,
-                    "Seu resumo da semana",
-                    String.format("Nesta semana seu domicílio registrou %d nota(s) e gastou R$ %s. Continue escaneando para acompanhar seus preços!",
-                            receipts, spend),
+                    messageService.translate("notification.digest.title", locale),
+                    messageService.translate("notification.digest.body", locale,
+                            String.valueOf(receipts), String.valueOf(spend)),
                     Map.of("receipts", receipts, "spend", spend, "windowDays", WINDOW_DAYS)));
             sent++;
         }

@@ -1,4 +1,5 @@
 package com.relyon.economizai.service.notifications.schedule;
+import com.relyon.economizai.service.LocalizedMessageService;
 
 import com.relyon.economizai.model.NotificationRule;
 import com.relyon.economizai.model.ReceiptItem;
@@ -42,6 +43,7 @@ public class ReplenishmentService {
     private final NotificationRuleRepository ruleRepository;
     private final ReceiptItemRepository receiptItemRepository;
     private final NotificationService notificationService;
+    private final LocalizedMessageService messageService;
 
     @Scheduled(fixedDelayString = "${economizai.notifications.replenishment.interval-ms:21600000}",
             initialDelayString = "${economizai.notifications.replenishment.initial-delay-ms:60000}")
@@ -92,10 +94,10 @@ public class ReplenishmentService {
 
     private void notify(NotificationRule rule, long avgIntervalDays, LocalDateTime lastPurchase, LocalDateTime predictedRunout) {
         var productName = rule.getProduct().getNormalizedName();
-        var title = "Hora de repor: " + productName;
-        var body = String.format(
-                "Você costuma comprar %s a cada ~%d dias e a última foi em %s — provavelmente está acabando.",
-                productName, avgIntervalDays, lastPurchase.toLocalDate());
+        var locale = LocalizedMessageService.toLocale(rule.getUser().getLocale());
+        var title = messageService.translate("notification.replenishment.title", locale, productName);
+        var body = messageService.translate("notification.replenishment.body", locale,
+                productName, String.valueOf(avgIntervalDays), lastPurchase.toLocalDate().toString());
         notificationService.notify(new NotificationPayload(
                 rule.getUser(), NotificationType.STOCKOUT, title, body,
                 Map.of(

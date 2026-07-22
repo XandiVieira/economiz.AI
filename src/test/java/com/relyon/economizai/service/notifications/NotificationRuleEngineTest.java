@@ -1,4 +1,7 @@
 package com.relyon.economizai.service.notifications;
+import org.mockito.Spy;
+import org.springframework.context.support.ResourceBundleMessageSource;
+import com.relyon.economizai.service.LocalizedMessageService;
 
 import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.MarketLocation;
@@ -25,6 +28,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -38,6 +42,14 @@ class NotificationRuleEngineTest {
     @Mock private MarketLocationService marketLocationService;
     @Mock private MarketNameService marketNameService;
     @Mock private NotificationService notificationService;
+    private static LocalizedMessageService realMessageService() {
+        var source = new ResourceBundleMessageSource();
+        source.setBasename("i18n/messages");
+        source.setDefaultEncoding("UTF-8");
+        return new LocalizedMessageService(source);
+    }
+
+    @Spy private LocalizedMessageService messageService = realMessageService();
     @InjectMocks private NotificationRuleEngine engine;
 
     @BeforeEach
@@ -95,7 +107,25 @@ class NotificationRuleEngineTest {
         var captor = ArgumentCaptor.forClass(NotificationPayload.class);
         verify(notificationService).notify(captor.capture());
         assertEquals(NotificationType.PRICE_DROP, captor.getValue().type());
+        // localized to the recipient's default (pt) locale
+        assertTrue(captor.getValue().title().startsWith("Preço baixou:"), captor.getValue().title());
         verify(ruleRepository).saveAll(any());
+    }
+
+    @Test
+    void priceDrop_notificationLocalizedToUserLocale_en() {
+        var enUser = owner(null, null);
+        enUser.setLocale("en");
+        var rule = priceRule(NotificationType.PRICE_DROP, new BigDecimal("6.00"), null, null, enUser);
+        when(ruleRepository.findActiveProductRules(any(), any())).thenReturn(List.of(rule));
+        lenient().when(marketLocationService.findByCnpjs(any())).thenReturn(Map.of());
+
+        engine.evaluate(List.of(observation(new BigDecimal("5.49"))), CONTRIBUTOR_HOUSEHOLD);
+
+        var captor = ArgumentCaptor.forClass(NotificationPayload.class);
+        verify(notificationService).notify(captor.capture());
+        assertTrue(captor.getValue().title().startsWith("Price drop:"), captor.getValue().title());
+        assertTrue(captor.getValue().body().contains("You asked to be alerted below"), captor.getValue().body());
     }
 
     @Test

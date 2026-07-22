@@ -16,6 +16,21 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-07-22 — Tudo localizado (pt/en): validação, e-mails e notificações
+
+Fechamos as lacunas de i18n. Agora respeitam `Accept-Language` / o idioma do usuário:
+- **Erros de validação por campo** (`@NotBlank`/`@Size`/`@Email`…) — antes vinham em
+  inglês fixo no mapa `errors`; agora localizados (o `message` de topo já era).
+- **E-mails de auth** (redefinição de senha, confirmação de e-mail) — antes só pt.
+- **Notificações push** (queda de preço, reposição, orçamento, resumo semanal, ofertas)
+  — antes só pt.
+
+Novo: cada usuário tem um **idioma** capturado do `Accept-Language` no cadastro
+(default `pt`) — decide a língua de e-mails e push (que saem fora do request). Mande
+`Accept-Language: en` no register / login social pra criar conta em inglês.
+
+---
+
 ## 2026-07-22 — Login por senha em conta social → 409 com o provedor
 
 `POST /auth/login` com e-mail/senha numa conta que foi criada via Google/Apple

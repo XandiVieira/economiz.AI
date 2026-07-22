@@ -1,4 +1,7 @@
 package com.relyon.economizai.service.notifications.schedule;
+import org.mockito.Spy;
+import org.springframework.context.support.ResourceBundleMessageSource;
+import com.relyon.economizai.service.LocalizedMessageService;
 
 import com.relyon.economizai.config.CollaborativeProperties;
 import com.relyon.economizai.dto.response.DealResponse;
@@ -53,6 +56,14 @@ class DealsDigestSchedulerTest {
     @Mock private NotificationService notificationService;
     @Mock private NotificationEventService eventService;
     @Mock private DigestScheduleService scheduleService;
+    private static LocalizedMessageService realMessageService() {
+        var source = new ResourceBundleMessageSource();
+        source.setBasename("i18n/messages");
+        source.setDefaultEncoding("UTF-8");
+        return new LocalizedMessageService(source);
+    }
+
+    @Spy private LocalizedMessageService messageService = realMessageService();
     @InjectMocks private DealsDigestScheduler scheduler;
 
     private final CollaborativeProperties properties = new CollaborativeProperties();

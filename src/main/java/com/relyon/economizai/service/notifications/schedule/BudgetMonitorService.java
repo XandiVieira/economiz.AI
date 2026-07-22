@@ -1,4 +1,5 @@
 package com.relyon.economizai.service.notifications.schedule;
+import com.relyon.economizai.service.LocalizedMessageService;
 
 import com.relyon.economizai.model.NotificationRule;
 import com.relyon.economizai.model.enums.NotificationType;
@@ -34,6 +35,7 @@ public class BudgetMonitorService {
     private final NotificationRuleRepository ruleRepository;
     private final ReceiptRepository receiptRepository;
     private final NotificationService notificationService;
+    private final LocalizedMessageService messageService;
 
     @Scheduled(fixedDelayString = "${economizai.notifications.budget.interval-ms:21600000}",
             initialDelayString = "${economizai.notifications.budget.initial-delay-ms:90000}")
@@ -63,12 +65,11 @@ public class BudgetMonitorService {
     }
 
     private void notify(NotificationRule rule, BigDecimal spend) {
-        var title = "Orçamento do mês atingido";
-        var monthName = LocalDate.now().getMonth()
-                .getDisplayName(TextStyle.FULL, Locale.forLanguageTag("pt-BR"));
-        var body = String.format(
-                "Seu domicílio já gastou R$ %s em %s, atingindo o limite de R$ %s que você definiu.",
-                spend, monthName, rule.getThresholdPrice());
+        var locale = LocalizedMessageService.toLocale(rule.getUser().getLocale());
+        var title = messageService.translate("notification.budget.title", locale);
+        var monthName = LocalDate.now().getMonth().getDisplayName(TextStyle.FULL, locale);
+        var body = messageService.translate("notification.budget.body", locale,
+                spend.toString(), monthName, rule.getThresholdPrice().toString());
         notificationService.notify(new NotificationPayload(
                 rule.getUser(), NotificationType.BUDGET, title, body,
                 Map.of(

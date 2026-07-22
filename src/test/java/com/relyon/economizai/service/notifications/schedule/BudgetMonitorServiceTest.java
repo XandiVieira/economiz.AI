@@ -1,4 +1,7 @@
 package com.relyon.economizai.service.notifications.schedule;
+import org.mockito.Spy;
+import org.springframework.context.support.ResourceBundleMessageSource;
+import com.relyon.economizai.service.LocalizedMessageService;
 
 import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.NotificationRule;
@@ -33,6 +36,14 @@ class BudgetMonitorServiceTest {
     @Mock private NotificationRuleRepository ruleRepository;
     @Mock private ReceiptRepository receiptRepository;
     @Mock private NotificationService notificationService;
+    private static LocalizedMessageService realMessageService() {
+        var source = new ResourceBundleMessageSource();
+        source.setBasename("i18n/messages");
+        source.setDefaultEncoding("UTF-8");
+        return new LocalizedMessageService(source);
+    }
+
+    @Spy private LocalizedMessageService messageService = realMessageService();
     @InjectMocks private BudgetMonitorService service;
 
     private static final UUID HOUSEHOLD_ID = UUID.randomUUID();

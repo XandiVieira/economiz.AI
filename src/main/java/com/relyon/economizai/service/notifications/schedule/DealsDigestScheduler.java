@@ -1,4 +1,5 @@
 package com.relyon.economizai.service.notifications.schedule;
+import com.relyon.economizai.service.LocalizedMessageService;
 
 import com.relyon.economizai.config.CollaborativeProperties;
 import com.relyon.economizai.dto.response.DealResponse;
@@ -62,6 +63,7 @@ public class DealsDigestScheduler {
     private static final int DEAL_LIMIT = 50;
 
     private final UserRepository userRepository;
+    private final LocalizedMessageService messageService;
     private final DealsService dealsService;
     private final DealSurfaceStateRepository surfaceStateRepository;
     private final NotificationService notificationService;
@@ -203,12 +205,15 @@ public class DealsDigestScheduler {
                 .setScale(0, RoundingMode.HALF_UP)
                 .intValueExact();
         var others = newsworthyCount - 1;
-        var ofertaWord = others == 1 ? "oferta" : "ofertas";
-        var title = "Ofertas pra você";
+        var locale = LocalizedMessageService.toLocale(user.getLocale());
+        var dealWord = messageService.translate(
+                others == 1 ? "notification.deals.word.one" : "notification.deals.word.many", locale);
+        var title = messageService.translate("notification.deals.title", locale);
         var body = others > 0
-                ? String.format("%s %d%% mais barato — e mais %d %s pra você",
-                        best.productName(), discountPct, others, ofertaWord)
-                : String.format("%s %d%% mais barato pra você", best.productName(), discountPct);
+                ? messageService.translate("notification.deals.body.multi", locale,
+                        best.productName(), String.valueOf(discountPct), String.valueOf(others), dealWord)
+                : messageService.translate("notification.deals.body.single", locale,
+                        best.productName(), String.valueOf(discountPct));
 
         var extras = new HashMap<String, Object>();
         extras.put("deeplink", "economizai://deals");

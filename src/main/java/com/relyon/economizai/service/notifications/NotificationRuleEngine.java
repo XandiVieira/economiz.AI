@@ -1,4 +1,5 @@
 package com.relyon.economizai.service.notifications;
+import com.relyon.economizai.service.LocalizedMessageService;
 
 import com.relyon.economizai.model.MarketLocation;
 import com.relyon.economizai.model.NotificationRule;
@@ -49,6 +50,7 @@ public class NotificationRuleEngine {
     private static final Duration COOLDOWN = Duration.ofHours(24);
 
     private final NotificationRuleRepository ruleRepository;
+    private final LocalizedMessageService messageService;
     private final MarketLocationService marketLocationService;
     private final MarketNameService marketNameService;
     private final NotificationService notificationService;
@@ -120,9 +122,10 @@ public class NotificationRuleEngine {
     private void notifyPriceRule(NotificationRule rule, PriceObservation observation) {
         var productName = observation.getProduct().getNormalizedName();
         var marketName = friendlyMarketName(rule, observation);
-        var title = "Preço baixou: " + productName;
-        var body = String.format("%s saiu por R$ %s no %s. Você pediu para avisar abaixo de R$ %s.",
-                productName, observation.getUnitPrice(), marketName, rule.getThresholdPrice());
+        var locale = LocalizedMessageService.toLocale(rule.getUser().getLocale());
+        var title = messageService.translate("notification.price_drop.title", locale, productName);
+        var body = messageService.translate("notification.price_drop.body", locale,
+                productName, observation.getUnitPrice().toString(), marketName, rule.getThresholdPrice().toString());
         notificationService.notify(new NotificationPayload(
                 rule.getUser(), rule.getType(), title, body, baseExtras(rule, observation)));
     }
