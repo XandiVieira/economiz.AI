@@ -59,13 +59,17 @@ conta LOCAL já verificada, **vincula**; se não verificada, rejeita (anti-takeo
 
 ---
 
-## 2026-07-22 — Exportar histórico de compras (CSV) — sugestão de usuário
+## 2026-07-22 — Exportar histórico de compras (CSV e XLSX) — sugestão de usuário
 
 Novo `GET /api/v1/receipts/export?from=&to=` (autenticado): baixa um CSV do
 histórico CONFIRMADO do domicílio — uma linha por item (não-excluído), com
 data, mercado, CNPJ, **chave de acesso**, item, quantidade, preço e categoria.
-Formato amigável ao Excel brasileiro: separador `;`, decimais com vírgula,
-UTF-8 com BOM, cabeçalhos localizados. `Content-Disposition: attachment`.
+Formatos: `?format=csv` (padrão — separador `;`, decimais com vírgula,
+UTF-8 com BOM, amigável ao Excel brasileiro) ou `?format=xlsx` (planilha
+com células tipadas de data/número — abre certo em qualquer locale).
+Cabeçalhos localizados. `Content-Disposition: attachment`. Entrega é
+**download direto** (o app salva/compartilha o arquivo); envio por e-mail
+pode vir depois como opção.
 PRO no plano de monetização, mas liberado enquanto o enforcement de assinatura
 estiver desligado (hoje). Janela de histórico FREE se aplica quando ligado.
 

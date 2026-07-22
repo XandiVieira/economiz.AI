@@ -100,22 +100,24 @@ public class ReceiptController {
     }
 
     /**
-     * CSV of the household's confirmed purchase history (one row per item,
-     * includes the chave de acesso). Brazilian-Excel-friendly: semicolon
-     * separator, comma decimals, UTF-8 BOM. PRO-gated (dormant while
-     * subscription enforcement is off); FREE history window applies.
+     * Download of the household's confirmed purchase history (one row per
+     * item, includes the chave de acesso) as CSV (default, Brazilian-Excel
+     * friendly) or XLSX ({@code ?format=xlsx}, typed cells). PRO-gated
+     * (dormant while subscription enforcement is off); FREE history window
+     * applies.
      */
     @GetMapping("/export")
-    public ResponseEntity<byte[]> exportCsv(
+    public ResponseEntity<byte[]> export(
             @AuthenticationPrincipal User user,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to) {
-        var csv = receiptExportService.exportPurchaseHistory(user, from, to);
-        var filename = "economizai-historico-" + LocalDate.now() + ".csv";
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
+            @RequestParam(defaultValue = "csv") ReceiptExportService.ExportFormat format) {
+        var file = receiptExportService.exportPurchaseHistory(user, from, to, format);
+        var filename = "economizai-historico-" + LocalDate.now() + "." + file.fileExtension();
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
-                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
-                .body(csv.getBytes(StandardCharsets.UTF_8));
+                .contentType(MediaType.parseMediaType(file.mediaType()))
+                .body(file.content());
     }
 
     @GetMapping("/{id}")

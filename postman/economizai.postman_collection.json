@@ -1884,7 +1884,7 @@
 					"response": []
 				},
 				{
-					"name": "Export purchase history (CSV)",
+					"name": "Export purchase history (CSV / XLSX)",
 					"request": {
 						"method": "GET",
 						"header": [
@@ -1898,7 +1898,7 @@
 							}
 						],
 						"url": {
-							"raw": "{{baseUrl}}/api/v1/receipts/export?from=&to=",
+							"raw": "{{baseUrl}}/api/v1/receipts/export?format=csv",
 							"host": [
 								"{{baseUrl}}"
 							],
@@ -1920,10 +1920,16 @@
 									"value": "",
 									"description": "optional ISO date-time",
 									"disabled": true
+								},
+								{
+									"key": "format",
+									"value": "xlsx",
+									"description": "csv (default) or xlsx",
+									"disabled": true
 								}
 							]
 						},
-						"description": "CSV of the household's CONFIRMED purchase history — one row per non-excluded item, includes chave de acesso. Semicolon separator, comma decimals, UTF-8 BOM (Brazilian Excel). PRO-gated (dormant while enforcement off); FREE history window applies."
+						"description": "Download of the household's CONFIRMED purchase history — one row per non-excluded item, includes chave de acesso. format=csv (default; semicolon separator, comma decimals, UTF-8 BOM for Brazilian Excel) or format=xlsx (typed date/number cells). PRO-gated (dormant while enforcement off); FREE history window applies."
 					},
 					"response": []
 				}

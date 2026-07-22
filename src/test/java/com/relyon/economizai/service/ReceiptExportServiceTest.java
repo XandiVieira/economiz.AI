@@ -9,6 +9,7 @@ import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.repository.ReceiptRepository;
 import com.relyon.economizai.service.subscription.Feature;
 import com.relyon.economizai.service.subscription.SubscriptionGateService;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,7 +19,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 
+import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.Month;
 import java.util.List;
@@ -85,7 +88,7 @@ class ReceiptExportServiceTest {
         when(receiptRepository.findAll(any(Specification.class), any(Sort.class)))
                 .thenReturn(List.of(confirmedReceipt(item("CHOPP BRAHMA 440ml", "14.00", false))));
 
-        var csv = service.exportPurchaseHistory(user, null, null);
+        var csv = new String(service.exportPurchaseHistory(user, null, null, ReceiptExportService.ExportFormat.CSV).content(), StandardCharsets.UTF_8);
 
         assertThat(csv).startsWith("﻿");
         var lines = csv.substring(1).split("\n");
@@ -105,9 +108,30 @@ class ReceiptExportServiceTest {
                         item("ARROZ 5KG", "28.90", false),
                         item("ITEM EXCLUIDO", "9.99", true))));
 
-        var csv = service.exportPurchaseHistory(user, null, null);
+        var csv = new String(service.exportPurchaseHistory(user, null, null, ReceiptExportService.ExportFormat.CSV).content(), StandardCharsets.UTF_8);
 
         assertThat(csv).contains("ARROZ 5KG").doesNotContain("ITEM EXCLUIDO");
+    }
+
+    @Test
+    void export_xlsx_producesReadableWorkbookWithTypedCells() throws Exception {
+        when(receiptRepository.findAll(any(Specification.class), any(Sort.class)))
+                .thenReturn(List.of(confirmedReceipt(item("CHOPP BRAHMA 440ml", "14.00", false))));
+
+        var file = service.exportPurchaseHistory(user, null, null, ReceiptExportService.ExportFormat.XLSX);
+
+        assertThat(file.mediaType()).contains("spreadsheetml");
+        assertThat(file.fileExtension()).isEqualTo("xlsx");
+        try (var workbook = new XSSFWorkbook(new ByteArrayInputStream(file.content()))) {
+            var sheet = workbook.getSheetAt(0);
+            assertThat(sheet.getRow(0).getCell(0).getStringCellValue()).isEqualTo("export.header.date");
+            var dataRow = sheet.getRow(1);
+            assertThat(dataRow.getCell(0).getLocalDateTimeCellValue())
+                    .isEqualTo(LocalDateTime.of(2026, Month.JULY, 20, 18, 30));
+            assertThat(dataRow.getCell(4).getStringCellValue()).isEqualTo("CHOPP BRAHMA 440ml");
+            assertThat(dataRow.getCell(7).getNumericCellValue()).isEqualTo(14.00);
+            assertThat(dataRow.getCell(10).getNumericCellValue()).isEqualTo(47.00);
+        }
     }
 
     @Test
@@ -115,7 +139,7 @@ class ReceiptExportServiceTest {
         doThrow(new PaywallException(Feature.CSV_EXPORT.name()))
                 .when(subscriptionGate).require(user, Feature.CSV_EXPORT);
 
-        assertThrows(PaywallException.class, () -> service.exportPurchaseHistory(user, null, null));
+        assertThrows(PaywallException.class, () -> service.exportPurchaseHistory(user, null, null, ReceiptExportService.ExportFormat.CSV));
         verify(receiptRepository, never()).findAll(any(Specification.class), any(Sort.class));
     }
 
@@ -126,7 +150,7 @@ class ReceiptExportServiceTest {
         when(subscriptionGate.clampFrom(user, requestedFrom)).thenReturn(clampedFrom);
         when(receiptRepository.findAll(any(Specification.class), any(Sort.class))).thenReturn(List.of());
 
-        service.exportPurchaseHistory(user, requestedFrom, null);
+        service.exportPurchaseHistory(user, requestedFrom, null, ReceiptExportService.ExportFormat.CSV);
 
         verify(subscriptionGate).clampFrom(user, requestedFrom);
     }
