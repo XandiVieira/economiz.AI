@@ -382,3 +382,25 @@ metered per-scrape not per-solve; cap enforced async not fail-fast at submit.)
 The receipts/week metric is the one to obsess over — it's the panel quality
 signal that everything else (Pro retention, B2B sellability) ultimately
 depends on.
+
+## Unit economics — custo por nota ingerida (estudo 2026-07-22)
+
+Risco de bloqueio de IP: baixo hoje (volume pequeno, 1 consulta/chave, dedup
+cross-household); a resposta de escala é proxy residencial BR (~R$1-2 por
+1.000 consultas — 100x mais barato que Infosimples) e não mais API paga.
+
+| Estratégia | Custo/nota |
+|---|---|
+| Scrape gratuito (atual) | R$0 |
+| Scrape via proxy BR (escala) | ~R$0,002 |
+| Captcha solve (MS/SC) | R$0,03-0,09 |
+| LLM parseia HTML já baixado (Haiku-class, prompt cacheado) | R$0,03-0,08 |
+| LLM vision lê foto da nota (sem SEFAZ) | ~R$0,05 — degrada EAN/matching; só p/ contingência |
+| Infosimples | R$0,24 |
+
+Cadeia recomendada (cada camada resgata a anterior): scrape grátis → LLM
+extrai do HTML quando o parser falha (auto-cura mudanças de layout; substitui
+a maioria dos resgates Infosimples) → Infosimples só quando o FETCH falha →
+solver p/ captcha. Custo misto projetado: ~R$0,01-0,02/nota (vs R$0,24 se
+tudo fosse Infosimples). LLM NÃO substitui o fetch — o risco de IP/captcha
+mora no HTTP, não no parse.
