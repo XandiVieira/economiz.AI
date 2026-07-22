@@ -333,7 +333,7 @@ signature-gated or experimental state while the paid by-chave fallback is off.
 ### State coverage — every UF is accepted
 
 Since 2026-07-16 **all 27 UFs are accepted at submit**. Verified states
-(RS, PR, SP, SC, MS — plus CE when Infosimples is on) use their dedicated
+(RS, PR, SP, SC, MS, GO — plus CE when Infosimples is on) use their dedicated
 adapters; every other state goes through an **experimental fallback chain**
 (GET the QR's own portal URL + shared DANFE parser, then Infosimples when
 enabled). If every layer fails, the receipt lands in `status=FAILED_PARSE`

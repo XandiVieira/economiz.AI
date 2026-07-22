@@ -59,6 +59,17 @@ conta LOCAL já verificada, **vincula**; se não verificada, rejeita (anti-takeo
 
 ---
 
+## 2026-07-22 — GO virou estado verificado (scan gratuito)
+
+Goiás saiu da cadeia experimental: adapter dedicado no portal
+`nfeweb.sefaz.go.gov.br` (sem captcha — shell → cookie de sessão → DANFE
+embutido em JS → parser padrão). Antes toda nota de GO era resgatada pela
+Infosimples (paga); agora a camada gratuita resolve. Digitação manual de
+chave também funciona para GO (a consulta não exige assinatura do QR).
+Validado com as notas reais do primeiro usuário orgânico de GO.
+
+---
+
 ## 2026-07-22 — Exportar histórico de compras (CSV e XLSX) — sugestão de usuário
 
 Novo `GET /api/v1/receipts/export?from=&to=` (autenticado): baixa um CSV do
