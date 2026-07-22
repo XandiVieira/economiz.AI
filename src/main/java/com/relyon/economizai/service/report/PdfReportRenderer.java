@@ -1,6 +1,5 @@
 package com.relyon.economizai.service.report;
 
-import com.lowagie.text.Chunk;
 import com.lowagie.text.Document;
 import com.lowagie.text.DocumentException;
 import com.lowagie.text.Element;
@@ -9,8 +8,10 @@ import com.lowagie.text.Image;
 import com.lowagie.text.PageSize;
 import com.lowagie.text.Paragraph;
 import com.lowagie.text.Phrase;
+import com.lowagie.text.pdf.ColumnText;
 import com.lowagie.text.pdf.PdfPCell;
 import com.lowagie.text.pdf.PdfPTable;
+import com.lowagie.text.pdf.PdfPageEventHelper;
 import com.lowagie.text.pdf.PdfWriter;
 import com.relyon.economizai.service.LocalizedMessageService;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,9 @@ import org.jfree.chart.ChartFactory;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.axis.CategoryLabelPositions;
 import org.jfree.chart.plot.PiePlot;
+import org.jfree.chart.renderer.category.BarRenderer;
+import org.jfree.chart.renderer.category.LineAndShapeRenderer;
+import org.jfree.chart.renderer.category.StandardBarPainter;
 import org.jfree.data.category.DefaultCategoryDataset;
 import org.jfree.data.general.DefaultPieDataset;
 import org.springframework.stereotype.Component;
@@ -47,11 +51,13 @@ public class PdfReportRenderer {
     private static final Color BRAND_GREEN = new Color(0x2E, 0x7D, 0x32);
     private static final Color LIGHT_GREEN = new Color(0xE8, 0xF5, 0xE9);
     private static final Color ROW_SHADE = new Color(0xF5, 0xF5, 0xF5);
+    // Brand green leads; the rest are deliberately distinct hues so adjacent
+    // pie slices stay tellable-apart (an all-green ramp blurs together in print).
     private static final Color[] CHART_PALETTE = {
-            new Color(0x2E, 0x7D, 0x32), new Color(0x66, 0xBB, 0x6A), new Color(0xA5, 0xD6, 0xA7),
-            new Color(0x1B, 0x5E, 0x20), new Color(0x81, 0xC7, 0x84), new Color(0x4C, 0xAF, 0x50),
-            new Color(0xC8, 0xE6, 0xC9), new Color(0x38, 0x8E, 0x3C), new Color(0x00, 0x69, 0x5C),
-            new Color(0x26, 0xA6, 0x9A)};
+            new Color(0x2E, 0x7D, 0x32), new Color(0x26, 0xA6, 0x9A), new Color(0xFF, 0xB3, 0x00),
+            new Color(0x6D, 0x4C, 0x41), new Color(0x66, 0xBB, 0x6A), new Color(0x54, 0x6E, 0x7A),
+            new Color(0xEF, 0x6C, 0x00), new Color(0x00, 0x83, 0x8F), new Color(0x9E, 0x9D, 0x24),
+            new Color(0x8D, 0x6E, 0x63)};
     private static final DateTimeFormatter CELL_DATE = DateTimeFormatter.ofPattern("dd/MM/yy");
     private static final DateTimeFormatter MONTH_LABEL = DateTimeFormatter.ofPattern("MM/yyyy");
 
@@ -60,13 +66,13 @@ public class PdfReportRenderer {
     public byte[] render(PurchaseReportData report) {
         try (var output = new ByteArrayOutputStream()) {
             var document = new Document(PageSize.A4, 36, 36, 48, 42);
-            PdfWriter.getInstance(document, output);
+            var writer = PdfWriter.getInstance(document, output);
+            writer.setPageEvent(new FooterOnEveryPage(translate("report.footer")));
             document.open();
             titleBand(document);
             kpiCards(document, report);
             charts(document, report);
             itemsTable(document, report);
-            footer(document);
             document.close();
             return output.toByteArray();
         } catch (IOException | DocumentException ex) {
@@ -137,8 +143,8 @@ public class PdfReportRenderer {
         table.setHeaderRows(1);
         for (var header : List.of(
                 translate("export.header.date"), translate("export.header.market"),
-                translate("export.header.item"), translate("export.header.quantity"),
-                translate("export.header.unit"), translate("export.header.unit-price"),
+                translate("export.header.item"), translate("export.header.quantity-short"),
+                translate("export.header.unit-short"), translate("export.header.unit-price"),
                 translate("export.header.item-total"), translate("export.header.category"))) {
             var cell = new PdfPCell(new Phrase(header, FontFactory.getFont(FontFactory.HELVETICA_BOLD, 8, Color.WHITE)));
             cell.setBackgroundColor(BRAND_GREEN);
@@ -151,22 +157,30 @@ public class PdfReportRenderer {
             table.addCell(bodyCell(item.issuedAt() == null ? "" : CELL_DATE.format(item.issuedAt()), background, Element.ALIGN_LEFT));
             table.addCell(bodyCell(safe(item.market()), background, Element.ALIGN_LEFT));
             table.addCell(bodyCell(safe(item.item()), background, Element.ALIGN_LEFT));
-            table.addCell(bodyCell(plain(item.quantity()), background, Element.ALIGN_RIGHT));
+            table.addCell(bodyCell(quantityText(item.quantity()), background, Element.ALIGN_RIGHT));
             table.addCell(bodyCell(safe(item.unit()), background, Element.ALIGN_CENTER));
-            table.addCell(bodyCell(plain(item.unitPrice()), background, Element.ALIGN_RIGHT));
-            table.addCell(bodyCell(plain(item.itemTotal()), background, Element.ALIGN_RIGHT));
+            table.addCell(bodyCell(moneyText(item.unitPrice()), background, Element.ALIGN_RIGHT));
+            table.addCell(bodyCell(moneyText(item.itemTotal()), background, Element.ALIGN_RIGHT));
             table.addCell(bodyCell(categoryLabel(item.category()), background, Element.ALIGN_LEFT));
             shaded = !shaded;
         }
         document.add(table);
     }
 
-    private void footer(Document document) {
-        var footer = new Paragraph(new Chunk(translate("report.footer"),
-                FontFactory.getFont(FontFactory.HELVETICA_OBLIQUE, 8, Color.GRAY)));
-        footer.setSpacingBefore(10);
-        footer.setAlignment(Element.ALIGN_CENTER);
-        document.add(footer);
+    /** Footer drawn at a fixed position on every page — never flows into an extra page. */
+    private static final class FooterOnEveryPage extends PdfPageEventHelper {
+        private final Phrase footerPhrase;
+
+        private FooterOnEveryPage(String footerText) {
+            this.footerPhrase = new Phrase(footerText,
+                    FontFactory.getFont(FontFactory.HELVETICA_OBLIQUE, 7.5f, Color.GRAY));
+        }
+
+        @Override
+        public void onEndPage(PdfWriter writer, Document document) {
+            ColumnText.showTextAligned(writer.getDirectContent(), Element.ALIGN_CENTER,
+                    footerPhrase, (document.left() + document.right()) / 2, document.bottom() - 22, 0);
+        }
     }
 
     // ---------- charts (JFreeChart → PNG) ----------
@@ -176,13 +190,37 @@ public class PdfReportRenderer {
         for (var monthly : report.monthlySeries()) {
             dataset.addValue(monthly.total(), translate("report.chart.total"), MONTH_LABEL.format(monthly.month()));
         }
+        // A line needs two points — a single month renders an empty plot, so
+        // fall back to a bar for short histories and show markers otherwise.
+        if (report.monthlySeries().size() < 2) {
+            var chart = ChartFactory.createBarChart(translate("report.chart.monthly-title"),
+                    null, null, dataset);
+            styleChart(chart);
+            flattenBars(chart);
+            chart.removeLegend();
+            return chart;
+        }
         var chart = ChartFactory.createLineChart(translate("report.chart.monthly-title"),
                 null, null, dataset);
         styleChart(chart);
         var plot = chart.getCategoryPlot();
+        if (plot.getRenderer() instanceof LineAndShapeRenderer lineRenderer) {
+            lineRenderer.setDefaultShapesVisible(true);
+        }
         plot.getRenderer().setSeriesPaint(0, BRAND_GREEN);
         plot.getRenderer().setSeriesStroke(0, new BasicStroke(2.4f));
         return chart;
+    }
+
+    /** Kill JFreeChart's default glossy gradient and cap the bar width. */
+    private static void flattenBars(JFreeChart chart) {
+        var plot = chart.getCategoryPlot();
+        if (plot.getRenderer() instanceof BarRenderer barRenderer) {
+            barRenderer.setBarPainter(new StandardBarPainter());
+            barRenderer.setMaximumBarWidth(0.18);
+            barRenderer.setShadowVisible(false);
+            barRenderer.setSeriesPaint(0, BRAND_GREEN);
+        }
     }
 
     private JFreeChart categoryChart(PurchaseReportData report) {
@@ -215,10 +253,9 @@ public class PdfReportRenderer {
         var chart = ChartFactory.createBarChart(translate("report.chart.markets-title"),
                 null, null, dataset);
         styleChart(chart);
-        var plot = chart.getCategoryPlot();
-        plot.getRenderer().setSeriesPaint(0, BRAND_GREEN);
+        flattenBars(chart);
         chart.removeLegend();
-        var domainAxis = plot.getDomainAxis();
+        var domainAxis = chart.getCategoryPlot().getDomainAxis();
         domainAxis.setCategoryLabelPositions(CategoryLabelPositions.UP_45);
         return chart;
     }
@@ -281,8 +318,12 @@ public class PdfReportRenderer {
                 : value.setScale(2, RoundingMode.HALF_UP).toPlainString().replace('.', ','));
     }
 
-    private static String plain(BigDecimal value) {
-        return value == null ? "" : value.toPlainString().replace('.', ',');
+    private static String moneyText(BigDecimal value) {
+        return value == null ? "" : value.setScale(2, RoundingMode.HALF_UP).toPlainString().replace('.', ',');
+    }
+
+    private static String quantityText(BigDecimal value) {
+        return value == null ? "" : value.stripTrailingZeros().toPlainString().replace('.', ',');
     }
 
     private static String safe(String value) {
