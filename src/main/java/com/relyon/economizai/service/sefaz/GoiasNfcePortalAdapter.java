@@ -47,8 +47,8 @@ public class GoiasNfcePortalAdapter implements SefazAdapter {
 
     private static final String BASE_URL = "https://nfeweb.sefaz.go.gov.br";
     private static final String SHELL_URL = BASE_URL + "/nfeweb/sites/nfce/danfeNFCe?p=";
-    private static final String RENDER_URL = BASE_URL + "/nfeweb/sites/nfce/render/danfeNFCe?chNFe=";
     private static final String DANFE_CALL_MARKER = "new DanfeNFCe(";
+    private static final Pattern JSESSIONID_IN_URL = Pattern.compile(";jsessionid=([A-Za-z0-9._\\-:]+)");
     private static final Pattern UNICODE_ESCAPE = Pattern.compile("\\\\u([0-9a-fA-F]{4})");
 
     private final RestClient restClient;
@@ -59,7 +59,10 @@ public class GoiasNfcePortalAdapter implements SefazAdapter {
                                   @Value("${economizai.ingestion.sefaz.timeout-ms:30000}") int timeoutMs,
                                   @Value("${economizai.ingestion.sefaz.retry.max-attempts:5}") int maxAttempts,
                                   @Value("${economizai.ingestion.sefaz.retry.delay-ms:5000}") long retryDelayMs,
-                                  @Value("${economizai.ingestion.sefaz.user-agent:economizai}") String userAgent) {
+                                  @Value("${economizai.ingestion.sefaz.go-user-agent:Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36}") String userAgent) {
+        // Browser-like UA on purpose: the portal sits behind F5 bot defense
+        // (TS* cookies) that intermittently serves cloud IPs a null DANFE embed
+        // for non-browser UAs — the same request from a residential IP works.
         this.maxAttempts = Math.max(1, maxAttempts);
         this.retryDelayMs = Math.max(0, retryDelayMs);
         var requestFactory = new SimpleClientHttpRequestFactory();
@@ -107,8 +110,11 @@ public class GoiasNfcePortalAdapter implements SefazAdapter {
         if (sessionCookies == null) {
             throw new SefazFetchException(UnidadeFederativa.GO.name());
         }
+        // Belt and suspenders: besides the cookies, pin the session via JBoss
+        // URL rewriting (the portal's own script tags use ;jsessionid=…), so a
+        // route that drops cookies still lands on the session's node.
         var renderPage = restClient.get()
-                .uri(RENDER_URL + chave)
+                .uri(renderUrl(chave, extractJsessionId(shellResponse.getBody())))
                 .header(HttpHeaders.COOKIE, sessionCookies)
                 .header(HttpHeaders.REFERER, SHELL_URL + chave + "|3|1")
                 .retrieve()
@@ -126,6 +132,19 @@ public class GoiasNfcePortalAdapter implements SefazAdapter {
     @Override
     public ParsedReceipt parseHtml(String html, String chaveAcesso, String sourceUrl) {
         return ScNfceDanfeParser.parse(html, chaveAcesso, sourceUrl);
+    }
+
+    static String renderUrl(String chave, String jsessionId) {
+        var base = BASE_URL + "/nfeweb/sites/nfce/render/danfeNFCe";
+        var sessionPath = jsessionId == null ? "" : ";jsessionid=" + jsessionId;
+        return base + sessionPath + "?chNFe=" + chave;
+    }
+
+    /** The session id as the portal's own URL-rewritten links carry it (e.g. {@code abc.jbprodeap17:eap08}). */
+    static String extractJsessionId(String shellHtml) {
+        if (shellHtml == null) return null;
+        var matcher = JSESSIONID_IN_URL.matcher(shellHtml);
+        return matcher.find() ? matcher.group(1) : null;
     }
 
     /**

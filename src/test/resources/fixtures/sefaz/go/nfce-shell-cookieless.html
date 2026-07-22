@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+
+
+<html class="no-js no-ie" dir="ltr" lang="pt-BR">
+<!--<![endif]-->
+
+<head>
+    <title>Nota Fiscal do Consumidor(NFC-e)</title>
+
+	<meta charset="UTF-8" />
+    <meta content="text/html; charset=utf-8" http-equiv="Content-Type" />
+    <meta content="index, follow" name="robots" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+
+    <meta content="IE=11" http-equiv="X-UA-Compatible" />
+
+	<!--[if lt IE 9]>
+	  <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+	  <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+	<![endif]-->
+
+    <link rel="stylesheet" href="/nfeweb/static/css/plugins/bootstrap/bootstrap.min.css;jsessionid=v0Bm0JlzbNv6cHF1zMhq8cWeM9FT0PqvNEl4rYOJ.jbprodeap18:eap09" />
+    <link rel="stylesheet" href="/nfeweb/static/css/plugins/reset.css;jsessionid=v0Bm0JlzbNv6cHF1zMhq8cWeM9FT0PqvNEl4rYOJ.jbprodeap18:eap09" />
+    <link rel="stylesheet" href="/nfeweb/static/css/plugins/boilerplate/main.css;jsessionid=v0Bm0JlzbNv6cHF1zMhq8cWeM9FT0PqvNEl4rYOJ.jbprodeap18:eap09" />
+
+    <link rel="stylesheet" href="/nfeweb/static/css/specific/partials.css;jsessionid=v0Bm0JlzbNv6cHF1zMhq8cWeM9FT0PqvNEl4rYOJ.jbprodeap18:eap09" />
+    <link rel="stylesheet" href="/nfeweb/static/css/specific/loading.css;jsessionid=v0Bm0JlzbNv6cHF1zMhq8cWeM9FT0PqvNEl4rYOJ.jbprodeap18:eap09" />
+
+    <link rel="stylesheet" href="/nfeweb/static/css/override/default-normalize.css;jsessionid=v0Bm0JlzbNv6cHF1zMhq8cWeM9FT0PqvNEl4rYOJ.jbprodeap18:eap09" />
+    <link rel="stylesheet" href="/nfeweb/static/css/override/mobile-width-fix.css;jsessionid=v0Bm0JlzbNv6cHF1zMhq8cWeM9FT0PqvNEl4rYOJ.jbprodeap18:eap09" />
+
+	<div>
+    <div>
+   <link rel="stylesheet" href="/nfeweb/static/css/app/nfce/showDanfeNFCe.css;jsessionid=v0Bm0JlzbNv6cHF1zMhq8cWeM9FT0PqvNEl4rYOJ.jbprodeap18:eap09" />
+</div>
+</div>
+
+	<script src="/nfeweb/static/js/plugins/jquery-1.11.3.min.js;jsessionid=v0Bm0JlzbNv6cHF1zMhq8cWeM9FT0PqvNEl4rYOJ.jbprodeap18:eap09"></script>
+	<script src="/nfeweb/static/js/plugins/bootstrap.min.js;jsessionid=v0Bm0JlzbNv6cHF1zMhq8cWeM9FT0PqvNEl4rYOJ.jbprodeap18:eap09"></script>
+  	<script src="/nfeweb/static/js/specific/loading.js;jsessionid=v0Bm0JlzbNv6cHF1zMhq8cWeM9FT0PqvNEl4rYOJ.jbprodeap18:eap09"></script>
+  	<script src="/nfeweb/static/js/specific/message.js;jsessionid=v0Bm0JlzbNv6cHF1zMhq8cWeM9FT0PqvNEl4rYOJ.jbprodeap18:eap09"></script>
+
+	<script charset="utf-8" type="text/javascript">
+		new WindowModalLoading('Aguarde...');	
+	</script>
+
+</head>
+
+<body>
+	<div id="loading" style="display: none"></div>
+	<div id="message-containter" style="display: none"></div>
+
+	<div class="container" id="content">
+
+	<div id="panel">
+
+		<div class="panel-body col-lg-12">
+
+			<div class="col-lg-12 container-title-label-left">
+				<label>Consulta da NFC-e</label>
+			</div>
+
+			<div class="col-lg-12 danfe-nfce-actions">
+				<div class="container-center danfe-nfce-actions-container">
+					<button class="btn btn-info btn-view-det button-compensation-min-479">Visualizar NFC-e detalhada</button>
+					<button class="btn btn-info btn-print progress-on-click button-compensation-min-479">Imprimir DANFE NFC-e</button>
+					<button class="btn btn-info btn-view-tabs button-compensation-min-479">Nova Consulta</button>
+				</div>
+			</div>
+
+			<iframe class="iframe-danfe-nfce" frameborder="0" onload="javascript:loadHeight(this);" scrolling="no" src="/nfeweb/sites/nfce/render/danfeNFCe?chNFe=52260739346861022483650190000191021190388509">
+				<p th:text="#{nfce.IFRAME_NOT_SUPPORTED}" style="color: red;font-size:20px"></p>
+			</iframe>
+
+		</div>
+
+	</div>
+
+</div>
+
+	<footer>
+		<script src="/nfeweb/static/js/plugins/handlebars-v3.0.3.js;jsessionid=v0Bm0JlzbNv6cHF1zMhq8cWeM9FT0PqvNEl4rYOJ.jbprodeap18:eap09"></script>
+    	<script src="/nfeweb/static/js/plugins/maskedinput.min.js;jsessionid=v0Bm0JlzbNv6cHF1zMhq8cWeM9FT0PqvNEl4rYOJ.jbprodeap18:eap09"></script>
+	    <script src="/nfeweb/static/js/plugins/boilerplate/modernizr-2.6.2.min.js;jsessionid=v0Bm0JlzbNv6cHF1zMhq8cWeM9FT0PqvNEl4rYOJ.jbprodeap18:eap09"></script>
+    	<script src="/nfeweb/static/js/plugins/boilerplate/main.js;jsessionid=v0Bm0JlzbNv6cHF1zMhq8cWeM9FT0PqvNEl4rYOJ.jbprodeap18:eap09"></script>
+    	<script src="/nfeweb/static/js/plugins/boilerplate/plugins.js;jsessionid=v0Bm0JlzbNv6cHF1zMhq8cWeM9FT0PqvNEl4rYOJ.jbprodeap18:eap09"></script>
+
+    	<script src="/nfeweb/static/js/specific/response.js;jsessionid=v0Bm0JlzbNv6cHF1zMhq8cWeM9FT0PqvNEl4rYOJ.jbprodeap18:eap09"></script>
+    	<script src="/nfeweb/static/js/specific/normalize.js;jsessionid=v0Bm0JlzbNv6cHF1zMhq8cWeM9FT0PqvNEl4rYOJ.jbprodeap18:eap09"></script>
+    	<script src="/nfeweb/static/js/specific/masks.js;jsessionid=v0Bm0JlzbNv6cHF1zMhq8cWeM9FT0PqvNEl4rYOJ.jbprodeap18:eap09"></script>
+    	<script src="/nfeweb/static/js/specific/bug-fix.js;jsessionid=v0Bm0JlzbNv6cHF1zMhq8cWeM9FT0PqvNEl4rYOJ.jbprodeap18:eap09"></script>
+
+    	<div>
+	<div>
+	<script charset="utf-8" src="/nfeweb/static/js/app/nfce/danfeNFCe.js;jsessionid=v0Bm0JlzbNv6cHF1zMhq8cWeM9FT0PqvNEl4rYOJ.jbprodeap18:eap09"></script>
+	<script charset="utf-8" src="/nfeweb/static/js/app/nfce/printDanfeNFCe.js;jsessionid=v0Bm0JlzbNv6cHF1zMhq8cWeM9FT0PqvNEl4rYOJ.jbprodeap18:eap09"></script>
+	<script charset="utf-8" src="/nfeweb/static/js/app/nfce/showDanfeNFCe.js;jsessionid=v0Bm0JlzbNv6cHF1zMhq8cWeM9FT0PqvNEl4rYOJ.jbprodeap18:eap09"></script>
+
+	<script charset="utf-8" type="text/javascript">
+        new ShowDanfeNFCe(
+       		'#danfe-nfce-container',
+       		'/nfeweb/imagens/',
+			'/nfeweb/sites/nfce/render/html/danfeNFCe?chNFe=52260739346861022483650190000191021190388509',
+			'/nfeweb/sites/nfe/consulta-completa',
+			'/nfeweb/sites/nfce/render/NFCe?chNFe=52260739346861022483650190000191021190388509'
+		);
+	</script>
+</div>
+
+	<script charset="utf-8" type="text/javascript">
+        new LoadingBar('Aguarde...');
+	</script>
+</div>
+
+		<script charset="utf-8" type="text/javascript">
+			var _message = {'SUCCESS':[],'ERROR':[],'INFO':[],'WARN':[]};
+			createGlobalMessagesFromResponse(_message);
+		</script>
+
+	</footer>
+
+
+
+
+</body></html>

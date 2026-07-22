@@ -57,4 +57,20 @@ class RealGoiasFixtureTest {
         assertEquals(0, firstItem.quantity().compareTo(new BigDecimal("0.234")));
         assertEquals("KG", firstItem.unit());
     }
+
+    @Test
+    void buildsSessionPinnedRenderUrl() {
+        assertEquals("https://nfeweb.sefaz.go.gov.br/nfeweb/sites/nfce/render/danfeNFCe;jsessionid=abc.jbprodeap17:eap08?chNFe=" + CHAVE,
+                GoiasNfcePortalAdapter.renderUrl(CHAVE, "abc.jbprodeap17:eap08"));
+        assertEquals("https://nfeweb.sefaz.go.gov.br/nfeweb/sites/nfce/render/danfeNFCe?chNFe=" + CHAVE,
+                GoiasNfcePortalAdapter.renderUrl(CHAVE, null));
+    }
+
+    @Test
+    void extractsJsessionIdFromShellHtml() throws Exception {
+        // the COOKIELESS shell (what the adapter's first request sees) carries
+        // JBoss URL-rewritten links; with cookies the rewriting disappears.
+        var sessionId = GoiasNfcePortalAdapter.extractJsessionId(fixture("nfce-shell-cookieless.html"));
+        assertEquals("v0Bm0JlzbNv6cHF1zMhq8cWeM9FT0PqvNEl4rYOJ.jbprodeap18:eap09", sessionId);
+    }
 }
