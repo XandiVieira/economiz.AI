@@ -6,6 +6,7 @@ import com.relyon.economizai.dto.request.SubmitReceiptRequest;
 import com.relyon.economizai.dto.request.UpdateItemCategoryRequest;
 import com.relyon.economizai.dto.request.UpdateReceiptItemRequest;
 import com.relyon.economizai.dto.response.ChaveExtractionResponse;
+import com.relyon.economizai.exception.InvalidExportFormatException;
 import com.relyon.economizai.dto.response.ConfirmReceiptResponse;
 import com.relyon.economizai.dto.response.ReceiptResponse;
 import com.relyon.economizai.dto.response.ReceiptSummaryResponse;
@@ -111,13 +112,22 @@ public class ReceiptController {
             @AuthenticationPrincipal User user,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
-            @RequestParam(defaultValue = "csv") ReceiptExportService.ExportFormat format) {
-        var file = receiptExportService.exportPurchaseHistory(user, from, to, format);
+            @RequestParam(defaultValue = "csv") String format) {
+        var file = receiptExportService.exportPurchaseHistory(user, from, to, parseFormat(format));
         var filename = "economizai-historico-" + LocalDate.now() + "." + file.fileExtension();
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
                 .contentType(MediaType.parseMediaType(file.mediaType()))
                 .body(file.content());
+    }
+
+    /** Case-insensitive — MVC's enum binding is case-sensitive and would 400 on "csv"/"xlsx". */
+    private static ReceiptExportService.ExportFormat parseFormat(String format) {
+        try {
+            return ReceiptExportService.ExportFormat.valueOf(format.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new InvalidExportFormatException(format);
+        }
     }
 
     @GetMapping("/{id}")

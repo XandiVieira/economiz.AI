@@ -45,6 +45,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
@@ -52,6 +53,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -284,6 +286,33 @@ class ReceiptControllerTest {
                         .with(SecurityMockMvcRequestPostProcessors.user(user)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].status").value("CONFIRMED"));
+    }
+
+    @Test
+    void export_lowercaseCsvAndXlsxFormats_bindAndDownload() throws Exception {
+        var user = buildUser();
+        when(receiptExportService.exportPurchaseHistory(any(), any(), any(), eq(ReceiptExportService.ExportFormat.CSV)))
+                .thenReturn(new ReceiptExportService.ExportFile("data".getBytes(), "text/csv", "csv"));
+        when(receiptExportService.exportPurchaseHistory(any(), any(), any(), eq(ReceiptExportService.ExportFormat.XLSX)))
+                .thenReturn(new ReceiptExportService.ExportFile(new byte[]{80, 75}, 
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx"));
+
+        mockMvc.perform(get("/api/v1/receipts/export")
+                        .with(SecurityMockMvcRequestPostProcessors.user(user)))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Disposition", containsString(".csv")));
+
+        mockMvc.perform(get("/api/v1/receipts/export").param("format", "xlsx")
+                        .with(SecurityMockMvcRequestPostProcessors.user(user)))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Disposition", containsString(".xlsx")));
+    }
+
+    @Test
+    void export_unknownFormat_returns400() throws Exception {
+        mockMvc.perform(get("/api/v1/receipts/export").param("format", "pdf")
+                        .with(SecurityMockMvcRequestPostProcessors.user(buildUser())))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
