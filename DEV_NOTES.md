@@ -10,6 +10,17 @@ mirror entries here.
 
 ---
 
+## LLM layers — activation + follow-ups (2026-07-22)
+- **Activation**: the whole LLM stack (enrichment, auditor, photo extraction) is
+  dormant until `OPENAI_API_KEY` is set on Render — workers skip silently, the
+  photo endpoint returns a localized 503. Set the key to go live.
+- **Sync vision call**: `POST /receipts/items-photo` runs the vision call on the
+  request thread (~5-15s). Fine at current volume; move to the async
+  PROCESSING+poll pattern if it ever strains the pool.
+- **Premium-readiness**: `Feature.PHOTO_EXTRACTION` already gates the endpoint
+  (dormant while subscription enforcement is off). Enrichment/auditor are
+  global env switches, not per-user.
+
 ## Merchant support gate — two scale follow-ups (2026-07-16)
 - **Now**: grey-merchant promotion (`PUT /admin/merchants/{cnpj}/support` →
   SUPPORTED) backfills the price index from ALL of the merchant's confirmed

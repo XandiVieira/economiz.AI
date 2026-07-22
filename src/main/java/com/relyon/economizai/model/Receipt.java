@@ -1,5 +1,6 @@
 package com.relyon.economizai.model;
 
+import com.relyon.economizai.model.enums.ReceiptOrigin;
 import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
 import jakarta.persistence.CascadeType;
@@ -54,8 +55,14 @@ public class Receipt extends BaseEntity implements HouseholdScoped {
     @Column(name = "chave_acesso", nullable = false, length = 44)
     private String chaveAcesso;
 
+    /** SCAN (SEFAZ-fetched, default) or PHOTO (vision-extracted — personal history only, never feeds the index). */
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 2)
+    @Column(nullable = false, length = 10)
+    @Builder.Default
+    private ReceiptOrigin origin = ReceiptOrigin.SCAN;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 2)  // null for PHOTO-origin receipts (no SEFAZ document exists)
     private UnidadeFederativa uf;
 
     @Column(name = "cnpj_emitente", length = 14)

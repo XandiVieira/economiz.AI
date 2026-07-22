@@ -17,5 +17,7 @@ public enum Feature {
     /** Cross-market basket optimization of a shopping list. */
     BASKET_OPTIMIZATION,
     /** CSV export of the household's purchase history (power users / accounting). */
-    CSV_EXPORT
+    CSV_EXPORT,
+    /** Vision extraction of a photographed receipt (LLM cost per use). */
+    PHOTO_EXTRACTION
 }

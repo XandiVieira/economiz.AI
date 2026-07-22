@@ -118,6 +118,31 @@ FE adicionar o botão de copiar. O CSV também inclui a chave.
 
 ---
 
+## 2026-07-22 — Camadas de IA: enriquecimento de produtos + extração por foto
+
+**Extração por foto (novo endpoint FE):** `POST /api/v1/receipts/items-photo`
+(multipart `file`) — o usuário fotografa a nota impressa e a IA extrai os
+itens. Cria uma nota `PENDING_CONFIRMATION` com `origin=PHOTO` que segue o
+fluxo normal de revisão/confirmação. Casos de uso: nota em contingência (a
+SEFAZ não tem o documento), QR ilegível, digitação manual inviável. Regras:
+- Notas por foto NÃO alimentam o índice colaborativo (sem autenticidade
+  SEFAZ) — só o histórico pessoal do domicílio.
+- Contam no limite mensal FREE; cap diário de fotos por usuário (padrão 5).
+- Erros novos: 400 `receipt.photo.not-receipt` (imagem não é nota), 400
+  `receipt.photo.no-items`, 503 `receipt.photo.extraction.unavailable`.
+
+**Enriquecimento por IA (transparente pro FE):** produtos que as camadas
+gratuitas não resolveram (categoria/marca/embalagem) são enriquecidos em
+lote por LLM; categorias/marcas passam a aparecer preenchidas com
+`categorizationSource=LLM`. Correções humanas continuam soberanas.
+
+Admin: `GET /api/v1/admin/llm/report` (KPIs, custo, fila de divergências) e
+`POST /api/v1/admin/llm/disagreements/{id}/resolve?accept=`. Tudo com
+liga/desliga por env (`LLM_ENRICHMENT_ENABLED`, `LLM_AUDITOR_ENABLED`,
+`PHOTO_EXTRACTION_ENABLED`) e pronto para virar recurso premium.
+
+---
+
 ## 2026-07-22 — Swagger ganhou o botão Authorize (JWT)
 
 O Swagger UI agora tem o cadeadinho: clique em **Authorize**, cole o token do

@@ -13,6 +13,7 @@ import com.relyon.economizai.dto.response.UnmatchedReportResponse;
 import com.relyon.economizai.dto.response.AdminUserSummaryResponse;
 import com.relyon.economizai.dto.response.DuplicateProductGroupResponse;
 import com.relyon.economizai.dto.response.GreyMerchantResponse;
+import com.relyon.economizai.dto.response.LlmReportResponse;
 import com.relyon.economizai.dto.response.MissingBrandProductResponse;
 import com.relyon.economizai.dto.response.ProductDeletionResponse;
 import com.relyon.economizai.dto.response.ProductMergeResultResponse;
@@ -27,6 +28,7 @@ import com.relyon.economizai.model.enums.CategorizationQualityTrigger;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
 import com.relyon.economizai.service.ReceiptService;
+import com.relyon.economizai.service.admin.AdminLlmService;
 import com.relyon.economizai.service.admin.AdminMerchantService;
 import com.relyon.economizai.service.admin.AdminNotificationService;
 import com.relyon.economizai.service.admin.AdminProductService;
@@ -76,6 +78,7 @@ public class AdminController {
     private final AdminReceiptService adminReceiptService;
     private final AdminNotificationService adminNotificationService;
     private final AdminMerchantService adminMerchantService;
+    private final AdminLlmService adminLlmService;
     private final AdminProductService adminProductService;
     private final CategorizationQualityService categorizationQualityService;
     private final MarketLocationService marketLocationService;
@@ -205,6 +208,21 @@ public class AdminController {
     public ResponseEntity<AdminMerchantService.SupportOverrideResult> setMerchantSupport(
             @PathVariable String cnpj, @RequestBody MerchantSupportOverrideRequest request) {
         return ResponseEntity.ok(adminMerchantService.setSupportOverride(cnpj, request.override()));
+    }
+
+    /** LLM teacher-layer health: labels, cost, override-rate KPI, disagreement queue. */
+    @GetMapping("/llm/report")
+    public ResponseEntity<LlmReportResponse> llmReport(
+            @RequestParam(defaultValue = "3") int enrichmentMaxAttempts) {
+        return ResponseEntity.ok(adminLlmService.report(enrichmentMaxAttempts));
+    }
+
+    /** Human verdict on an LLM disagreement: accept applies it as source USER; reject closes it. */
+    @PostMapping("/llm/disagreements/{id}/resolve")
+    public ResponseEntity<Void> resolveLlmDisagreement(@PathVariable UUID id,
+                                                       @RequestParam boolean accept) {
+        adminLlmService.resolveDisagreement(id, accept);
+        return ResponseEntity.noContent().build();
     }
 
     /** Re-run brand extraction to fill products missing a brand (after registry edits). */

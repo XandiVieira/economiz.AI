@@ -15,6 +15,7 @@ import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.service.ReceiptExportService;
 import com.relyon.economizai.service.ReceiptService;
+import com.relyon.economizai.service.llm.PhotoReceiptExtractionService;
 import com.relyon.economizai.service.report.ReportEmailService;
 import com.relyon.economizai.service.scan.ChaveAcessoOcrService;
 import com.relyon.economizai.service.scan.QrCodePhotoDecoder;
@@ -57,6 +58,7 @@ public class ReceiptController {
     private final ReceiptService receiptService;
     private final ReceiptExportService receiptExportService;
     private final ReportEmailService reportEmailService;
+    private final PhotoReceiptExtractionService photoReceiptExtractionService;
     private final QrCodePhotoDecoder qrCodePhotoDecoder;
     private final ChaveAcessoOcrService chaveAcessoOcrService;
 
@@ -76,6 +78,19 @@ public class ReceiptController {
         var qrPayload = qrCodePhotoDecoder.decode(file);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(receiptService.submit(user, new SubmitReceiptRequest(qrPayload)));
+    }
+
+    /**
+     * Extract items from a PHOTO of the printed receipt via vision LLM — the
+     * fallback when SEFAZ can't serve the nota (contingency, unreadable QR).
+     * Creates a PENDING_CONFIRMATION receipt with origin=PHOTO (personal
+     * history only; never contributes to the collaborative index).
+     */
+    @PostMapping("/items-photo")
+    public ResponseEntity<ReceiptResponse> extractItemsFromPhoto(@AuthenticationPrincipal User user,
+                                                                 @RequestParam("file") MultipartFile file) {
+        var receiptId = photoReceiptExtractionService.extract(user, file);
+        return ResponseEntity.status(HttpStatus.CREATED).body(receiptService.get(user, receiptId));
     }
 
     /**

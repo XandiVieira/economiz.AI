@@ -403,6 +403,11 @@ GET    /api/v1/receipts/export?from=&to=&format=&delivery= → CSV (flat) | XLSX
 PATCH  /api/v1/receipts/{id}/items/{itemId}          → fix typos / qty / toggle excluded / set friendlyDescription
 PUT    /api/v1/receipts/{id}/items/{itemId}/category  → correct the category { "category": "MEAT_DAIRY" }
 POST   /api/v1/receipts/{id}/items                   → add a missing item (PENDING_CONFIRMATION only)
+POST   /api/v1/receipts/items-photo                  → multipart photo of the printed receipt; vision-LLM
+                                                        extracts items into a PENDING_CONFIRMATION receipt
+                                                        (origin=PHOTO — personal history only, never feeds
+                                                        the price index; counts toward the FREE monthly cap;
+                                                        per-user daily photo cap; 503 when the LLM layer is off)
 POST   /api/v1/receipts/{id}/confirm                 → commit. Optional body { excludedItemIds: [uuid, ...] }
                                                         Returns { receipt, personalPromos: [...] }
 POST   /api/v1/receipts/{id}/reject                  → discard. Receipt stays as REJECTED in history.
@@ -1119,6 +1124,8 @@ POST   /api/v1/admin/products/recategorize?includeMl=false → RecategorizeResul
 POST   /api/v1/admin/products/refresh-brands       → BrandBackfillResponse (fill missing brands)
 POST   /api/v1/admin/markets/classify-segments     → SegmentClassificationSummary (CNAE-classify pending markets)
 GET    /api/v1/admin/merchants/grey                → List<GreyMerchantResponse> (grey-zone review queue, ranked by scan volume)
+GET    /api/v1/admin/llm/report                    → LlmReportResponse (LLM labels, cost, override-rate KPI, disagreement queue)
+POST   /api/v1/admin/llm/disagreements/{id}/resolve?accept=true|false → 204 (accept applies suggestion as source USER)
 PUT    /api/v1/admin/merchants/{cnpj}/support      → SupportOverrideResult — body {"override":"SUPPORTED"|"BLOCKED"|null}; SUPPORTED backfills the price index from the merchant's confirmed receipts
 DELETE /api/v1/admin/products/{id}?force=false     → 200 ProductDeletionResponse (prune test/junk catalog rows)
 GET    /api/v1/admin/costs?days=30                 → CostReportResponse (paid-API spend: total + by service + by state + today vs budget)

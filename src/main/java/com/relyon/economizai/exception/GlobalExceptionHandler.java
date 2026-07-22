@@ -106,6 +106,11 @@ public class GlobalExceptionHandler {
         return respond(ex, HttpStatus.SERVICE_UNAVAILABLE, "Report e-mail delivery unavailable");
     }
 
+    @ExceptionHandler(PhotoExtractionUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handlePhotoExtractionUnavailable(PhotoExtractionUnavailableException ex) {
+        return respond(ex, HttpStatus.SERVICE_UNAVAILABLE, "Photo extraction unavailable");
+    }
+
     @ExceptionHandler(OcrUnavailableException.class)
     public ResponseEntity<ErrorResponse> handleOcrUnavailable(OcrUnavailableException ex) {
         return respond(ex, HttpStatus.SERVICE_UNAVAILABLE, "OCR engine not available on this host");

@@ -176,7 +176,7 @@ public class ReceiptService {
      * so reject/delete-and-resubmit can't game the limit; PRO (limit MAX_VALUE)
      * bypasses entirely.
      */
-    private void enforceMonthlyReceiptCap(User user) {
+    public void enforceMonthlyReceiptCap(User user) {
         var monthlyLimit = subscriptionGate.monthlyReceiptLimit(user);
         if (monthlyLimit == Integer.MAX_VALUE) {
             return;

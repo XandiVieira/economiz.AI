@@ -35,6 +35,7 @@ import com.relyon.economizai.model.enums.UnidadeFederativa;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.LocalizedMessageService;
 import com.relyon.economizai.service.ReceiptService;
+import com.relyon.economizai.service.admin.AdminLlmService;
 import com.relyon.economizai.service.admin.AdminMerchantService;
 import com.relyon.economizai.service.admin.AdminNotificationService;
 import com.relyon.economizai.service.admin.AdminProductService;
@@ -100,6 +101,7 @@ class AdminControllerTest {
     @MockitoBean private AdminReceiptService adminReceiptService;
     @MockitoBean private AdminNotificationService adminNotificationService;
     @MockitoBean private AdminMerchantService adminMerchantService;
+    @MockitoBean private AdminLlmService adminLlmService;
     @MockitoBean private AdminProductService adminProductService;
     @MockitoBean private CategorizationQualityService categorizationQualityService;
     @MockitoBean private MarketLocationService marketLocationService;

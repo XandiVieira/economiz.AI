@@ -1938,6 +1938,47 @@
 						"description": "The household's CONFIRMED purchase history. format=csv (flat, pt-BR Excel-friendly), format=xlsx (multi-sheet report: KPI dashboard + native charts + styled item table), format=pdf (branded report with charts). delivery=download streams the file; delivery=email sends it as attachment to the user's own e-mail (202; 503 if SMTP off). PRO-gated (dormant while enforcement off); FREE history window applies."
 					},
 					"response": []
+				},
+				{
+					"name": "Extract items from receipt PHOTO (vision LLM)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Accept-Language",
+								"value": "pt"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": "",
+									"description": "photo of the printed receipt"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/receipts/items-photo",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"receipts",
+								"items-photo"
+							]
+						},
+						"description": "Vision fallback: extracts items from a photographed receipt into a PENDING_CONFIRMATION receipt (origin=PHOTO, excluded from the collaborative index). 503 when the LLM layer is disabled."
+					},
+					"response": []
 				}
 			]
 		},
@@ -9533,6 +9574,66 @@
 							]
 						},
 						"description": "APPLIES re-categorization. By default only trusted dictionary suggestions are applied (ML is currently unreliable); skips manual (source=USER) categories and null suggestions. Pass includeMl=true to also apply ML. Run the dictionary fixes first, then this."
+					},
+					"response": []
+				},
+				{
+					"name": "LLM teacher-layer report (admin)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept-Language",
+								"value": "pt"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/llm/report",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"llm",
+								"report"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Resolve LLM disagreement (admin)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept-Language",
+								"value": "pt"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/llm/disagreements/{{disagreementId}}/resolve?accept=true",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"llm",
+								"disagreements",
+								"{{disagreementId}}",
+								"resolve"
+							],
+							"query": [
+								{
+									"key": "accept",
+									"value": "true"
+								}
+							]
+						}
 					},
 					"response": []
 				}

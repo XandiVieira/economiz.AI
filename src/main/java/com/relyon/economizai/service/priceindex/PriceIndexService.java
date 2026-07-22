@@ -5,6 +5,7 @@ import com.relyon.economizai.model.MarketLocation;
 import com.relyon.economizai.model.PriceObservation;
 import com.relyon.economizai.model.PriceObservationAudit;
 import com.relyon.economizai.model.Receipt;
+import com.relyon.economizai.model.enums.ReceiptOrigin;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.repository.PriceObservationAuditRepository;
 import com.relyon.economizai.repository.PriceObservationAuditRepository.MarketHouseholdCount;
@@ -97,6 +98,12 @@ public class PriceIndexService {
         }
         if (!receipt.getUser().isContributionOptIn()) {
             log.info("price_index.write.skipped reason=user_opt_out receipt={}", receipt.getId());
+            return true;
+        }
+        if (receipt.getOrigin() == ReceiptOrigin.PHOTO) {
+            // Vision-extracted receipts are unverifiable (no SEFAZ document) —
+            // personal history only, never community price data.
+            log.info("price_index.write.skipped reason=photo_origin receipt={}", receipt.getId());
             return true;
         }
         if (receipt.getCnpjEmitente() == null) {
