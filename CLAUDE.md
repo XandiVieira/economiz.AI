@@ -72,6 +72,7 @@ GitHub repo: `economiz.AI` (https://github.com/XandiVieira/economiz.AI.git)
 - **One INFO line per decision, not per loop iteration.** Use the format `<event>.<outcome> key1=value1 key2=value2`. Examples: `item.created_from_ean`, `item.matched_by_alias`, `item.unmatched`, `submit ok`, `confirm ok`. Aggregates (`canonicalize done matched=X created=Y`) come at the end as a separate INFO.
 
 ### Testing
+- **Test mailbox — ALWAYS `developer@economizaai.app`.** Any test that involves an email address (manual curl tests, feature verification, E2E runs, admin test notifications, beta-signup/contact payloads) MUST use this dedicated QA mailbox or a plus-alias of it (`developer+<tag>@economizaai.app`, e.g. `developer+e2e-1712345678@economizaai.app` for uniqueness). Never use real/personal addresses or made-up domains — test traffic was polluting the main inbox. The Postman collection reads it from the `testMailbox` collection variable.
 - All new code must be covered by relevant unit tests
 - Tests live in `src/test/java` mirroring the main package structure
 - Use JUnit 5 + Mockito for unit tests
