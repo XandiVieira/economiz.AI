@@ -44,6 +44,14 @@ conta LOCAL já verificada, **vincula**; se não verificada, rejeita (anti-takeo
 
 ---
 
+## 2026-07-22 — Swagger ganhou o botão Authorize (JWT)
+
+O Swagger UI agora tem o cadeadinho: clique em **Authorize**, cole o token do
+`POST /auth/login` (sem o prefixo `Bearer`) e todas as chamadas protegidas
+passam a enviar o header. Nada mudou na API em si.
+
+---
+
 ## 2026-07-16 — Restaurantes/bares rejeitados; padarias, açougues e conveniências aceitos
 
 Nova regra de estabelecimento no scan (varejo recorrente de alimentos vs.
