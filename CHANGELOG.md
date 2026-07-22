@@ -16,6 +16,17 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-07-22 — Plataforma do cliente no login (web / android / ios)
+
+Novo campo **opcional** `platform` (`WEB` | `ANDROID` | `IOS`) nos endpoints de auth
+(`/register`, `/login`, `/google`, `/apple`). Mandem em toda chamada de login/registro
+a plataforma de onde o usuário está entrando.
+- Guardamos a **plataforma de registro** (a original, só na criação da conta), a
+  **última plataforma** usada e a **última data de login por plataforma**.
+- É best-effort: valor ausente ou desconhecido é ignorado (nunca vira 400).
+- `UserResponse` (ex.: `GET /users/me`) agora traz `registrationPlatform`,
+  `lastPlatform`, `lastWebLoginAt`, `lastAndroidLoginAt`, `lastIosLoginAt`.
+
 ## 2026-07-22 — Tudo localizado (pt/en): validação, e-mails e notificações
 
 Fechamos as lacunas de i18n. Agora respeitam `Accept-Language` / o idioma do usuário:

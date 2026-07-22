@@ -1,11 +1,13 @@
 package com.relyon.economizai.dto.response;
 
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.Platform;
 import com.relyon.economizai.model.enums.Role;
 import com.relyon.economizai.model.enums.SubscriptionTier;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public record UserResponse(
@@ -19,6 +21,11 @@ public record UserResponse(
         LocalDateTime emailVerifiedAt,
         BigDecimal homeLatitude,
         BigDecimal homeLongitude,
+        Platform registrationPlatform,
+        Platform lastPlatform,
+        OffsetDateTime lastWebLoginAt,
+        OffsetDateTime lastAndroidLoginAt,
+        OffsetDateTime lastIosLoginAt,
         LocalDateTime createdAt
 ) {
     public static UserResponse from(User user) {
@@ -33,6 +40,11 @@ public record UserResponse(
                 user.getEmailVerifiedAt(),
                 user.getHomeLatitude(),
                 user.getHomeLongitude(),
+                user.getRegistrationPlatform(),
+                user.getLastPlatform(),
+                user.getLastWebLoginAt(),
+                user.getLastAndroidLoginAt(),
+                user.getLastIosLoginAt(),
                 user.getCreatedAt()
         );
     }

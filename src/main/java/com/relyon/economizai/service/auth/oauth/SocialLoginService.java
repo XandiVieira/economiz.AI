@@ -8,10 +8,12 @@ import com.relyon.economizai.exception.InvalidOAuthTokenException;
 import com.relyon.economizai.legal.LegalDocuments;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.AuthProvider;
+import com.relyon.economizai.model.enums.Platform;
 import com.relyon.economizai.repository.UserRepository;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.HouseholdService;
 import com.relyon.economizai.service.LocalizedMessageService;
+import com.relyon.economizai.service.auth.LoginActivityRecorder;
 import com.relyon.economizai.service.auth.RefreshTokenService;
 import com.relyon.economizai.service.notifications.NotificationRuleService;
 import com.relyon.economizai.service.privacy.LogMasker;
@@ -48,6 +50,7 @@ public class SocialLoginService {
     private final RefreshTokenService refreshTokenService;
     private final HouseholdService householdService;
     private final NotificationRuleService notificationRuleService;
+    private final LoginActivityRecorder loginActivityRecorder;
 
     @Transactional
     public AuthResponse loginWithGoogle(GoogleLoginRequest request) {
@@ -56,7 +59,7 @@ public class SocialLoginService {
             throw new InvalidOAuthTokenException();
         }
         var user = resolveOrCreateUser(AuthProvider.GOOGLE, claims.subject(), claims.email(),
-                claims.emailVerified(), claims.name());
+                claims.emailVerified(), claims.name(), request.platform());
         return issueAuth(user);
     }
 
@@ -67,25 +70,28 @@ public class SocialLoginService {
             throw new InvalidOAuthTokenException();
         }
         var user = resolveOrCreateUser(AuthProvider.APPLE, claims.subject(), claims.email(),
-                claims.emailVerified(), claims.name());
+                claims.emailVerified(), claims.name(), request.platform());
         return issueAuth(user);
     }
 
     private User resolveOrCreateUser(AuthProvider provider, String subject, String email,
-                                     boolean emailVerified, String name) {
+                                     boolean emailVerified, String name, Platform platform) {
         var bySubject = userRepository.findByAuthProviderAndProviderSubject(provider, subject);
         if (bySubject.isPresent()) {
             var user = bySubject.get();
             log.info("social.login matched_by_subject provider={} user={}", provider, LogMasker.email(user.getEmail()));
+            loginActivityRecorder.recordLogin(user, platform);
             return user;
         }
         if (email != null && !email.isBlank()) {
             var byEmail = userRepository.findByEmail(email);
             if (byEmail.isPresent()) {
-                return linkProvider(byEmail.get(), provider, subject, emailVerified);
+                var user = linkProvider(byEmail.get(), provider, subject, emailVerified);
+                loginActivityRecorder.recordLogin(user, platform);
+                return user;
             }
         }
-        return createSocialUser(provider, subject, email, emailVerified, name);
+        return createSocialUser(provider, subject, email, emailVerified, name, platform);
     }
 
     private User linkProvider(User user, AuthProvider provider, String subject, boolean emailVerified) {
@@ -109,7 +115,7 @@ public class SocialLoginService {
     }
 
     private User createSocialUser(AuthProvider provider, String subject, String email,
-                                  boolean emailVerified, String name) {
+                                  boolean emailVerified, String name, Platform platform) {
         if (email == null || email.isBlank()) {
             log.warn("social.login create_rejected_missing_email provider={}", provider);
             throw new InvalidOAuthTokenException();
@@ -132,6 +138,7 @@ public class SocialLoginService {
                 .build();
         var savedUser = userRepository.save(user);
         notificationRuleService.ensureDefaults(savedUser);
+        loginActivityRecorder.recordRegistration(savedUser, platform);
         log.info("social.login created provider={} user={} household={}",
                 provider, LogMasker.email(savedUser.getEmail()), household.getId());
         return savedUser;

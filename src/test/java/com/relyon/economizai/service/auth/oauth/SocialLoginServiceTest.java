@@ -7,9 +7,11 @@ import com.relyon.economizai.legal.LegalDocuments;
 import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.AuthProvider;
+import com.relyon.economizai.model.enums.Platform;
 import com.relyon.economizai.repository.UserRepository;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.HouseholdService;
+import com.relyon.economizai.service.auth.LoginActivityRecorder;
 import com.relyon.economizai.service.auth.RefreshTokenService;
 import com.relyon.economizai.service.notifications.NotificationRuleService;
 import org.junit.jupiter.api.Test;
@@ -27,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -55,6 +58,9 @@ class SocialLoginServiceTest {
     @Mock
     private NotificationRuleService notificationRuleService;
 
+    @Mock
+    private LoginActivityRecorder loginActivityRecorder;
+
     @InjectMocks
     private SocialLoginService socialLoginService;
 
@@ -79,7 +85,7 @@ class SocialLoginServiceTest {
         });
         stubTokenIssue();
 
-        var response = socialLoginService.loginWithGoogle(new GoogleLoginRequest("id-token"));
+        var response = socialLoginService.loginWithGoogle(new GoogleLoginRequest("id-token", null));
 
         assertEquals("jwt-token", response.token());
         assertEquals("refresh-token", response.refreshToken());
@@ -114,7 +120,7 @@ class SocialLoginServiceTest {
                 .thenReturn(Optional.of(existing));
         stubTokenIssue();
 
-        var response = socialLoginService.loginWithGoogle(new GoogleLoginRequest("id-token"));
+        var response = socialLoginService.loginWithGoogle(new GoogleLoginRequest("id-token", null));
 
         assertEquals("jwt-token", response.token());
         verify(userRepository, never()).save(any(User.class));
@@ -139,7 +145,7 @@ class SocialLoginServiceTest {
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
         stubTokenIssue();
 
-        var response = socialLoginService.loginWithGoogle(new GoogleLoginRequest("id-token"));
+        var response = socialLoginService.loginWithGoogle(new GoogleLoginRequest("id-token", null));
 
         assertEquals("jwt-token", response.token());
         assertEquals(AuthProvider.GOOGLE, local.getAuthProvider());
@@ -162,7 +168,7 @@ class SocialLoginServiceTest {
         when(userRepository.findByAuthProviderAndProviderSubject(AuthProvider.GOOGLE, "sub-1"))
                 .thenReturn(Optional.empty());
         when(userRepository.findByEmail("maria@example.com")).thenReturn(Optional.of(local));
-        var request = new GoogleLoginRequest("id-token");
+        var request = new GoogleLoginRequest("id-token", null);
 
         assertThrows(InvalidOAuthTokenException.class,
                 () -> socialLoginService.loginWithGoogle(request));
@@ -186,7 +192,7 @@ class SocialLoginServiceTest {
         when(userRepository.findByAuthProviderAndProviderSubject(AuthProvider.APPLE, "apple-sub-1"))
                 .thenReturn(Optional.empty());
         when(userRepository.findByEmail("joao@example.com")).thenReturn(Optional.of(local));
-        var request = new AppleLoginRequest("identity-token", "Joao");
+        var request = new AppleLoginRequest("identity-token", "Joao", null);
 
         assertThrows(InvalidOAuthTokenException.class,
                 () -> socialLoginService.loginWithApple(request));
@@ -201,7 +207,7 @@ class SocialLoginServiceTest {
                 .thenReturn(new GoogleTokenVerifier.GoogleClaims("sub-1", null, true, "Maria"));
         when(userRepository.findByAuthProviderAndProviderSubject(AuthProvider.GOOGLE, "sub-1"))
                 .thenReturn(Optional.empty());
-        var request = new GoogleLoginRequest("id-token");
+        var request = new GoogleLoginRequest("id-token", null);
 
         assertThrows(InvalidOAuthTokenException.class,
                 () -> socialLoginService.loginWithGoogle(request));
@@ -214,7 +220,7 @@ class SocialLoginServiceTest {
     void loginWithGoogle_blankSubject_rejected() {
         when(googleTokenVerifier.verify("id-token"))
                 .thenReturn(new GoogleTokenVerifier.GoogleClaims("", "maria@example.com", true, "Maria"));
-        var request = new GoogleLoginRequest("id-token");
+        var request = new GoogleLoginRequest("id-token", null);
 
         assertThrows(InvalidOAuthTokenException.class,
                 () -> socialLoginService.loginWithGoogle(request));
@@ -236,7 +242,7 @@ class SocialLoginServiceTest {
         });
         stubTokenIssue();
 
-        var response = socialLoginService.loginWithApple(new AppleLoginRequest("identity-token", "Joao"));
+        var response = socialLoginService.loginWithApple(new AppleLoginRequest("identity-token", "Joao", null));
 
         assertEquals("jwt-token", response.token());
         var captor = ArgumentCaptor.forClass(User.class);
@@ -262,10 +268,47 @@ class SocialLoginServiceTest {
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
         stubTokenIssue();
 
-        socialLoginService.loginWithApple(new AppleLoginRequest("identity-token", null));
+        socialLoginService.loginWithApple(new AppleLoginRequest("identity-token", null, null));
 
         var captor = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(captor.capture());
         assertEquals("Usuario", captor.getValue().getName());
+    }
+
+    @Test
+    void loginWithGoogle_existingUser_recordsLoginPlatform() {
+        var existing = User.builder()
+                .id(UUID.randomUUID())
+                .name("Maria")
+                .email("maria@example.com")
+                .authProvider(AuthProvider.GOOGLE)
+                .providerSubject("sub-1")
+                .build();
+        when(googleTokenVerifier.verify("id-token"))
+                .thenReturn(new GoogleTokenVerifier.GoogleClaims("sub-1", "maria@example.com", true, "Maria"));
+        when(userRepository.findByAuthProviderAndProviderSubject(AuthProvider.GOOGLE, "sub-1"))
+                .thenReturn(Optional.of(existing));
+        stubTokenIssue();
+
+        socialLoginService.loginWithGoogle(new GoogleLoginRequest("id-token", Platform.WEB));
+
+        verify(loginActivityRecorder).recordLogin(existing, Platform.WEB);
+    }
+
+    @Test
+    void loginWithApple_newUser_recordsRegistrationPlatform() {
+        when(appleTokenVerifier.verify("identity-token", "Joao"))
+                .thenReturn(new AppleTokenVerifier.AppleClaims("apple-sub-1", "joao@example.com", true, "Joao"));
+        when(userRepository.findByAuthProviderAndProviderSubject(AuthProvider.APPLE, "apple-sub-1"))
+                .thenReturn(Optional.empty());
+        when(userRepository.findByEmail("joao@example.com")).thenReturn(Optional.empty());
+        when(householdService.createSoloHousehold())
+                .thenReturn(Household.builder().id(UUID.randomUUID()).inviteCode("XYZ789").build());
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        stubTokenIssue();
+
+        socialLoginService.loginWithApple(new AppleLoginRequest("identity-token", "Joao", Platform.IOS));
+
+        verify(loginActivityRecorder).recordRegistration(any(User.class), eq(Platform.IOS));
     }
 }

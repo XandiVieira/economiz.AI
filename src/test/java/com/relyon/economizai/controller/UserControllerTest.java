@@ -127,6 +127,11 @@ class UserControllerTest {
                 user.getEmailVerifiedAt(),
                 user.getHomeLatitude(),
                 user.getHomeLongitude(),
+                user.getRegistrationPlatform(),
+                user.getLastPlatform(),
+                user.getLastWebLoginAt(),
+                user.getLastAndroidLoginAt(),
+                user.getLastIosLoginAt(),
                 user.getCreatedAt()
         );
     }
@@ -211,7 +216,7 @@ class UserControllerTest {
         var request = new UpdateContributionRequest(false);
         var response = new UserResponse(user.getId(), user.getName(), user.getEmail(),
                 user.getRole(), user.getSubscriptionTier(), false, true, user.getEmailVerifiedAt(),
-                null, null, user.getCreatedAt());
+                null, null, null, null, null, null, null, user.getCreatedAt());
         when(userService.updateContribution(any(User.class), any(UpdateContributionRequest.class)))
                 .thenReturn(response);
 
@@ -228,7 +233,7 @@ class UserControllerTest {
         var user = buildUser();
         var ur = new UserResponse(user.getId(), user.getName(), user.getEmail(),
                 user.getRole(), user.getSubscriptionTier(), true, true, user.getEmailVerifiedAt(),
-                null, null, user.getCreatedAt());
+                null, null, null, null, null, null, null, user.getCreatedAt());
         var hr = new HouseholdResponse(
                 UUID.randomUUID(), "ABC123", LocalDateTime.now().plusHours(48),
                 List.of(new HouseholdResponse.HouseholdMember(user.getId(), user.getName(), user.getEmail())),

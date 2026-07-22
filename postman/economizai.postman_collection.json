@@ -267,7 +267,7 @@
 						},
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"name\": \"Demo User\",\n  \"email\": \"developer+demo@economizaai.app\",\n  \"password\": \"password123\",\n  \"acceptedTermsVersion\": \"1.0\",\n  \"acceptedPrivacyVersion\": \"1.0\"\n}"
+							"raw": "{\n  \"name\": \"Demo User\",\n  \"email\": \"developer+demo@economizaai.app\",\n  \"password\": \"password123\",\n  \"acceptedTermsVersion\": \"1.0\",\n  \"acceptedPrivacyVersion\": \"1.0\",\n  \"platform\": \"WEB\"\n}"
 						}
 					},
 					"response": [],
@@ -316,7 +316,7 @@
 						},
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"email\": \"developer+demo@economizaai.app\",\n  \"password\": \"password123\"\n}"
+							"raw": "{\n  \"email\": \"developer+demo@economizaai.app\",\n  \"password\": \"password123\",\n  \"platform\": \"WEB\"\n}"
 						}
 					},
 					"response": [],
@@ -365,7 +365,7 @@
 						},
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"idToken\": \"<google id_token from the native Google Sign-In SDK>\"\n}"
+							"raw": "{\n  \"idToken\": \"<google id_token from the native Google Sign-In SDK>\",\n  \"platform\": \"ANDROID\"\n}"
 						}
 					},
 					"response": []
@@ -401,7 +401,7 @@
 						},
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"identityToken\": \"<apple identity_token>\",\n  \"name\": \"Maria Silva\"\n}"
+							"raw": "{\n  \"identityToken\": \"<apple identity_token>\",\n  \"name\": \"Maria Silva\",\n  \"platform\": \"IOS\"\n}"
 						}
 					},
 					"response": []
@@ -5196,7 +5196,7 @@
 						},
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"name\": \"E2E Test User\",\n  \"email\": \"developer+e2e@economizaai.app\",\n  \"password\": \"password123\",\n  \"acceptedTermsVersion\": \"1.0\",\n  \"acceptedPrivacyVersion\": \"1.0\"\n}"
+							"raw": "{\n  \"name\": \"E2E Test User\",\n  \"email\": \"developer+e2e@economizaai.app\",\n  \"password\": \"password123\",\n  \"acceptedTermsVersion\": \"1.0\",\n  \"acceptedPrivacyVersion\": \"1.0\",\n  \"platform\": \"WEB\"\n}"
 						}
 					},
 					"response": [],
@@ -5262,7 +5262,7 @@
 						},
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"email\": \"{{e2eEmail}}\",\n  \"password\": \"password123\"\n}"
+							"raw": "{\n  \"email\": \"{{e2eEmail}}\",\n  \"password\": \"password123\",\n  \"platform\": \"WEB\"\n}"
 						}
 					},
 					"response": [],
@@ -5488,7 +5488,7 @@
 						},
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"email\": \"{{e2eEmail}}\",\n  \"password\": \"password123\"\n}"
+							"raw": "{\n  \"email\": \"{{e2eEmail}}\",\n  \"password\": \"password123\",\n  \"platform\": \"WEB\"\n}"
 						}
 					},
 					"response": [],

@@ -60,6 +60,7 @@ import com.relyon.economizai.repository.DataShareConsentRepository;
 import com.relyon.economizai.model.UserWatchedMarket;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.auth.EmailVerificationService;
+import com.relyon.economizai.service.auth.LoginActivityRecorder;
 import com.relyon.economizai.service.auth.RefreshTokenService;
 import com.relyon.economizai.service.notifications.NotificationRuleService;
 import com.relyon.economizai.service.privacy.LogMasker;
@@ -107,6 +108,7 @@ public class UserService {
     private final EmailVerificationService emailVerificationService;
     private final RefreshTokenService refreshTokenService;
     private final NotificationRuleService notificationRuleService;
+    private final LoginActivityRecorder loginActivityRecorder;
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -136,6 +138,7 @@ public class UserService {
 
         var savedUser = userRepository.save(user);
         notificationRuleService.ensureDefaults(savedUser);
+        loginActivityRecorder.recordRegistration(savedUser, request.platform());
         emailVerificationService.sendVerificationFor(savedUser);
         var token = jwtService.generateToken(savedUser);
         var refreshToken = refreshTokenService.issue(savedUser);
@@ -160,6 +163,7 @@ public class UserService {
                 .filter(foundUser -> passwordEncoder.matches(request.password(), foundUser.getPassword()))
                 .orElseThrow(InvalidCredentialsException::new);
 
+        loginActivityRecorder.recordLogin(user, request.platform());
         var token = jwtService.generateToken(user);
         var refreshToken = refreshTokenService.issue(user);
         log.info("User logged in: {}", LogMasker.email(user.getEmail()));

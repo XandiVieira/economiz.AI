@@ -2,6 +2,7 @@ package com.relyon.economizai.model;
 
 import com.relyon.economizai.model.enums.AuthProvider;
 import com.relyon.economizai.model.enums.DigestFrequency;
+import com.relyon.economizai.model.enums.Platform;
 import com.relyon.economizai.model.enums.Role;
 import com.relyon.economizai.model.enums.SubscriptionTier;
 import jakarta.persistence.Column;
@@ -148,6 +149,26 @@ public class User extends BaseEntity implements UserDetails {
     @Column(name = "phone_verified", nullable = false)
     @Builder.Default
     private boolean phoneVerified = false;
+
+    // Platform used when the account was first created (immutable once set).
+    @Enumerated(EnumType.STRING)
+    @Column(name = "registration_platform", length = 10)
+    private Platform registrationPlatform;
+
+    // Platform used on the most recent login (overwritten every login).
+    @Enumerated(EnumType.STRING)
+    @Column(name = "last_platform", length = 10)
+    private Platform lastPlatform;
+
+    // Last time the user logged in from each platform.
+    @Column(name = "last_web_login_at")
+    private OffsetDateTime lastWebLoginAt;
+
+    @Column(name = "last_android_login_at")
+    private OffsetDateTime lastAndroidLoginAt;
+
+    @Column(name = "last_ios_login_at")
+    private OffsetDateTime lastIosLoginAt;
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {

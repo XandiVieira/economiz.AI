@@ -1,5 +1,6 @@
 package com.relyon.economizai.dto.request;
 
+import com.relyon.economizai.model.enums.Platform;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
@@ -18,7 +19,10 @@ public record RegisterRequest(
         @NotBlank String acceptedTermsVersion,
         @Schema(description = "Version string of the Privacy Policy the user accepted (fetch current via GET /legal/privacy-policy).",
                 example = "1.0")
-        @NotBlank String acceptedPrivacyVersion
+        @NotBlank String acceptedPrivacyVersion,
+        @Schema(description = "Optional client platform (WEB / ANDROID / IOS). Recorded as the registration "
+                + "platform. Unknown/absent values are ignored.", example = "ANDROID")
+        Platform platform
 ) {
 
     @AssertTrue(message = "Você deve aceitar a versão atual dos Termos de Uso e da Política de Privacidade")

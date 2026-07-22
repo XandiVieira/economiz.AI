@@ -89,10 +89,18 @@ POST /api/v1/auth/register
   "email": "maria@example.com",
   "password": "atLeast8chars",
   "acceptedTermsVersion": "1.0",
-  "acceptedPrivacyVersion": "1.0"
+  "acceptedPrivacyVersion": "1.0",
+  "platform": "WEB"                // optional: WEB | ANDROID | IOS
 }
 → 201 { "token": "...", "refreshToken": "...", "user": { ... } }
 ```
+
+`platform` is **optional** on all auth endpoints (`/register`, `/login`, `/google`,
+`/apple`). Send `WEB`, `ANDROID`, or `IOS`. It records the **registration platform**
+(first time only) and the **last-login time per platform**; unknown/absent values are
+ignored (never a 400). The tracked values surface on `UserResponse` as
+`registrationPlatform`, `lastPlatform`, and `lastWebLoginAt` / `lastAndroidLoginAt` /
+`lastIosLoginAt`.
 
 The terms/privacy versions come from `GET /api/v1/legal/terms` and
 `GET /api/v1/legal/privacy-policy`. Show the docs to the user, then send the
@@ -107,7 +115,7 @@ member, and they get an `inviteCode` valid for 48h. They can:
 
 ```
 POST /api/v1/auth/login
-{ "email": "maria@example.com", "password": "..." }
+{ "email": "maria@example.com", "password": "...", "platform": "ANDROID" }  // platform optional
 → 200 { "token": "...", "refreshToken": "...", "user": { ... } }
 ```
 
@@ -123,8 +131,8 @@ POST /api/v1/auth/login
 The mobile app runs the **native** Google / Apple sign-in SDK, gets the provider token, and sends it here. The backend verifies the token (RS256 against the provider's JWKS; issuer/expiry checks, and audience when client IDs are configured), then **finds-or-creates** the user and returns the **same `AuthResponse`** as password login.
 
 ```
-POST /api/v1/auth/google   { "idToken": "<google id_token>" }                 → 200 { token, refreshToken, user }
-POST /api/v1/auth/apple    { "identityToken": "<apple identity_token>", "name": "Maria Silva" } → 200 { token, refreshToken, user }
+POST /api/v1/auth/google   { "idToken": "<google id_token>", "platform": "ANDROID" }                 → 200 { token, refreshToken, user }
+POST /api/v1/auth/apple    { "identityToken": "<apple identity_token>", "name": "Maria Silva", "platform": "IOS" } → 200 { token, refreshToken, user }
 ```
 
 - First-time social users get a **solo household**, `emailVerified=true` (the provider already verified it — no verification email is sent), and the current legal versions are accepted on their behalf (show terms in the app before the social button).

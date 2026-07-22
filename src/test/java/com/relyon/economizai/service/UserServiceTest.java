@@ -47,7 +47,9 @@ import com.relyon.economizai.repository.SubscriptionRepository;
 import com.relyon.economizai.repository.UserRepository;
 import com.relyon.economizai.repository.UserWatchedMarketRepository;
 import com.relyon.economizai.security.JwtService;
+import com.relyon.economizai.model.enums.Platform;
 import com.relyon.economizai.service.auth.EmailVerificationService;
+import com.relyon.economizai.service.auth.LoginActivityRecorder;
 import com.relyon.economizai.service.auth.RefreshTokenService;
 import com.relyon.economizai.service.notifications.NotificationRuleService;
 import org.mockito.ArgumentMatchers;
@@ -159,6 +161,9 @@ class UserServiceTest {
     @Mock
     private DataShareConsentRepository dataShareConsentRepository;
 
+    @Mock
+    private LoginActivityRecorder loginActivityRecorder;
+
     @InjectMocks
     private UserService userService;
 
@@ -185,7 +190,7 @@ class UserServiceTest {
 
     @Test
     void register_shouldCreateUserAndReturnToken() {
-        var request = new RegisterRequest("John", "john@test.com", "password123", "1.0", "1.0");
+        var request = new RegisterRequest("John", "john@test.com", "password123", "1.0", "1.0", null);
         var household = Household.builder().id(UUID.randomUUID()).inviteCode("ABC123").build();
         when(userRepository.existsByEmail("john@test.com")).thenReturn(false);
         when(householdService.createSoloHousehold()).thenReturn(household);
@@ -211,7 +216,7 @@ class UserServiceTest {
 
     @Test
     void register_shouldThrowWhenEmailExists() {
-        var request = new RegisterRequest("John", "john@test.com", "password123", "1.0", "1.0");
+        var request = new RegisterRequest("John", "john@test.com", "password123", "1.0", "1.0", null);
         when(userRepository.existsByEmail("john@test.com")).thenReturn(true);
 
         assertThrows(EmailAlreadyExistsException.class, () -> userService.register(request));
@@ -220,7 +225,7 @@ class UserServiceTest {
 
     @Test
     void login_shouldReturnTokenForValidCredentials() {
-        var request = new LoginRequest("john@test.com", "password123");
+        var request = new LoginRequest("john@test.com", "password123", null);
         var user = buildUser();
         when(userRepository.findByEmail("john@test.com")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("password123", "encoded")).thenReturn(true);
@@ -234,8 +239,36 @@ class UserServiceTest {
     }
 
     @Test
+    void login_recordsClientPlatform() {
+        var request = new LoginRequest("john@test.com", "password123", Platform.ANDROID);
+        var user = buildUser();
+        when(userRepository.findByEmail("john@test.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("password123", "encoded")).thenReturn(true);
+        when(jwtService.generateToken(user)).thenReturn("jwt-token");
+
+        userService.login(request);
+
+        verify(loginActivityRecorder).recordLogin(user, Platform.ANDROID);
+    }
+
+    @Test
+    void register_recordsRegistrationPlatform() {
+        var request = new RegisterRequest("John", "john@test.com", "password123", "1.0", "1.0", Platform.IOS);
+        var household = Household.builder().id(UUID.randomUUID()).inviteCode("ABC123").build();
+        when(userRepository.existsByEmail("john@test.com")).thenReturn(false);
+        when(householdService.createSoloHousehold()).thenReturn(household);
+        when(passwordEncoder.encode("password123")).thenReturn("encoded");
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(jwtService.generateToken(any(User.class))).thenReturn("jwt-token");
+
+        userService.register(request);
+
+        verify(loginActivityRecorder).recordRegistration(any(User.class), eq(Platform.IOS));
+    }
+
+    @Test
     void login_shouldThrowForInvalidPassword() {
-        var request = new LoginRequest("john@test.com", "wrong");
+        var request = new LoginRequest("john@test.com", "wrong", null);
         var user = buildUser();
         when(userRepository.findByEmail("john@test.com")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("wrong", "encoded")).thenReturn(false);
@@ -245,7 +278,7 @@ class UserServiceTest {
 
     @Test
     void login_shouldThrowForNonExistentEmail() {
-        var request = new LoginRequest("noone@test.com", "password");
+        var request = new LoginRequest("noone@test.com", "password", null);
         when(userRepository.findByEmail("noone@test.com")).thenReturn(Optional.empty());
 
         assertThrows(InvalidCredentialsException.class, () -> userService.login(request));
@@ -253,7 +286,7 @@ class UserServiceTest {
 
     @Test
     void login_socialAccount_throwsSocialAccountLoginExceptionWithProvider() {
-        var request = new LoginRequest("jane@test.com", "whatever");
+        var request = new LoginRequest("jane@test.com", "whatever", null);
         var socialUser = User.builder()
                 .id(UUID.randomUUID())
                 .name("Jane")
@@ -322,7 +355,7 @@ class UserServiceTest {
 
     @Test
     void register_shouldRejectStaleTermsVersion() {
-        var request = new RegisterRequest("John", "john@test.com", "password123", "0.9", "1.0");
+        var request = new RegisterRequest("John", "john@test.com", "password123", "0.9", "1.0", null);
         when(userRepository.existsByEmail("john@test.com")).thenReturn(false);
 
         assertThrows(InvalidLegalVersionException.class,
@@ -332,7 +365,7 @@ class UserServiceTest {
 
     @Test
     void register_shouldRejectStalePrivacyVersion() {
-        var request = new RegisterRequest("John", "john@test.com", "password123", "1.0", "0.9");
+        var request = new RegisterRequest("John", "john@test.com", "password123", "1.0", "0.9", null);
         when(userRepository.existsByEmail("john@test.com")).thenReturn(false);
 
         assertThrows(InvalidLegalVersionException.class,
