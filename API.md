@@ -387,6 +387,11 @@ They can:
 
 ```
 GET    /api/v1/receipts/{id}                         → full receipt with items
+GET    /api/v1/receipts/export?from=&to=             → CSV download of CONFIRMED history (one row per
+                                                        non-excluded item; includes chave de acesso;
+                                                        `;` separator + comma decimals + UTF-8 BOM for
+                                                        pt-BR Excel; localized headers; PRO-gated —
+                                                        dormant while enforcement is off)
 PATCH  /api/v1/receipts/{id}/items/{itemId}          → fix typos / qty / toggle excluded / set friendlyDescription
 PUT    /api/v1/receipts/{id}/items/{itemId}/category  → correct the category { "category": "MEAT_DAIRY" }
 POST   /api/v1/receipts/{id}/items                   → add a missing item (PENDING_CONFIRMATION only)

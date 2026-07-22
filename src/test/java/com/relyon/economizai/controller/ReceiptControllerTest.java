@@ -20,6 +20,7 @@ import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.LocalizedMessageService;
+import com.relyon.economizai.service.ReceiptExportService;
 import com.relyon.economizai.service.ReceiptService;
 import com.relyon.economizai.service.scan.ChaveAcessoOcrService;
 import com.relyon.economizai.service.scan.QrCodePhotoDecoder;
@@ -67,6 +68,9 @@ class ReceiptControllerTest {
 
     @MockitoBean
     private ReceiptService receiptService;
+
+    @MockitoBean
+    private ReceiptExportService receiptExportService;
 
     @MockitoBean
     private QrCodePhotoDecoder qrCodePhotoDecoder;

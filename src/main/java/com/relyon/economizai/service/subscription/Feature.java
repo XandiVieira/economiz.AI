@@ -15,5 +15,7 @@ public enum Feature {
     /** Submit more than the FREE monthly receipt cap. */
     RECEIPT_UPLOAD_UNLIMITED,
     /** Cross-market basket optimization of a shopping list. */
-    BASKET_OPTIMIZATION
+    BASKET_OPTIMIZATION,
+    /** CSV export of the household's purchase history (power users / accounting). */
+    CSV_EXPORT
 }

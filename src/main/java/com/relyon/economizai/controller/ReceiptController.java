@@ -12,6 +12,7 @@ import com.relyon.economizai.dto.response.ReceiptSummaryResponse;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.model.enums.ReceiptStatus;
+import com.relyon.economizai.service.ReceiptExportService;
 import com.relyon.economizai.service.ReceiptService;
 import com.relyon.economizai.service.scan.ChaveAcessoOcrService;
 import com.relyon.economizai.service.scan.QrCodePhotoDecoder;
@@ -22,7 +23,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -37,6 +40,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -48,6 +53,7 @@ import java.util.UUID;
 public class ReceiptController {
 
     private final ReceiptService receiptService;
+    private final ReceiptExportService receiptExportService;
     private final QrCodePhotoDecoder qrCodePhotoDecoder;
     private final ChaveAcessoOcrService chaveAcessoOcrService;
 
@@ -91,6 +97,25 @@ public class ReceiptController {
             @RequestParam(required = false) String q,
             @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(receiptService.list(user, from, to, marketCnpj, category, status, q, pageable));
+    }
+
+    /**
+     * CSV of the household's confirmed purchase history (one row per item,
+     * includes the chave de acesso). Brazilian-Excel-friendly: semicolon
+     * separator, comma decimals, UTF-8 BOM. PRO-gated (dormant while
+     * subscription enforcement is off); FREE history window applies.
+     */
+    @GetMapping("/export")
+    public ResponseEntity<byte[]> exportCsv(
+            @AuthenticationPrincipal User user,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to) {
+        var csv = receiptExportService.exportPurchaseHistory(user, from, to);
+        var filename = "economizai-historico-" + LocalDate.now() + ".csv";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .body(csv.getBytes(StandardCharsets.UTF_8));
     }
 
     @GetMapping("/{id}")

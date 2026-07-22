@@ -59,6 +59,22 @@ conta LOCAL já verificada, **vincula**; se não verificada, rejeita (anti-takeo
 
 ---
 
+## 2026-07-22 — Exportar histórico de compras (CSV) — sugestão de usuário
+
+Novo `GET /api/v1/receipts/export?from=&to=` (autenticado): baixa um CSV do
+histórico CONFIRMADO do domicílio — uma linha por item (não-excluído), com
+data, mercado, CNPJ, **chave de acesso**, item, quantidade, preço e categoria.
+Formato amigável ao Excel brasileiro: separador `;`, decimais com vírgula,
+UTF-8 com BOM, cabeçalhos localizados. `Content-Disposition: attachment`.
+PRO no plano de monetização, mas liberado enquanto o enforcement de assinatura
+estiver desligado (hoje). Janela de histórico FREE se aplica quando ligado.
+
+Sobre a segunda sugestão do mesmo usuário (copiar o número da NFC-e na tela da
+nota): o campo `chaveAcesso` já vem em todas as respostas de receipt — é só o
+FE adicionar o botão de copiar. O CSV também inclui a chave.
+
+---
+
 ## 2026-07-22 — Swagger ganhou o botão Authorize (JWT)
 
 O Swagger UI agora tem o cadeadinho: clique em **Authorize**, cole o token do

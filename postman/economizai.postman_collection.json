@@ -1882,6 +1882,50 @@
 						"description": "`q` does case-insensitive substring match on rawDescription, friendlyDescription, the linked product's normalized name, and the receipt's market name. `category` is multi-value — repeat it for OR (here: GROCERIES or CLEANING)."
 					},
 					"response": []
+				},
+				{
+					"name": "Export purchase history (CSV)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Accept-Language",
+								"value": "pt"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/receipts/export?from=&to=",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"receipts",
+								"export"
+							],
+							"query": [
+								{
+									"key": "from",
+									"value": "",
+									"description": "optional ISO date-time",
+									"disabled": true
+								},
+								{
+									"key": "to",
+									"value": "",
+									"description": "optional ISO date-time",
+									"disabled": true
+								}
+							]
+						},
+						"description": "CSV of the household's CONFIRMED purchase history — one row per non-excluded item, includes chave de acesso. Semicolon separator, comma decimals, UTF-8 BOM (Brazilian Excel). PRO-gated (dormant while enforcement off); FREE history window applies."
+					},
+					"response": []
 				}
 			]
 		},
@@ -5779,6 +5823,54 @@
 									"pm.test('receipt.status is CONFIRMED', function () { pm.expect(d.receipt.status).to.eql('CONFIRMED'); });",
 									"pm.test('confirmedAt is set', function () { pm.expect(d.receipt.confirmedAt).to.not.be.null; });",
 									"pm.test('personalPromos is an array', function () { pm.expect(d.personalPromos).to.be.an('array'); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "13b. Export purchase history CSV",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Accept-Language",
+								"value": "pt"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/receipts/export",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"receipts",
+								"export"
+							]
+						}
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('GET /receipts/export -> 200 text/csv', function () {",
+									"    pm.response.to.have.status(200);",
+									"    pm.expect(pm.response.headers.get('Content-Type')).to.include('text/csv');",
+									"});",
+									"pm.test('CSV tem cabecalho e a chave da nota confirmada', function () {",
+									"    var body = pm.response.text();",
+									"    pm.expect(body).to.include('Chave de acesso');",
+									"    pm.expect(body.split('\\n').length).to.be.above(1);",
+									"});"
 								]
 							}
 						}
