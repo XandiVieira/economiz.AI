@@ -73,4 +73,26 @@ class RealGoiasFixtureTest {
         var sessionId = GoiasNfcePortalAdapter.extractJsessionId(fixture("nfce-shell-cookieless.html"));
         assertEquals("v0Bm0JlzbNv6cHF1zMhq8cWeM9FT0PqvNEl4rYOJ.jbprodeap18:eap09", sessionId);
     }
+
+    @Test
+    void signedV2QrUrlsAreUsedVerbatim() {
+        // v2 QRs carry a signature hash — rebuilding |3|1 gets the empty shell
+        var signedUrl = "https://nfeweb.sefaz.go.gov.br/nfeweb/sites/nfce/danfeNFCe"
+                + "?p=52260793209765049205655290000050451048579174|2|1|1|B72997307EDA1BEE338F17AC2C7C1988C4960035";
+        assertEquals(signedUrl, GoiasNfcePortalAdapter.shellUrl(signedUrl,
+                "52260793209765049205655290000050451048579174"));
+    }
+
+    @Test
+    void bareChaveRebuildsUnsignedV3Url() {
+        assertEquals("https://nfeweb.sefaz.go.gov.br/nfeweb/sites/nfce/danfeNFCe?p=" + CHAVE + "|3|1",
+                GoiasNfcePortalAdapter.shellUrl(CHAVE, CHAVE));
+    }
+
+    @Test
+    void foreignUrlsAreNotFetchedVerbatim() {
+        // SSRF guard: a QR pointing elsewhere never becomes the shell URL
+        assertEquals("https://nfeweb.sefaz.go.gov.br/nfeweb/sites/nfce/danfeNFCe?p=" + CHAVE + "|3|1",
+                GoiasNfcePortalAdapter.shellUrl("https://evil.example.com/?p=" + CHAVE, CHAVE));
+    }
 }

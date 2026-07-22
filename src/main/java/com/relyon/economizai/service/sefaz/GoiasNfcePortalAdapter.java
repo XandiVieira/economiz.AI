@@ -84,10 +84,11 @@ public class GoiasNfcePortalAdapter implements SefazAdapter {
     @Override
     public String fetchHtml(String qrPayload) {
         var chave = ChaveAcessoParser.extractChave(qrPayload);
+        var shellUrl = shellUrl(qrPayload, chave);
         RuntimeException lastTransient = null;
         for (var attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
-                return fetchOnce(chave);
+                return fetchOnce(shellUrl, chave);
             } catch (SefazFetchException | RestClientException ex) {
                 lastTransient = ex;
                 log.warn("go.fetch transient attempt={}/{} chave={} reason={}: {}",
@@ -101,9 +102,26 @@ public class GoiasNfcePortalAdapter implements SefazAdapter {
                 : new SefazFetchException(UnidadeFederativa.GO.name());
     }
 
-    private String fetchOnce(String chave) {
+    /**
+     * GO issues TWO QR shapes: version 3 ({@code chave|3|1}, unsigned) and
+     * version 2 ({@code chave|2|1|1|<hash>}, SIGNED). A signed consult only
+     * answers with the DANFE when the ORIGINAL params — hash included — are
+     * presented, so a scanned QR URL must be used verbatim; rebuilding
+     * {@code |3|1} silently gets the empty shell (the exact bug that sent
+     * every v2 nota to the paid fallback). Reconstruction is only for
+     * manually-typed bare chaves, which v3 accepts.
+     */
+    static String shellUrl(String qrPayload, String chave) {
+        var trimmed = qrPayload == null ? "" : qrPayload.trim();
+        if (trimmed.toLowerCase().startsWith("https://") && trimmed.contains(".sefaz.go.gov.br/")) {
+            return trimmed;
+        }
+        return SHELL_URL + chave + "|3|1";
+    }
+
+    private String fetchOnce(String shellUrl, String chave) {
         var shellResponse = restClient.get()
-                .uri(SHELL_URL + chave + "|3|1")
+                .uri(shellUrl)
                 .retrieve()
                 .toEntity(String.class);
         var sessionCookies = sessionCookies(shellResponse);
@@ -116,7 +134,7 @@ public class GoiasNfcePortalAdapter implements SefazAdapter {
         var renderPage = restClient.get()
                 .uri(renderUrl(chave, extractJsessionId(shellResponse.getBody())))
                 .header(HttpHeaders.COOKIE, sessionCookies)
-                .header(HttpHeaders.REFERER, SHELL_URL + chave + "|3|1")
+                .header(HttpHeaders.REFERER, shellUrl)
                 .retrieve()
                 .body(String.class);
         var danfeHtml = extractEmbeddedDanfe(renderPage);
