@@ -7,6 +7,7 @@ import com.relyon.economizai.dto.request.UpdateContributionRequest;
 import com.relyon.economizai.dto.request.UpdateUserRequest;
 import com.relyon.economizai.exception.EmailAlreadyExistsException;
 import com.relyon.economizai.exception.InvalidCredentialsException;
+import com.relyon.economizai.exception.SocialAccountLoginException;
 import com.relyon.economizai.exception.InvalidCurrentPasswordException;
 import com.relyon.economizai.exception.InvalidLegalVersionException;
 import com.relyon.economizai.model.Household;
@@ -21,6 +22,7 @@ import com.relyon.economizai.model.Subscription;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.UserWatchedMarket;
 import com.relyon.economizai.model.enums.ProductCategory;
+import com.relyon.economizai.model.enums.AuthProvider;
 import com.relyon.economizai.model.enums.Role;
 import com.relyon.economizai.model.enums.SubscriptionStatus;
 import com.relyon.economizai.model.enums.SubscriptionTier;
@@ -70,6 +72,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -246,6 +249,28 @@ class UserServiceTest {
         when(userRepository.findByEmail("noone@test.com")).thenReturn(Optional.empty());
 
         assertThrows(InvalidCredentialsException.class, () -> userService.login(request));
+    }
+
+    @Test
+    void login_socialAccount_throwsSocialAccountLoginExceptionWithProvider() {
+        var request = new LoginRequest("jane@test.com", "whatever");
+        var socialUser = User.builder()
+                .id(UUID.randomUUID())
+                .name("Jane")
+                .email("jane@test.com")
+                .password(null)                       // social users have no local password
+                .authProvider(AuthProvider.GOOGLE)
+                .role(Role.USER)
+                .subscriptionTier(SubscriptionTier.FREE)
+                .build();
+        when(userRepository.findByEmail("jane@test.com")).thenReturn(Optional.of(socialUser));
+
+        var thrown = assertThrows(SocialAccountLoginException.class, () -> userService.login(request));
+
+        assertEquals(AuthProvider.GOOGLE, thrown.getProvider());
+        assertEquals("auth.social_account", thrown.getMessageKey());
+        // must short-circuit BEFORE the password check
+        verify(passwordEncoder, never()).matches(anyString(), any());
     }
 
     @Test

@@ -9,6 +9,8 @@ import com.relyon.economizai.dto.response.AuthResponse;
 import com.relyon.economizai.dto.response.UserResponse;
 import com.relyon.economizai.exception.EmailAlreadyExistsException;
 import com.relyon.economizai.exception.InvalidCredentialsException;
+import com.relyon.economizai.exception.SocialAccountLoginException;
+import com.relyon.economizai.model.enums.AuthProvider;
 import com.relyon.economizai.model.enums.Role;
 import com.relyon.economizai.model.enums.SubscriptionTier;
 import com.relyon.economizai.security.JwtService;
@@ -171,5 +173,22 @@ class AuthControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void login_socialAccount_returns409WithProviderForButtonHighlight() throws Exception {
+        var request = new LoginRequest("jane@test.com", "whatever");
+        when(userService.login(any(LoginRequest.class)))
+                .thenThrow(new SocialAccountLoginException(AuthProvider.GOOGLE));
+        when(localizedMessageService.translate(any(SocialAccountLoginException.class)))
+                .thenReturn("Esta conta usa login com Google.");
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                // structured provider so the FE can highlight the right button
+                .andExpect(jsonPath("$.errors.provider").value("GOOGLE"))
+                .andExpect(jsonPath("$.message").value("Esta conta usa login com Google."));
     }
 }

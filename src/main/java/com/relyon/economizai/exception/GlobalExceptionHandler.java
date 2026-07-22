@@ -37,6 +37,20 @@ public class GlobalExceptionHandler {
         return respond(ex, HttpStatus.UNAUTHORIZED, "Failed login attempt");
     }
 
+    /**
+     * Password login attempted on a social account. 409 (distinct from the 401
+     * for a wrong password so the FE branches cleanly) + the provider in the
+     * errors map so the app can highlight the right "Continue with …" button.
+     */
+    @ExceptionHandler(SocialAccountLoginException.class)
+    public ResponseEntity<ErrorResponse> handleSocialAccountLogin(SocialAccountLoginException ex) {
+        var message = messageService.translate(ex);
+        log.warn("Password login attempted on {} social account", ex.getProvider());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ErrorResponse(HttpStatus.CONFLICT.value(), message, LocalDateTime.now(),
+                        Map.of("provider", ex.getProvider().name())));
+    }
+
     @ExceptionHandler(InvalidOAuthTokenException.class)
     public ResponseEntity<ErrorResponse> handleInvalidOAuthToken(InvalidOAuthTokenException ex) {
         return respond(ex, HttpStatus.UNAUTHORIZED, "Invalid social-login token");

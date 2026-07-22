@@ -16,6 +16,18 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-07-22 — Login por senha em conta social → 409 com o provedor
+
+`POST /auth/login` com e-mail/senha numa conta que foi criada via Google/Apple
+(sem senha) agora retorna **409 `auth.social_account`** em vez de um 401 genérico.
+A resposta traz o provedor pra você destacar o botão certo:
+`{ "status": 409, "message": "...", "errors": { "provider": "GOOGLE" } }`. Leia
+`errors.provider` (`GOOGLE`/`APPLE`); `message` já vem localizada
+("Esta conta usa login com Google. Toque em 'Continuar com Google'."). Senha
+errada de verdade continua 401 `auth.invalid.credentials`.
+
+---
+
 ## 2026-07-21 — Login social (Google + Apple) no ar; `emailVerified`/`emailVerifiedAt` na resposta
 
 Google e Apple login estão **configurados e no ar** (audience/client-ids do backend

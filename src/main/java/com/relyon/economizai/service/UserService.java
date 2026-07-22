@@ -31,6 +31,8 @@ import com.relyon.economizai.dto.response.UserDataExportResponse.DataShareConsen
 import com.relyon.economizai.dto.response.UserResponse;
 import com.relyon.economizai.exception.EmailAlreadyExistsException;
 import com.relyon.economizai.exception.InvalidCredentialsException;
+import com.relyon.economizai.exception.SocialAccountLoginException;
+import com.relyon.economizai.model.enums.AuthProvider;
 import com.relyon.economizai.exception.InvalidCurrentPasswordException;
 import com.relyon.economizai.exception.InvalidLegalVersionException;
 import com.relyon.economizai.legal.LegalDocuments;
@@ -143,7 +145,17 @@ public class UserService {
     }
 
     public AuthResponse login(LoginRequest request) {
-        var user = userRepository.findByEmail(request.email())
+        var found = userRepository.findByEmail(request.email());
+        // A social-login account (Google/Apple) has no local password, so a password
+        // attempt would only ever yield a generic "invalid credentials". Detect it and
+        // point the user at the right provider button instead.
+        found.filter(candidate -> candidate.getPassword() == null
+                        && candidate.getAuthProvider() != AuthProvider.LOCAL)
+                .ifPresent(socialUser -> {
+                    throw new SocialAccountLoginException(socialUser.getAuthProvider());
+                });
+
+        var user = found
                 .filter(foundUser -> passwordEncoder.matches(request.password(), foundUser.getPassword()))
                 .orElseThrow(InvalidCredentialsException::new);
 

@@ -111,6 +111,13 @@ POST /api/v1/auth/login
 → 200 { "token": "...", "refreshToken": "...", "user": { ... } }
 ```
 
+- **Wrong email/password** → `401 auth.invalid.credentials` (same error for unknown email or wrong password — no account-enumeration).
+- **Password login on a social account** → `409 auth.social_account` (the email belongs to a Google/Apple account with no password). The response carries the provider so you can point the user at the right button:
+  ```
+  { "status": 409, "message": "Esta conta usa login com Google...", "errors": { "provider": "GOOGLE" } }
+  ```
+  Read `errors.provider` (`GOOGLE`/`APPLE`) to highlight the matching "Continue with …" button; `message` is already localized.
+
 ### Social login (Google / Apple)
 
 The mobile app runs the **native** Google / Apple sign-in SDK, gets the provider token, and sends it here. The backend verifies the token (RS256 against the provider's JWKS; issuer/expiry checks, and audience when client IDs are configured), then **finds-or-creates** the user and returns the **same `AuthResponse`** as password login.
