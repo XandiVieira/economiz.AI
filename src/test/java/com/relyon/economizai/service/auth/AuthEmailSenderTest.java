@@ -10,7 +10,10 @@ import org.mockito.ArgumentCaptor;
 import org.slf4j.LoggerFactory;
 import org.springframework.mail.MailSendException;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.context.support.ResourceBundleMessageSource;
+import com.relyon.economizai.service.LocalizedMessageService;
 
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Properties;
 
@@ -31,6 +34,15 @@ class AuthEmailSenderTest {
     private static final String RECIPIENT = "maria@example.com";
     private static final String RESET_CODE = "123456";
     private static final String VERIFY_CODE = "654321";
+    private static final Locale PT = Locale.forLanguageTag("pt");
+
+    // Real message service over the actual bundle, so content assertions verify localized copy.
+    private LocalizedMessageService messageService() {
+        var source = new ResourceBundleMessageSource();
+        source.setBasename("i18n/messages");
+        source.setDefaultEncoding("UTF-8");
+        return new LocalizedMessageService(source);
+    }
 
     // A real (empty-session) MimeMessage the mocked sender hands back, so the helper
     // can populate it and we can read the rendered subject/recipients/body back.
@@ -58,9 +70,9 @@ class AuthEmailSenderTest {
     @Test
     void sendsPasswordResetCodeWhenSmtpConfigured() throws Exception {
         var mailSender = mailSenderReturningRealMime();
-        var sender = new AuthEmailSender(Optional.of(mailSender), FROM, "smtp-user", true);
+        var sender = new AuthEmailSender(Optional.of(mailSender), messageService(), FROM, "smtp-user", true);
 
-        sender.sendPasswordResetCode(RECIPIENT, RESET_CODE, 60);
+        sender.sendPasswordResetCode(RECIPIENT, PT, RESET_CODE, 60);
 
         var captor = ArgumentCaptor.forClass(MimeMessage.class);
         verify(mailSender).send(captor.capture());
@@ -74,11 +86,27 @@ class AuthEmailSenderTest {
     }
 
     @Test
+    void resetEmail_localizedToRecipientLocale_en() throws Exception {
+        var mailSender = mailSenderReturningRealMime();
+        var sender = new AuthEmailSender(Optional.of(mailSender), messageService(), FROM, "smtp-user", true);
+
+        sender.sendPasswordResetCode(RECIPIENT, Locale.ENGLISH, RESET_CODE, 60);
+
+        var captor = ArgumentCaptor.forClass(MimeMessage.class);
+        verify(mailSender).send(captor.capture());
+        var sent = captor.getValue();
+        assertEquals("Your password reset code — economizai", sent.getSubject());
+        var body = bodyOf(sent);
+        assertTrue(body.contains("Password reset"), "en heading");
+        assertTrue(body.contains(RESET_CODE));
+    }
+
+    @Test
     void sendsEmailVerificationCodeWhenSmtpConfigured() throws Exception {
         var mailSender = mailSenderReturningRealMime();
-        var sender = new AuthEmailSender(Optional.of(mailSender), FROM, "smtp-user", true);
+        var sender = new AuthEmailSender(Optional.of(mailSender), messageService(), FROM, "smtp-user", true);
 
-        sender.sendEmailVerification(RECIPIENT, VERIFY_CODE, 24);
+        sender.sendEmailVerification(RECIPIENT, PT, VERIFY_CODE, 24);
 
         var captor = ArgumentCaptor.forClass(MimeMessage.class);
         verify(mailSender).send(captor.capture());
@@ -92,9 +120,9 @@ class AuthEmailSenderTest {
     @Test
     void doesNotSendWhenSmtpUsernameBlank() {
         var mailSender = mock(JavaMailSender.class);
-        var sender = new AuthEmailSender(Optional.of(mailSender), FROM, "   ", true);
+        var sender = new AuthEmailSender(Optional.of(mailSender), messageService(), FROM, "   ", true);
 
-        sender.sendPasswordResetCode(RECIPIENT, RESET_CODE, 60);
+        sender.sendPasswordResetCode(RECIPIENT, PT, RESET_CODE, 60);
 
         verify(mailSender, never()).send(any(MimeMessage.class));
     }
@@ -102,19 +130,19 @@ class AuthEmailSenderTest {
     @Test
     void doesNotSendWhenSmtpUsernameNull() {
         var mailSender = mock(JavaMailSender.class);
-        var sender = new AuthEmailSender(Optional.of(mailSender), FROM, null, true);
+        var sender = new AuthEmailSender(Optional.of(mailSender), messageService(), FROM, null, true);
 
-        sender.sendEmailVerification(RECIPIENT, VERIFY_CODE, 24);
+        sender.sendEmailVerification(RECIPIENT, PT, VERIFY_CODE, 24);
 
         verify(mailSender, never()).send(any(MimeMessage.class));
     }
 
     @Test
     void doesNotSendWhenMailSenderAbsentEvenWithUsername() {
-        var sender = new AuthEmailSender(Optional.empty(), FROM, "smtp-user", true);
+        var sender = new AuthEmailSender(Optional.empty(), messageService(), FROM, "smtp-user", true);
 
         // No mailSender bean to send through; must be a silent no-op.
-        assertDoesNotThrow(() -> sender.sendPasswordResetCode(RECIPIENT, RESET_CODE, 60));
+        assertDoesNotThrow(() -> sender.sendPasswordResetCode(RECIPIENT, PT, RESET_CODE, 60));
     }
 
     private ListAppender<ILoggingEvent> attachLogCapture() {
@@ -128,9 +156,9 @@ class AuthEmailSenderTest {
     @Test
     void devCodeLogEnabled_logsCodeWhenSmtpNotConfigured() {
         var appender = attachLogCapture();
-        var sender = new AuthEmailSender(Optional.empty(), FROM, "", true);
+        var sender = new AuthEmailSender(Optional.empty(), messageService(), FROM, "", true);
 
-        sender.sendPasswordResetCode(RECIPIENT, RESET_CODE, 60);
+        sender.sendPasswordResetCode(RECIPIENT, PT, RESET_CODE, 60);
 
         assertTrue(appender.list.stream()
                         .anyMatch(loggedEvent -> loggedEvent.getFormattedMessage().contains(RESET_CODE)),
@@ -140,10 +168,10 @@ class AuthEmailSenderTest {
     @Test
     void devCodeLogDisabled_neverLogsCodeWhenSmtpNotConfigured() {
         var appender = attachLogCapture();
-        var sender = new AuthEmailSender(Optional.empty(), FROM, "", false);
+        var sender = new AuthEmailSender(Optional.empty(), messageService(), FROM, "", false);
 
-        sender.sendPasswordResetCode(RECIPIENT, RESET_CODE, 60);
-        sender.sendEmailVerification(RECIPIENT, VERIFY_CODE, 24);
+        sender.sendPasswordResetCode(RECIPIENT, PT, RESET_CODE, 60);
+        sender.sendEmailVerification(RECIPIENT, PT, VERIFY_CODE, 24);
 
         assertTrue(appender.list.stream()
                         .noneMatch(loggedEvent -> loggedEvent.getFormattedMessage().contains(RESET_CODE)
@@ -155,9 +183,9 @@ class AuthEmailSenderTest {
     void swallowsExceptionFromMailSenderSoCallerNeverErrors() {
         var mailSender = mailSenderReturningRealMime();
         doThrow(new MailSendException("smtp down")).when(mailSender).send(any(MimeMessage.class));
-        var sender = new AuthEmailSender(Optional.of(mailSender), FROM, "smtp-user", true);
+        var sender = new AuthEmailSender(Optional.of(mailSender), messageService(), FROM, "smtp-user", true);
 
-        assertDoesNotThrow(() -> sender.sendPasswordResetCode(RECIPIENT, RESET_CODE, 60));
+        assertDoesNotThrow(() -> sender.sendPasswordResetCode(RECIPIENT, PT, RESET_CODE, 60));
         verify(mailSender).send(any(MimeMessage.class));
     }
 }

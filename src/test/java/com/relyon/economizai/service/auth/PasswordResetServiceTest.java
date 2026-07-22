@@ -113,7 +113,7 @@ class PasswordResetServiceTest {
 
         // a 6-digit code is emailed; only its hash is persisted
         var codeCaptor = ArgumentCaptor.forClass(String.class);
-        verify(emailSender).sendPasswordResetCode(eq(user.getEmail()), codeCaptor.capture(), eq(60));
+        verify(emailSender).sendPasswordResetCode(eq(user.getEmail()), any(java.util.Locale.class), codeCaptor.capture(), eq(60));
         var emailedCode = codeCaptor.getValue();
         assertTrue(emailedCode.matches("\\d{6}"), "emailed code must be exactly 6 digits");
         assertEquals(sha256(emailedCode), savedToken.getToken(), "stored token must be the code's hash");

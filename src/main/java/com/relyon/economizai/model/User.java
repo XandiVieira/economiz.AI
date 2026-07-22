@@ -43,6 +43,12 @@ public class User extends BaseEntity implements UserDetails {
     @Column(nullable = false, unique = true)
     private String email;
 
+    // Preferred UI language ("pt"/"en"), captured from Accept-Language at
+    // registration. Drives emails + push notifications (produced off-request).
+    @Column(nullable = false, length = 5)
+    @Builder.Default
+    private String locale = "pt";
+
     // Nullable: social-login (Google/Apple) users have no local password.
     @Column(nullable = true)
     private String password;

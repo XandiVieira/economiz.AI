@@ -11,6 +11,7 @@ import com.relyon.economizai.model.enums.AuthProvider;
 import com.relyon.economizai.repository.UserRepository;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.HouseholdService;
+import com.relyon.economizai.service.LocalizedMessageService;
 import com.relyon.economizai.service.auth.RefreshTokenService;
 import com.relyon.economizai.service.notifications.NotificationRuleService;
 import com.relyon.economizai.service.privacy.LogMasker;
@@ -119,6 +120,7 @@ public class SocialLoginService {
                 .name(resolvedName)
                 .email(email)
                 .password(null)
+                .locale(LocalizedMessageService.requestLocaleTag())
                 .authProvider(provider)
                 .providerSubject(subject)
                 .household(household)

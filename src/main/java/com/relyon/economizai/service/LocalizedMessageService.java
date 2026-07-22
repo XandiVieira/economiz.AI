@@ -52,4 +52,13 @@ public class LocalizedMessageService {
         if (localeTag == null || localeTag.isBlank()) return DEFAULT_LOCALE;
         return Locale.forLanguageTag(localeTag);
     }
+
+    /**
+     * The current request's language normalized to a SUPPORTED UI tag to persist
+     * on the user ("en" when the request asked for English, otherwise "pt").
+     * Called at registration so later off-request messages know the language.
+     */
+    public static String requestLocaleTag() {
+        return "en".equals(LocaleContextHolder.getLocale().getLanguage()) ? "en" : "pt";
+    }
 }

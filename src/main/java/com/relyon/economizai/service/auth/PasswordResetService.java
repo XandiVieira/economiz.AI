@@ -9,6 +9,7 @@ import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.AuthProvider;
 import com.relyon.economizai.repository.PasswordResetTokenRepository;
 import com.relyon.economizai.repository.UserRepository;
+import com.relyon.economizai.service.LocalizedMessageService;
 import com.relyon.economizai.service.privacy.LogMasker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -65,7 +66,8 @@ public class PasswordResetService {
                 .token(CodeHasher.sha256(code))   // only the hash is stored; the email carries the code
                 .expiresAt(LocalDateTime.now().plusMinutes(CODE_TTL_MINUTES))
                 .build());
-        emailSender.sendPasswordResetCode(user.getEmail(), code, CODE_TTL_MINUTES);
+        emailSender.sendPasswordResetCode(user.getEmail(),
+                LocalizedMessageService.toLocale(user.getLocale()), code, CODE_TTL_MINUTES);
         log.info("password_reset.requested user={} ttl_minutes={}",
                 LogMasker.email(user.getEmail()), CODE_TTL_MINUTES);
     }

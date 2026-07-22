@@ -72,7 +72,7 @@ class EmailVerificationServiceTest {
 
         // a 6-digit code is emailed; only its hash is persisted
         var codeCaptor = ArgumentCaptor.forClass(String.class);
-        verify(emailSender).sendEmailVerification(eq(user.getEmail()), codeCaptor.capture(), eq(24));
+        verify(emailSender).sendEmailVerification(eq(user.getEmail()), any(java.util.Locale.class), codeCaptor.capture(), eq(24));
         var emailedCode = codeCaptor.getValue();
         assertTrue(emailedCode.matches("\\d{6}"), "emailed code must be exactly 6 digits");
         assertEquals(CodeHasher.sha256(emailedCode), savedToken.getToken(),
@@ -96,7 +96,7 @@ class EmailVerificationServiceTest {
         emailVerificationService.resend(user);
 
         verify(tokenRepository).save(any(EmailVerificationToken.class));
-        verify(emailSender).sendEmailVerification(eq(user.getEmail()), anyString(), anyInt());
+        verify(emailSender).sendEmailVerification(eq(user.getEmail()), any(java.util.Locale.class), anyString(), anyInt());
     }
 
     @Test

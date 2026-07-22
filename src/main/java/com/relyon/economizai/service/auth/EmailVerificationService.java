@@ -5,6 +5,7 @@ import com.relyon.economizai.model.EmailVerificationToken;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.repository.EmailVerificationTokenRepository;
 import com.relyon.economizai.repository.UserRepository;
+import com.relyon.economizai.service.LocalizedMessageService;
 import com.relyon.economizai.service.privacy.LogMasker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,7 +47,8 @@ public class EmailVerificationService {
                 .token(CodeHasher.sha256(code))
                 .expiresAt(LocalDateTime.now().plusHours(CODE_TTL_HOURS))
                 .build());
-        emailSender.sendEmailVerification(user.getEmail(), code, CODE_TTL_HOURS);
+        emailSender.sendEmailVerification(user.getEmail(),
+                LocalizedMessageService.toLocale(user.getLocale()), code, CODE_TTL_HOURS);
         log.info("email_verification.sent user={} ttl_hours={}",
                 LogMasker.email(user.getEmail()), CODE_TTL_HOURS);
     }

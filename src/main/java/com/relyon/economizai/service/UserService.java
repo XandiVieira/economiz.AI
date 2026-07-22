@@ -127,6 +127,7 @@ public class UserService {
                 .name(request.name())
                 .email(request.email())
                 .password(passwordEncoder.encode(request.password()))
+                .locale(LocalizedMessageService.requestLocaleTag())
                 .household(household)
                 .acceptedTermsVersion(request.acceptedTermsVersion())
                 .acceptedPrivacyVersion(request.acceptedPrivacyVersion())
