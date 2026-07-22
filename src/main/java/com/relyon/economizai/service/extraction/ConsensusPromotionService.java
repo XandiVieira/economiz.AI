@@ -213,7 +213,12 @@ public class ConsensusPromotionService {
         var phrases = new ArrayList<String>();
         for (var size = MAX_PHRASE_TOKENS; size >= 1; size--) {
             for (var start = 0; start + size <= tokens.length; start++) {
-                phrases.add(String.join(" ", Arrays.copyOfRange(tokens, start, start + size)));
+                var phrase = String.join(" ", Arrays.copyOfRange(tokens, start, start + size));
+                // Size/unit/fragment tokens (500ml, kg, single letters) carry no
+                // category signal and poison every product that shares them.
+                if (LearnableTokenFilter.isLearnable(phrase)) {
+                    phrases.add(phrase);
+                }
             }
         }
         return phrases;

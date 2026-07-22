@@ -216,7 +216,12 @@ public class AutoPromotionService {
         var phrases = new ArrayList<String>();
         for (var size = MAX_PHRASE_TOKENS; size >= 1; size--) {
             for (var i = 0; i + size <= tokens.length; i++) {
-                phrases.add(String.join(" ", Arrays.copyOfRange(tokens, i, i + size)));
+                var phrase = String.join(" ", Arrays.copyOfRange(tokens, i, i + size));
+                // Size/unit/fragment tokens (500ml, kg, single letters) carry no
+                // category signal and poison every product that shares them.
+                if (LearnableTokenFilter.isLearnable(phrase)) {
+                    phrases.add(phrase);
+                }
             }
         }
         return phrases;

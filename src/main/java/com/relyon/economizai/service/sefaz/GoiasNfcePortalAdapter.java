@@ -14,6 +14,7 @@ import org.springframework.web.client.RestClientException;
 
 import java.util.EnumSet;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -86,8 +87,9 @@ public class GoiasNfcePortalAdapter implements SefazAdapter {
                 return fetchOnce(chave);
             } catch (SefazFetchException | RestClientException ex) {
                 lastTransient = ex;
-                log.warn("go.fetch transient attempt={}/{} chave={} reason={}",
-                        attempt, maxAttempts, LogMasker.chave(chave), ex.getMessage());
+                log.warn("go.fetch transient attempt={}/{} chave={} reason={}: {}",
+                        attempt, maxAttempts, LogMasker.chave(chave),
+                        ex.getClass().getSimpleName(), abbreviate(ex.getMessage()));
                 sleepBetweenAttempts(attempt);
             }
         }
@@ -101,13 +103,13 @@ public class GoiasNfcePortalAdapter implements SefazAdapter {
                 .uri(SHELL_URL + chave + "|3|1")
                 .retrieve()
                 .toEntity(String.class);
-        var sessionCookie = sessionCookie(shellResponse);
-        if (sessionCookie == null) {
+        var sessionCookies = sessionCookies(shellResponse);
+        if (sessionCookies == null) {
             throw new SefazFetchException(UnidadeFederativa.GO.name());
         }
         var renderPage = restClient.get()
                 .uri(RENDER_URL + chave)
-                .header(HttpHeaders.COOKIE, sessionCookie)
+                .header(HttpHeaders.COOKIE, sessionCookies)
                 .header(HttpHeaders.REFERER, SHELL_URL + chave + "|3|1")
                 .retrieve()
                 .body(String.class);
@@ -126,13 +128,21 @@ public class GoiasNfcePortalAdapter implements SefazAdapter {
         return ScNfceDanfeParser.parse(html, chaveAcesso, sourceUrl);
     }
 
-    private static String sessionCookie(ResponseEntity<String> response) {
+    /**
+     * ALL cookies from the shell response, not just JSESSIONID: the portal is a
+     * load-balanced JBoss cluster with node-pinned sessions, and the LB routes
+     * by its own cookies (CookieGenericoGoias + F5 TS*). Forwarding only the
+     * JSESSIONID sent the render request to a random node, which answered with
+     * a null embed — the intermittent failures the telemetry showed.
+     */
+    private static String sessionCookies(ResponseEntity<String> response) {
         var setCookies = response.getHeaders().getOrEmpty(HttpHeaders.SET_COOKIE);
+        if (setCookies.stream().noneMatch(cookie -> cookie.toUpperCase().startsWith("JSESSIONID"))) {
+            return null;
+        }
         return setCookies.stream()
-                .filter(cookie -> cookie.toUpperCase().startsWith("JSESSIONID"))
-                .map(cookie -> cookie.split(";", 2)[0])
-                .findFirst()
-                .orElse(null);
+                .map(cookie -> cookie.split(";", 2)[0].trim())
+                .collect(Collectors.joining("; "));
     }
 
     /**
@@ -203,6 +213,11 @@ public class GoiasNfcePortalAdapter implements SefazAdapter {
             }
         }
         return result.toString();
+    }
+
+    private static String abbreviate(String message) {
+        if (message == null) return "(no message — likely null embed / missing session)";
+        return message.length() <= 90 ? message : message.substring(0, 90);
     }
 
     private void sleepBetweenAttempts(int attempt) {
