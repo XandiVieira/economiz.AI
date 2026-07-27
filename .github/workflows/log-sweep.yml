@@ -1,0 +1,41 @@
+# Periodic live-error sweep: pulls recent Render logs, finds a NEW application error
+# (deduped against the ledger), and hands it to the fixer. Replaces the old local
+# `docker logs` tail from auto-fix-watchdog.ps1.
+name: log-sweep
+
+on:
+  schedule:
+    - cron: '17 */2 * * *'   # every 2 hours
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      found: ${{ steps.sweep.outputs.found }}
+      signature: ${{ steps.sweep.outputs.signature }}
+      context: ${{ steps.sweep.outputs.context }}
+    steps:
+      - uses: actions/checkout@v4   # needs the ledger for dedup
+      - name: Sweep Render logs
+        id: sweep
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: srv-d7odp50k1i2s73ep8o5g
+          OWNER_ID: tea-d1ijuaumcj7s73918us0
+          LOG_WINDOW_MIN: '150'
+        run: python3 .github/scripts/log_sweep.py
+
+  fix:
+    needs: sweep
+    if: ${{ needs.sweep.outputs.found == 'true' }}
+    uses: ./.github/workflows/autofix.yml
+    with:
+      source: log-sweep
+      signature: ${{ needs.sweep.outputs.signature }}
+      error_context: ${{ needs.sweep.outputs.context }}
+    secrets: inherit

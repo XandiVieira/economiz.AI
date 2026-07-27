@@ -1,0 +1,69 @@
+# Reusable autonomous fixer. Called by e2e-daily.yml and log-sweep.yml when they
+# detect a problem. Reproduce-first, full `mvnw test` gate, push to `development`,
+# wait for the Render deploy + health, auto-revert on failure, and learn from every
+# outcome (AUTONOMOUS_FIXES.md ledger + AUTOFIX_LESSONS.md memory). See .github/AUTOFIX.md.
+name: autofix
+
+on:
+  workflow_call:
+    inputs:
+      source:
+        description: "What triggered this (e2e | log-sweep)."
+        required: true
+        type: string
+      signature:
+        description: "Short dedup signature for the detected error."
+        required: true
+        type: string
+      error_context:
+        description: "The error / failing-step context handed to the fixer."
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout development
+        uses: actions/checkout@v4
+        with:
+          ref: development
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Configure git
+        run: |
+          git config user.name "economizai-autofix"
+          git config user.email "developer@economizaai.app"
+
+      - name: Run reproduce-first fixer
+        env:
+          AUTOFIX_SOURCE: ${{ inputs.source }}
+          AUTOFIX_SIGNATURE: ${{ inputs.signature }}
+          AUTOFIX_CONTEXT: ${{ inputs.error_context }}
+          BASE_BRANCH: development
+          SERVICE_ID: srv-d7odp50k1i2s73ep8o5g
+          HEALTH_URL: https://economiz-ai.onrender.com/actuator/health
+          MAX_FIXES_PER_HOUR: '3'
+          CLAUDE_TIMEOUT_SEC: '900'
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: python3 .github/scripts/autofix.py

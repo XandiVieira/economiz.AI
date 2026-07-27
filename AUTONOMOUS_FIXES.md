@@ -1,5 +1,10 @@
 ﻿# Autonomous Bug-Fix Ledger
 
+> **Now runs in GitHub Actions** (not the retired local `auto-fix-watchdog.ps1`):
+> `log-sweep.yml` scans Render logs every 2h and `e2e-daily.yml` runs the E2E flow
+> nightly; both call the reusable `autofix.yml`. It learns via `AUTOFIX_LESSONS.md`.
+> See `.github/AUTOFIX.md`. The contract below is unchanged.
+
 > **What this is.** `auto-fix-watchdog.ps1` watches the live `economizai-app`
 > logs and, when it detects an error, autonomously diagnoses it, writes a fix,
 > builds + tests it, and (if green) commits, pushes, and lets the existing
