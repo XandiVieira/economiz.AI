@@ -1,10 +1,14 @@
 package com.relyon.economizai.service.admin;
 
 import com.relyon.economizai.exception.ReceiptNotFoundException;
+import com.relyon.economizai.model.PriceObservation;
+import com.relyon.economizai.model.PriceObservationAudit;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
+import com.relyon.economizai.repository.PriceObservationAuditRepository;
+import com.relyon.economizai.repository.PriceObservationRepository;
 import com.relyon.economizai.repository.ReceiptRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,6 +33,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -36,6 +42,8 @@ import static org.mockito.Mockito.when;
 class AdminReceiptServiceTest {
 
     @Mock private ReceiptRepository receiptRepository;
+    @Mock private PriceObservationAuditRepository observationAuditRepository;
+    @Mock private PriceObservationRepository observationRepository;
 
     @InjectMocks private AdminReceiptService service;
 
@@ -117,5 +125,40 @@ class AdminReceiptServiceTest {
         when(receiptRepository.findById(unknownId)).thenReturn(Optional.empty());
 
         assertThrows(ReceiptNotFoundException.class, () -> service.get(unknownId));
+    }
+
+    @Test
+    void purgeObservationsForReceipt_deletesAuditsThenObservationsAndReturnsCount() {
+        var receiptId = UUID.randomUUID();
+        var firstObservationId = UUID.randomUUID();
+        var secondObservationId = UUID.randomUUID();
+        var firstAudit = mock(PriceObservationAudit.class);
+        var secondAudit = mock(PriceObservationAudit.class);
+        var firstObservation = mock(PriceObservation.class);
+        var secondObservation = mock(PriceObservation.class);
+        when(firstObservation.getId()).thenReturn(firstObservationId);
+        when(secondObservation.getId()).thenReturn(secondObservationId);
+        when(firstAudit.getObservation()).thenReturn(firstObservation);
+        when(secondAudit.getObservation()).thenReturn(secondObservation);
+        var audits = List.of(firstAudit, secondAudit);
+        when(observationAuditRepository.findByReceiptId(receiptId)).thenReturn(audits);
+
+        var removed = service.purgeObservationsForReceipt(receiptId);
+
+        assertEquals(2, removed);
+        verify(observationAuditRepository).deleteAll(audits);
+        verify(observationRepository).deleteAllById(List.of(firstObservationId, secondObservationId));
+    }
+
+    @Test
+    void purgeObservationsForReceipt_noAudits_returnsZeroAndDeletesNothing() {
+        var receiptId = UUID.randomUUID();
+        when(observationAuditRepository.findByReceiptId(receiptId)).thenReturn(List.of());
+
+        var removed = service.purgeObservationsForReceipt(receiptId);
+
+        assertEquals(0, removed);
+        verify(observationAuditRepository, never()).deleteAll(any());
+        verify(observationRepository, never()).deleteAllById(any());
     }
 }

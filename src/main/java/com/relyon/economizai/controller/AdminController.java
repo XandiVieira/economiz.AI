@@ -17,6 +17,7 @@ import com.relyon.economizai.dto.response.LlmReportResponse;
 import com.relyon.economizai.dto.response.MissingBrandProductResponse;
 import com.relyon.economizai.dto.response.ProductDeletionResponse;
 import com.relyon.economizai.dto.response.ProductMergeResultResponse;
+import com.relyon.economizai.dto.response.PurgeObservationsResponse;
 import com.relyon.economizai.dto.response.RecategorizeReportResponse;
 import com.relyon.economizai.dto.response.RecategorizeResultResponse;
 import com.relyon.economizai.dto.response.RelevanceReportResponse;
@@ -134,6 +135,16 @@ public class AdminController {
     @GetMapping("/receipts/{id}")
     public ResponseEntity<ReceiptResponse> getReceipt(@PathVariable UUID id) {
         return ResponseEntity.ok(adminReceiptService.get(id));
+    }
+
+    /**
+     * Purge the anonymized community price observations a receipt contributed. Deleting
+     * a receipt/account keeps those observations by design (LGPD); this removes them for
+     * a bad or test receipt. Returns how many were removed.
+     */
+    @DeleteMapping("/receipts/{id}/observations")
+    public ResponseEntity<PurgeObservationsResponse> purgeReceiptObservations(@PathVariable UUID id) {
+        return ResponseEntity.ok(new PurgeObservationsResponse(adminReceiptService.purgeObservationsForReceipt(id)));
     }
 
     @PostMapping("/notifications/test")

@@ -41,6 +41,11 @@ public interface PriceObservationAuditRepository extends JpaRepository<PriceObse
     long countDistinctHouseholdsForProduct(@Param("productId") UUID productId,
                                            @Param("since") LocalDateTime since);
 
+    /** All audit rows a given receipt contributed — used by the admin purge that
+     * removes the anonymized observations a test/erroneous receipt produced (a plain
+     * receipt delete cascades these audit rows but NOT the observations they link). */
+    List<PriceObservationAudit> findByReceiptId(UUID receiptId);
+
     /** Batched k-anonymity helper: distinct contributing households per market for a
      * product, in one query (avoids an N+1 over markets in {@code bestMarkets}). */
     @Query("""

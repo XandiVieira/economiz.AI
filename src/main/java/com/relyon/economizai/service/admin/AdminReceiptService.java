@@ -5,6 +5,8 @@ import com.relyon.economizai.dto.response.ReceiptSummaryResponse;
 import com.relyon.economizai.exception.ReceiptNotFoundException;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
+import com.relyon.economizai.repository.PriceObservationAuditRepository;
+import com.relyon.economizai.repository.PriceObservationRepository;
 import com.relyon.economizai.repository.ReceiptRepository;
 import com.relyon.economizai.service.ReceiptSpecifications;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +39,8 @@ import java.util.UUID;
 public class AdminReceiptService {
 
     private final ReceiptRepository receiptRepository;
+    private final PriceObservationAuditRepository observationAuditRepository;
+    private final PriceObservationRepository observationRepository;
 
     @Transactional(readOnly = true)
     public Page<ReceiptSummaryResponse> list(LocalDateTime from,
@@ -62,5 +66,27 @@ public class AdminReceiptService {
     public ReceiptResponse get(UUID receiptId) {
         var receipt = receiptRepository.findById(receiptId).orElseThrow(ReceiptNotFoundException::new);
         return ReceiptResponse.from(receipt);
+    }
+
+    /**
+     * Admin data-quality / test cleanup: purge the anonymized {@code PriceObservation}
+     * rows a given receipt contributed to the community index. A normal receipt/account
+     * delete cascades the {@code price_observation_audits} rows but deliberately keeps
+     * the observations (LGPD: anonymized aggregates survive personal-data deletion), so
+     * this is the only way to remove observations produced by a bad or test receipt.
+     * The audit rows are deleted first (unique FK to the observation), then the
+     * observations themselves. Returns how many observations were removed.
+     */
+    @Transactional
+    public int purgeObservationsForReceipt(UUID receiptId) {
+        var audits = observationAuditRepository.findByReceiptId(receiptId);
+        if (audits.isEmpty()) {
+            return 0;
+        }
+        var observationIds = audits.stream().map(audit -> audit.getObservation().getId()).toList();
+        observationAuditRepository.deleteAll(audits);
+        observationRepository.deleteAllById(observationIds);
+        log.info("admin.purge_observations receipt={} removed={}", receiptId, observationIds.size());
+        return observationIds.size();
     }
 }
