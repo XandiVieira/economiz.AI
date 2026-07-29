@@ -73,6 +73,28 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-07-29 08:21:53] [NEEDS-HUMAN] NO-REPRO - E2E: 13b. Export purchase history CSV
+- **Detected:**
+```
+A daily E2E run against the live dev server FAILED (1/122 assertions).
+Failing steps:
+- 13b. Export purchase history CSV: AssertionError: expected 1 to be above 1
+
+Server-side errors during the run (the likely root cause):
+```
+2026-07-29 08:16:08.083 WARN  [req=9223af1e user= rcpt= item=] c.r.e.e.GlobalExceptionHandler - Failed login attempt: E-mail ou senha inválidos.
+2026-07-29 08:16:08.446 WARN  [req=f1ccdd25 user=developer+e2e-1785312960996@economizaai.app rcpt= item=] c.r.e.e.GlobalExceptionHandler - Validation failed: {qrPayload=não pode estar em branco}
+2026-07-29 08:16:09.261 WARN  [req=b7528808 user=developer+e2e-1785312960996@economizaai.app rcpt= item=] c.r.e.e.GlobalExceptionHandler - No handler for request: api/v1/receipts
+2026-07-29 08:16:09.622 WARN  [req=b12819c6 user=developer+e2e-1785312960996@economizaai.app rcpt= item=] c.r.e.e.GlobalExceptionHandler - No handler for request: api/v1/receipts
+2026-07-29 08:16:10.394 WARN  [req=55d2c162 user=developer+e2e-1785312960996@economizaai.app rcpt= item=] c.r.e.e.GlobalExceptionHandler - Validation failed: {qrPayload=não pode estar em branco}
+2026-07-29 08:16:13.995 WARN  [req=5a293a97 user=developer+e2e-1785312960996@economizaai.app rcpt= item=] c.r.e.e.GlobalExceptionHandler - Bad request: CNPJ inválido: deve conter exatamente 14 dígitos.
+2026-07-29 08:16:14.265 WARN  [req=1d662c84 user=developer+e2e-1785312960996@economizaai.app rcpt= item=] c.r.e.e.GlobalExceptionHandler - Bad request: CNPJ inválido: deve conter
+```
+- **Outcome:** could not reproduce with a failing test; no code changed.
+- **Detail:** No production code was touched — the failure traces to missing E2E test data, not a code defect.
+
+REPRO_FAIL E2E_QR_PAYLOAD secret was empty for this run, so step 9's submit sent a blank qrPayload (correctly rejected with 400 by `@NotBlank` validation), no receipt was ever created/confirmed for the fresh e2e user, and step 13b's CSV export legitimately had only the header row — this is a test-data/secret freshness gap (NFC-e QR payloads are single-use real receipts that must be refreshed), not a
+
 ### [2026-07-08 18:05:05] [NEEDS-HUMAN] NO-REPRO (attempt 1x) - INFO  [req=    o.a.c.httpN.HttpNProcessor - Error parsing HT
 - **Error snippet:**
 ```r

@@ -5,6 +5,8 @@
 > first. The seed lessons below were distilled by hand from AUTONOMOUS_FIXES.md.
 
 <!-- LESSONS BELOW -->
+
+- [2026-07-29 08:21:53] [[NEEDS-HUMAN] NO-REPRO] When an E2E "export/list" assertion fails right after a receipt-submission step, check whether the submission step's own log shows a validation/skip condition (e.g. blank required payload) before assuming the export/report code is broken — an empty upstream secret (like `E2E_QR_PAYLOAD`) starves every downstream step of data and produces a chain of "no data found" failures that look like separate bugs.
 - [seed] Adding a constructor dependency to a controller requires a matching @MockitoBean in its @WebMvcTest slice test, or the context fails to load ("Application run failed"). Update the slice test in the same fix.
 - [seed] Postgres-only defects (untyped null bind like `(:since IS NULL OR ...)`, "could not determine data type of parameter") cannot be reproduced on the H2 test profile — the query passes on H2. Reply REPRO_FAIL rather than forcing a fake test.
 - [seed] Infra/external log lines are NOT code bugs: Tomcat "Error parsing HTTP request header" (malformed client request, empty MDC), Postgres "terminating connection due to administrator command" (backend killed). Reply REPRO_FAIL fast.
