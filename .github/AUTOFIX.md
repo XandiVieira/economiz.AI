@@ -40,5 +40,23 @@ No-fix outcomes are committed with `[skip render]` so recording never triggers a
 | `E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD` | optional | Admin E2E steps skip without them. |
 | `E2E_QR_PAYLOAD` | optional | A real NFC-e QR string; receipt-scan E2E steps skip without it. |
 
+## E2E coverage
+The nightly E2E Flow exercises every endpoint as a **no-5xx coverage probe** (asserts
+`status < 500` — catches crashes even when data is empty), plus the real scan→confirm→
+**purge**→delete cleanup so it leaves zero garbage in the community price index. One live
+scan uses a public GO NFC-e QR (from `RealGoiasFixtureTest`); all test mail goes to
+`developer@economizaai.app`.
+
+**Deliberately excluded from the nightly run** (they'd corrupt shared dev data, spend
+money, or break the sequential flow — all covered by the unit/integration suite instead):
+- Global-catalog / LLM / paid mutations: `categorizer/*/import`, `promote-consensus`,
+  `DELETE learned|consensus`, `brands/derive-from-catalog`, admin `products/merge`,
+  `refresh-brands`, `recategorize`, `markets/classify-segments`, `llm/*/resolve`.
+- Auth-flow breakers: `logout`, `refresh`, `forgot/verify/reset-password`, `verify-email`,
+  `auth/google|apple` (need real provider tokens).
+- Cross-entity destructive: `households/join|leave`, `DELETE members`, admin `DELETE users`,
+  `DELETE products`, `PUT subscription-tier`, `notifications/test`.
+- Multipart uploads (`receipts/*photo`, `profile-picture` POST) and `phone/verify` (needs an SMS code).
+
 ## Trigger manually
 `gh workflow run e2e-daily.yml` or `gh workflow run log-sweep.yml`.
