@@ -1,0 +1,27 @@
+# Weekly dev-hygiene check: confirm the nightly E2E's confirm->purge cleanup keeps
+# orphaned price observations (deleted-account leftovers) from accumulating. Read-only;
+# goes red if the count exceeds ORPHAN_THRESHOLD. Not wired to the fixer — a rising
+# count is an ops signal, not a reproduce-with-a-test bug.
+name: observation-audit
+
+on:
+  schedule:
+    - cron: '0 5 * * 1'   # Mondays 05:00 UTC = 02:00 America/Sao_Paulo
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Count orphaned observations
+        env:
+          BASE_URL: https://economiz-ai.onrender.com
+          E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+          E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+          ORPHAN_THRESHOLD: '50'
+        run: python3 .github/scripts/observation_audit.py

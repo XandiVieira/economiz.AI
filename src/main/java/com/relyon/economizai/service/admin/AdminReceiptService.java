@@ -89,4 +89,11 @@ public class AdminReceiptService {
         log.info("admin.purge_observations receipt={} removed={}", receiptId, observationIds.size());
         return observationIds.size();
     }
+
+    /** Count observations with no audit row — leftovers from deleted accounts. A rising
+     * number on dev means the nightly E2E purge is silently failing to clean up. */
+    @Transactional(readOnly = true)
+    public long countOrphanedObservations() {
+        return observationRepository.countOrphaned();
+    }
 }

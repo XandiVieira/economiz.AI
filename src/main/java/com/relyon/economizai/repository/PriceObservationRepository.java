@@ -22,6 +22,13 @@ public interface PriceObservationRepository extends JpaRepository<PriceObservati
 
     long countByProduct(Product product);
 
+    /** Observations with no audit row — leftovers from a deleted account (LGPD keeps the
+     * anonymized observation but cascades its audit link away). On dev this gauges test-scan
+     * garbage the nightly E2E purge should keep near zero; a weekly job alerts if it climbs. */
+    @Query("SELECT COUNT(po) FROM PriceObservation po WHERE NOT EXISTS "
+            + "(SELECT 1 FROM PriceObservationAudit a WHERE a.observation = po)")
+    long countOrphaned();
+
     @Modifying
     @Query("UPDATE PriceObservation po SET po.product = :survivor WHERE po.product = :absorbed")
     int repointProduct(@Param("absorbed") Product absorbed, @Param("survivor") Product survivor);

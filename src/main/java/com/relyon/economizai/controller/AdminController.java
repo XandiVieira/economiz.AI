@@ -16,6 +16,7 @@ import com.relyon.economizai.dto.response.GreyMerchantResponse;
 import com.relyon.economizai.dto.response.LlmReportResponse;
 import com.relyon.economizai.dto.response.MissingBrandProductResponse;
 import com.relyon.economizai.dto.response.ProductDeletionResponse;
+import com.relyon.economizai.dto.response.OrphanedObservationsResponse;
 import com.relyon.economizai.dto.response.ProductMergeResultResponse;
 import com.relyon.economizai.dto.response.PurgeObservationsResponse;
 import com.relyon.economizai.dto.response.RecategorizeReportResponse;
@@ -145,6 +146,13 @@ public class AdminController {
     @DeleteMapping("/receipts/{id}/observations")
     public ResponseEntity<PurgeObservationsResponse> purgeReceiptObservations(@PathVariable UUID id) {
         return ResponseEntity.ok(new PurgeObservationsResponse(adminReceiptService.purgeObservationsForReceipt(id)));
+    }
+
+    /** Count community observations left orphaned by account deletions — a dev-hygiene gauge
+     * that a weekly job watches to confirm the nightly E2E purge keeps test garbage near zero. */
+    @GetMapping("/observations/orphaned-count")
+    public ResponseEntity<OrphanedObservationsResponse> orphanedObservationCount() {
+        return ResponseEntity.ok(new OrphanedObservationsResponse(adminReceiptService.countOrphanedObservations()));
     }
 
     @PostMapping("/notifications/test")

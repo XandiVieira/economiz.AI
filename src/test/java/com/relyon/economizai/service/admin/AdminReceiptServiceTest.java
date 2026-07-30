@@ -161,4 +161,11 @@ class AdminReceiptServiceTest {
         verify(observationAuditRepository, never()).deleteAll(any());
         verify(observationRepository, never()).deleteAllById(any());
     }
+
+    @Test
+    void countOrphanedObservations_delegatesToRepository() {
+        when(observationRepository.countOrphaned()).thenReturn(4L);
+
+        assertEquals(4L, service.countOrphanedObservations());
+    }
 }

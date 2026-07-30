@@ -10953,6 +10953,49 @@
 					]
 				},
 				{
+					"name": "COV admin: orphaned observations count (dev-hygiene gauge)",
+					"request": {
+						"method": "GET",
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{adminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/observations/orphaned-count",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"observations",
+								"orphaned-count"
+							]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"if (pm.collectionVariables.get('adminToken')) {",
+									"    pm.test('orphaned-count no server error', () => pm.expect(pm.response.code).to.be.below(500));",
+									"}"
+								]
+							}
+						}
+					]
+				},
+				{
 					"name": "COV admin: purge test receipt's price observations (zero-garbage cleanup)",
 					"request": {
 						"method": "DELETE",

@@ -10,6 +10,7 @@ health, auto-revert on failure. It also **learns** over time.
 |---|---|
 | `.github/workflows/e2e-daily.yml` | Nightly (06:00 UTC) newman run of the Postman **E2E Flow** against the live dev API. On failure → fixer. |
 | `.github/workflows/log-sweep.yml` | Every 2h: pulls recent Render logs, finds a NEW app error (deduped vs the ledger) → fixer. |
+| `.github/workflows/observation-audit.yml` | Weekly (Mon 02:00 BRT): asserts orphaned price observations (deleted-account leftovers) aren't accumulating — i.e. the nightly confirm→purge cleanup works. Read-only; not wired to the fixer. |
 | `.github/workflows/autofix.yml` | Reusable fixer job (reproduce → test → push → deploy-wait → health → revert). |
 | `.github/scripts/autofix.py` | The fixer + learning loop. |
 | `.github/scripts/log_sweep.py` | Render Logs API scan + detection rules. |
