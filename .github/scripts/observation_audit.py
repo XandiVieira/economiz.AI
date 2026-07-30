@@ -40,11 +40,18 @@ def main():
     if not (EMAIL and PASSWORD):
         summary("observation-audit: no admin creds — skipped")
         return 0
+    # Login failure (rate-limit / transient) is a skip, not a red run — only an
+    # over-threshold orphan count should fail. The real weekly cadence won't rate-limit.
     try:
         token = post("/api/v1/auth/login", {"email": EMAIL, "password": PASSWORD})["token"]
+    except Exception as error:
+        summary(f"observation-audit: admin login failed ({error}) — skipped this run")
+        print(f"login skipped: {error}")
+        return 0
+    try:
         count = get("/api/v1/admin/observations/orphaned-count", token)["orphaned"]
     except Exception as error:
-        summary(f"observation-audit: error — {error}")
+        summary(f"observation-audit: query error — {error}")
         print(error)
         return 1
     ok = count <= THRESHOLD
