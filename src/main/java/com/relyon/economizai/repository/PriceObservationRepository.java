@@ -29,6 +29,13 @@ public interface PriceObservationRepository extends JpaRepository<PriceObservati
             + "(SELECT 1 FROM PriceObservationAudit a WHERE a.observation = po)")
     long countOrphaned();
 
+    /** Bulk-delete orphaned observations (no audit row). Dev-only cleanup — on prod these
+     * are LGPD-preserved anonymized aggregates and must NOT be deleted. Gated at the endpoint. */
+    @Modifying
+    @Query("DELETE FROM PriceObservation po WHERE NOT EXISTS "
+            + "(SELECT 1 FROM PriceObservationAudit a WHERE a.observation = po)")
+    int deleteOrphaned();
+
     @Modifying
     @Query("UPDATE PriceObservation po SET po.product = :survivor WHERE po.product = :absorbed")
     int repointProduct(@Param("absorbed") Product absorbed, @Param("survivor") Product survivor);

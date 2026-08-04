@@ -96,4 +96,13 @@ public class AdminReceiptService {
     public long countOrphanedObservations() {
         return observationRepository.countOrphaned();
     }
+
+    /** Dev-only: bulk-delete every orphaned observation. Gated at the endpoint — on prod
+     * these are LGPD-preserved anonymized aggregates. Returns how many were removed. */
+    @Transactional
+    public int deleteOrphanedObservations() {
+        var removed = observationRepository.deleteOrphaned();
+        log.info("admin.delete_orphaned_observations removed={}", removed);
+        return removed;
+    }
 }

@@ -10377,13 +10377,12 @@
 							"script": {
 								"type": "text/javascript",
 								"exec": [
-									"// Admin coverage is best-effort: skip cleanly if creds are absent or login is rate-limited.",
+									"// Admin login must succeed — a bad E2E_ADMIN_* credential now fails RED (no silent skip).",
+									"pm.test('admin login succeeded (200)', function () {",
+									"    pm.expect(pm.response.code, 'admin login must return 200 — check E2E_ADMIN_* secrets').to.eql(200);",
+									"});",
 									"if (pm.response.code === 200) {",
 									"    pm.collectionVariables.set('adminToken', pm.response.json().token);",
-									"    pm.test('admin login ok', () => pm.expect(pm.response.code).to.eql(200));",
-									"} else {",
-									"    pm.collectionVariables.set('adminToken', '');",
-									"    console.log('admin login skipped, code=' + pm.response.code);",
 									"}"
 								]
 							}

@@ -168,6 +168,33 @@ class AdminControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    // --- observations: orphaned count + dev-gated cleanup ---
+
+    @Test
+    void orphanedObservationCount_returnsCount() throws Exception {
+        when(adminReceiptService.countOrphanedObservations()).thenReturn(607L);
+
+        mockMvc.perform(get("/api/v1/admin/observations/orphaned-count")
+                        .with(SecurityMockMvcRequestPostProcessors.user(adminUser())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orphaned").value(607));
+    }
+
+    @Test
+    void purgeOrphanedObservations_forbiddenWhenDevCleanupDisabled() throws Exception {
+        // devCleanupEnabled defaults to false in the slice — even an admin is blocked.
+        mockMvc.perform(delete("/api/v1/admin/observations/orphaned")
+                        .with(SecurityMockMvcRequestPostProcessors.user(adminUser())))
+                .andExpect(status().isForbidden());
+        verify(adminReceiptService, never()).deleteOrphanedObservations();
+    }
+
+    @Test
+    void purgeOrphanedObservations_unauthorizedWhenAnonymous() throws Exception {
+        mockMvc.perform(delete("/api/v1/admin/observations/orphaned"))
+                .andExpect(status().isUnauthorized());
+    }
+
     // --- list / get users ---
 
     @Test

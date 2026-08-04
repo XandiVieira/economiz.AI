@@ -168,4 +168,12 @@ class AdminReceiptServiceTest {
 
         assertEquals(4L, service.countOrphanedObservations());
     }
+
+    @Test
+    void deleteOrphanedObservations_delegatesAndReturnsCount() {
+        when(observationRepository.deleteOrphaned()).thenReturn(607);
+
+        assertEquals(607, service.deleteOrphanedObservations());
+        verify(observationRepository).deleteOrphaned();
+    }
 }

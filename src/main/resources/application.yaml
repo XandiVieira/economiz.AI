@@ -69,6 +69,10 @@ economizai:
     # Comma-separated emails promoted to ROLE_ADMIN on startup (idempotent).
     # The account must already exist (registered via the app); empty = no-op.
     emails: ${ADMIN_EMAILS:}
+    # Enables DELETE /admin/observations/orphaned (bulk-delete deleted-account
+    # observation leftovers). DEV ONLY — on prod these are LGPD-preserved
+    # anonymized aggregates. Never set true in production.
+    dev-cleanup-enabled: ${DEV_CLEANUP_ENABLED:false}
   privacy:
     k-anonymity: 3
   ingestion:

@@ -45,6 +45,8 @@ import com.relyon.economizai.service.sefaz.StateCoverageService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -88,6 +90,10 @@ public class AdminController {
     private final CostReportService costReportService;
     private final StateCoverageService stateCoverageService;
     private final SefazIngestionService sefazIngestionService;
+
+    // Dev-only guard for the orphaned-observation bulk delete (off on prod).
+    @Value("${economizai.admin.dev-cleanup-enabled:false}")
+    private boolean devCleanupEnabled;
 
     @PostMapping("/receipts/{id}/reparse")
     public ResponseEntity<ReceiptResponse> reparseReceipt(@PathVariable UUID id) {
@@ -153,6 +159,19 @@ public class AdminController {
     @GetMapping("/observations/orphaned-count")
     public ResponseEntity<OrphanedObservationsResponse> orphanedObservationCount() {
         return ResponseEntity.ok(new OrphanedObservationsResponse(adminReceiptService.countOrphanedObservations()));
+    }
+
+    /**
+     * Dev-only cleanup: bulk-delete every orphaned observation (deleted-account leftovers).
+     * Disabled unless {@code economizai.admin.dev-cleanup-enabled=true} — on prod these are
+     * LGPD-preserved anonymized aggregates and must never be mass-deleted.
+     */
+    @DeleteMapping("/observations/orphaned")
+    public ResponseEntity<PurgeObservationsResponse> purgeOrphanedObservations() {
+        if (!devCleanupEnabled) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        return ResponseEntity.ok(new PurgeObservationsResponse(adminReceiptService.deleteOrphanedObservations()));
     }
 
     @PostMapping("/notifications/test")
