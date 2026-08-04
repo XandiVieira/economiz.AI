@@ -1,0 +1,27 @@
+# Weekly chaos/concurrency run: N virtual users hammer the live dev app at once
+# (k6), contending on shared catalog products to surface races/deadlocks/pool
+# exhaustion. Throwaway users self-delete; one persistent user accumulates history.
+# Goes red on any 5xx; the log-sweep also catches server errors and feeds the fixer.
+name: chaos-weekly
+
+on:
+  schedule:
+    - cron: '0 4 * * 0'   # Sundays 04:00 UTC = 01:00 America/Sao_Paulo
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  chaos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: grafana/setup-k6-action@v1
+      - name: Run chaos journey
+        env:
+          BASE_URL: https://economiz-ai.onrender.com
+          VUS: '6'
+          RUN_ID: ${{ github.run_id }}
+        run: k6 run .github/scripts/chaos.js
