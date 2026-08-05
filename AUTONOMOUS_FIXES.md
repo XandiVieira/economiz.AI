@@ -73,6 +73,31 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-08-05 08:22:42] FIX f7f4fa7 - E2E: COV admin: LLM teacher-layer report (admin)
+- **Detected:**
+```
+A daily E2E run against the live dev server FAILED (1/208 assertions).
+Failing steps:
+- COV admin: LLM teacher-layer report (admin): AssertionError: expected 500 to be below 500
+
+Server-side errors during the run (the likely root cause):
+```
+Caused by: org.hibernate.exception.SQLGrammarException: JDBC exception executing SQL [ERROR: column ld1_0.updated_at does not exist
+	at org.hibernate.exception.internal.StandardSQLExceptionConverter.convert(StandardSQLExceptionConverter.java:34)
+	at org.hibernate.engine.jdbc.spi.SqlExceptionHelper.convert(SqlExceptionHelper.java:115)
+	at org.springframework.dao.support.PersistenceExceptionTranslationInterceptor.invoke(PersistenceExceptionTranslationInterceptor.java:135)
+Caused by: org.postgresql.util.PSQLException: ERROR: column ld1_0.updated_at does not exist
+2026-08-05 08:14:03.790 WARN  [req=b6f57620 user=developer+e2e-1785917594347@economizaai.app rcpt= item=] c.r.e.e.GlobalExceptionHandler - Entity not found: Product not found.
+2026-08-05 08:14:03.883 WARN  [req=38f331c5 user=developer+e2e-1785917594347@economizaai.app rcpt= item=] c.r.e.e.GlobalExceptionHandler - Type mismatch for parameter 'groupBy': Method parameter 'groupBy': Failed to convert value of type 'java.lang.String' to required type 'com.relyon.economizai.model.enums.InsightsGroupBy'; Failed to convert from type [java.lang.String] to type [@org.springframework.web.bind.annotation.RequestParam com.relyon.economizai.model.enums.InsightsGroupBy] for value [NONSENSE]
+2026-0
+```
+- **Reproduced by:** `com.relyon.economizai.repository.LlmDisagreementRepositoryTest#findOpenDisagreements_failsBecauseMigrationNeverAddedUpdatedAtColumn` (failed before fix, passes after)
+- **Root cause + fix:** FIXED com.relyon.economizai.repository.LlmDisagreementRepositoryTest#findOpenDisagreements_failsBecauseMigrationNeverAddedUpdatedAtColumn | V64__llm_layers.sql created `llm_disagreements` without an `updated_at` column, but `LlmDisagreement extends BaseEntity`, which requires that column on every select — every query (used by the admin LLM report) threw `SQLGrammarException: column ld1_0.updated_at does not exist`. Added V65 migration adding the column.
+LESSON Since the test profile uses `ddl-auto: create-drop` (Flyway disabled), entity/migration schema drift can't be caught by a normal @DataJ
+- **Build:** PASS (mvnw test, full suite)
+- **Deploy:** pushed f7f4fa7 → Render, health **UP**
+- **Outcome:** RESOLVED
+
 ### [2026-07-29 08:21:53] [NEEDS-HUMAN] NO-REPRO - E2E: 13b. Export purchase history CSV
 - **Detected:**
 ```
