@@ -39,6 +39,7 @@ import com.relyon.economizai.service.admin.AdminLlmService;
 import com.relyon.economizai.service.admin.AdminMerchantService;
 import com.relyon.economizai.service.admin.AdminNotificationService;
 import com.relyon.economizai.service.admin.AdminProductService;
+import com.relyon.economizai.service.admin.AdminDevService;
 import com.relyon.economizai.service.admin.AdminReceiptService;
 import com.relyon.economizai.service.admin.AdminUserService;
 import com.relyon.economizai.service.extraction.CategorizationQualityService;
@@ -109,6 +110,7 @@ class AdminControllerTest {
     @MockitoBean private CostReportService costReportService;
     @MockitoBean private StateCoverageService stateCoverageService;
     @MockitoBean private SefazIngestionService sefazIngestionService;
+    @MockitoBean private AdminDevService adminDevService;
     @MockitoBean private JwtService jwtService;
     @MockitoBean private UserDetailsService userDetailsService;
     @MockitoBean private LocalizedMessageService localizedMessageService;
@@ -159,6 +161,14 @@ class AdminControllerTest {
     void reparseReceipt_forbiddenForNonAdmin() throws Exception {
         mockMvc.perform(post("/api/v1/admin/receipts/" + UUID.randomUUID() + "/reparse")
                         .with(SecurityMockMvcRequestPostProcessors.user(regularUser())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void seedDiscountedReceipt_forbiddenWhenDevSeedDisabled() throws Exception {
+        // economizai.admin.dev-seed-enabled defaults to false in the test context.
+        mockMvc.perform(post("/api/v1/admin/dev/seed-discounted-receipt")
+                        .with(SecurityMockMvcRequestPostProcessors.user(adminUser())))
                 .andExpect(status().isForbidden());
     }
 

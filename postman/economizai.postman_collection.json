@@ -11970,6 +11970,33 @@
 					},
 					"response": []
 				},
+					{
+						"name": "Seed a discounted receipt (dev-only, admin)",
+						"request": {
+							"method": "POST",
+							"header": [
+								{
+									"key": "Authorization",
+									"value": "Bearer {{token}}"
+								}
+							],
+							"url": {
+								"raw": "{{baseUrl}}/api/v1/admin/dev/seed-discounted-receipt",
+								"host": [
+									"{{baseUrl}}"
+								],
+								"path": [
+									"api",
+									"v1",
+									"admin",
+									"dev",
+									"seed-discounted-receipt"
+								]
+							},
+							"description": "DEV-ONLY (economizai.admin.dev-seed-enabled=true). Plants a PENDING receipt with a receipt-level discount and one promotional line (paidTotalPrice below totalPrice) for the calling admin household — deterministic data for QA/e2e of the discount UI. 403 when the flag is off (prod)."
+						},
+						"response": []
+					},
 				{
 					"name": "List users (admin, paginated, optional name/email search)",
 					"request": {
