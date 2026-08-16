@@ -26,6 +26,7 @@ import com.relyon.economizai.dto.response.StateCoverageResponse;
 import com.relyon.economizai.dto.response.ProductResponse;
 import com.relyon.economizai.dto.response.ReceiptResponse;
 import com.relyon.economizai.dto.response.ReceiptSummaryResponse;
+import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.CategorizationQualityTrigger;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
@@ -34,6 +35,7 @@ import com.relyon.economizai.service.admin.AdminLlmService;
 import com.relyon.economizai.service.admin.AdminMerchantService;
 import com.relyon.economizai.service.admin.AdminNotificationService;
 import com.relyon.economizai.service.admin.AdminProductService;
+import com.relyon.economizai.service.admin.AdminDevService;
 import com.relyon.economizai.service.admin.AdminReceiptService;
 import com.relyon.economizai.service.admin.AdminUserService;
 import com.relyon.economizai.service.extraction.CategorizationQualityService;
@@ -47,6 +49,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -90,10 +93,15 @@ public class AdminController {
     private final CostReportService costReportService;
     private final StateCoverageService stateCoverageService;
     private final SefazIngestionService sefazIngestionService;
+    private final AdminDevService adminDevService;
 
     // Dev-only guard for the orphaned-observation bulk delete (off on prod).
     @Value("${economizai.admin.dev-cleanup-enabled:false}")
     private boolean devCleanupEnabled;
+
+    // Dev-only guard for QA/e2e test-data seeding (off on prod).
+    @Value("${economizai.admin.dev-seed-enabled:false}")
+    private boolean devSeedEnabled;
 
     @PostMapping("/receipts/{id}/reparse")
     public ResponseEntity<ReceiptResponse> reparseReceipt(@PathVariable UUID id) {
@@ -172,6 +180,19 @@ public class AdminController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
         return ResponseEntity.ok(new PurgeObservationsResponse(adminReceiptService.deleteOrphanedObservations()));
+    }
+
+    /**
+     * Dev-only: plant a discounted PENDING receipt (with a per-item paid price) for
+     * the calling admin's household, so QA / e2e flows have a deterministic note to
+     * exercise the discount UI. Disabled unless {@code economizai.admin.dev-seed-enabled=true}.
+     */
+    @PostMapping("/dev/seed-discounted-receipt")
+    public ResponseEntity<ReceiptResponse> seedDiscountedReceipt(@AuthenticationPrincipal User user) {
+        if (!devSeedEnabled) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        return ResponseEntity.ok(adminDevService.seedDiscountedReceipt(user));
     }
 
     @PostMapping("/notifications/test")
