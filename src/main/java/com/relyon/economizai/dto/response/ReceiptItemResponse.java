@@ -35,13 +35,6 @@ public record ReceiptItemResponse(
         return from(item, null, false);
     }
 
-    /** A line is promotional when a manual paid total is set below the as-printed total. */
-    private static boolean isPromotional(ReceiptItem item) {
-        return item.getPaidTotalPrice() != null
-                && item.getTotalPrice() != null
-                && item.getPaidTotalPrice().compareTo(item.getTotalPrice()) < 0;
-    }
-
     public static ReceiptItemResponse from(ReceiptItem item, String overrideLabel) {
         return from(item, overrideLabel, false);
     }
@@ -83,7 +76,7 @@ public record ReceiptItemResponse(
                 item.getTotalPrice(),
                 item.getPaidUnitPrice(),
                 item.getPaidTotalPrice(),
-                isPromotional(item),
+                item.isPromotional(),
                 item.isExcluded(),
                 item.isNfcePromoFlag(),
                 category,

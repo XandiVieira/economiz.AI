@@ -97,4 +97,11 @@ public class ReceiptItem extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "category_at_confirmation", length = 30)
     private ProductCategory categoryAtConfirmation;
+
+    /** True when a manual paid total is recorded below the as-printed total — i.e. the line was on promotion. */
+    public boolean isPromotional() {
+        return paidTotalPrice != null
+                && totalPrice != null
+                && paidTotalPrice.compareTo(totalPrice) < 0;
+    }
 }

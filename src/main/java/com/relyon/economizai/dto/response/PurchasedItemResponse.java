@@ -41,13 +41,6 @@ public record PurchasedItemResponse(
         return from(item, (String) null);
     }
 
-    /** A line is promotional when a manual paid total is set below the as-printed total. */
-    private static boolean isPromotional(ReceiptItem item) {
-        return item.getPaidTotalPrice() != null
-                && item.getTotalPrice() != null
-                && item.getPaidTotalPrice().compareTo(item.getTotalPrice()) < 0;
-    }
-
     /**
      * @param overrideLabel the household's corrected category label (enum name or
      *                      custom-category name), shown in place of the product's
@@ -74,7 +67,7 @@ public record PurchasedItemResponse(
                 item.getTotalPrice(),
                 item.getPaidUnitPrice(),
                 item.getPaidTotalPrice(),
-                isPromotional(item),
+                item.isPromotional(),
                 item.isNfcePromoFlag(),
                 receipt.getId(),
                 receipt.getMarketName(),
