@@ -27,6 +27,9 @@ public record PurchasedItemResponse(
         String unit,
         BigDecimal unitPrice,
         BigDecimal totalPrice,
+        BigDecimal paidUnitPrice,
+        BigDecimal paidTotalPrice,
+        boolean promotional,
         boolean nfcePromoFlag,
         UUID receiptId,
         String marketName,
@@ -36,6 +39,13 @@ public record PurchasedItemResponse(
 ) {
     public static PurchasedItemResponse from(ReceiptItem item) {
         return from(item, (String) null);
+    }
+
+    /** A line is promotional when a manual paid total is set below the as-printed total. */
+    private static boolean isPromotional(ReceiptItem item) {
+        return item.getPaidTotalPrice() != null
+                && item.getTotalPrice() != null
+                && item.getPaidTotalPrice().compareTo(item.getTotalPrice()) < 0;
     }
 
     /**
@@ -62,6 +72,9 @@ public record PurchasedItemResponse(
                 item.getUnit(),
                 item.getUnitPrice(),
                 item.getTotalPrice(),
+                item.getPaidUnitPrice(),
+                item.getPaidTotalPrice(),
+                isPromotional(item),
                 item.isNfcePromoFlag(),
                 receipt.getId(),
                 receipt.getMarketName(),
@@ -73,7 +86,7 @@ public record PurchasedItemResponse(
     /** Copy with the household's custom display name applied; leaves the original {@code marketName} intact. */
     public PurchasedItemResponse withMarketFriendlyName(String marketFriendlyName) {
         return new PurchasedItemResponse(itemId, productId, category, globalCategory, displayDescription, rawDescription,
-                friendlyDescription, ean, quantity, unit, unitPrice, totalPrice, nfcePromoFlag,
-                receiptId, marketName, marketFriendlyName, marketCnpj, purchasedAt);
+                friendlyDescription, ean, quantity, unit, unitPrice, totalPrice, paidUnitPrice, paidTotalPrice,
+                promotional, nfcePromoFlag, receiptId, marketName, marketFriendlyName, marketCnpj, purchasedAt);
     }
 }

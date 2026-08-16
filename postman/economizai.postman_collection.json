@@ -1675,7 +1675,7 @@
 						},
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"ean\": \"7891234567890\",\n  \"quantity\": 2,\n  \"unit\": \"UN\",\n  \"unitPrice\": 28.90,\n  \"totalPrice\": 57.80,\n  \"friendlyDescription\": \"Arroz Tio João 5kg\"\n}"
+							"raw": "{\n  \"ean\": \"7891234567890\",\n  \"quantity\": 2,\n  \"unit\": \"UN\",\n  \"unitPrice\": 28.90,\n  \"totalPrice\": 57.80,\n  \"paidTotalPrice\": 49.90,\n  \"friendlyDescription\": \"Arroz Tio João 5kg\"\n}"
 						}
 					},
 					"response": []
@@ -5814,7 +5814,7 @@
 						},
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"friendlyDescription\": \"ITEM REVISADO\",\n  \"quantity\": 1,\n  \"unit\": \"UN\",\n  \"unitPrice\": 9.99,\n  \"totalPrice\": 9.99\n}"
+							"raw": "{\n  \"friendlyDescription\": \"ITEM REVISADO\",\n  \"quantity\": 1,\n  \"unit\": \"UN\",\n  \"unitPrice\": 9.99,\n  \"totalPrice\": 9.99,\n  \"paidTotalPrice\": 7.99\n}"
 						}
 					},
 					"response": [],
@@ -5833,6 +5833,11 @@
 									"});",
 									"pm.test('rawDescription stays immutable (SEFAZ audit trail)', function () {",
 									"    pm.expect(item.rawDescription).to.not.eql('ITEM REVISADO');",
+									"});",
+									"pm.test('manual discount recorded — paid below original marks the line promotional', function () {",
+									"    pm.expect(item.paidTotalPrice).to.eql(7.99);",
+									"    pm.expect(item.totalPrice).to.eql(9.99);",
+									"    pm.expect(item.promotional).to.eql(true);",
 									"});"
 								]
 							}

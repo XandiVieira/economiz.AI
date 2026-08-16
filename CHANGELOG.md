@@ -16,6 +16,26 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-08-16 — Desconto por item na revisão (preço pago manual)
+
+A NFC-e só traz **um desconto no total da nota** (`discountTotal` na receipt), nunca
+por item. Para quem quer registrar o desconto de um item específico, o endpoint de
+edição de item na revisão agora aceita o **preço realmente pago**:
+
+- `PATCH /receipts/{id}/items/{itemId}` aceita dois campos **opcionais**:
+  - `paidTotalPrice` — total efetivamente pago nessa linha (quando em promoção). Não
+    pode ser **maior** que `totalPrice` (senão `400` com `receipt.item.paid.price.exceeds.original`).
+  - `paidUnitPrice` — preço unitário pago. Se omitido e houver `paidTotalPrice`, é
+    derivado de `paidTotalPrice ÷ quantity`.
+  - Enviar `paidTotalPrice: null` **limpa** um desconto manual anterior.
+- O `totalPrice`/`unitPrice` original **continua como impresso** (preço de prateleira —
+  ainda é a base do índice colaborativo). Só é editável enquanto a nota está `PENDING_CONFIRMATION`.
+- **Response shape:** todo item (`ReceiptItemResponse` e `PurchasedItemResponse` do
+  `GET /items`) agora traz `paidUnitPrice`, `paidTotalPrice` e o booleano derivado
+  `promotional` (`true` quando `paidTotalPrice` está presente e abaixo de `totalPrice`).
+  Use `promotional` para o selo de desconto por item; mostre `paidTotalPrice` riscando
+  o `totalPrice` original.
+
 ## 2026-07-22 — Plataforma do cliente no login (web / android / ios)
 
 Novo campo **opcional** `platform` (`WEB` | `ANDROID` | `IOS`) nos endpoints de auth

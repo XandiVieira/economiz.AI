@@ -5,6 +5,12 @@ import com.relyon.economizai.model.ReceiptItem;
 import java.math.BigDecimal;
 import java.util.UUID;
 
+/**
+ * A line item. Prices are as-printed on the NFC-e (shelf price); {@code paidUnitPrice}/
+ * {@code paidTotalPrice} carry the user-entered "price actually paid" when the line was
+ * bought on promotion, and {@code promotional} is the derived flag ({@code paidTotalPrice}
+ * present and below {@code totalPrice}) the FE keys the discount badge off.
+ */
 public record ReceiptItemResponse(
         UUID id,
         UUID productId,
@@ -17,6 +23,9 @@ public record ReceiptItemResponse(
         String unit,
         BigDecimal unitPrice,
         BigDecimal totalPrice,
+        BigDecimal paidUnitPrice,
+        BigDecimal paidTotalPrice,
+        boolean promotional,
         boolean excluded,
         boolean nfcePromoFlag,
         String category,
@@ -24,6 +33,13 @@ public record ReceiptItemResponse(
 ) {
     public static ReceiptItemResponse from(ReceiptItem item) {
         return from(item, null, false);
+    }
+
+    /** A line is promotional when a manual paid total is set below the as-printed total. */
+    private static boolean isPromotional(ReceiptItem item) {
+        return item.getPaidTotalPrice() != null
+                && item.getTotalPrice() != null
+                && item.getPaidTotalPrice().compareTo(item.getTotalPrice()) < 0;
     }
 
     public static ReceiptItemResponse from(ReceiptItem item, String overrideLabel) {
@@ -65,6 +81,9 @@ public record ReceiptItemResponse(
                 item.getUnit(),
                 item.getUnitPrice(),
                 item.getTotalPrice(),
+                item.getPaidUnitPrice(),
+                item.getPaidTotalPrice(),
+                isPromotional(item),
                 item.isExcluded(),
                 item.isNfcePromoFlag(),
                 category,
