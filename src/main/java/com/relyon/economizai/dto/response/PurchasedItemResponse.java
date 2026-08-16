@@ -27,6 +27,9 @@ public record PurchasedItemResponse(
         String unit,
         BigDecimal unitPrice,
         BigDecimal totalPrice,
+        BigDecimal paidUnitPrice,
+        BigDecimal paidTotalPrice,
+        boolean promotional,
         boolean nfcePromoFlag,
         UUID receiptId,
         String marketName,
@@ -62,6 +65,9 @@ public record PurchasedItemResponse(
                 item.getUnit(),
                 item.getUnitPrice(),
                 item.getTotalPrice(),
+                item.getPaidUnitPrice(),
+                item.getPaidTotalPrice(),
+                item.isPromotional(),
                 item.isNfcePromoFlag(),
                 receipt.getId(),
                 receipt.getMarketName(),
@@ -73,7 +79,7 @@ public record PurchasedItemResponse(
     /** Copy with the household's custom display name applied; leaves the original {@code marketName} intact. */
     public PurchasedItemResponse withMarketFriendlyName(String marketFriendlyName) {
         return new PurchasedItemResponse(itemId, productId, category, globalCategory, displayDescription, rawDescription,
-                friendlyDescription, ean, quantity, unit, unitPrice, totalPrice, nfcePromoFlag,
-                receiptId, marketName, marketFriendlyName, marketCnpj, purchasedAt);
+                friendlyDescription, ean, quantity, unit, unitPrice, totalPrice, paidUnitPrice, paidTotalPrice,
+                promotional, nfcePromoFlag, receiptId, marketName, marketFriendlyName, marketCnpj, purchasedAt);
     }
 }

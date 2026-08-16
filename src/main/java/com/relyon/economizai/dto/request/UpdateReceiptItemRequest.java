@@ -32,5 +32,12 @@ public record UpdateReceiptItemRequest(
                 "Product, also remembered household-wide so future receipts of the same product inherit it. " +
                 "Send empty string to clear.",
                 example = "Cerveja Stella 330ml")
-        @Size(max = 500) String friendlyDescription
+        @Size(max = 500) String friendlyDescription,
+        @Schema(description = "Optional. Unit price actually paid when this line was on promotion. Leave null " +
+                "if the line wasn't discounted; when null it is derived from paidTotalPrice ÷ quantity.")
+        @DecimalMin(value = "0.0") BigDecimal paidUnitPrice,
+        @Schema(description = "Optional. Total actually PAID for this line when on promotion — must not exceed " +
+                "totalPrice. The original totalPrice stays as-printed (shelf price); this records what was " +
+                "really paid so the app can show the discount. Send null to clear a previously-set manual discount.")
+        @DecimalMin(value = "0.0") BigDecimal paidTotalPrice
 ) {}

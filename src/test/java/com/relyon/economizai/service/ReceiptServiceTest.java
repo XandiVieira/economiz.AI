@@ -2,6 +2,7 @@ package com.relyon.economizai.service;
 
 import com.relyon.economizai.dto.request.SubmitReceiptRequest;
 import com.relyon.economizai.dto.request.UpdateReceiptItemRequest;
+import com.relyon.economizai.exception.InvalidItemPriceException;
 import com.relyon.economizai.exception.ManualChaveUnsupportedException;
 import com.relyon.economizai.exception.PaywallException;
 import com.relyon.economizai.exception.ReceiptAlreadyIngestedException;
@@ -56,6 +57,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -487,7 +489,9 @@ class ReceiptServiceTest {
                 new BigDecimal("28.90"),
                 new BigDecimal("86.70"),
                 null,
-                "Arroz Tio João 5kg"
+                "Arroz Tio João 5kg",
+                null,
+                null
         );
 
         var response = receiptService.updateItem(user, receipt.getId(), item.getId(), request);
@@ -504,13 +508,53 @@ class ReceiptServiceTest {
     }
 
     @Test
+    void updateItem_recordsPaidPriceAndDerivesUnitForDiscountedLine() {
+        var user = buildUser();
+        var receipt = persistedReceipt(user, ReceiptStatus.PENDING_CONFIRMATION);
+        var item = receipt.getItems().get(0);
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
+
+        // Original line: qty 2 × 10.00 = 20.00 as-printed; user paid 15.00 on promo.
+        var request = new UpdateReceiptItemRequest(
+                null, item.getEan(), new BigDecimal("2"), item.getUnit(),
+                new BigDecimal("10.00"), new BigDecimal("20.00"),
+                null, null, null, new BigDecimal("15.00"));
+
+        var response = receiptService.updateItem(user, receipt.getId(), item.getId(), request);
+
+        var updated = response.items().get(0);
+        assertEquals(new BigDecimal("20.00"), updated.totalPrice()); // original stays as-printed
+        assertEquals(0, updated.paidTotalPrice().compareTo(new BigDecimal("15.00")));
+        assertEquals(0, updated.paidUnitPrice().compareTo(new BigDecimal("7.5000"))); // 15.00 ÷ 2
+        assertTrue(updated.promotional());
+    }
+
+    @Test
+    void updateItem_paidPriceAboveOriginal_throws() {
+        var user = buildUser();
+        var receipt = persistedReceipt(user, ReceiptStatus.PENDING_CONFIRMATION);
+        var item = receipt.getItems().get(0);
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
+
+        var request = new UpdateReceiptItemRequest(
+                null, item.getEan(), new BigDecimal("1"), item.getUnit(),
+                new BigDecimal("10.00"), new BigDecimal("10.00"),
+                null, null, null, new BigDecimal("12.00"));
+        var receiptId = receipt.getId();
+        var itemId = item.getId();
+
+        assertThrows(InvalidItemPriceException.class,
+                () -> receiptService.updateItem(user, receiptId, itemId, request));
+    }
+
+    @Test
     void updateItem_throwsForUnknownItem() {
         var user = buildUser();
         var receipt = persistedReceipt(user, ReceiptStatus.PENDING_CONFIRMATION);
         when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
 
         var request = new UpdateReceiptItemRequest("X", null,
-                new BigDecimal("1"), null, null, new BigDecimal("1"), null, null);
+                new BigDecimal("1"), null, null, new BigDecimal("1"), null, null, null, null);
         var receiptId = receipt.getId();
         var missingItemId = UUID.randomUUID();
 

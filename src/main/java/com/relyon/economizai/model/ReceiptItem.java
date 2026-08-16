@@ -73,6 +73,21 @@ public class ReceiptItem extends BaseEntity {
     private boolean nfcePromoFlag = false;
 
     /**
+     * User-entered price actually paid for this line when it was bought on
+     * promotion. The NFC-e carries no per-item discount, so these are captured
+     * manually in the review screen. {@link #unitPrice}/{@link #totalPrice} stay
+     * as-printed (shelf price, still the price-index baseline); these hold what
+     * was really paid. Null when the line has no manual discount. A line is
+     * "promotional" when {@code paidTotalPrice} is present and below
+     * {@code totalPrice}.
+     */
+    @Column(name = "paid_unit_price", precision = 12, scale = 4)
+    private BigDecimal paidUnitPrice;
+
+    @Column(name = "paid_total_price", precision = 12, scale = 2)
+    private BigDecimal paidTotalPrice;
+
+    /**
      * Category snapshot frozen at confirmation — "new knowledge only affects
      * new entries". The linked product's category keeps evolving (consensus,
      * dictionary backfills) for FUTURE purchases; confirmed history displays
@@ -82,4 +97,11 @@ public class ReceiptItem extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "category_at_confirmation", length = 30)
     private ProductCategory categoryAtConfirmation;
+
+    /** True when a manual paid total is recorded below the as-printed total — i.e. the line was on promotion. */
+    public boolean isPromotional() {
+        return paidTotalPrice != null
+                && totalPrice != null
+                && paidTotalPrice.compareTo(totalPrice) < 0;
+    }
 }

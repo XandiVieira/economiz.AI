@@ -429,7 +429,7 @@ class ReceiptServiceCoverageTest {
                 "ignored", "7891234567890",
                 new BigDecimal("1"), "UN",
                 new BigDecimal("28.90"), new BigDecimal("28.90"),
-                Boolean.TRUE, "Arroz Tio João");
+                Boolean.TRUE, "Arroz Tio João", null, null);
 
         receiptService.updateItem(user, receipt.getId(), item.getId(), request);
 
@@ -448,7 +448,7 @@ class ReceiptServiceCoverageTest {
                 .thenReturn(Optional.of(receipt));
 
         var request = new UpdateReceiptItemRequest(
-                "x", null, new BigDecimal("1"), null, null, new BigDecimal("1"), null, null);
+                "x", null, new BigDecimal("1"), null, null, new BigDecimal("1"), null, null, null, null);
         var receiptId = receipt.getId();
         var itemId = item.getId();
 

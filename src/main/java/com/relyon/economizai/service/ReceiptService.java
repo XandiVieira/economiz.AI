@@ -11,6 +11,7 @@ import com.relyon.economizai.exception.ManualChaveUnsupportedException;
 import com.relyon.economizai.exception.PaywallException;
 import com.relyon.economizai.exception.ReceiptAlreadyIngestedException;
 import com.relyon.economizai.exception.ReceiptItemNotFoundException;
+import com.relyon.economizai.exception.InvalidItemPriceException;
 import com.relyon.economizai.exception.ReceiptNotEditableException;
 import com.relyon.economizai.exception.ReceiptNotFoundException;
 import com.relyon.economizai.exception.UnsupportedMerchantException;
@@ -55,6 +56,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.HashMap;
@@ -617,5 +620,31 @@ public class ReceiptService {
             item.setFriendlyDescription(request.friendlyDescription().isBlank()
                     ? null : request.friendlyDescription());
         }
+        applyPaidPrice(item, request);
+    }
+
+    /**
+     * Records the user-entered "price actually paid" for a discounted line. The
+     * original {@link ReceiptItem#getTotalPrice() totalPrice} stays as-printed
+     * (shelf price); the paid price is stored separately so the app can show the
+     * discount. A null paid total clears any previous manual discount. The paid
+     * total can never exceed the original — a discount only lowers the price.
+     */
+    private void applyPaidPrice(ReceiptItem item, UpdateReceiptItemRequest request) {
+        var paidTotal = request.paidTotalPrice();
+        if (paidTotal == null) {
+            item.setPaidUnitPrice(null);
+            item.setPaidTotalPrice(null);
+            return;
+        }
+        if (item.getTotalPrice() != null && paidTotal.compareTo(item.getTotalPrice()) > 0) {
+            throw new InvalidItemPriceException();
+        }
+        var paidUnit = request.paidUnitPrice();
+        if (paidUnit == null && item.getQuantity() != null && item.getQuantity().signum() > 0) {
+            paidUnit = paidTotal.divide(item.getQuantity(), 4, RoundingMode.HALF_UP);
+        }
+        item.setPaidUnitPrice(paidUnit);
+        item.setPaidTotalPrice(paidTotal);
     }
 }
