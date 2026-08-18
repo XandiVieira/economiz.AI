@@ -143,6 +143,7 @@ GitHub repo: `economiz.AI` (https://github.com/XandiVieira/economiz.AI.git)
 - Ask before making code edits during investigation sessions.
 
 ## Project Documentation
+- `OPERATOR.md` is the **AI-owned SDLC constitution** — roles (AI operator vs owner), the autonomous-vs-GATED split (what the AI ships vs what needs the owner's button), the continuous loop, and the secrets/environment map. Read it before any autonomous/scheduled action; update it when the guardrails change.
 - `HELP.md` is the project development log — vision, architecture, phased roadmap, session log. Update on significant progress, decisions, or architectural changes.
 - `MONETIZATION.md` is the living revenue strategy. Update when pricing, tiers, or B2B plans evolve.
 - `API.md` is the FE-facing endpoint walk-through. Update when endpoints/payloads change.
