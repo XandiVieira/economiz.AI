@@ -29,6 +29,26 @@ monitor → triage → reproduce → fix → test (harness) → deploy → valid
 - **Frontend**: harness in `economiza-ai-front/TESTING.md` (web/Android/iOS). CI operator
   to be added (see "Build plan").
 
+## Cross-repo coordination (backend ⇄ frontend)
+
+The two repos are one product: the FE consumes the backend's API, so many fixes/syncs
+span both. **Never reason about one in isolation when a change touches the contract.**
+
+- **Shared workspace.** Any operator run (scheduled or interactive) that could touch the
+  contract checks out **both** repos: backend `XandiVieira/economiz.AI` and frontend
+  `Relyon-Business-AI/economiza-ai-front` (canonical org path — `polyf/...` redirects).
+- **Contract is the seam.** The backend's OpenAPI (`/v3/api-docs`, Swagger) + `API.md` +
+  `CHANGELOG.md` are the source of truth the FE depends on. On any endpoint/response-shape
+  change, update `API.md`/`CHANGELOG.md` **and** check the FE's `src/services/*` +
+  `src/types` for drift (missing/renamed fields, removed endpoints). A `contract-sync`
+  check (backend OpenAPI vs FE usage) surfaces mismatches; run it before calling a
+  contract change "done".
+- **Linked PRs.** A cross-repo change opens a PR in **each** repo, cross-referencing the
+  other in the body, and they ship together (respecting each side's deploy rules —
+  backend deploy window; FE OTA).
+- **Direction of truth.** Backend defines the contract; FE adapts. If the FE needs a shape
+  the backend doesn't provide, that's a backend change first (propose it), not an FE hack.
+
 ## Autonomous vs GATED
 
 | Area | ✅ AI does autonomously | 🔴 GATED — owner clicks the button |
