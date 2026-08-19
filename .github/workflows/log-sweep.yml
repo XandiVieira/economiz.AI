@@ -8,12 +8,11 @@ on:
     - cron: '17 */2 * * *'   # every 2 hours
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   sweep:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read   # only reads the ledger for dedup
     timeout-minutes: 10
     outputs:
       found: ${{ steps.sweep.outputs.found }}
@@ -33,6 +32,8 @@ jobs:
   fix:
     needs: sweep
     if: ${{ needs.sweep.outputs.found == 'true' }}
+    permissions:
+      contents: write   # the reusable fixer pushes the fix
     uses: ./.github/workflows/autofix.yml
     with:
       source: log-sweep
