@@ -169,6 +169,10 @@ public class CommunityPromoService {
     }
 
     /** Recent/baseline medians + drop percentage; null when the group has no qualifying price drop. */
+    // False positive: median() returns null only for an empty list, and the guard
+    // below (recentPrices non-empty, baselinePrices.size() >= 3) guarantees both
+    // medians are non-null before they are dereferenced.
+    @SuppressWarnings("java:S2259")
     private PriceDrop computePriceDrop(List<PriceObservation> rows, LocalDateTime recentCutoff) {
         // Use normalized R$/base-unit when ALL rows in the group carry it
         // (same product across time can shift pack sizes — a market that

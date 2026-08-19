@@ -38,6 +38,9 @@ public class ReceiptExportService {
 
     public enum ExportFormat { CSV, XLSX, PDF }
 
+    // A transient file carrier that's never compared for equality; content-based
+    // equals/hashCode on the byte[] would be needless overhead. Reference identity is fine.
+    @SuppressWarnings("java:S6218")
     public record ExportFile(byte[] content, String mediaType, String fileExtension) {}
 
     private static final DateTimeFormatter CSV_DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");

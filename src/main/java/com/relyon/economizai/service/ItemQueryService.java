@@ -78,6 +78,10 @@ public class ItemQueryService {
         return new PageImpl<>(rows, pageable, total);
     }
 
+    // False positive: the query is assembled from fixed, whitelisted JPQL fragments
+    // (FilterClauses.where/join); every user value is a named parameter bound via
+    // setParameter (see bind()). No user input is concatenated into the query string.
+    @SuppressWarnings("java:S2077")
     private long countMatching(FilterClauses clauses) {
         var countQuery = entityManager.createQuery(
                 "SELECT COUNT(ri) FROM ReceiptItem ri JOIN ri.receipt r LEFT JOIN ri.product p"
@@ -86,6 +90,8 @@ public class ItemQueryService {
         return countQuery.getSingleResult();
     }
 
+    // False positive — same as countMatching: fixed JPQL fragments + bound parameters, no user input in the string.
+    @SuppressWarnings("java:S2077")
     private List<ReceiptItem> loadPage(FilterClauses clauses, Pageable pageable) {
         var rowQuery = entityManager.createQuery(
                 "SELECT ri FROM ReceiptItem ri JOIN FETCH ri.receipt r LEFT JOIN FETCH ri.product p"

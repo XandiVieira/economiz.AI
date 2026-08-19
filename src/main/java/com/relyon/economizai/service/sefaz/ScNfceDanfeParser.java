@@ -240,6 +240,10 @@ public final class ScNfceDanfeParser {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    // jsoup's Document.body() is @Nullable (null for body-less/fragment inputs);
+    // Sonar's flow analysis can't see that, so it thinks the guard is always false.
+    // Keep it — a malformed SEFAZ page without a <body> must not NPE.
+    @SuppressWarnings("java:S2583")
     private static List<String> lines(Document document) {
         var body = document.body();
         var text = body == null ? document.text() : body.wholeText();
