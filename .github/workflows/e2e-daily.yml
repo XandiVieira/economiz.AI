@@ -7,12 +7,11 @@ on:
     - cron: '0 6 * * *'   # 06:00 UTC = 03:00 America/Sao_Paulo, after the nightly deploy window
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   e2e:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read   # checkout + run the E2E flow; no push
     timeout-minutes: 20
     outputs:
       failed: ${{ steps.run.outputs.failed }}
@@ -47,6 +46,8 @@ jobs:
   fix:
     needs: e2e
     if: ${{ always() && needs.e2e.outputs.failed == 'true' }}
+    permissions:
+      contents: write   # the reusable fixer pushes the fix
     uses: ./.github/workflows/autofix.yml
     with:
       source: e2e
