@@ -17,8 +17,10 @@ import java.util.regex.Pattern;
  */
 public final class LearnableTokenFilter {
 
-    // 500ml, 1l, 2kg, 165g, 350, 12x1, 1.5l — any number-led size expression
-    private static final Pattern SIZE_WORD = Pattern.compile("^\\d+([.,x]\\d+)*[a-z]{0,3}$");
+    // 500ml, 1l, 2kg, 165g, 350, 12x1, 1.5l — any number-led size expression.
+    // Repetition is bounded ({0,10}, real size words have ≤3 segments) so a
+    // pathologically long token can't trigger regex-engine stack overflow.
+    private static final Pattern SIZE_WORD = Pattern.compile("^\\d+([.,x]\\d+){0,10}[a-z]{0,3}$");
     // bare packaging/measure units as standalone words
     private static final Set<String> UNIT_WORDS = Set.of(
             "g", "kg", "mg", "ml", "l", "lt", "un", "und", "unid", "cx", "pct", "pc",

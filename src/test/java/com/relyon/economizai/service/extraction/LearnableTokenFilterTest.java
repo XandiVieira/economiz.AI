@@ -41,4 +41,20 @@ class LearnableTokenFilterTest {
         assertFalse(LearnableTokenFilter.isLearnable("c vale"));
         assertFalse(LearnableTokenFilter.isLearnable("gallo 500ml"));
     }
+
+    @Test
+    void multiSegmentSizeWordsStillMatchAfterBoundingTheRegex() {
+        // the bounded {0,10} repetition must still catch real multi-segment sizes
+        assertFalse(LearnableTokenFilter.isLearnable("1.5l"));
+        assertFalse(LearnableTokenFilter.isLearnable("2x1.5l"));
+        assertFalse(LearnableTokenFilter.isLearnable("12x1kg"));
+    }
+
+    @Test
+    void pathologicallyLongNumericTokenTerminatesWithoutStackOverflow() {
+        // Previously an unbounded regex repetition could stack-overflow on huge input.
+        var huge = "1" + ".1".repeat(50000);
+        // just needs to return (any boolean) quickly instead of throwing StackOverflowError
+        LearnableTokenFilter.isLearnable(huge);
+    }
 }
