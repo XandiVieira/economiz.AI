@@ -73,6 +73,16 @@ A rollback looks like:
 
 <!-- AUTONOMOUS ENTRIES BELOW - newest first. The watchdog inserts here. -->
 
+### [2026-08-20 11:15:00] FIX - java.lang.ArrayIndexOutOfBoundsException @ EanCatalogService.firstBrand
+- **Trigger:** [NEEDS-HUMAN] entry from 2026-07-08 (CLAUDE-TIMEOUT on first attempt); operator proactive pass picked it up.
+- **Error:** `java.lang.ArrayIndexOutOfBoundsException: Index 0 out of bounds for length 0 at EanCatalogService.firstBrand(EanCatalogService.java:161)`
+- **Reproduced by:** `com.relyon.economizai.service.extraction.EanCatalogServiceTest#parseOpenFoodFactsRow_commaOnlyBrandDoesNotThrow` (failed before fix — exact AIOOBE; passes after) + `parseOpenFoodFactsRow_leadingCommaYieldsSecondBrandNotBlank`
+- **Root cause:** `firstBrand(String)` called `.split(",")[0]` without a limit argument, so Java strips trailing empty strings — `","` yields `[]` (length 0), and `[0]` throws AIOOBE. Open Food Facts occasionally ships `brands=","` for products with no real brand.
+- **Fix:** `split(",", -1)` retains trailing empty strings so the array always has ≥1 element; trim `parts[0]` and return null when blank — comma-only or leading-comma strings yield null instead of throwing.
+- **Build:** PASS (mvnw test, EanCatalogServiceTest 19/19)
+- **Deploy:** PR opened — awaits owner merge (production is gated; dev auto-deploys on merge to development)
+- **Outcome:** RESOLVED (pending merge)
+
 ### [2026-08-05 08:22:42] FIX f7f4fa7 - E2E: COV admin: LLM teacher-layer report (admin)
 - **Detected:**
 ```

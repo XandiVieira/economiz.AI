@@ -276,4 +276,23 @@ class EanCatalogServiceTest {
 
         assertEquals("Marca Principal", req.brand());
     }
+
+    @Test
+    void parseOpenFoodFactsRow_commaOnlyBrandDoesNotThrow() {
+        // OFF occasionally ships brands="," (comma only). split(",") returns [] in Java
+        // (trailing empty strings discarded) → ArrayIndexOutOfBoundsException: Index 0 out of
+        // bounds for length 0 at EanCatalogService.firstBrand — reproduces the prod error.
+        var req = EanCatalogService.parseOpenFoodFactsRow("7891234567890", "Produto", ",", "en:beverages");
+
+        assertNull(req.brand(), "comma-only brands string should yield null brand, not throw");
+    }
+
+    @Test
+    void parseOpenFoodFactsRow_leadingCommaYieldsSecondBrandNotBlank() {
+        // brands=",Nestlé" → split(",", -1)[0] is "" (blank) → null; not the secondary brand.
+        // Guard: we only take the first element regardless; blank first = null.
+        var req = EanCatalogService.parseOpenFoodFactsRow("7891234567890", "Produto", ",Nestlé", "en:beverages");
+
+        assertNull(req.brand(), "leading-comma brand string (blank first token) should yield null");
+    }
 }
