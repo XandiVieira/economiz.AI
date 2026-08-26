@@ -59,7 +59,7 @@ class PhotoReceiptExtractionServiceTest {
         service = new PhotoReceiptExtractionService(openAiClient, photoUploadValidator, paidApiGuard,
                 subscriptionGate, receiptRepository, receiptService, transactionTemplate, true, 60);
         var household = Household.builder().id(UUID.randomUUID()).inviteCode("ABC123").build();
-        user = User.builder().id(UUID.randomUUID()).email("developer+photo@economizaai.app")
+        user = User.builder().id(UUID.randomUUID()).email("alexandre+photo@economizaai.app")
                 .household(household).build();
         lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
             TransactionCallback<?> callback = invocation.getArgument(0);

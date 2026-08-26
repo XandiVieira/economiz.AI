@@ -38,7 +38,7 @@ class ReportEmailServiceTest {
     }
 
     private User user() {
-        return User.builder().id(UUID.randomUUID()).email("developer+report@economizaai.app").build();
+        return User.builder().id(UUID.randomUUID()).email("alexandre+report@economizaai.app").build();
     }
 
     private ExportFile csvFile() {
