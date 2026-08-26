@@ -52,7 +52,7 @@ jobs:
       - name: Configure git
         run: |
           git config user.name "economizai-autofix"
-          git config user.email "developer@economizaai.app"
+          git config user.email "alexandre@economizaai.app"
 
       - name: Run reproduce-first fixer
         env:

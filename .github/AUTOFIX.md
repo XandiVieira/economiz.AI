@@ -11,7 +11,7 @@ health, auto-revert on failure. It also **learns** over time.
 | `.github/workflows/e2e-daily.yml` | Nightly (06:00 UTC) newman run of the Postman **E2E Flow** against the live dev API. On failure → fixer. |
 | `.github/workflows/log-sweep.yml` | Every 2h: pulls recent Render logs, finds a NEW app error (deduped vs the ledger) → fixer. |
 | `.github/workflows/observation-audit.yml` | Weekly (Mon 02:00 BRT): asserts orphaned price observations (deleted-account leftovers) aren't accumulating — i.e. the nightly confirm→purge cleanup works. Read-only; not wired to the fixer. |
-| `.github/workflows/chaos-weekly.yml` | Weekly (Sun 01:00 BRT): N k6 virtual users hit dev concurrently, contending on shared catalog products, to surface races/deadlocks/pool exhaustion. Throwaway users self-delete; one persistent user (`developer+chaospersist@`) accumulates history to cover returning-user scenarios. Goes red on any 5xx (which the log-sweep also feeds to the fixer). |
+| `.github/workflows/chaos-weekly.yml` | Weekly (Sun 01:00 BRT): N k6 virtual users hit dev concurrently, contending on shared catalog products, to surface races/deadlocks/pool exhaustion. Throwaway users self-delete; one persistent user (`alexandre+chaospersist@`) accumulates history to cover returning-user scenarios. Goes red on any 5xx (which the log-sweep also feeds to the fixer). |
 | `.github/workflows/autofix.yml` | Reusable fixer job (reproduce → test → push → deploy-wait → health → revert). |
 | `.github/scripts/autofix.py` | The fixer + learning loop. |
 | `.github/scripts/log_sweep.py` | Render Logs API scan + detection rules. |
@@ -47,7 +47,7 @@ The nightly E2E Flow exercises every endpoint as a **no-5xx coverage probe** (as
 `status < 500` — catches crashes even when data is empty), plus the real scan→confirm→
 **purge**→delete cleanup so it leaves zero garbage in the community price index. One live
 scan uses a public GO NFC-e QR (from `RealGoiasFixtureTest`); all test mail goes to
-`developer@economizaai.app`.
+`alexandre@economizaai.app`.
 
 The nightly E2E also includes a **FUZZ** section — boundary/edge-case inputs (inverted date
 ranges, huge/zero/negative limits, 500-char + unicode/emoji strings, absurd quantities, bad

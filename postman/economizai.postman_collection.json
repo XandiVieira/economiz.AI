@@ -98,8 +98,8 @@
 		},
 		{
 			"key": "testMailbox",
-			"value": "developer@economizaai.app",
-			"description": "Dedicated QA mailbox. ALL test emails must be this address or a plus-alias of it (developer+<tag>@economizaai.app) so test traffic never lands in the main inbox."
+			"value": "alexandre@economizaai.app",
+			"description": "Dedicated QA mailbox. ALL test emails must be this address or a plus-alias of it (alexandre+<tag>@economizaai.app) so test traffic never lands in the main inbox."
 		}
 	],
 	"item": [
@@ -180,7 +180,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\"name\": \"John Doe\", \"email\": \"developer+contact@economizaai.app\", \"phone\": \"+55 51 99999-0000\", \"message\": \"Sugestao: adicionem modo escuro.\"}",
+							"raw": "{\"name\": \"John Doe\", \"email\": \"alexandre+contact@economizaai.app\", \"phone\": \"+55 51 99999-0000\", \"message\": \"Sugestao: adicionem modo escuro.\"}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -214,7 +214,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\"name\": \"Jane Beta\", \"email\": \"developer+beta@economizaai.app\", \"phone\": \"+55 51 99999-0000\"}",
+							"raw": "{\"name\": \"Jane Beta\", \"email\": \"alexandre+beta@economizaai.app\", \"phone\": \"+55 51 99999-0000\"}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -267,7 +267,7 @@
 						},
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"name\": \"Demo User\",\n  \"email\": \"developer+demo@economizaai.app\",\n  \"password\": \"password123\",\n  \"acceptedTermsVersion\": \"1.0\",\n  \"acceptedPrivacyVersion\": \"1.0\",\n  \"platform\": \"WEB\"\n}"
+							"raw": "{\n  \"name\": \"Demo User\",\n  \"email\": \"alexandre+demo@economizaai.app\",\n  \"password\": \"password123\",\n  \"acceptedTermsVersion\": \"1.0\",\n  \"acceptedPrivacyVersion\": \"1.0\",\n  \"platform\": \"WEB\"\n}"
 						}
 					},
 					"response": [],
@@ -316,7 +316,7 @@
 						},
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"email\": \"developer+demo@economizaai.app\",\n  \"password\": \"password123\",\n  \"platform\": \"WEB\"\n}"
+							"raw": "{\n  \"email\": \"alexandre+demo@economizaai.app\",\n  \"password\": \"password123\",\n  \"platform\": \"WEB\"\n}"
 						}
 					},
 					"response": [],
@@ -437,7 +437,7 @@
 						},
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"email\": \"developer+demo@economizaai.app\"\n}"
+							"raw": "{\n  \"email\": \"alexandre+demo@economizaai.app\"\n}"
 						}
 					},
 					"response": []
@@ -473,7 +473,7 @@
 						},
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"email\": \"developer+demo@economizaai.app\",\n  \"code\": \"123456\"\n}"
+							"raw": "{\n  \"email\": \"alexandre+demo@economizaai.app\",\n  \"code\": \"123456\"\n}"
 						}
 					},
 					"response": []
@@ -509,7 +509,7 @@
 						},
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"email\": \"developer+demo@economizaai.app\",\n  \"code\": \"123456\",\n  \"newPassword\": \"newPassword123\"\n}"
+							"raw": "{\n  \"email\": \"alexandre+demo@economizaai.app\",\n  \"code\": \"123456\",\n  \"newPassword\": \"newPassword123\"\n}"
 						}
 					},
 					"response": []
@@ -5237,7 +5237,7 @@
 						},
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"name\": \"E2E Test User\",\n  \"email\": \"developer+e2e@economizaai.app\",\n  \"password\": \"password123\",\n  \"acceptedTermsVersion\": \"1.0\",\n  \"acceptedPrivacyVersion\": \"1.0\",\n  \"platform\": \"WEB\"\n}"
+							"raw": "{\n  \"name\": \"E2E Test User\",\n  \"email\": \"alexandre+e2e@economizaai.app\",\n  \"password\": \"password123\",\n  \"acceptedTermsVersion\": \"1.0\",\n  \"acceptedPrivacyVersion\": \"1.0\",\n  \"platform\": \"WEB\"\n}"
 						}
 					},
 					"response": [],
@@ -5247,7 +5247,7 @@
 							"script": {
 								"type": "text/javascript",
 								"exec": [
-									"var mailbox = pm.collectionVariables.get('testMailbox') || 'developer@economizaai.app'; var email = mailbox.replace('@', '+e2e-' + Date.now() + '@');",
+									"var mailbox = pm.collectionVariables.get('testMailbox') || 'alexandre@economizaai.app'; var email = mailbox.replace('@', '+e2e-' + Date.now() + '@');",
 									"pm.collectionVariables.set('e2eEmail', email);",
 									"pm.request.body.raw = JSON.stringify({ name: 'E2E Test User', email: email, password: 'password123', acceptedTermsVersion: '1.0', acceptedPrivacyVersion: '1.0' });"
 								]
@@ -8477,7 +8477,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\"name\": \"John Doe\", \"email\": \"developer+contact@economizaai.app\", \"phone\": \"+55 51 99999-0000\", \"message\": \"Sugestao: adicionem modo escuro.\"}",
+							"raw": "{\"name\": \"John Doe\", \"email\": \"alexandre+contact@economizaai.app\", \"phone\": \"+55 51 99999-0000\", \"message\": \"Sugestao: adicionem modo escuro.\"}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -8524,7 +8524,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\"name\": \"Jane Beta\", \"email\": \"developer+beta@economizaai.app\", \"phone\": \"+55 51 99999-0000\"}",
+							"raw": "{\"name\": \"Jane Beta\", \"email\": \"alexandre+beta@economizaai.app\", \"phone\": \"+55 51 99999-0000\"}",
 							"options": {
 								"raw": {
 									"language": "json"

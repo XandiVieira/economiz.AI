@@ -3,7 +3,7 @@
 // to shake out races, deadlocks, and pool exhaustion a sequential E2E can't.
 //
 // - Throwaway VUs register a unique account, act, then DELETE themselves (no garbage).
-// - VU 1 is the PERSISTENT "returning user" (developer+chaospersist@) — it logs in and
+// - VU 1 is the PERSISTENT "returning user" (alexandre+chaospersist@) — it logs in and
 //   ACCUMULATES history week over week instead of deleting, so we also cover the
 //   "user with existing data" scenarios a fresh user misses.
 // - No receipt confirms / no admin / no SEFAZ scans, so nothing pollutes the community
@@ -51,8 +51,8 @@ export default function () {
   const H = { headers: { 'Content-Type': 'application/json' } };
   const persistent = __VU === 1;
   const email = persistent
-    ? 'developer+chaospersist@economizaai.app'
-    : `developer+chaos-${RUN}-${__VU}@economizaai.app`;
+    ? 'alexandre+chaospersist@economizaai.app'
+    : `alexandre+chaos-${RUN}-${__VU}@economizaai.app`;
   const password = 'ChaosUser!2026';
 
   // Register (persistent account 409s after the first ever run -> log in instead).

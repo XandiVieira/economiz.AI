@@ -53,7 +53,7 @@ class ReceiptExportServiceTest {
     @BeforeEach
     void setUp() {
         var household = Household.builder().id(UUID.randomUUID()).inviteCode("ABC123").build();
-        user = User.builder().id(UUID.randomUUID()).email("developer+export@economizaai.app")
+        user = User.builder().id(UUID.randomUUID()).email("alexandre+export@economizaai.app")
                 .household(household).build();
         // headers echo their key so assertions are stable regardless of locale
         lenient().when(localizedMessageService.translate(anyString())).thenAnswer(inv -> inv.getArgument(0));

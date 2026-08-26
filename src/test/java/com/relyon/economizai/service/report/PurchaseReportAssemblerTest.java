@@ -38,7 +38,7 @@ class PurchaseReportAssemblerTest {
     @BeforeEach
     void setUp() {
         var household = Household.builder().id(UUID.randomUUID()).inviteCode("ABC123").build();
-        user = User.builder().id(UUID.randomUUID()).email("developer+report@economizaai.app")
+        user = User.builder().id(UUID.randomUUID()).email("alexandre+report@economizaai.app")
                 .household(household).build();
     }
 
