@@ -4,9 +4,11 @@ import com.relyon.economizai.dto.response.ReceiptResponse;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.exception.UserNotFoundException;
 import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
 import com.relyon.economizai.repository.ReceiptRepository;
+import com.relyon.economizai.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -28,17 +30,21 @@ import java.util.concurrent.ThreadLocalRandom;
 public class AdminDevService {
 
     private final ReceiptRepository receiptRepository;
+    private final UserRepository userRepository;
 
     /**
-     * Plants a PENDING_CONFIRMATION receipt with a receipt-level discount and one
-     * line carrying a manual paid price (promotional), so the review/discount UI
-     * has a deterministic note to exercise. Returns the created receipt.
+     * Plants a PENDING_CONFIRMATION receipt with a receipt-level discount and
+     * three lines carrying a manual paid price (promotional), so the
+     * review/discount UI has deterministic promotions to exercise. Seeds into
+     * {@code targetEmail}'s account when given (admin planting screenshot data
+     * for another account), the caller's own otherwise. Returns the created receipt.
      */
     @Transactional
-    public ReceiptResponse seedDiscountedReceipt(User caller) {
+    public ReceiptResponse seedDiscountedReceipt(User caller, String targetEmail) {
+        var target = resolveTarget(caller, targetEmail);
         var receipt = Receipt.builder()
-                .user(caller)
-                .household(caller.getHousehold())
+                .user(target)
+                .household(target.getHousehold())
                 .chaveAcesso(randomChave())
                 .qrPayload("seed://discounted-receipt")
                 .uf(UnidadeFederativa.RS)
@@ -47,19 +53,28 @@ public class AdminDevService {
                 .issuedAt(LocalDateTime.now())
                 .status(ReceiptStatus.PENDING_CONFIRMATION)
                 .discountTotal(new BigDecimal("5.00"))
-                // gross 68.00 − discount 5.00 = 63.00 net "valor a pagar"
-                .totalAmount(new BigDecimal("63.00"))
+                // gross 86.90 − discount 5.00 = 81.90 net "valor a pagar"
+                .totalAmount(new BigDecimal("81.90"))
                 .build();
 
-        // Line 1 was bought on promotion: paid 19.90 vs 25.00 as-printed.
+        // Lines 1-3 were bought on promotion: paid total < as-printed total.
         receipt.addItem(item(1, "ARROZ TESTE 5KG", "1", "25.00", "25.00", "19.90"));
-        receipt.addItem(item(2, "FEIJAO TESTE 1KG", "2", "8.00", "16.00", null));
-        receipt.addItem(item(3, "LEITE TESTE 1L", "6", "4.50", "27.00", null));
+        receipt.addItem(item(2, "FEIJAO TESTE 1KG", "2", "8.00", "16.00", "13.50"));
+        receipt.addItem(item(3, "CAFE TESTE 500G", "1", "18.90", "18.90", "14.90"));
+        receipt.addItem(item(4, "LEITE TESTE 1L", "6", "4.50", "27.00", null));
 
         var saved = receiptRepository.save(receipt);
-        log.info("dev.seed.discounted_receipt user={} receipt={} items={} discount={}",
-                caller.getEmail(), saved.getId(), saved.getItems().size(), saved.getDiscountTotal());
+        log.info("dev.seed.discounted_receipt caller={} target={} receipt={} items={} discount={}",
+                caller.getEmail(), target.getEmail(), saved.getId(), saved.getItems().size(),
+                saved.getDiscountTotal());
         return ReceiptResponse.from(saved);
+    }
+
+    private User resolveTarget(User caller, String targetEmail) {
+        if (targetEmail == null || targetEmail.isBlank()) return caller;
+        var email = targetEmail.trim();
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new UserNotFoundException(email));
     }
 
     private ReceiptItem item(int lineNumber, String description, String quantity,
