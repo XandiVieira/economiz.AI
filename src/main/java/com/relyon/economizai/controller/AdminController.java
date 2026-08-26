@@ -183,16 +183,18 @@ public class AdminController {
     }
 
     /**
-     * Dev-only: plant a discounted PENDING receipt (with a per-item paid price) for
-     * the calling admin's household, so QA / e2e flows have a deterministic note to
-     * exercise the discount UI. Disabled unless {@code economizai.admin.dev-seed-enabled=true}.
+     * Dev-only: plant a discounted PENDING receipt (three lines with a per-item
+     * paid price) so QA / e2e flows have deterministic promotions to exercise the
+     * discount UI. Seeds the calling admin's household, or {@code targetEmail}'s
+     * when given. Disabled unless {@code economizai.admin.dev-seed-enabled=true}.
      */
     @PostMapping("/dev/seed-discounted-receipt")
-    public ResponseEntity<ReceiptResponse> seedDiscountedReceipt(@AuthenticationPrincipal User user) {
+    public ResponseEntity<ReceiptResponse> seedDiscountedReceipt(@AuthenticationPrincipal User user,
+                                                                 @RequestParam(required = false) String targetEmail) {
         if (!devSeedEnabled) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
-        return ResponseEntity.ok(adminDevService.seedDiscountedReceipt(user));
+        return ResponseEntity.ok(adminDevService.seedDiscountedReceipt(user, targetEmail));
     }
 
     @PostMapping("/notifications/test")

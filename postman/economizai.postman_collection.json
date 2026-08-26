@@ -11987,7 +11987,7 @@
 								}
 							],
 							"url": {
-								"raw": "{{baseUrl}}/api/v1/admin/dev/seed-discounted-receipt",
+								"raw": "{{baseUrl}}/api/v1/admin/dev/seed-discounted-receipt?targetEmail=",
 								"host": [
 									"{{baseUrl}}"
 								],
@@ -11997,9 +11997,17 @@
 									"admin",
 									"dev",
 									"seed-discounted-receipt"
+								],
+								"query": [
+									{
+										"key": "targetEmail",
+										"value": "",
+										"description": "Optional: seed into this user's account/household instead of the calling admin's (404 user.not.found when unknown).",
+										"disabled": true
+									}
 								]
 							},
-							"description": "DEV-ONLY (economizai.admin.dev-seed-enabled=true). Plants a PENDING receipt with a receipt-level discount and one promotional line (paidTotalPrice below totalPrice) for the calling admin household — deterministic data for QA/e2e of the discount UI. 403 when the flag is off (prod)."
+							"description": "DEV-ONLY (economizai.admin.dev-seed-enabled=true). Plants a PENDING receipt with a receipt-level discount and THREE promotional lines (paidTotalPrice below totalPrice) — deterministic data for QA/e2e of the discount UI. Seeds the calling admin's household, or targetEmail's when given. 403 when the flag is off (prod)."
 						},
 						"response": []
 					},
