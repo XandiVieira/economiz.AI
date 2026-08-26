@@ -1,5 +1,6 @@
 package com.relyon.economizai.service;
 
+import com.relyon.economizai.model.HouseholdProductAlias;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.model.enums.ReceiptStatus;
@@ -71,12 +72,25 @@ public final class ReceiptSpecifications {
                 if (search != null) {
                     var like = "%" + search.toLowerCase() + "%";
                     var productLeft = items.join("product", JoinType.LEFT);
-                    predicates.add(cb.or(
+                    var searchMatches = new ArrayList<Predicate>(List.of(
                             cb.like(cb.lower(items.get("rawDescription")), like),
                             cb.like(cb.lower(items.get("friendlyDescription")), like),
                             cb.like(cb.lower(productLeft.get("normalizedName")), like),
                             cb.like(cb.lower(root.get("marketName")), like)
                     ));
+                    // The household's product rename (alias) must also match — a
+                    // user who renamed "ARROZ TIO JOAO 5KG" to "arroz" expects
+                    // searching "arroz" to find those receipts.
+                    if (query != null) {
+                        var aliasSubquery = query.subquery(Integer.class);
+                        var alias = aliasSubquery.from(HouseholdProductAlias.class);
+                        aliasSubquery.select(cb.literal(1)).where(
+                                cb.equal(alias.get("product"), items.get("product")),
+                                cb.equal(alias.get("household"), root.get("household")),
+                                cb.like(cb.lower(alias.get("friendlyName")), like));
+                        searchMatches.add(cb.exists(aliasSubquery));
+                    }
+                    predicates.add(cb.or(searchMatches.toArray(new Predicate[0])));
                 }
             }
             return cb.and(predicates.toArray(new Predicate[0]));

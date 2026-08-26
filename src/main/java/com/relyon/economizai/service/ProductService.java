@@ -14,6 +14,7 @@ import com.relyon.economizai.model.ProductAlias;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.CategorizationSource;
+import com.relyon.economizai.repository.HouseholdProductAliasRepository;
 import com.relyon.economizai.repository.ProductAliasRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.repository.PriceObservationRepository;
@@ -30,10 +31,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -44,6 +47,7 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final ProductAliasRepository aliasRepository;
+    private final HouseholdProductAliasRepository householdProductAliasRepository;
     private final ReceiptItemRepository receiptItemRepository;
     private final PriceObservationRepository priceObservationRepository;
     private final ProductExtractor productExtractor;
@@ -52,12 +56,13 @@ public class ProductService {
     @Transactional(readOnly = true)
     public Page<ProductResponse> search(String query, User user, Pageable pageable) {
         var trimmedQuery = (query == null || query.isBlank()) ? null : query.trim();
-        var products = productRepository.searchAll(trimmedQuery);
+        var householdId = user.getHousehold().getId();
+        var products = withHouseholdAliasMatches(
+                productRepository.searchAll(trimmedQuery), householdId, trimmedQuery);
         if (products.isEmpty()) {
             return new PageImpl<>(List.of(), pageable, 0);
         }
 
-        var householdId = user.getHousehold().getId();
         var productIds = products.stream().map(Product::getId).toList();
         var ranking = ProductSearchRanking.from(productIds, householdId, user,
                 receiptItemRepository, priceObservationRepository);
@@ -71,6 +76,23 @@ public class ProductService {
     @Transactional(readOnly = true)
     public ProductResponse get(UUID id) {
         return ProductResponse.from(loadProduct(id));
+    }
+
+    /**
+     * Catalog-name matches plus products this household renamed to something
+     * matching the query — the user searches by the name THEY gave the product.
+     */
+    private List<Product> withHouseholdAliasMatches(List<Product> products, UUID householdId, String query) {
+        if (query == null) return products;
+        var aliasMatches = householdProductAliasRepository
+                .findProductsByFriendlyNameContaining(householdId, query);
+        if (aliasMatches.isEmpty()) return products;
+        var knownIds = products.stream().map(Product::getId).collect(Collectors.toSet());
+        var merged = new ArrayList<>(products);
+        aliasMatches.stream()
+                .filter(aliasProduct -> !knownIds.contains(aliasProduct.getId()))
+                .forEach(merged::add);
+        return merged;
     }
 
     /**

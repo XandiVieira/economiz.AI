@@ -3,6 +3,7 @@ package com.relyon.economizai.service;
 import com.relyon.economizai.dto.response.ProductMarketPriceResponse.PriceType;
 import com.relyon.economizai.exception.ProductNotFoundException;
 import com.relyon.economizai.model.Household;
+import com.relyon.economizai.model.HouseholdProductAlias;
 import com.relyon.economizai.model.MarketLocation;
 import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.Receipt;
@@ -10,6 +11,7 @@ import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.model.enums.ReceiptStatus;
+import com.relyon.economizai.repository.HouseholdProductAliasRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.service.geo.MarketLocationService;
@@ -55,6 +57,7 @@ class HouseholdProductServiceTest {
 
     @Mock private ProductRepository productRepository;
     @Mock private ReceiptItemRepository receiptItemRepository;
+    @Mock private HouseholdProductAliasRepository householdProductAliasRepository;
     @Mock private PriceIndexService priceIndexService;
     @Mock private WatchedMarketService watchedMarketService;
     @Mock private MarketLocationService marketLocationService;
@@ -188,6 +191,35 @@ class HouseholdProductServiceTest {
 
         assertEquals(1, result.size());
         assertEquals(arroz.getId(), result.get(0).productId());
+    }
+
+    @Test
+    void listHouseholdProducts_queryMatchesHouseholdFriendlyName() {
+        var renamed = product("GRAO FINO TIPO 1 5KG");
+        var leite = product("Leite Integral");
+        when(receiptItemRepository.findConfirmedHistoryForHousehold(HOUSEHOLD_ID)).thenReturn(List.of(
+                item(renamed, "25.00", CNPJ_ZAFFARI, "Zaffari", LocalDateTime.of(2026, Month.JANUARY, 1, 10, 0)),
+                item(leite, "4.50", CNPJ_NACIONAL, "Nacional", LocalDateTime.of(2026, Month.FEBRUARY, 1, 10, 0))));
+        when(householdProductAliasRepository.findAllByHouseholdIdAndProductIdIn(eq(HOUSEHOLD_ID), any()))
+                .thenReturn(List.of(HouseholdProductAlias.builder()
+                        .product(renamed).friendlyName("Arroz do mercado").build()));
+
+        var result = service.listHouseholdProducts(user, "arroz");
+
+        assertEquals(1, result.size());
+        assertEquals(renamed.getId(), result.get(0).productId());
+        assertEquals("Arroz do mercado", result.get(0).friendlyName());
+    }
+
+    @Test
+    void listHouseholdProducts_friendlyNameNullWhenNeverRenamed() {
+        var leite = product("Leite Integral");
+        when(receiptItemRepository.findConfirmedHistoryForHousehold(HOUSEHOLD_ID)).thenReturn(List.of(
+                item(leite, "4.50", CNPJ_NACIONAL, "Nacional", LocalDateTime.of(2026, Month.FEBRUARY, 1, 10, 0))));
+
+        var result = service.listHouseholdProducts(user, null);
+
+        assertNull(result.get(0).friendlyName());
     }
 
     @Test
