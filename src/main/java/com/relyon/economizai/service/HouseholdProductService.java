@@ -8,6 +8,8 @@ import com.relyon.economizai.model.MarketLocation;
 import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.HouseholdProductAlias;
+import com.relyon.economizai.repository.HouseholdProductAliasRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.service.geo.DistanceCalculator;
@@ -30,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Household-scoped product views:
@@ -51,6 +54,7 @@ public class HouseholdProductService {
 
     private final ProductRepository productRepository;
     private final ReceiptItemRepository receiptItemRepository;
+    private final HouseholdProductAliasRepository householdProductAliasRepository;
     private final PriceIndexService priceIndexService;
     private final WatchedMarketService watchedMarketService;
     private final MarketLocationService marketLocationService;
@@ -64,19 +68,31 @@ public class HouseholdProductService {
 
         var cnpjs = byProduct.values().stream().map(aggregate -> aggregate.lastCnpj).distinct().toList();
         var overrides = marketNameService.resolveNames(householdId, cnpjs);
+        var friendlyNames = friendlyNamesByProduct(householdId, byProduct.keySet());
 
         return byProduct.values().stream()
-                .map(aggregate -> aggregate.toResponse(overrides))
+                .map(aggregate -> aggregate.toResponse(overrides,
+                        friendlyNames.get(aggregate.product.getId())))
                 .filter(resp -> matchesQuery(resp, query))
                 .sorted(Comparator.comparing(HouseholdProductResponse::lastBoughtAt,
                         Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
     }
 
+    /** The household's own renames (household_product_aliases), keyed by product id. */
+    private Map<UUID, String> friendlyNamesByProduct(UUID householdId, Set<UUID> productIds) {
+        return householdProductAliasRepository
+                .findAllByHouseholdIdAndProductIdIn(householdId, new ArrayList<>(productIds))
+                .stream()
+                .collect(Collectors.toMap(alias -> alias.getProduct().getId(),
+                        HouseholdProductAlias::getFriendlyName));
+    }
+
     private boolean matchesQuery(HouseholdProductResponse resp, String query) {
         if (query == null || query.isBlank()) return true;
         var lower = query.strip().toLowerCase();
         return (resp.name() != null && resp.name().toLowerCase().contains(lower))
+                || (resp.friendlyName() != null && resp.friendlyName().toLowerCase().contains(lower))
                 || (resp.brand() != null && resp.brand().toLowerCase().contains(lower));
     }
 
@@ -205,12 +221,12 @@ public class HouseholdProductService {
             lastMarketName = receipt.getMarketName();
         }
 
-        private HouseholdProductResponse toResponse(Map<String, String> overrides) {
-            var friendly = overrides.getOrDefault(lastCnpj, lastMarketName);
+        private HouseholdProductResponse toResponse(Map<String, String> overrides, String friendlyName) {
+            var friendlyMarket = overrides.getOrDefault(lastCnpj, lastMarketName);
             return new HouseholdProductResponse(
-                    product.getId(), product.getNormalizedName(), product.getBrand(),
+                    product.getId(), product.getNormalizedName(), friendlyName, product.getBrand(),
                     product.getCategory() != null ? product.getCategory().name() : null,
-                    timesBought, lastBoughtAt, lastUnitPrice, lastCnpj, lastMarketName, friendly);
+                    timesBought, lastBoughtAt, lastUnitPrice, lastCnpj, lastMarketName, friendlyMarket);
         }
     }
 }

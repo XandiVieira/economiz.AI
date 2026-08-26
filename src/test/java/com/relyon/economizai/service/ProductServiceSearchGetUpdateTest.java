@@ -8,6 +8,7 @@ import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.CategorizationSource;
 import com.relyon.economizai.model.enums.ProductCategory;
+import com.relyon.economizai.repository.HouseholdProductAliasRepository;
 import com.relyon.economizai.repository.ProductAliasRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.repository.PriceObservationRepository;
@@ -46,6 +47,7 @@ class ProductServiceSearchGetUpdateTest {
 
     @Mock private ProductRepository productRepository;
     @Mock private ProductAliasRepository aliasRepository;
+    @Mock private HouseholdProductAliasRepository householdProductAliasRepository;
     @Mock private ReceiptItemRepository receiptItemRepository;
     @Mock private PriceObservationRepository priceObservationRepository;
     @Mock private ProductExtractor productExtractor;
@@ -57,7 +59,7 @@ class ProductServiceSearchGetUpdateTest {
 
     @BeforeEach
     void setUp() {
-        productService = new ProductService(productRepository, aliasRepository,
+        productService = new ProductService(productRepository, aliasRepository, householdProductAliasRepository,
                 receiptItemRepository, priceObservationRepository, productExtractor, eanCatalogService);
     }
 
@@ -146,6 +148,30 @@ class ProductServiceSearchGetUpdateTest {
         var result = productService.search("arroz", user(), pageable);
 
         assertFalse(result.getContent().get(0).hasPriceHistory());
+    }
+
+    @Test
+    void search_includesProductsMatchedByHouseholdFriendlyName() {
+        var pageable = PageRequest.of(0, 20);
+        var catalogMatch = buildProduct(UUID.randomUUID(), "Arroz Tio Joao 5kg");
+        var renamed = buildProduct(UUID.randomUUID(), "Cafe Melitta 500g");
+        when(productRepository.searchAll("arroz")).thenReturn(List.of(catalogMatch));
+        // "renamed" only matches via the household alias; "catalogMatch" matches both ways and must not duplicate.
+        when(householdProductAliasRepository.findProductsByFriendlyNameContaining(HOUSEHOLD_ID, "arroz"))
+                .thenReturn(List.of(renamed, catalogMatch));
+        when(receiptItemRepository.findProductIdsWithHistoryForHousehold(anyList(), eq(HOUSEHOLD_ID)))
+                .thenReturn(List.of());
+        when(priceObservationRepository.findProductIdsObservedAtVisitedMarkets(anyList(), eq(HOUSEHOLD_ID)))
+                .thenReturn(List.of());
+        when(priceObservationRepository.findProductIdsObservedInHouseholdCities(anyList(), eq(HOUSEHOLD_ID)))
+                .thenReturn(List.of());
+
+        var result = productService.search("arroz", user(), pageable);
+
+        assertEquals(2, result.getTotalElements());
+        var returnedIds = result.getContent().stream().map(response -> response.id()).toList();
+        assertTrue(returnedIds.contains(renamed.getId()));
+        assertTrue(returnedIds.contains(catalogMatch.getId()));
     }
 
     @Test

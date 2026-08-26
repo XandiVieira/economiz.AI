@@ -21,6 +21,15 @@ public interface HouseholdProductAliasRepository extends JpaRepository<Household
 
     List<HouseholdProductAlias> findAllByHouseholdIdAndProductIdIn(UUID householdId, List<UUID> productIds);
 
+    /** Products this household renamed to something matching the query (case-insensitive substring). */
+    @Query("""
+        SELECT alias.product FROM HouseholdProductAlias alias
+        WHERE alias.household.id = :householdId
+          AND LOWER(alias.friendlyName) LIKE LOWER(CONCAT('%', :query, '%'))
+    """)
+    List<Product> findProductsByFriendlyNameContaining(@Param("householdId") UUID householdId,
+                                                       @Param("query") String query);
+
     long countByProduct(Product product);
 
     @Modifying

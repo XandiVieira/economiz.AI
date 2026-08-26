@@ -16,6 +16,28 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-08-26 — Busca considera o nome amigável do produto
+
+O apelido que o usuário dá ao produto (`friendlyName`, salvo em
+`household_product_aliases` quando ele renomeia um item) agora conta na busca:
+
+- `GET /receipts?q=` — além de descrição bruta, `friendlyDescription` do item,
+  nome do produto e nome do mercado, o `q` agora também casa com o **apelido do
+  produto** do household.
+- `GET /products?query=` — a busca global também retorna produtos que o
+  household renomeou para algo que casa com a query (mesmo que o nome de
+  catálogo não case).
+- `GET /products/mine?query=` — filtra também pelo apelido, e o response ganhou
+  o campo novo **`friendlyName`** (string, nullable — `null` quando o household
+  nunca renomeou o produto). Use-o como nome de exibição preferido.
+
+Escopo: o apelido é **por household** — renomes de outros households nunca
+afetam a busca de vocês.
+
+Também no seed de QA: `POST /admin/dev/seed-discounted-receipt` agora planta
+**3 linhas promocionais** (antes 1) e aceita `?targetEmail=` para plantar a
+nota na conta de outro usuário (admin-only, dev-only).
+
 ## 2026-08-16 — Desconto por item na revisão (preço pago manual)
 
 A NFC-e só traz **um desconto no total da nota** (`discountTotal` na receipt), nunca
