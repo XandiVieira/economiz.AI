@@ -1,0 +1,39 @@
+# Periodic PROD error sweep — ALERT-ONLY. Same detection as log-sweep.yml but
+# against the prod service, and instead of invoking the fixer it opens a
+# deduplicated `prod-error` GitHub issue. Prod is never auto-fixed: reproduce
+# and fix on dev, then ship through the normal gated deploy.
+name: log-sweep-prod
+
+on:
+  schedule:
+    - cron: '47 */2 * * *'   # every 2 hours, offset from the dev sweep
+  workflow_dispatch:
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write   # opens the alert issue
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sweep prod Render logs
+        id: sweep
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: srv-d9p4nctbedkc73e3veb0
+          OWNER_ID: tea-d1ijuaumcj7s73918us0
+          LOG_WINDOW_MIN: '150'
+          # Prod dedup is against `prod-error` issues (prod_alert.py), not the
+          # dev fix ledger — /dev/null disables the ledger check.
+          LEDGER: /dev/null
+        run: python3 .github/scripts/log_sweep.py
+      - name: Open alert issue
+        if: steps.sweep.outputs.found == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SIGNATURE: ${{ steps.sweep.outputs.signature }}
+          CONTEXT: ${{ steps.sweep.outputs.context }}
+          SOURCE: log-sweep-prod
+        run: python3 .github/scripts/prod_alert.py

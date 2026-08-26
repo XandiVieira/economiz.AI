@@ -24,8 +24,11 @@ Native frontend (`polyf/economiza-ai-front`).
 monitor → triage → reproduce → fix → test (harness) → deploy → validate → document → (escalate at any gate)
 ```
 
-- **Backend**: already implemented — see `.github/AUTOFIX.md` (log-sweep 2h, nightly
+- **Backend (dev)**: already implemented — see `.github/AUTOFIX.md` (log-sweep 2h, nightly
   E2E, chaos, reproduce-first autofix, `AUTONOMOUS_FIXES.md` ledger + `AUTOFIX_LESSONS.md`).
+- **Backend (prod)**: ALERT-ONLY — `log-sweep-prod.yml` (2h) + `e2e-prod.yml` (nightly,
+  self-cleaning flow) open deduplicated `prod-error` issues via `prod_alert.py`. The fixer
+  never touches prod; chaos/stress stays dev-only. Fix on dev → gated prod deploy.
 - **Frontend**: harness in `economiza-ai-front/TESTING.md` (web/Android/iOS). CI operator
   to be added (see "Build plan").
 
