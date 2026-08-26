@@ -10382,10 +10382,16 @@
 							"script": {
 								"type": "text/javascript",
 								"exec": [
-									"// Admin login must succeed — a bad E2E_ADMIN_* credential now fails RED (no silent skip).",
-									"pm.test('admin login succeeded (200)', function () {",
-									"    pm.expect(pm.response.code, 'admin login must return 200 — check E2E_ADMIN_* secrets').to.eql(200);",
-									"});",
+									"// Admin login must succeed when creds are configured — a bad E2E_ADMIN_* credential fails RED (no silent skip).",
+									"// With NO creds at all (e.g. prod, where E2E_PROD_ADMIN_* is optional) the admin coverage block is skipped.",
+									"var adminEmail = pm.variables.replaceIn('{{adminEmail}}');",
+									"if (!adminEmail) {",
+									"    console.log('adminEmail not configured — skipping admin coverage');",
+									"} else {",
+									"    pm.test('admin login succeeded (200)', function () {",
+									"        pm.expect(pm.response.code, 'admin login must return 200 — check E2E_ADMIN_* secrets').to.eql(200);",
+									"    });",
+									"}",
 									"if (pm.response.code === 200) {",
 									"    pm.collectionVariables.set('adminToken', pm.response.json().token);",
 									"}"
