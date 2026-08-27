@@ -15,6 +15,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -65,6 +66,22 @@ class AdminDevServiceTest {
         verify(receiptRepository).save(saved.capture());
         assertEquals(target, saved.getValue().getUser());
         assertEquals(target.getHousehold(), saved.getValue().getHousehold());
+    }
+
+    @Test
+    void seedDiscountedReceipt_replacesEarlierSeededReceipts() {
+        var caller = user("dev@economizaai.app");
+        var earlierSeed = Receipt.builder()
+                .user(caller).household(caller.getHousehold())
+                .qrPayload(AdminDevService.SEED_QR_PAYLOAD).build();
+        when(receiptRepository.findAllByHouseholdIdAndQrPayload(
+                caller.getHousehold().getId(), AdminDevService.SEED_QR_PAYLOAD))
+                .thenReturn(List.of(earlierSeed));
+        when(receiptRepository.save(any(Receipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        adminDevService.seedDiscountedReceipt(caller, null);
+
+        verify(receiptRepository).deleteAll(List.of(earlierSeed));
     }
 
     @Test
