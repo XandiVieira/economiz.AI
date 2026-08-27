@@ -29,45 +29,60 @@ import java.util.concurrent.ThreadLocalRandom;
 @Slf4j
 public class AdminDevService {
 
+    /** Marks seeded receipts so a re-seed can find and replace earlier ones. */
+    static final String SEED_QR_PAYLOAD = "seed://discounted-receipt";
+
     private final ReceiptRepository receiptRepository;
     private final UserRepository userRepository;
 
     /**
      * Plants a PENDING_CONFIRMATION receipt with a receipt-level discount and
      * three lines carrying a manual paid price (promotional), so the
-     * review/discount UI has deterministic promotions to exercise. Seeds into
+     * review/discount UI has deterministic promotions to exercise. Line/market
+     * names look like a real NFC-e (screenshot/marketing friendly). Seeds into
      * {@code targetEmail}'s account when given (admin planting screenshot data
-     * for another account), the caller's own otherwise. Returns the created receipt.
+     * for another account), the caller's own otherwise. Earlier seeded receipts
+     * of the target household are REPLACED, so re-seeding never piles up.
+     * Returns the created receipt.
      */
     @Transactional
     public ReceiptResponse seedDiscountedReceipt(User caller, String targetEmail) {
         var target = resolveTarget(caller, targetEmail);
+        replaceEarlierSeeds(target);
         var receipt = Receipt.builder()
                 .user(target)
                 .household(target.getHousehold())
                 .chaveAcesso(randomChave())
-                .qrPayload("seed://discounted-receipt")
+                .qrPayload(SEED_QR_PAYLOAD)
                 .uf(UnidadeFederativa.RS)
                 .cnpjEmitente("12345678000190")
-                .marketName("MERCADO TESTE (SEED)")
+                .marketName("SUPERMERCADO NACIONAL")
                 .issuedAt(LocalDateTime.now())
                 .status(ReceiptStatus.PENDING_CONFIRMATION)
                 .discountTotal(new BigDecimal("5.00"))
-                // gross 86.90 − discount 5.00 = 81.90 net "valor a pagar"
-                .totalAmount(new BigDecimal("81.90"))
+                // gross 91.52 − discount 5.00 = 86.52 net "valor a pagar"
+                .totalAmount(new BigDecimal("86.52"))
                 .build();
 
         // Lines 1-3 were bought on promotion: paid total < as-printed total.
-        receipt.addItem(item(1, "ARROZ TESTE 5KG", "1", "25.00", "25.00", "19.90"));
-        receipt.addItem(item(2, "FEIJAO TESTE 1KG", "2", "8.00", "16.00", "13.50"));
-        receipt.addItem(item(3, "CAFE TESTE 500G", "1", "18.90", "18.90", "14.90"));
-        receipt.addItem(item(4, "LEITE TESTE 1L", "6", "4.50", "27.00", null));
+        receipt.addItem(item(1, "ARROZ BRANCO TIO JOAO T1 5KG", "1", "25.90", "25.90", "19.90"));
+        receipt.addItem(item(2, "FEIJAO PRETO CAMIL 1KG", "2", "8.99", "17.98", "14.98"));
+        receipt.addItem(item(3, "CAFE PILAO TORR MOIDO 500G", "1", "18.90", "18.90", "14.90"));
+        receipt.addItem(item(4, "LEITE UHT INT ITALAC 1L", "6", "4.79", "28.74", null));
 
         var saved = receiptRepository.save(receipt);
         log.info("dev.seed.discounted_receipt caller={} target={} receipt={} items={} discount={}",
                 caller.getEmail(), target.getEmail(), saved.getId(), saved.getItems().size(),
                 saved.getDiscountTotal());
         return ReceiptResponse.from(saved);
+    }
+
+    private void replaceEarlierSeeds(User target) {
+        var earlierSeeds = receiptRepository.findAllByHouseholdIdAndQrPayload(
+                target.getHousehold().getId(), SEED_QR_PAYLOAD);
+        if (earlierSeeds.isEmpty()) return;
+        receiptRepository.deleteAll(earlierSeeds);
+        log.info("dev.seed.replaced_earlier target={} removed={}", target.getEmail(), earlierSeeds.size());
     }
 
     private User resolveTarget(User caller, String targetEmail) {

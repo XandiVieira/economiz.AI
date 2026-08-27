@@ -33,6 +33,9 @@ public interface ReceiptRepository extends JpaRepository<Receipt, UUID>, JpaSpec
 
     List<Receipt> findAllByHouseholdId(UUID householdId);
 
+    /** Seeded dev receipts carry a fixed marker payload — lets a re-seed replace earlier ones. */
+    List<Receipt> findAllByHouseholdIdAndQrPayload(UUID householdId, String qrPayload);
+
     List<Receipt> findAllByOriginHouseholdId(UUID householdId);
 
     // On leave: the leaver's earliest own receipt whose ORIGIN differs from the
