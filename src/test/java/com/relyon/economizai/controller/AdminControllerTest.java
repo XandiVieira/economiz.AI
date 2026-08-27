@@ -140,7 +140,7 @@ class AdminControllerTest {
 
     private ProductResponse sampleProduct() {
         return new ProductResponse(UUID.randomUUID(), "7891234567890", "ARROZ TIO J 5KG",
-                "Arroz", "Tio João", ProductCategory.GROCERIES, "UN",
+                "Arroz", null, "Tio João", ProductCategory.GROCERIES, "UN",
                 new BigDecimal("5"), "KG", CategorizationSource.DICTIONARY, false);
     }
 

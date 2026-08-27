@@ -12,6 +12,7 @@ public record ProductResponse(
         String ean,
         String normalizedName,
         String genericName,
+        String friendlyDescription,
         String brand,
         ProductCategory category,
         String unit,
@@ -21,12 +22,13 @@ public record ProductResponse(
         boolean hasPriceHistory
 ) {
     /**
-     * Without price-history context: defaults {@code hasPriceHistory} to false.
-     * Used by callers (single get, post-write echoes) that don't compute the
-     * collaborative k-anonymity count.
+     * Without price-history or household context: defaults {@code hasPriceHistory}
+     * to false and {@code friendlyDescription} to null. Used by callers (single get,
+     * post-write echoes) that don't compute the collaborative k-anonymity count or
+     * don't have a household in scope.
      */
     public static ProductResponse from(Product product) {
-        return from(product, false);
+        return from(product, false, null);
     }
 
     /**
@@ -36,11 +38,23 @@ public record ProductResponse(
      * the search path; see {@code ProductService.search}.
      */
     public static ProductResponse from(Product product, boolean hasPriceHistory) {
+        return from(product, hasPriceHistory, null);
+    }
+
+    /**
+     * @param friendlyDescription the household's own rename of this product
+     *                            (household_product_aliases), null when never
+     *                            renamed or when no household is in scope. Takes
+     *                            precedence over {@code genericName}/{@code
+     *                            normalizedName} for display — see FE ProductResponse usage.
+     */
+    public static ProductResponse from(Product product, boolean hasPriceHistory, String friendlyDescription) {
         return new ProductResponse(
                 product.getId(),
                 product.getEan(),
                 product.getNormalizedName(),
                 product.getGenericName(),
+                friendlyDescription,
                 product.getBrand(),
                 product.getCategory(),
                 product.getUnit(),

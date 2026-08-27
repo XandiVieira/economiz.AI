@@ -4,6 +4,7 @@ import com.relyon.economizai.dto.request.CreateProductRequest;
 import com.relyon.economizai.dto.request.UpdateProductRequest;
 import com.relyon.economizai.exception.ProductNotFoundException;
 import com.relyon.economizai.model.Household;
+import com.relyon.economizai.model.HouseholdProductAlias;
 import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.CategorizationSource;
@@ -110,8 +111,31 @@ class ProductServiceSearchGetUpdateTest {
 
         assertEquals(1, result.getTotalElements());
         assertEquals("Arroz Tio Joao 5kg", result.getContent().get(0).normalizedName());
+        assertNull(result.getContent().get(0).friendlyDescription());
         assertFalse(result.getContent().get(0).hasPriceHistory());
         verify(productRepository).searchAll("arroz");
+    }
+
+    @Test
+    void search_includesHouseholdFriendlyRenameWhenPresent() {
+        var pageable = PageRequest.of(0, 20);
+        var id = UUID.randomUUID();
+        var product = buildProduct(id);
+        var alias = HouseholdProductAlias.builder().product(product).friendlyName("Arroz Comum").build();
+        when(productRepository.searchAll("arroz")).thenReturn(List.of(product));
+        when(receiptItemRepository.findProductIdsWithHistoryForHousehold(anyList(), eq(HOUSEHOLD_ID)))
+                .thenReturn(List.of());
+        when(priceObservationRepository.findProductIdsObservedAtVisitedMarkets(anyList(), eq(HOUSEHOLD_ID)))
+                .thenReturn(List.of());
+        when(priceObservationRepository.findProductIdsObservedInHouseholdCities(anyList(), eq(HOUSEHOLD_ID)))
+                .thenReturn(List.of());
+        when(householdProductAliasRepository.findAllByHouseholdIdAndProductIdIn(eq(HOUSEHOLD_ID), anyList()))
+                .thenReturn(List.of(alias));
+
+        var result = productService.search("arroz", user(), pageable);
+
+        assertEquals("Arroz Comum", result.getContent().get(0).friendlyDescription());
+        assertEquals("Arroz Tio Joao 5kg", result.getContent().get(0).normalizedName());
     }
 
     @Test

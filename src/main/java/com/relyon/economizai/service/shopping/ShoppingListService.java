@@ -7,9 +7,12 @@ import com.relyon.economizai.dto.response.ShoppingListResponse;
 import com.relyon.economizai.exception.InvalidShoppingListItemException;
 import com.relyon.economizai.exception.ProductNotFoundException;
 import com.relyon.economizai.exception.ShoppingListNotFoundException;
+import com.relyon.economizai.model.HouseholdProductAlias;
+import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.ShoppingList;
 import com.relyon.economizai.model.ShoppingListItem;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.repository.HouseholdProductAliasRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.repository.ShoppingListItemRepository;
 import com.relyon.economizai.repository.ShoppingListRepository;
@@ -21,7 +24,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * CRUD for persistent household shopping lists. The existing
@@ -37,11 +43,12 @@ public class ShoppingListService {
     private final ShoppingListRepository listRepository;
     private final ShoppingListItemRepository itemRepository;
     private final ProductRepository productRepository;
+    private final HouseholdProductAliasRepository householdProductAliasRepository;
 
     @Transactional(readOnly = true)
     public List<ShoppingListResponse> listForHousehold(User user) {
         return listRepository.findAllByHouseholdIdOrderByCreatedAtDesc(user.getHousehold().getId()).stream()
-                .map(ShoppingListResponse::from)
+                .map(this::toResponse)
                 .toList();
     }
 
@@ -50,12 +57,12 @@ public class ShoppingListService {
     public ShoppingListResponse getSole(User user) {
         var lists = listRepository.findAllByHouseholdId(user.getHousehold().getId());
         if (lists.size() != 1) throw new ShoppingListNotFoundException();
-        return ShoppingListResponse.from(lists.get(0));
+        return toResponse(lists.get(0));
     }
 
     @Transactional(readOnly = true)
     public ShoppingListResponse get(User user, UUID listId) {
-        return ShoppingListResponse.from(loadOwned(user, listId));
+        return toResponse(loadOwned(user, listId));
     }
 
     @Transactional
@@ -76,14 +83,14 @@ public class ShoppingListService {
         }
         log.info("shopping_list.created household={} name='{}' items={}",
                 user.getHousehold().getId(), request.name(), saved.getItems().size());
-        return ShoppingListResponse.from(saved);
+        return toResponse(saved);
     }
 
     @Transactional
     public ShoppingListResponse rename(User user, UUID listId, UpdateShoppingListRequest request) {
         var list = loadOwned(user, listId);
         list.setName(request.name());
-        return ShoppingListResponse.from(listRepository.save(list));
+        return toResponse(listRepository.save(list));
     }
 
     @Transactional
@@ -100,7 +107,7 @@ public class ShoppingListService {
         var item = buildItem(request.productId(), request.freeText(), request.quantity(), nextPos);
         list.addItem(item);
         itemRepository.save(item);
-        return ShoppingListResponse.from(list);
+        return toResponse(list);
     }
 
     @Transactional
@@ -113,7 +120,7 @@ public class ShoppingListService {
         item.setChecked(!item.isChecked());
         item.setCheckedAt(item.isChecked() ? LocalDateTime.now() : null);
         itemRepository.save(item);
-        return ShoppingListResponse.from(list);
+        return toResponse(list);
     }
 
     @Transactional
@@ -125,7 +132,26 @@ public class ShoppingListService {
                 .orElseThrow(ShoppingListNotFoundException::new);
         list.getItems().remove(item);
         itemRepository.delete(item);
-        return ShoppingListResponse.from(list);
+        return toResponse(list);
+    }
+
+    private ShoppingListResponse toResponse(ShoppingList list) {
+        return ShoppingListResponse.from(list, friendlyNamesByProduct(list));
+    }
+
+    /** The household's own renames (household_product_aliases) for this list's linked products, keyed by product id. */
+    private Map<UUID, String> friendlyNamesByProduct(ShoppingList list) {
+        var productIds = list.getItems().stream()
+                .map(ShoppingListItem::getProduct)
+                .filter(Objects::nonNull)
+                .map(Product::getId)
+                .distinct()
+                .toList();
+        if (productIds.isEmpty()) return Map.of();
+        return householdProductAliasRepository
+                .findAllByHouseholdIdAndProductIdIn(list.getHousehold().getId(), productIds)
+                .stream()
+                .collect(Collectors.toMap(alias -> alias.getProduct().getId(), HouseholdProductAlias::getFriendlyName));
     }
 
     private ShoppingList loadOwned(User user, UUID listId) {

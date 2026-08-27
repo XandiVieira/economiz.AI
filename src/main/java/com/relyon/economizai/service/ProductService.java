@@ -9,6 +9,7 @@ import com.relyon.economizai.dto.response.UnmatchedItemResponse;
 import com.relyon.economizai.exception.EanConflictException;
 import com.relyon.economizai.exception.ProductAliasConflictException;
 import com.relyon.economizai.exception.ProductNotFoundException;
+import com.relyon.economizai.model.HouseholdProductAlias;
 import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.ProductAlias;
 import com.relyon.economizai.model.ReceiptItem;
@@ -34,6 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -66,11 +68,20 @@ public class ProductService {
         var productIds = products.stream().map(Product::getId).toList();
         var ranking = ProductSearchRanking.from(productIds, householdId, user,
                 receiptItemRepository, priceObservationRepository);
+        var friendlyByProduct = friendlyNamesByProduct(householdId, productIds);
         var sorted = products.stream()
                 .sorted(ranking.comparator())
-                .map(product -> ProductResponse.from(product, ranking.wasBought(product.getId())))
+                .map(product -> ProductResponse.from(product, ranking.wasBought(product.getId()),
+                        friendlyByProduct.get(product.getId())))
                 .toList();
         return page(sorted, pageable);
+    }
+
+    /** The household's own renames (household_product_aliases) for these products, keyed by product id. */
+    private Map<UUID, String> friendlyNamesByProduct(UUID householdId, List<UUID> productIds) {
+        if (productIds.isEmpty()) return Map.of();
+        return householdProductAliasRepository.findAllByHouseholdIdAndProductIdIn(householdId, productIds).stream()
+                .collect(Collectors.toMap(alias -> alias.getProduct().getId(), HouseholdProductAlias::getFriendlyName));
     }
 
     @Transactional(readOnly = true)

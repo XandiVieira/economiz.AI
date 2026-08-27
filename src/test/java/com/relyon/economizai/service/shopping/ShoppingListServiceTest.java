@@ -7,10 +7,12 @@ import com.relyon.economizai.exception.InvalidShoppingListItemException;
 import com.relyon.economizai.exception.ProductNotFoundException;
 import com.relyon.economizai.exception.ShoppingListNotFoundException;
 import com.relyon.economizai.model.Household;
+import com.relyon.economizai.model.HouseholdProductAlias;
 import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.ShoppingList;
 import com.relyon.economizai.model.ShoppingListItem;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.repository.HouseholdProductAliasRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.repository.ShoppingListItemRepository;
 import com.relyon.economizai.repository.ShoppingListRepository;
@@ -33,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -44,6 +47,7 @@ class ShoppingListServiceTest {
     @Mock private ShoppingListRepository listRepository;
     @Mock private ShoppingListItemRepository itemRepository;
     @Mock private ProductRepository productRepository;
+    @Mock private HouseholdProductAliasRepository householdProductAliasRepository;
 
     private ShoppingListService service;
     private User user;
@@ -51,9 +55,12 @@ class ShoppingListServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new ShoppingListService(listRepository, itemRepository, productRepository);
+        service = new ShoppingListService(listRepository, itemRepository, productRepository, householdProductAliasRepository);
         household = Household.builder().id(UUID.randomUUID()).inviteCode("ABC123").build();
         user = User.builder().id(UUID.randomUUID()).email("owner@economizai").household(household).build();
+        // No test asserts on friendly-name precedence here (covered separately); default to "no aliases".
+        lenient().when(householdProductAliasRepository.findAllByHouseholdIdAndProductIdIn(any(), any()))
+                .thenReturn(List.of());
     }
 
     @Test
@@ -106,6 +113,37 @@ class ShoppingListServiceTest {
 
         assertEquals(list.getId(), response.id());
         assertEquals("Semana", response.name());
+    }
+
+    @Test
+    void get_prefersHouseholdFriendlyNameOverRawProductName() {
+        var product = product("BATATA PALHA D.NONNA 440G");
+        var list = list("Semana", List.of(itemWithProduct(product, 0)));
+        var alias = HouseholdProductAlias.builder().household(household).product(product)
+                .friendlyName("Batata Palha").build();
+        when(listRepository.findById(list.getId())).thenReturn(Optional.of(list));
+        when(householdProductAliasRepository.findAllByHouseholdIdAndProductIdIn(household.getId(), List.of(product.getId())))
+                .thenReturn(List.of(alias));
+
+        var response = service.get(user, list.getId());
+
+        var responseItem = response.items().get(0);
+        assertEquals("BATATA PALHA D.NONNA 440G", responseItem.productName());
+        assertEquals("Batata Palha", responseItem.friendlyDescription());
+        assertEquals("Batata Palha", responseItem.displayName());
+    }
+
+    @Test
+    void get_fallsBackToProductNameWhenNoFriendlyAlias() {
+        var product = product("BATATA PALHA D.NONNA 440G");
+        var list = list("Semana", List.of(itemWithProduct(product, 0)));
+        when(listRepository.findById(list.getId())).thenReturn(Optional.of(list));
+
+        var response = service.get(user, list.getId());
+
+        var responseItem = response.items().get(0);
+        assertNull(responseItem.friendlyDescription());
+        assertEquals("BATATA PALHA D.NONNA 440G", responseItem.displayName());
     }
 
     @Test
@@ -350,6 +388,15 @@ class ShoppingListServiceTest {
         return ShoppingListItem.builder()
                 .id(UUID.randomUUID())
                 .freeText(freeText)
+                .quantity(BigDecimal.ONE)
+                .position(position)
+                .build();
+    }
+
+    private ShoppingListItem itemWithProduct(Product product, int position) {
+        return ShoppingListItem.builder()
+                .id(UUID.randomUUID())
+                .product(product)
                 .quantity(BigDecimal.ONE)
                 .position(position)
                 .build();

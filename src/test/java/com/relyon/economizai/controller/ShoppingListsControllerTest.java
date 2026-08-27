@@ -59,7 +59,7 @@ class ShoppingListsControllerTest {
 
     private ShoppingListResponse sampleList(UUID listId, String name) {
         var item = new ShoppingListResponse.Item(
-                UUID.randomUUID(), null, null, "papel higienico", "papel higienico",
+                UUID.randomUUID(), null, null, null, "papel higienico", "papel higienico",
                 BigDecimal.ONE, 0, false, null);
         return new ShoppingListResponse(listId, name, UUID.randomUUID(),
                 LocalDateTime.now(), LocalDateTime.now(), 1, 0, List.of(item));
