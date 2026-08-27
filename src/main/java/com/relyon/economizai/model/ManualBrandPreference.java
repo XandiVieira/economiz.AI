@@ -16,6 +16,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 @Entity
 @Table(name = "manual_brand_preferences",
@@ -35,8 +37,9 @@ public class ManualBrandPreference extends BaseEntity implements HouseholdScoped
     // The household this row ORIGINALLY belonged to. Set once at creation, never
     // rewritten on merge (household_id is the current location). Lets a split
     // restore each person's data to where it came from. See HouseholdMergeService.
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "origin_household_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "origin_household_id")
+    @OnDelete(action = OnDeleteAction.SET_NULL)
     private Household originHousehold;
 
     @Column(name = "generic_name", nullable = false, length = 255)

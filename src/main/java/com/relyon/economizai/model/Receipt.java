@@ -22,6 +22,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.BatchSize;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -48,8 +50,9 @@ public class Receipt extends BaseEntity implements HouseholdScoped {
     // The household this receipt ORIGINALLY belonged to. Set once at scan time,
     // never rewritten on merge (household_id is the current location). Lets a split
     // restore each person's data to where it came from. See HouseholdMergeService.
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "origin_household_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "origin_household_id")
+    @OnDelete(action = OnDeleteAction.SET_NULL)
     private Household originHousehold;
 
     @Column(name = "chave_acesso", nullable = false, length = 44)

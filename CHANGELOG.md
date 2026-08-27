@@ -16,6 +16,13 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-08-27 — Corrigido: exclusão de conta (LGPD) falhava com 500 em prod
+
+`DELETE /users/me` retornava 500 em produção quando o domicílio tinha correções
+de categoria (ou qualquer dado com vínculo de origem de merge). Corrigido no
+nível do banco (FKs de origem agora `ON DELETE SET NULL`); nenhum contrato
+mudou. Se o app tratava esse 500 com workaround, pode remover.
+
 ## 2026-08-26 — Busca considera o nome amigável do produto
 
 O apelido que o usuário dá ao produto (`friendlyName`, salvo em
