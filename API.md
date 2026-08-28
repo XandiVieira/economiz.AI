@@ -4,8 +4,14 @@ Practical walk-through of the backend, organized by user flow. For the
 machine-readable contract, hit **`/swagger-ui`** on whichever environment
 you're against (everything's annotated with descriptions and examples).
 
-- **Production:** `https://economiz-ai.onrender.com`
+- **Production:** `https://economizai-app-prod.onrender.com`
+- **Dev:** `https://economiz-ai.onrender.com` (also reachable via the legacy
+  proxy `https://economizai.economizai.workers.dev`)
 - **Local:** `http://localhost:8080`
+
+Both environments run the same code (prod is deployed from the `production`
+branch, promoted from `development`); dev is where features land first and
+where test/screenshot data lives.
 
 All `/api/v1/**` routes (except `/auth/*` and `/legal/*`) require a JWT in the
 `Authorization: Bearer <token>` header. Access tokens expire after 24h —
@@ -726,6 +732,13 @@ opens; `GET /products/recently-viewed` powers a "vistos recentemente" shelf
 (per user, not household). `GET /products?lastProducts=N` returns the same list
 wrapped in the paged search shape, if that's more convenient.
 
+**Friendly name in search results (2026-08-27):** `ProductResponse` carries
+`friendlyDescription` — the household's own rename of the product
+(`household_product_aliases`), null when never renamed. It's populated in
+`GET /products` **search results** (so the "Adicionar item" screen shows the
+name the user knows); the single `GET /products/{id}` returns it null. Prefer
+`friendlyDescription ?? normalizedName` for display.
+
 `GET /products` stays the **global** catalog (for autocomplete when creating alerts/rules etc.). For "the products I buy", use the two household-scoped endpoints:
 
 - **`GET /products/mine`** → `List<HouseholdProductResponse>` = products your household has bought (confirmed, non-excluded), newest purchase first. Each: `{ productId, name, friendlyName, brand, category, timesBought, lastBoughtAt, lastUnitPrice, lastMarketCnpj, lastMarketName, lastMarketFriendlyName }`. `friendlyName` is your household's own rename of the product (null when never renamed) — prefer it for display. Display `lastMarketFriendlyName` (your custom market name when set, else the original `lastMarketName`).
@@ -1102,7 +1115,7 @@ DELETE /api/v1/shopping-lists/{id}/items/{itemId}                      → remov
 
 Each item is **either** linked to a canonical `Product` (auto-suggestion-friendly) **or** free text — the request must include exactly one. Free-text entries can be upgraded later by replacing the row with a productId-bound one.
 
-`ShoppingListResponse.items[*].displayName` is the resolved label — `productName` if linked, else `freeText`.
+`ShoppingListResponse.items[*].displayName` is the resolved label, in precedence order: the household's **`friendlyDescription`** (their own rename of the product, when set) → `productName` (catalog name, when linked) → `freeText`. `friendlyDescription` is also exposed as its own nullable field on each item (2026-08-27), matching `ReceiptItemResponse`.
 
 ---
 
@@ -1133,6 +1146,11 @@ PUT    /api/v1/admin/merchants/{cnpj}/support      → SupportOverrideResult —
 DELETE /api/v1/admin/products/{id}?force=false     → 200 ProductDeletionResponse (prune test/junk catalog rows)
 GET    /api/v1/admin/costs?days=30                 → CostReportResponse (paid-API spend: total + by service + by state + today vs budget)
 GET    /api/v1/admin/state-coverage                → StateCoverageResponse (per-UF: VERIFIED/EXPERIMENTAL + per-layer success/failure telemetry from real scans)
+GET    /api/v1/admin/notifications/relevance-report?days=30 → RelevanceReportResponse (deal-suppression shadow-mode KPI before flipping relevance ON)
+DELETE /api/v1/admin/receipts/{id}/observations    → PurgeObservationsResponse (pull one receipt's contributions out of the price index)
+GET    /api/v1/admin/observations/orphaned-count   → OrphanedObservationsResponse (deleted-account leftovers in the index)
+DELETE /api/v1/admin/observations/orphaned         → PurgeObservationsResponse (bulk-purge orphans; DEV-ONLY — gated by DEV_CLEANUP_ENABLED)
+POST   /api/v1/admin/dev/seed-discounted-receipt?targetEmail= → ReceiptResponse (DEV-ONLY, gated by ECONOMIZAI_ADMIN_DEV_SEED_ENABLED: plants a realistic PENDING receipt with 3 promotional lines for QA/screenshots; targetEmail seeds another account; re-seed replaces earlier seeds)
 ```
 
 - **Delete product** — removes a product and its CASCADE dependents (aliases, observations, category overrides, alerts, snoozes, shopping-list items). Receipt items that referenced it are detached (`product_id` → null), so confirmed purchase history survives as unmatched rows. Refuses with `409 product.deletion.referenced` when the product still backs confirmed purchases unless `force=true`. Returns `{ productId, receiptItemsDetached }`.
@@ -1310,7 +1328,7 @@ gating service.
 
 | Capability | FREE | PRO | Enforcement |
 | --- | --- | --- | --- |
-| Watched markets (`POST /markets/{cnpj}/watch`) | 3 pins | unlimited | New pin over the cap → **402**. Unpin / re-pin existing is always fine. |
+| Watched markets (`POST /markets/watched/{cnpj}`) | 3 pins | unlimited | New pin over the cap → **402**. Unpin / re-pin existing is always fine. |
 | Receipt uploads (`POST /receipts`) | 5 / calendar month | unlimited | Over the cap → **402**. Counts ALL statuses (reject/resubmit can't game it). |
 | History window (`/insights/*`, `/items`) | last 90 days | full range | `from` older than 90d (or omitted) is silently clamped. No error — just windowed. |
 | Notification delivery | in-app inbox only | inbox + push/email | FREE inbox row is always saved (`delivered=false`, `failureReason=free_tier_inbox_only`); push/email skipped. |
