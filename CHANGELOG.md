@@ -7,14 +7,22 @@ Skim from the top until you hit a date you've already read.
 For the complete API contract see [API.md](./API.md) (walk-through) or
 `/swagger-ui` on whichever environment you're hitting.
 
-**Dev server (use from anywhere):**
-- API: `https://economiz-ai.onrender.com/api/v1` (new — Render; stable)
-- Also reachable at the old `https://economizai.economizai.workers.dev/api/v1`
-  (now proxies to Render), so the store build's URL keeps working.
-- Swagger: `https://economiz-ai.onrender.com/swagger-ui/index.html`
-- Health: `https://economiz-ai.onrender.com/actuator/health`
+**Environments:**
+- **Production:** `https://economizai-app-prod.onrender.com/api/v1`
+  (Swagger: `/swagger-ui/index.html`, health: `/actuator/health`)
+- **Dev:** `https://economiz-ai.onrender.com/api/v1` — features land here
+  first. Also reachable at the old `https://economizai.economizai.workers.dev/api/v1`
+  (proxies to Render), so the store build's URL keeps working.
 
 ---
+
+## 2026-08-27 — Nome amigável nas listas de compras e na busca de produtos
+
+`ShoppingListResponse.items[*]` ganhou o campo **`friendlyDescription`**
+(nullable — o apelido que o domicílio deu ao produto), e `displayName` agora
+prefere: `friendlyDescription` → `productName` → `freeText`. `ProductResponse`
+também carrega `friendlyDescription` nos resultados de `GET /products?query=`
+(tela "Adicionar item"); no `GET /products/{id}` vem `null`.
 
 ## 2026-08-27 — Corrigido: exclusão de conta (LGPD) falhava com 500 em prod
 
