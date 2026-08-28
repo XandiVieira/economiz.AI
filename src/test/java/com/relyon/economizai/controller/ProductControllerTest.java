@@ -156,7 +156,7 @@ class ProductControllerTest {
     void get_returns404WhenMissing() throws Exception {
         var user = buildUser();
         var id = UUID.randomUUID();
-        when(productService.get(id)).thenThrow(new ProductNotFoundException());
+        when(productService.get(eq(id), any(User.class))).thenThrow(new ProductNotFoundException());
 
         mockMvc.perform(get("/api/v1/products/" + id)
                         .with(SecurityMockMvcRequestPostProcessors.user(user)))

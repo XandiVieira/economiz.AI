@@ -99,8 +99,8 @@ public class ProductController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ProductResponse> get(@PathVariable UUID id) {
-        return ResponseEntity.ok(productService.get(id));
+    public ResponseEntity<ProductResponse> get(@AuthenticationPrincipal User user, @PathVariable UUID id) {
+        return ResponseEntity.ok(productService.get(id, user));
     }
 
     /**
@@ -110,8 +110,9 @@ public class ProductController {
      * has no price data yet. 404 when unknown to both.
      */
     @GetMapping("/by-ean/{ean}")
-    public ResponseEntity<EanLookupResponse> lookupByEan(@PathVariable String ean) {
-        return ResponseEntity.ok(productService.lookupByEan(ean));
+    public ResponseEntity<EanLookupResponse> lookupByEan(@AuthenticationPrincipal User user,
+                                                         @PathVariable String ean) {
+        return ResponseEntity.ok(productService.lookupByEan(ean, user));
     }
 
     @PostMapping

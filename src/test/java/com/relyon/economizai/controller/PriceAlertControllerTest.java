@@ -56,7 +56,7 @@ class PriceAlertControllerTest {
     }
 
     private PriceAlertResponse buildAlert(UUID alertId, UUID productId) {
-        return new PriceAlertResponse(alertId, productId, "Arroz Tio Joao",
+        return new PriceAlertResponse(alertId, productId, "Arroz Tio Joao", null,
                 new BigDecimal("5.99"), 5.0, true, null, LocalDateTime.now());
     }
 

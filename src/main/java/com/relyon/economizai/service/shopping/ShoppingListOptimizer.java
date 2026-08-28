@@ -13,6 +13,7 @@ import com.relyon.economizai.repository.PriceObservationAuditRepository;
 import com.relyon.economizai.repository.PriceObservationRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.repository.ReceiptItemRepository;
+import com.relyon.economizai.service.HouseholdProductAliasService;
 import com.relyon.economizai.service.geo.MarketNameService;
 import com.relyon.economizai.service.subscription.Feature;
 import com.relyon.economizai.service.subscription.SubscriptionGateService;
@@ -64,6 +65,7 @@ public class ShoppingListOptimizer {
     private final CollaborativeProperties properties;
     private final MarketNameService marketNameService;
     private final SubscriptionGateService subscriptionGate;
+    private final HouseholdProductAliasService householdProductAliasService;
 
     @Transactional(readOnly = true)
     public ShoppingPlanResponse optimize(User user, OptimizeShoppingListRequest request) {
@@ -72,18 +74,21 @@ public class ShoppingListOptimizer {
         var perMarket = new HashMap<String, MarketPlanBuilder>();
         var unpriced = new ArrayList<UnpricedItem>();
         var totalCost = BigDecimal.ZERO;
+        var friendlyNames = householdProductAliasService.friendlyNamesFor(householdId,
+                request.items().stream().map(requested -> requested.productId()).distinct().toList());
 
         for (var requested : request.items()) {
             var product = productRepository.findById(requested.productId())
                     .orElseThrow(ProductNotFoundException::new);
+            var friendlyDescription = friendlyNames.get(product.getId());
             var cheapest = findCheapestMarket(product, householdId);
             if (cheapest == null) {
                 unpriced.add(new UnpricedItem(product.getId(), product.getNormalizedName(),
-                        requested.quantity(), "no observed price (local or community)"));
+                        friendlyDescription, requested.quantity(), "no observed price (local or community)"));
                 continue;
             }
             var subtotal = cheapest.unitPrice.multiply(requested.quantity()).setScale(2, RoundingMode.HALF_UP);
-            var planItem = new PlanItem(product.getId(), product.getNormalizedName(),
+            var planItem = new PlanItem(product.getId(), product.getNormalizedName(), friendlyDescription,
                     requested.quantity(), cheapest.unitPrice, subtotal, cheapest.source);
             perMarket.computeIfAbsent(cheapest.cnpj, cnpj -> new MarketPlanBuilder(cheapest.cnpj, cheapest.marketName))
                     .add(planItem);

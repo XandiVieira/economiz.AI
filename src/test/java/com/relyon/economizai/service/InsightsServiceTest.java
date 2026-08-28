@@ -10,6 +10,7 @@ import com.relyon.economizai.repository.InsightsRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.service.geo.MarketNameService;
 import com.relyon.economizai.service.subscription.SubscriptionGateService;
+import com.relyon.economizai.service.HouseholdProductAliasService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -47,6 +48,7 @@ class InsightsServiceTest {
     @Mock private MarketNameService marketNameService;
     @Mock private HouseholdProductCategoryOverrideService categoryOverrideService;
     @Mock private SubscriptionGateService subscriptionGate;
+    @Mock private HouseholdProductAliasService householdProductAliasService;
 
     @InjectMocks private InsightsService insightsService;
 
@@ -369,5 +371,20 @@ class InsightsServiceTest {
 
         assertThrows(ProductNotFoundException.class,
                 () -> insightsService.priceHistory(user, productId, null, null));
+    }
+
+    @Test
+    void priceHistory_carriesHouseholdFriendlyName() {
+        var user = buildUser();
+        var productId = UUID.randomUUID();
+        var product = Product.builder().id(productId).normalizedName("LEITE ITALAC 1L").build();
+        when(productRepository.findById(productId)).thenReturn(Optional.of(product));
+        when(insightsRepository.priceHistoryForProduct(any(), any(), any(), any())).thenReturn(List.of());
+        when(householdProductAliasService.findFor(user.getHousehold(), product)).thenReturn("Leite da semana");
+
+        var response = insightsService.priceHistory(user, productId, null, null);
+
+        assertEquals("LEITE ITALAC 1L", response.productName());
+        assertEquals("Leite da semana", response.friendlyDescription());
     }
 }

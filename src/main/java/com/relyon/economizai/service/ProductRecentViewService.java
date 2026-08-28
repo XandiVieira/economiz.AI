@@ -25,6 +25,7 @@ public class ProductRecentViewService {
 
     private final ProductRecentViewRepository recentViewRepository;
     private final ProductRepository productRepository;
+    private final HouseholdProductAliasService householdProductAliasService;
 
     @Transactional
     public void track(User user, UUID productId) {
@@ -42,10 +43,12 @@ public class ProductRecentViewService {
 
     @Transactional(readOnly = true)
     public List<ProductResponse> listRecent(User user, int limit) {
-        return recentViewRepository
-                .findRecentByUserId(user.getId(), PageRequest.of(0, limit))
-                .stream()
-                .map(view -> ProductResponse.from(view.getProduct()))
+        var views = recentViewRepository.findRecentByUserId(user.getId(), PageRequest.of(0, limit));
+        var friendlyNames = householdProductAliasService.friendlyNamesFor(user.getHousehold().getId(),
+                views.stream().map(view -> view.getProduct().getId()).toList());
+        return views.stream()
+                .map(view -> ProductResponse.from(view.getProduct(), false,
+                        friendlyNames.get(view.getProduct().getId())))
                 .toList();
     }
 }

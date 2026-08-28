@@ -225,7 +225,7 @@ class DashboardCacheServiceTest {
 
     private ConsumptionPredictionResponse prediction(String productName) {
         return new ConsumptionPredictionResponse(
-                UUID.randomUUID(), productName, null,
+                UUID.randomUUID(), productName, null, null,
                 LocalDate.of(2026, Month.MAY, 1), LocalDate.of(2026, Month.JUNE, 15),
                 3L, new BigDecimal("15.0"), BigDecimal.ONE, 4,
                 Confidence.MEDIUM, Status.RUNNING_LOW);

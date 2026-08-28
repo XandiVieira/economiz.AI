@@ -51,13 +51,13 @@ class ShoppingListOptimizerControllerTest {
     void optimize_returnsPlanGroupedByMarket() throws Exception {
         var user = buildUser();
         var productId = UUID.randomUUID();
-        var planItem = new ShoppingPlanResponse.PlanItem(productId, "Arroz Tio Joao",
+        var planItem = new ShoppingPlanResponse.PlanItem(productId, "Arroz Tio Joao", null,
                 new BigDecimal("2"), new BigDecimal("22.90"), new BigDecimal("45.80"),
                 ShoppingPlanResponse.PlanItem.PriceSource.LOCAL_HISTORY);
         var marketPlan = new ShoppingPlanResponse.MarketPlan("12345678000190", "Mercado X", "Mercado X",
                 new BigDecimal("45.80"), 1, List.of(planItem));
         var unpricedId = UUID.randomUUID();
-        var unpriced = new ShoppingPlanResponse.UnpricedItem(unpricedId, "Sabao em po",
+        var unpriced = new ShoppingPlanResponse.UnpricedItem(unpricedId, "Sabao em po", null,
                 BigDecimal.ONE, "no price data");
         var response = new ShoppingPlanResponse(List.of(marketPlan), new BigDecimal("45.80"), List.of(unpriced));
         when(optimizer.optimize(any(User.class), any(OptimizeShoppingListRequest.class))).thenReturn(response);

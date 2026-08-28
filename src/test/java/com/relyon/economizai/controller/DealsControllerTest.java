@@ -48,7 +48,7 @@ class DealsControllerTest {
     }
 
     private DealResponse deal() {
-        return new DealResponse(UUID.randomUUID(), "Leite", "MEAT_DAIRY",
+        return new DealResponse(UUID.randomUUID(), "Leite", null, "MEAT_DAIRY",
                 "12345678000199", "Mercado X",
                 new BigDecimal("7.00"), new BigDecimal("10.00"),
                 new BigDecimal("3.00"), new BigDecimal("30.00"), new BigDecimal("0.3000"),

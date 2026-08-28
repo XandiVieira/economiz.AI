@@ -12,6 +12,7 @@ import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.NotificationType;
 import com.relyon.economizai.repository.NotificationRuleRepository;
 import com.relyon.economizai.repository.ProductRepository;
+import com.relyon.economizai.service.HouseholdProductAliasService;
 import com.relyon.economizai.service.privacy.LogMasker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +39,7 @@ public class NotificationRuleService {
 
     private final NotificationRuleRepository ruleRepository;
     private final ProductRepository productRepository;
+    private final HouseholdProductAliasService householdProductAliasService;
 
     @Transactional
     public NotificationRuleResponse create(User user, CreateNotificationRuleRequest request) {
@@ -55,7 +57,8 @@ public class NotificationRuleService {
         var saved = ruleRepository.save(rule);
         log.info("notification_rule.saved user={} type={} product={} active={}",
                 LogMasker.email(user.getEmail()), type, productId, saved.isActive());
-        return NotificationRuleResponse.from(saved);
+        return NotificationRuleResponse.from(saved,
+                householdProductAliasService.findFor(user.getHousehold(), saved.getProduct()));
     }
 
     private NotificationRule applyCreate(NotificationRule rule, CreateNotificationRuleRequest request, Product product) {
@@ -86,8 +89,16 @@ public class NotificationRuleService {
     @Transactional
     public List<NotificationRuleResponse> list(User user) {
         ensureDefaults(user);
-        return ruleRepository.findAllByUserIdFetchProduct(user.getId()).stream()
-                .map(NotificationRuleResponse::from)
+        var rules = ruleRepository.findAllByUserIdFetchProduct(user.getId());
+        var friendlyNames = householdProductAliasService.friendlyNamesFor(user.getHousehold().getId(),
+                rules.stream()
+                        .filter(rule -> rule.getProduct() != null)
+                        .map(rule -> rule.getProduct().getId())
+                        .distinct()
+                        .toList());
+        return rules.stream()
+                .map(rule -> NotificationRuleResponse.from(rule,
+                        rule.getProduct() != null ? friendlyNames.get(rule.getProduct().getId()) : null))
                 .toList();
     }
 
@@ -103,7 +114,8 @@ public class NotificationRuleService {
         var saved = ruleRepository.save(rule);
         log.info("notification_rule.updated user={} rule={} active={}",
                 LogMasker.email(user.getEmail()), id, saved.isActive());
-        return NotificationRuleResponse.from(saved);
+        return NotificationRuleResponse.from(saved,
+                householdProductAliasService.findFor(user.getHousehold(), saved.getProduct()));
     }
 
     @Transactional

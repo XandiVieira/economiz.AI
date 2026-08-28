@@ -12,6 +12,7 @@ import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.NotificationType;
 import com.relyon.economizai.repository.NotificationRuleRepository;
 import com.relyon.economizai.repository.ProductRepository;
+import com.relyon.economizai.service.HouseholdProductAliasService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -21,6 +22,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.util.Optional;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -39,6 +42,7 @@ class NotificationRuleServiceTest {
 
     @Mock private NotificationRuleRepository ruleRepository;
     @Mock private ProductRepository productRepository;
+    @Mock private HouseholdProductAliasService householdProductAliasService;
     @InjectMocks private NotificationRuleService service;
 
     private static final UUID PRODUCT_ID = UUID.randomUUID();
@@ -219,5 +223,21 @@ class NotificationRuleServiceTest {
                 .thenReturn(Optional.of(disabled));
 
         assertFalse(service.isEnabled(owner, NotificationType.PROMO_PERSONAL));
+    }
+
+    @Test
+    void list_carriesHouseholdFriendlyNameForProductRules() {
+        var user = user();
+        var product = Product.builder().id(UUID.randomUUID()).normalizedName("CAFE 500G").build();
+        var rule = NotificationRule.builder().id(UUID.randomUUID()).user(user)
+                .type(NotificationType.PRICE_DROP).product(product).active(true).build();
+        when(ruleRepository.findAllByUserIdFetchProduct(user.getId())).thenReturn(List.of(rule));
+        when(householdProductAliasService.friendlyNamesFor(eq(user.getHousehold().getId()), any()))
+                .thenReturn(Map.of(product.getId(), "Cafe do papai"));
+
+        var rules = service.list(user);
+
+        assertEquals("CAFE 500G", rules.get(0).productName());
+        assertEquals("Cafe do papai", rules.get(0).friendlyDescription());
     }
 }

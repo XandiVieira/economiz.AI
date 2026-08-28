@@ -17,6 +17,7 @@ import java.util.UUID;
 public record DealResponse(
         UUID productId,
         String productName,
+        String friendlyDescription,
         String category,
         String marketCnpj,
         String marketName,

@@ -8,6 +8,7 @@ import java.util.UUID;
 public record PriceHistoryResponse(
         UUID productId,
         String productName,
+        String friendlyDescription,
         List<PricePoint> points
 ) {
     public record PricePoint(

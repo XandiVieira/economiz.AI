@@ -17,6 +17,7 @@ import java.util.UUID;
 public record ConsumptionPredictionResponse(
         UUID productId,
         String productName,
+        String friendlyDescription,
         ProductCategory category,
         LocalDate lastPurchaseDate,
         LocalDate predictedNextPurchaseDate,

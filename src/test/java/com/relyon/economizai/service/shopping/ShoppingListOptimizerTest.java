@@ -18,6 +18,7 @@ import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.service.geo.MarketNameService;
 import com.relyon.economizai.service.subscription.Feature;
 import com.relyon.economizai.service.subscription.SubscriptionGateService;
+import com.relyon.economizai.service.HouseholdProductAliasService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -48,6 +49,7 @@ class ShoppingListOptimizerTest {
     @Mock private PriceObservationRepository observationRepository;
     @Mock private PriceObservationAuditRepository auditRepository;
     @Mock private ProductRepository productRepository;
+    @Mock private HouseholdProductAliasService householdProductAliasService;
     @Mock private MarketNameService marketNameService;
     @Mock private SubscriptionGateService subscriptionGate;
 
@@ -60,7 +62,8 @@ class ShoppingListOptimizerTest {
     void setUp() {
         properties = new CollaborativeProperties();
         optimizer = new ShoppingListOptimizer(receiptItemRepository, observationRepository,
-                auditRepository, productRepository, properties, marketNameService, subscriptionGate);
+                auditRepository, productRepository, properties, marketNameService, subscriptionGate,
+                householdProductAliasService);
         household = Household.builder().id(UUID.randomUUID()).inviteCode("ABC123").build();
         user = User.builder().id(UUID.randomUUID()).email("buyer@economizai").household(household).build();
         lenient().when(observationRepository.findRecentByProduct(any(), any())).thenReturn(List.of());
@@ -330,5 +333,26 @@ class ShoppingListOptimizerTest {
                 .quantity(BigDecimal.ONE)
                 .observedAt(LocalDateTime.now().minusDays(2))
                 .build();
+    }
+
+    @Test
+    void optimize_carriesHouseholdFriendlyNameOnPlanAndUnpricedItems() {
+        var priced = product("Arroz");
+        var unpriced = product("Sabao");
+        when(productRepository.findById(priced.getId())).thenReturn(Optional.of(priced));
+        when(productRepository.findById(unpriced.getId())).thenReturn(Optional.of(unpriced));
+        when(receiptItemRepository.findHouseholdHistoryForProduct(eq(priced.getId()), any())).thenReturn(List.of(
+                historyItem(priced, "11111111111111", "Mercado X", new BigDecimal("6.00"))
+        ));
+        when(householdProductAliasService.friendlyNamesFor(eq(household.getId()), any()))
+                .thenReturn(Map.of(priced.getId(), "Arroz do mes", unpriced.getId(), "Sabao da maquina"));
+
+        var request = new OptimizeShoppingListRequest(List.of(
+                new OptimizeShoppingListRequest.Item(priced.getId(), BigDecimal.ONE),
+                new OptimizeShoppingListRequest.Item(unpriced.getId(), BigDecimal.ONE)));
+        var plan = optimizer.optimize(user, request);
+
+        assertEquals("Arroz do mes", plan.marketPlans().get(0).items().get(0).friendlyDescription());
+        assertEquals("Sabao da maquina", plan.unpriced().get(0).friendlyDescription());
     }
 }

@@ -10,6 +10,7 @@ import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.NotificationType;
 import com.relyon.economizai.repository.NotificationRuleRepository;
 import com.relyon.economizai.repository.ProductRepository;
+import com.relyon.economizai.service.HouseholdProductAliasService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -18,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -26,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -35,6 +38,7 @@ class PriceAlertServiceTest {
 
     @Mock private NotificationRuleRepository ruleRepository;
     @Mock private ProductRepository productRepository;
+    @Mock private HouseholdProductAliasService householdProductAliasService;
     @InjectMocks private PriceAlertService service;
 
     private static final UUID PRODUCT_ID = UUID.randomUUID();
@@ -150,5 +154,21 @@ class PriceAlertServiceTest {
         when(ruleRepository.findByIdAndUserId(ruleId, owner.getId())).thenReturn(Optional.empty());
 
         assertThrows(PriceAlertNotFoundException.class, () -> service.delete(owner, ruleId));
+    }
+
+    @Test
+    void list_carriesHouseholdFriendlyName() {
+        var user = user();
+        var product = Product.builder().id(UUID.randomUUID()).normalizedName("ARROZ 5KG").build();
+        var rule = NotificationRule.builder().id(UUID.randomUUID()).user(user)
+                .type(NotificationType.PRICE_DROP).product(product).active(true).build();
+        when(ruleRepository.findAllByUserIdFetchProduct(user.getId())).thenReturn(List.of(rule));
+        when(householdProductAliasService.friendlyNamesFor(eq(user.getHousehold().getId()), any()))
+                .thenReturn(Map.of(product.getId(), "Arroz de todo dia"));
+
+        var alerts = service.list(user);
+
+        assertEquals("ARROZ 5KG", alerts.get(0).productName());
+        assertEquals("Arroz de todo dia", alerts.get(0).friendlyDescription());
     }
 }

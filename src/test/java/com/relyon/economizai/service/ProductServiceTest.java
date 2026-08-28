@@ -14,6 +14,7 @@ import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.CategorizationSource;
 import com.relyon.economizai.model.enums.ProductCategory;
+import com.relyon.economizai.repository.HouseholdProductAliasRepository;
 import com.relyon.economizai.repository.ProductAliasRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.repository.PriceObservationRepository;
@@ -47,6 +48,7 @@ class ProductServiceTest {
 
     @Mock private ProductRepository productRepository;
     @Mock private ProductAliasRepository aliasRepository;
+    @Mock private HouseholdProductAliasRepository householdProductAliasRepository;
     @Mock private ReceiptItemRepository receiptItemRepository;
     @Mock private PriceObservationRepository priceObservationRepository;
     @Mock private ProductExtractor productExtractor;
@@ -60,7 +62,7 @@ class ProductServiceTest {
                 .normalizedName("ARROZ TIO J 5KG").category(ProductCategory.GROCERIES).build();
         when(productRepository.findByEan("7891234567890")).thenReturn(Optional.of(product));
 
-        var result = productService.lookupByEan("7891234567890");
+        var result = productService.lookupByEan("7891234567890", buildUser());
 
         assertEquals(true, result.known());
         assertEquals(product.getId(), result.product().id());
@@ -74,7 +76,7 @@ class ProductServiceTest {
                 EanCatalogEntry.builder().ean("7891234567890").genericName("Arroz")
                         .brand("Tio João").category(ProductCategory.GROCERIES).build()));
 
-        var result = productService.lookupByEan("7891234567890");
+        var result = productService.lookupByEan("7891234567890", buildUser());
 
         assertEquals(false, result.known());
         assertNull(result.product());
@@ -87,7 +89,7 @@ class ProductServiceTest {
         var product = Product.builder().id(UUID.randomUUID()).ean("7891234567890").build();
         when(productRepository.findByEan("7891234567890")).thenReturn(Optional.of(product));
 
-        var result = productService.lookupByEan(" 789.1234.5678-90 ");
+        var result = productService.lookupByEan(" 789.1234.5678-90 ", buildUser());
 
         assertEquals(true, result.known());
     }
@@ -97,12 +99,12 @@ class ProductServiceTest {
         when(productRepository.findByEan("7899999999999")).thenReturn(Optional.empty());
         when(eanCatalogService.lookup("7899999999999")).thenReturn(Optional.empty());
 
-        assertThrows(ProductNotFoundException.class, () -> productService.lookupByEan("7899999999999"));
+        assertThrows(ProductNotFoundException.class, () -> productService.lookupByEan("7899999999999", buildUser()));
     }
 
     @Test
     void lookupByEan_tooShortInputThrows404WithoutQuerying() {
-        assertThrows(ProductNotFoundException.class, () -> productService.lookupByEan("123"));
+        assertThrows(ProductNotFoundException.class, () -> productService.lookupByEan("123", buildUser()));
 
         verify(productRepository, never()).findByEan(any());
     }

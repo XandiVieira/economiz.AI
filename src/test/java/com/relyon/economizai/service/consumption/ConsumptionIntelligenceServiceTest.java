@@ -11,6 +11,7 @@ import com.relyon.economizai.repository.ConsumptionSnoozeRepository;
 import com.relyon.economizai.repository.ManualPurchaseRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.repository.ReceiptItemRepository;
+import com.relyon.economizai.service.HouseholdProductAliasService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,6 +22,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -37,6 +39,7 @@ class ConsumptionIntelligenceServiceTest {
     @Mock private ManualPurchaseRepository manualPurchaseRepository;
     @Mock private ConsumptionSnoozeRepository snoozeRepository;
     @Mock private ProductRepository productRepository;
+    @Mock private HouseholdProductAliasService householdProductAliasService;
 
     private CollaborativeProperties properties;
     private ConsumptionIntelligenceService service;
@@ -50,7 +53,7 @@ class ConsumptionIntelligenceServiceTest {
         // medium-history behavior. Default is now 2 per PRO-50.
         properties.getConsumption().setMinPurchasesForPrediction(3);
         service = new ConsumptionIntelligenceService(receiptItemRepository, manualPurchaseRepository,
-                snoozeRepository, productRepository, properties);
+                snoozeRepository, productRepository, properties, householdProductAliasService);
         var household = Household.builder().id(UUID.randomUUID()).inviteCode("ABC123").build();
         user = User.builder().id(UUID.randomUUID()).email("u@e").household(household).build();
         lenient().when(manualPurchaseRepository.findAllByHouseholdId(any())).thenReturn(List.of());
@@ -209,5 +212,23 @@ class ConsumptionIntelligenceServiceTest {
                 .unitPrice(BigDecimal.ONE)
                 .totalPrice(qty)
                 .build();
+    }
+
+    @Test
+    void predict_carriesHouseholdFriendlyName() {
+        var product = product("Leite");
+        var now = LocalDateTime.now();
+        when(receiptItemRepository.findConfirmedHistoryForHousehold(any())).thenReturn(List.of(
+                purchase(product, now.minusDays(28), BigDecimal.ONE),
+                purchase(product, now.minusDays(21), BigDecimal.ONE),
+                purchase(product, now.minusDays(14), BigDecimal.ONE),
+                purchase(product, now.minusDays(7), BigDecimal.ONE)
+        ));
+        when(householdProductAliasService.friendlyNamesFor(any(), any()))
+                .thenReturn(Map.of(product.getId(), "Leite integral"));
+
+        var predictions = service.predict(user);
+
+        assertEquals("Leite integral", predictions.get(0).friendlyDescription());
     }
 }

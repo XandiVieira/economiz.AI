@@ -16,6 +16,7 @@ import com.relyon.economizai.repository.ConsumptionSnoozeRepository;
 import com.relyon.economizai.repository.ManualPurchaseRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.repository.ReceiptItemRepository;
+import com.relyon.economizai.service.HouseholdProductAliasService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -56,6 +57,7 @@ class ConsumptionIntelligenceServiceCoverageTest {
     @Mock private ManualPurchaseRepository manualPurchaseRepository;
     @Mock private ConsumptionSnoozeRepository snoozeRepository;
     @Mock private ProductRepository productRepository;
+    @Mock private HouseholdProductAliasService householdProductAliasService;
 
     private CollaborativeProperties properties;
     private ConsumptionIntelligenceService service;
@@ -67,7 +69,7 @@ class ConsumptionIntelligenceServiceCoverageTest {
         properties = new CollaborativeProperties();
         properties.getConsumption().setMinPurchasesForPrediction(3);
         service = new ConsumptionIntelligenceService(receiptItemRepository, manualPurchaseRepository,
-                snoozeRepository, productRepository, properties);
+                snoozeRepository, productRepository, properties, householdProductAliasService);
         household = Household.builder().id(UUID.randomUUID()).inviteCode("ABC123").build();
         user = User.builder().id(UUID.randomUUID()).email("u@economizai").household(household).build();
         lenient().when(manualPurchaseRepository.findAllByHouseholdId(any())).thenReturn(List.of());

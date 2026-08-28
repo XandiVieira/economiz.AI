@@ -16,6 +16,31 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-08-28 — `friendlyDescription` em TODOS os endpoints que retornam produto
+
+Todo endpoint que devolve um nome de produto agora traz **os dois campos**: o
+nome de catálogo (como veio da nota, geralmente CAIXA ALTA) **e**
+`friendlyDescription` (o apelido que o domicílio deu ao produto; `null` se
+nunca renomeado). Regra de exibição no app: `friendlyDescription ?? nome de
+catálogo`. Endpoints que ganharam o campo:
+
+- `POST /shopping-list/optimize` — `marketPlans[*].items[*]` e `unpriced[*]`
+- `GET /deals` — cada oferta (e o push do resumo de ofertas já usa o apelido)
+- `GET /insights/products/{id}/price-history` — no nível do produto
+- `GET /consumption/predictions` e `/consumption/suggested-list` — cada previsão
+- `GET/POST /alerts` — `PriceAlertResponse`
+- `GET/POST/PATCH /notification-rules` — `NotificationRuleResponse`
+- `GET /products/{id}` (antes vinha `null`), `GET /products/by-ean/{ean}` e
+  `GET /products/recently-viewed`
+
+Já tinham (nada mudou): itens da nota (`ReceiptItemResponse`), `GET /items`
+(`PurchasedItemResponse`), listas de compras (`ShoppingListResponse.items[*]`),
+busca `GET /products?query=` e `GET /products/mine` (`friendlyName`).
+
+**Importante:** o backend NÃO inventa nome bonito — `friendlyDescription` só
+existe depois que alguém do domicílio renomeia o produto (na revisão da nota ou
+onde houver edição de nome). Sem rename, exibam o nome de catálogo mesmo.
+
 ## 2026-08-27 — Nome amigável nas listas de compras e na busca de produtos
 
 `ShoppingListResponse.items[*]` ganhou o campo **`friendlyDescription`**

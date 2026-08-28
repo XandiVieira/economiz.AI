@@ -86,7 +86,7 @@ class DealsDigestSchedulerTest {
     }
 
     private DealResponse deal(UUID product, double discountFraction, BigDecimal currentPrice) {
-        return new DealResponse(product, "Café", "GROCERY", "12345678000199", "Mercado X",
+        return new DealResponse(product, "Café", null, "GROCERY", "12345678000199", "Mercado X",
                 currentPrice, new BigDecimal("10.00"), new BigDecimal("2.00"),
                 new BigDecimal("20.00"), BigDecimal.valueOf(discountFraction),
                 3L, null, false, LocalDateTime.now());

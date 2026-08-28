@@ -140,7 +140,7 @@ class InsightsControllerTest {
     void priceHistory_returnsPoints() throws Exception {
         var user = buildUser();
         var productId = UUID.randomUUID();
-        var response = new PriceHistoryResponse(productId, "Arroz Tio Joao",
+        var response = new PriceHistoryResponse(productId, "Arroz Tio Joao", null,
                 List.of(new PriceHistoryResponse.PricePoint(LocalDateTime.now(), "12345678000190",
                         "Mercado X", "Mercado X", new BigDecimal("28.90"), new BigDecimal("2"))));
         when(insightsService.priceHistory(any(User.class), eq(productId), any(), any())).thenReturn(response);

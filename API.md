@@ -535,7 +535,9 @@ GET /api/v1/insights/products/{productId}/price-history?from=&to=
 
 `categories/top` takes the same **category lens** as `/items` via `categoryView` (default `HOUSEHOLD`). In the HOUSEHOLD lens each product is counted **once** under its effective category, so a product moved by an override is removed from its old enum bucket and added to the override target (custom name → its own bucket). Each `CategoryBucket` carries `category` (the global enum, **null** for custom-category buckets), `label` (always present — the display name), `total`, and `itemCount`. Pass `categoryView=GLOBAL` to group purely by `Product.category` (the pre-lens behavior).
 
-`price-history` returns chronological points, **each tagged with marketCnpj +
+`price-history`'s top level carries `productName` **and `friendlyDescription`**
+(the household's rename, null when never renamed — prefer it for the chart
+title). It returns chronological points, **each tagged with marketCnpj +
 marketName** so the FE can color the points to differentiate stores of the same
 chain (Zaffari Hipica vs Zaffari Centro both render as "ZAFFARI" but have
 different CNPJs).
@@ -736,8 +738,10 @@ wrapped in the paged search shape, if that's more convenient.
 `friendlyDescription` — the household's own rename of the product
 (`household_product_aliases`), null when never renamed. It's populated in
 `GET /products` **search results** (so the "Adicionar item" screen shows the
-name the user knows); the single `GET /products/{id}` returns it null. Prefer
-`friendlyDescription ?? normalizedName` for display.
+name the user knows). Since 2026-08-28 it's also populated in
+`GET /products/{id}`, `GET /products/by-ean/{ean}` (the tracked-product branch)
+and `GET /products/recently-viewed`. Prefer `friendlyDescription ??
+normalizedName` for display.
 
 `GET /products` stays the **global** catalog (for autocomplete when creating alerts/rules etc.). For "the products I buy", use the two household-scoped endpoints:
 
@@ -836,6 +840,7 @@ GET /api/v1/deals?includeNearby=false&radiusKm=5&limit=20
     {
       "productId":        "…",
       "productName":      "Leite Integral 1L",
+      "friendlyDescription": "Leite das crianças",  // household rename, null when never renamed
       "category":         "MEAT_DAIRY",
       "marketCnpj":       "12345678000199",
       "marketName":       "Atacadão (Centro)",   // household friendly name
@@ -966,7 +971,9 @@ GET /api/v1/consumption/predictions
 → list of ConsumptionPredictionResponse, sorted by daysUntilNextPurchase ASC
 ```
 
-Each prediction has `status` (`OK` / `RUNNING_LOW` / `RAN_OUT`),
+Each prediction carries `productName` **and `friendlyDescription`** (the
+household's rename, null when never renamed — prefer it for display), plus
+`status` (`OK` / `RUNNING_LOW` / `RAN_OUT`),
 `daysUntilNextPurchase` (negative when overdue), `confidence` (LOW/MEDIUM/HIGH),
 `averageQuantityPerPurchase`. **Volume gate**: products with fewer than 2 prior
 purchases are silently skipped. Returns empty array, never an error.
@@ -1008,11 +1015,11 @@ POST /api/v1/shopping-list/optimize
         "marketName": "...",
         "subtotal": 35.40,
         "itemCount": 2,
-        "items": [ { "productId": "...", "quantity": 2, "estimatedUnitPrice": 12.50, "estimatedSubtotal": 25.00, "priceSource": "LOCAL_HISTORY" } ]
+        "items": [ { "productId": "...", "productName": "...", "friendlyDescription": null, "quantity": 2, "estimatedUnitPrice": 12.50, "estimatedSubtotal": 25.00, "priceSource": "LOCAL_HISTORY" } ]
       }
     ],
     "estimatedTotal": 35.40,
-    "unpriced": [ { "productId": "...", "reason": "no observed price (local or community)" } ]
+    "unpriced": [ { "productId": "...", "productName": "...", "friendlyDescription": null, "reason": "no observed price (local or community)" } ]
   }
 ```
 
@@ -1022,6 +1029,9 @@ median, (3) unpriced (FE shows "preço indisponível" badge).
 
 No travel-time modeling yet — V1 picks lowest-cost regardless of how many
 markets the user would have to visit.
+
+`items[*]` and `unpriced[*]` carry `productName` **and `friendlyDescription`**
+(the household's rename, null when never renamed — prefer it for display).
 
 ---
 
@@ -1182,7 +1192,7 @@ GET    /api/v1/alerts          → 200 List<PriceAlertResponse> (newest first)
 DELETE /api/v1/alerts/{id}     → 204 (404 if not the caller's)
 ```
 
-`PriceAlertResponse`: `{ id, productId, productName, thresholdPrice, radiusKm, active, lastFiredAt, createdAt }`.
+`PriceAlertResponse`: `{ id, productId, productName, friendlyDescription, thresholdPrice, radiusKm, active, lastFiredAt, createdAt }` — `friendlyDescription` is the household's rename of the product (null when never renamed), prefer it for display.
 
 - **Upsert semantics:** one rule per (user, product). Re-`POST`ing the same `productId` updates the existing rule's threshold/radius/active — no duplicates, no 409.
 - **`radiusKm`** is measured from the user's home. If set but home or market coordinates are unknown, the rule does **not** fire (constraint honored). Omit it to match anywhere in the network.
@@ -1206,7 +1216,7 @@ PATCH  /api/v1/notification-rules/{id}       → 200 NotificationRuleResponse   
 DELETE /api/v1/notification-rules/{id}       → 204 (defaults can't be deleted — disable instead → 400)
 ```
 
-`NotificationRuleResponse`: `{ id, type, productId, productName, thresholdPrice, radiusKm, leadTimeDays, channel, active, isDefault, lastFiredAt, createdAt }`.
+`NotificationRuleResponse`: `{ id, type, productId, productName, friendlyDescription, thresholdPrice, radiusKm, leadTimeDays, channel, active, isDefault, lastFiredAt, createdAt }` — `friendlyDescription` is the household's rename of the product (null for product-less rules or when never renamed), prefer it for display.
 
 **User-creatable types** (you supply the params; validated server-side):
 

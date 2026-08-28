@@ -7,6 +7,7 @@ import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.model.enums.RelevanceMode;
+import com.relyon.economizai.service.HouseholdProductAliasService;
 import com.relyon.economizai.service.geo.MarketNameService;
 import com.relyon.economizai.service.geo.WatchedMarketService;
 import com.relyon.economizai.service.notifications.DealFeedbackService;
@@ -63,6 +64,7 @@ public class DealsService {
     private final WatchedMarketService watchedMarketService;
     private final MarketNameService marketNameService;
     private final DealFeedbackService dealFeedbackService;
+    private final HouseholdProductAliasService householdProductAliasService;
 
     @Transactional(readOnly = true)
     public List<DealResponse> findDeals(User user, boolean includeNearby, Double radiusKm, int limit) {
@@ -76,6 +78,8 @@ public class DealsService {
         var relevanceMode = dealFeedbackService.mode();
         var suppressions = dealFeedbackService.suppressionsFor(user);
         var watchedCnpjs = watchedMarketService.watchedCnpjs(user);
+        var friendlyNames = householdProductAliasService.friendlyNamesFor(householdId,
+                List.copyOf(purchased.keySet()));
         var deals = new ArrayList<DealResponse>();
         var suppressedCount = 0;
         for (var aggregate : purchased.values()) {
@@ -86,7 +90,8 @@ public class DealsService {
                 suppressedCount++;
                 continue;
             }
-            var deal = bestDealForProduct(user, aggregate, watchedCnpjs, includeNearby, radiusKm);
+            var deal = bestDealForProduct(user, aggregate, watchedCnpjs, includeNearby, radiusKm,
+                    friendlyNames.get(aggregate.product.getId()));
             if (deal == null) continue;
             if (suppressions.suppresses(deal.productId(), deal.marketCnpj())) {
                 suppressedCount++;
@@ -120,7 +125,7 @@ public class DealsService {
      * null when nothing currently beats their last-paid by the relevance threshold.
      */
     private DealResponse bestDealForProduct(User user, ProductAggregate aggregate, Set<String> watchedCnpjs,
-                                            boolean includeNearby, Double radiusKm) {
+                                            boolean includeNearby, Double radiusKm, String friendlyDescription) {
         var lastPaid = aggregate.lastUnitPrice;
         if (lastPaid == null || lastPaid.signum() <= 0) return null;
 
@@ -132,7 +137,7 @@ public class DealsService {
         var best = cheapestQualifyingMarket(markets, lastPaid);
         if (best == null) return null;
 
-        return buildDeal(user, aggregate, best, lastPaid);
+        return buildDeal(user, aggregate, best, lastPaid, friendlyDescription);
     }
 
     /**
@@ -155,7 +160,8 @@ public class DealsService {
 
     /** Compute savings (amount, fraction, pct) against last-paid and assemble the response row. */
     private DealResponse buildDeal(User user, ProductAggregate aggregate,
-                                   PriceIndexService.MarketPriceRow best, BigDecimal lastPaid) {
+                                   PriceIndexService.MarketPriceRow best, BigDecimal lastPaid,
+                                   String friendlyDescription) {
         var currentPrice = best.medianPrice().setScale(2, RoundingMode.HALF_UP);
         var savingsAmount = lastPaid.subtract(currentPrice).setScale(2, RoundingMode.HALF_UP);
         var discountFraction = lastPaid.subtract(currentPrice)
@@ -167,6 +173,7 @@ public class DealsService {
         return new DealResponse(
                 aggregate.product.getId(),
                 aggregate.product.getNormalizedName(),
+                friendlyDescription,
                 aggregate.product.getCategory() != null ? aggregate.product.getCategory().name() : null,
                 best.cnpj(),
                 friendlyName,

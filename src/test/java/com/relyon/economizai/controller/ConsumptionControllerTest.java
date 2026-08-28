@@ -51,7 +51,7 @@ class ConsumptionControllerTest {
     void predictions_returnsList() throws Exception {
         var pid = UUID.randomUUID();
         when(service.predict(any())).thenReturn(List.of(
-                new ConsumptionPredictionResponse(pid, "Leite", null,
+                new ConsumptionPredictionResponse(pid, "Leite", "Leite Integral", null,
                         LocalDate.now().minusDays(7), LocalDate.now(), 0L,
                         new BigDecimal("7.0"), new BigDecimal("1.000"), 4,
                         ConsumptionPredictionResponse.Confidence.LOW,

@@ -36,6 +36,7 @@ import com.relyon.economizai.model.enums.AuthProvider;
 import com.relyon.economizai.exception.InvalidCurrentPasswordException;
 import com.relyon.economizai.exception.InvalidLegalVersionException;
 import com.relyon.economizai.legal.LegalDocuments;
+import com.relyon.economizai.model.HouseholdProductAlias;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.repository.HouseholdCustomCategoryRepository;
 import com.relyon.economizai.repository.HouseholdMarketAliasRepository;
@@ -74,7 +75,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @Slf4j
@@ -276,8 +279,20 @@ public class UserService {
                 user.getAcceptedPrivacyVersion(),
                 user.getAcceptedLegalAt());
 
-        var notificationRules = notificationRuleRepository.findAllByUserId(userId).stream()
-                .map(NotificationRuleResponse::from)
+        var rules = notificationRuleRepository.findAllByUserId(userId);
+        var ruleProductIds = rules.stream()
+                .filter(rule -> rule.getProduct() != null)
+                .map(rule -> rule.getProduct().getId())
+                .distinct()
+                .toList();
+        var ruleFriendlyNames = ruleProductIds.isEmpty() ? Map.<UUID, String>of()
+                : householdProductAliasRepository
+                        .findAllByHouseholdIdAndProductIdIn(user.getHousehold().getId(), ruleProductIds).stream()
+                        .collect(Collectors.toMap(alias -> alias.getProduct().getId(),
+                                HouseholdProductAlias::getFriendlyName));
+        var notificationRules = rules.stream()
+                .map(rule -> NotificationRuleResponse.from(rule,
+                        rule.getProduct() != null ? ruleFriendlyNames.get(rule.getProduct().getId()) : null))
                 .toList();
 
         var notificationPreferences = notificationPreferenceRepository.findAllByUserId(userId).stream()

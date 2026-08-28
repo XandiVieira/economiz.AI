@@ -12,6 +12,7 @@ import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.service.geo.MarketNameService;
 import com.relyon.economizai.service.geo.WatchedMarketService;
 import com.relyon.economizai.service.notifications.DealFeedbackService;
+import com.relyon.economizai.service.HouseholdProductAliasService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,6 +44,7 @@ class DealsServiceTest {
     @Mock private WatchedMarketService watchedMarketService;
     @Mock private MarketNameService marketNameService;
     @Mock private DealFeedbackService dealFeedbackService;
+    @Mock private HouseholdProductAliasService householdProductAliasService;
 
     private final CollaborativeProperties properties = new CollaborativeProperties();
 
@@ -56,7 +58,7 @@ class DealsServiceTest {
     @BeforeEach
     void setUp() {
         dealsService = new DealsService(receiptItemRepository, priceIndexService, properties,
-                watchedMarketService, marketNameService, dealFeedbackService);
+                watchedMarketService, marketNameService, dealFeedbackService, householdProductAliasService);
         lenient().when(dealFeedbackService.mode()).thenReturn(RelevanceMode.OFF);
         lenient().when(dealFeedbackService.suppressionsFor(any()))
                 .thenReturn(DealFeedbackService.SuppressionSet.empty());
@@ -240,5 +242,20 @@ class DealsServiceTest {
     @Test
     void emptyWhenLimitNonPositive() {
         assertTrue(dealsService.findDeals(user(), false, null, 0).isEmpty());
+    }
+
+    @Test
+    void dealCarriesHouseholdFriendlyName() {
+        when(receiptItemRepository.findConfirmedHistoryForHousehold(HOUSEHOLD_ID))
+                .thenReturn(List.of(purchase(new BigDecimal("10.00"), LocalDateTime.now())));
+        when(priceIndexService.bestMarkets(eq(PRODUCT_ID), anyInt(), any(), any(), any(), any()))
+                .thenReturn(List.of(market(WATCHED_CNPJ, new BigDecimal("7.00"), 3L, null, true)));
+        when(householdProductAliasService.friendlyNamesFor(eq(HOUSEHOLD_ID), any()))
+                .thenReturn(Map.of(PRODUCT_ID, "Leite das criancas"));
+
+        var deals = dealsService.findDeals(user(), false, null, 20);
+
+        assertEquals("Leite", deals.get(0).productName());
+        assertEquals("Leite das criancas", deals.get(0).friendlyDescription());
     }
 }

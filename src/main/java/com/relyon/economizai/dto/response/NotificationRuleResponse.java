@@ -13,6 +13,7 @@ public record NotificationRuleResponse(
         NotificationType type,
         UUID productId,
         String productName,
+        String friendlyDescription,
         BigDecimal thresholdPrice,
         Double radiusKm,
         Integer leadTimeDays,
@@ -22,12 +23,14 @@ public record NotificationRuleResponse(
         LocalDateTime lastFiredAt,
         LocalDateTime createdAt
 ) {
-    public static NotificationRuleResponse from(NotificationRule rule) {
+    /** @param friendlyDescription the household's own rename of the rule's product, null when never renamed */
+    public static NotificationRuleResponse from(NotificationRule rule, String friendlyDescription) {
         return new NotificationRuleResponse(
                 rule.getId(),
                 rule.getType(),
                 rule.getProduct() != null ? rule.getProduct().getId() : null,
                 rule.getProduct() != null ? rule.getProduct().getNormalizedName() : null,
+                friendlyDescription,
                 rule.getThresholdPrice(),
                 rule.getRadiusKm(),
                 rule.getLeadTimeDays(),

@@ -45,6 +45,7 @@ public class InsightsService {
     private final MarketNameService marketNameService;
     private final HouseholdProductCategoryOverrideService categoryOverrideService;
     private final SubscriptionGateService subscriptionGate;
+    private final HouseholdProductAliasService householdProductAliasService;
 
     @Transactional(readOnly = true)
     @Cacheable(value = CachingConfig.INSIGHTS_SPEND_CACHE,
@@ -287,7 +288,8 @@ public class InsightsService {
                 .map(point -> point.withMarketFriendlyName(marketNameService.applyOverride(
                         overrides, point.marketCnpj(), point.marketName())))
                 .toList();
-        return new PriceHistoryResponse(product.getId(), product.getNormalizedName(), points);
+        var friendlyDescription = householdProductAliasService.findFor(user.getHousehold(), product);
+        return new PriceHistoryResponse(product.getId(), product.getNormalizedName(), friendlyDescription, points);
     }
 
     private static BigDecimal toBigDecimal(Object value) {

@@ -209,11 +209,12 @@ public class DealsDigestScheduler {
         var dealWord = messageService.translate(
                 others == 1 ? "notification.deals.word.one" : "notification.deals.word.many", locale);
         var title = messageService.translate("notification.deals.title", locale);
+        var productLabel = best.friendlyDescription() != null ? best.friendlyDescription() : best.productName();
         var body = others > 0
                 ? messageService.translate("notification.deals.body.multi", locale,
-                        best.productName(), String.valueOf(discountPct), String.valueOf(others), dealWord)
+                        productLabel, String.valueOf(discountPct), String.valueOf(others), dealWord)
                 : messageService.translate("notification.deals.body.single", locale,
-                        best.productName(), String.valueOf(discountPct));
+                        productLabel, String.valueOf(discountPct));
 
         var extras = new HashMap<String, Object>();
         extras.put("deeplink", "economizai://deals");

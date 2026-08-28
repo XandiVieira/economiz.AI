@@ -252,7 +252,7 @@ class ProductServiceSearchGetUpdateTest {
         var id = UUID.randomUUID();
         when(productRepository.findById(id)).thenReturn(Optional.of(buildProduct(id)));
 
-        var response = productService.get(id);
+        var response = productService.get(id, user());
 
         assertEquals(id, response.id());
         assertEquals("Tio Joao", response.brand());
@@ -264,7 +264,7 @@ class ProductServiceSearchGetUpdateTest {
         var id = UUID.randomUUID();
         when(productRepository.findById(id)).thenReturn(Optional.empty());
 
-        assertThrows(ProductNotFoundException.class, () -> productService.get(id));
+        assertThrows(ProductNotFoundException.class, () -> productService.get(id, user()));
     }
 
     @Test
@@ -344,5 +344,22 @@ class ProductServiceSearchGetUpdateTest {
         assertEquals(ProductCategory.BEVERAGES, response.category());
         assertEquals(CategorizationSource.DICTIONARY, response.categorizationSource());
         verify(receiptItemRepository, never()).linkByEan(any(Product.class), any());
+    }
+
+    @Test
+    void get_carriesCallerHouseholdFriendlyName() {
+        var id = UUID.randomUUID();
+        var caller = user();
+        when(productRepository.findById(id)).thenReturn(Optional.of(buildProduct(id)));
+        when(householdProductAliasRepository.findByHouseholdIdAndProductId(caller.getHousehold().getId(), id))
+                .thenReturn(Optional.of(HouseholdProductAlias.builder()
+                        .household(caller.getHousehold())
+                        .product(buildProduct(id))
+                        .friendlyName("Arroz da casa")
+                        .build()));
+
+        var response = productService.get(id, caller);
+
+        assertEquals("Arroz da casa", response.friendlyDescription());
     }
 }

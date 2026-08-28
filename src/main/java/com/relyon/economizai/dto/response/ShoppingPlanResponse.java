@@ -32,6 +32,7 @@ public record ShoppingPlanResponse(
     public record PlanItem(
             UUID productId,
             String productName,
+            String friendlyDescription,
             BigDecimal quantity,
             BigDecimal estimatedUnitPrice,
             BigDecimal estimatedSubtotal,
@@ -43,6 +44,7 @@ public record ShoppingPlanResponse(
     public record UnpricedItem(
             UUID productId,
             String productName,
+            String friendlyDescription,
             BigDecimal quantity,
             String reason
     ) {}

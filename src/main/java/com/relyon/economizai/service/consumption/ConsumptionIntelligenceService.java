@@ -14,6 +14,7 @@ import com.relyon.economizai.repository.ConsumptionSnoozeRepository;
 import com.relyon.economizai.repository.ManualPurchaseRepository;
 import com.relyon.economizai.repository.ProductRepository;
 import com.relyon.economizai.repository.ReceiptItemRepository;
+import com.relyon.economizai.service.HouseholdProductAliasService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -69,6 +70,7 @@ public class ConsumptionIntelligenceService {
     private final ConsumptionSnoozeRepository snoozeRepository;
     private final ProductRepository productRepository;
     private final CollaborativeProperties properties;
+    private final HouseholdProductAliasService householdProductAliasService;
 
     @Transactional(readOnly = true)
     public List<ConsumptionPredictionResponse> predict(User user) {
@@ -84,10 +86,12 @@ public class ConsumptionIntelligenceService {
         }
 
         var snoozedProductIds = activeSnoozes(householdId);
+        var friendlyNames = householdProductAliasService.friendlyNamesFor(householdId,
+                List.copyOf(byProduct.keySet()));
         var predictions = new ArrayList<ConsumptionPredictionResponse>();
         for (var entry : byProduct.entrySet()) {
             if (snoozedProductIds.contains(entry.getKey())) continue;
-            var prediction = predictForProduct(entry.getValue(), consumption);
+            var prediction = predictForProduct(entry.getValue(), consumption, friendlyNames.get(entry.getKey()));
             if (prediction != null) predictions.add(prediction);
         }
 
@@ -190,7 +194,8 @@ public class ConsumptionIntelligenceService {
      * next purchase date → classify how urgent it is.
      */
     private ConsumptionPredictionResponse predictForProduct(List<PurchaseEvent> events,
-                                                            CollaborativeProperties.Consumption cfg) {
+                                                            CollaborativeProperties.Consumption cfg,
+                                                            String friendlyDescription) {
         if (!hasEnoughPurchases(events, cfg)) return null;
 
         events.sort(Comparator.comparing(PurchaseEvent::date));
@@ -210,6 +215,7 @@ public class ConsumptionIntelligenceService {
         return new ConsumptionPredictionResponse(
                 lastEvent.product().getId(),
                 lastEvent.product().getNormalizedName(),
+                friendlyDescription,
                 lastEvent.product().getCategory(),
                 lastEvent.date(),
                 nextPurchase,

@@ -10,6 +10,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -50,5 +56,17 @@ public class HouseholdProductAliasService {
         return repository.findByHouseholdIdAndProductId(household.getId(), product.getId())
                 .map(HouseholdProductAlias::getFriendlyName)
                 .orElse(null);
+    }
+
+    /**
+     * The household's renames for these products, keyed by product id. Batch
+     * variant for list endpoints — one query instead of one per row.
+     */
+    @Transactional(readOnly = true)
+    public Map<UUID, String> friendlyNamesFor(UUID householdId, Collection<UUID> productIds) {
+        if (productIds.isEmpty()) return Map.of();
+        return repository.findAllByHouseholdIdAndProductIdIn(householdId, List.copyOf(productIds)).stream()
+                .collect(Collectors.toMap(alias -> alias.getProduct().getId(),
+                        HouseholdProductAlias::getFriendlyName));
     }
 }

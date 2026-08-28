@@ -85,8 +85,17 @@ public class ProductService {
     }
 
     @Transactional(readOnly = true)
-    public ProductResponse get(UUID id) {
-        return ProductResponse.from(loadProduct(id));
+    public ProductResponse get(UUID id, User user) {
+        var product = loadProduct(id);
+        return ProductResponse.from(product, false, friendlyNameFor(user, product));
+    }
+
+    /** The caller household's own rename of this product, null when never renamed. */
+    private String friendlyNameFor(User user, Product product) {
+        return householdProductAliasRepository
+                .findByHouseholdIdAndProductId(user.getHousehold().getId(), product.getId())
+                .map(HouseholdProductAlias::getFriendlyName)
+                .orElse(null);
     }
 
     /**
@@ -113,14 +122,15 @@ public class ProductService {
      * barcode is unknown to both.
      */
     @Transactional(readOnly = true)
-    public EanLookupResponse lookupByEan(String ean) {
+    public EanLookupResponse lookupByEan(String ean, User user) {
         var digits = ean == null ? "" : ean.replaceAll("\\D", "");
         if (digits.length() < 8) {
             throw new ProductNotFoundException();
         }
         var product = productRepository.findByEan(digits);
         if (product.isPresent()) {
-            return EanLookupResponse.ofProduct(ProductResponse.from(product.get()));
+            return EanLookupResponse.ofProduct(
+                    ProductResponse.from(product.get(), false, friendlyNameFor(user, product.get())));
         }
         return eanCatalogService.lookup(digits)
                 .map(EanLookupResponse::ofCatalog)
@@ -194,7 +204,7 @@ public class ProductService {
         var linked = backfillByDescription(unmatched, normalized, product);
         log.info("Alias '{}' → product {}; backfilled {} items in household {}",
                 normalized, product.getId(), linked, user.getHousehold().getId());
-        return ProductResponse.from(product);
+        return ProductResponse.from(product, false, friendlyNameFor(user, product));
     }
 
     @Transactional(readOnly = true)
