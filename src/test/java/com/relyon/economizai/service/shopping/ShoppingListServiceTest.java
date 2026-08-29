@@ -14,6 +14,7 @@ import com.relyon.economizai.model.ShoppingListItem;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.repository.HouseholdProductAliasRepository;
 import com.relyon.economizai.repository.ProductRepository;
+import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.repository.ShoppingListItemRepository;
 import com.relyon.economizai.repository.ShoppingListRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +49,7 @@ class ShoppingListServiceTest {
     @Mock private ShoppingListItemRepository itemRepository;
     @Mock private ProductRepository productRepository;
     @Mock private HouseholdProductAliasRepository householdProductAliasRepository;
+    @Mock private ReceiptItemRepository receiptItemRepository;
 
     private ShoppingListService service;
     private User user;
@@ -55,11 +57,15 @@ class ShoppingListServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new ShoppingListService(listRepository, itemRepository, productRepository, householdProductAliasRepository);
+        service = new ShoppingListService(listRepository, itemRepository, productRepository,
+                householdProductAliasRepository, receiptItemRepository);
         household = Household.builder().id(UUID.randomUUID()).inviteCode("ABC123").build();
         user = User.builder().id(UUID.randomUUID()).email("owner@economizai").household(household).build();
-        // No test asserts on friendly-name precedence here (covered separately); default to "no aliases".
+        // No test asserts on friendly-name precedence here (covered separately); default to
+        // "no explicit aliases" and "no receipt-derived friendly names".
         lenient().when(householdProductAliasRepository.findAllByHouseholdIdAndProductIdIn(any(), any()))
+                .thenReturn(List.of());
+        lenient().when(receiptItemRepository.findLatestFriendlyDescriptionsForHousehold(any(), any()))
                 .thenReturn(List.of());
     }
 
@@ -144,6 +150,45 @@ class ShoppingListServiceTest {
         var responseItem = response.items().get(0);
         assertNull(responseItem.friendlyDescription());
         assertEquals("BATATA PALHA D.NONNA 440G", responseItem.displayName());
+    }
+
+    @Test
+    void get_fallsBackToReceiptFriendlyNameForDisplayWhenNoAlias() {
+        var product = product("BATATA PALHA D.NONNA 440G");
+        var list = list("Semana", List.of(itemWithProduct(product, 0)));
+        when(listRepository.findById(list.getId())).thenReturn(Optional.of(list));
+        // No explicit alias, but the household named this product on a past receipt.
+        when(receiptItemRepository.findLatestFriendlyDescriptionsForHousehold(
+                List.of(product.getId()), household.getId()))
+                .thenReturn(List.<Object[]>of(new Object[]{product.getId(), "Batata Palha"}));
+
+        var response = service.get(user, list.getId());
+
+        var responseItem = response.items().get(0);
+        // friendlyDescription stays alias-only (null here); the receipt name only feeds displayName.
+        assertNull(responseItem.friendlyDescription());
+        assertEquals("BATATA PALHA D.NONNA 440G", responseItem.productName());
+        assertEquals("Batata Palha", responseItem.displayName());
+    }
+
+    @Test
+    void get_prefersExplicitAliasOverReceiptFriendlyName() {
+        var product = product("BATATA PALHA D.NONNA 440G");
+        var list = list("Semana", List.of(itemWithProduct(product, 0)));
+        var alias = HouseholdProductAlias.builder().household(household).product(product)
+                .friendlyName("Minha Batata").build();
+        when(listRepository.findById(list.getId())).thenReturn(Optional.of(list));
+        when(householdProductAliasRepository.findAllByHouseholdIdAndProductIdIn(household.getId(), List.of(product.getId())))
+                .thenReturn(List.of(alias));
+        lenient().when(receiptItemRepository.findLatestFriendlyDescriptionsForHousehold(
+                List.of(product.getId()), household.getId()))
+                .thenReturn(List.<Object[]>of(new Object[]{product.getId(), "Batata Palha"}));
+
+        var response = service.get(user, list.getId());
+
+        var responseItem = response.items().get(0);
+        assertEquals("Minha Batata", responseItem.friendlyDescription());
+        assertEquals("Minha Batata", responseItem.displayName());
     }
 
     @Test

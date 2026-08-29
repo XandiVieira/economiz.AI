@@ -14,6 +14,7 @@ import com.relyon.economizai.model.ShoppingListItem;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.repository.HouseholdProductAliasRepository;
 import com.relyon.economizai.repository.ProductRepository;
+import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.repository.ShoppingListItemRepository;
 import com.relyon.economizai.repository.ShoppingListRepository;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -44,6 +46,7 @@ public class ShoppingListService {
     private final ShoppingListItemRepository itemRepository;
     private final ProductRepository productRepository;
     private final HouseholdProductAliasRepository householdProductAliasRepository;
+    private final ReceiptItemRepository receiptItemRepository;
 
     @Transactional(readOnly = true)
     public List<ShoppingListResponse> listForHousehold(User user) {
@@ -136,22 +139,40 @@ public class ShoppingListService {
     }
 
     private ShoppingListResponse toResponse(ShoppingList list) {
-        return ShoppingListResponse.from(list, friendlyNamesByProduct(list));
-    }
-
-    /** The household's own renames (household_product_aliases) for this list's linked products, keyed by product id. */
-    private Map<UUID, String> friendlyNamesByProduct(ShoppingList list) {
         var productIds = list.getItems().stream()
                 .map(ShoppingListItem::getProduct)
                 .filter(Objects::nonNull)
                 .map(Product::getId)
                 .distinct()
                 .toList();
+        return ShoppingListResponse.from(list,
+                aliasesByProduct(list, productIds),
+                productFriendlyNamesByProduct(list, productIds));
+    }
+
+    /** The household's explicit renames (household_product_aliases) for these products, keyed by product id. */
+    private Map<UUID, String> aliasesByProduct(ShoppingList list, List<UUID> productIds) {
         if (productIds.isEmpty()) return Map.of();
         return householdProductAliasRepository
                 .findAllByHouseholdIdAndProductIdIn(list.getHousehold().getId(), productIds)
                 .stream()
                 .collect(Collectors.toMap(alias -> alias.getProduct().getId(), HouseholdProductAlias::getFriendlyName));
+    }
+
+    /**
+     * The household's own friendly name per product, taken from its most recent confirmed
+     * receipt (user-typed or inherited) — the displayName fallback for products the household
+     * hasn't explicitly renamed, so the list shows a human name instead of the raw SEFAZ
+     * product name. Rows arrive newest-first, so the first hit per product wins.
+     */
+    private Map<UUID, String> productFriendlyNamesByProduct(ShoppingList list, List<UUID> productIds) {
+        if (productIds.isEmpty()) return Map.of();
+        var byProduct = new HashMap<UUID, String>();
+        for (var row : receiptItemRepository.findLatestFriendlyDescriptionsForHousehold(
+                productIds, list.getHousehold().getId())) {
+            byProduct.putIfAbsent((UUID) row[0], (String) row[1]);
+        }
+        return byProduct;
     }
 
     private ShoppingList loadOwned(User user, UUID listId) {

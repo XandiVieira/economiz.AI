@@ -16,6 +16,30 @@ public interface ReceiptItemRepository extends JpaRepository<ReceiptItem, UUID> 
     /** Latest real purchase of a product — price-math sanity input for LLM pack-size enrichment. */
     Optional<ReceiptItem> findFirstByProductIdOrderByCreatedAtDesc(UUID productId);
 
+    /**
+     * The household's own friendly name for each of the given products, taken from its
+     * confirmed, non-excluded receipt items — i.e. what the household last called the
+     * product on a note (user-typed override or inherited alias). Rows are returned
+     * newest-first (by receipt issue date), so callers keep the first hit per product.
+     * Used as a shopping-list display fallback when the household hasn't set an explicit
+     * {@code household_product_aliases} rename — keeps the list from showing the raw
+     * SEFAZ product name ("BATATA PALHA D.NONNA 440G").
+     */
+    @Query("""
+        SELECT ri.product.id, ri.friendlyDescription
+        FROM ReceiptItem ri
+        JOIN ri.receipt r
+        WHERE ri.product.id IN :productIds
+          AND r.household.id = :householdId
+          AND r.status = 'CONFIRMED'
+          AND ri.excluded = false
+          AND ri.friendlyDescription IS NOT NULL
+          AND ri.friendlyDescription <> ''
+        ORDER BY r.issuedAt DESC NULLS LAST
+    """)
+    List<Object[]> findLatestFriendlyDescriptionsForHousehold(@Param("productIds") List<UUID> productIds,
+                                                              @Param("householdId") UUID householdId);
+
 
     @Query("""
         SELECT ri FROM ReceiptItem ri
