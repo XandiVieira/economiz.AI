@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+
+
+<html class="no-js no-ie" dir="ltr" lang="pt-BR">
+<!--<![endif]-->
+
+<head>
+    <title>Nota Fiscal do Consumidor(NFC-e)</title>
+
+	<meta charset="UTF-8" />
+    <meta content="text/html; charset=utf-8" http-equiv="Content-Type" />
+    <meta content="index, follow" name="robots" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+
+    <meta content="IE=11" http-equiv="X-UA-Compatible" />
+
+	<!--[if lt IE 9]>
+	  <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+	  <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+	<![endif]-->
+
+    <link rel="stylesheet" href="/nfeweb/static/css/plugins/bootstrap/bootstrap.min.css" />
+    <link rel="stylesheet" href="/nfeweb/static/css/plugins/reset.css" />
+    <link rel="stylesheet" href="/nfeweb/static/css/plugins/boilerplate/main.css" />
+
+    <link rel="stylesheet" href="/nfeweb/static/css/specific/partials.css" />
+    <link rel="stylesheet" href="/nfeweb/static/css/specific/loading.css" />
+
+    <link rel="stylesheet" href="/nfeweb/static/css/override/default-normalize.css" />
+    <link rel="stylesheet" href="/nfeweb/static/css/override/mobile-width-fix.css" />
+
+	<div>
+	<div>
+    <link rel="stylesheet" href="/nfeweb/xslt/nfce/v2.05/css/jquery.mobile-1.4.5.min.css" />
+    <link rel="stylesheet" href="/nfeweb/xslt/nfce/v2.05/css/nfceMob_ie.css" />
+    <link rel="stylesheet" href="/nfeweb/xslt/nfce/v2.05/css/nfceMob.css" />
+ 	<link rel="stylesheet" href="/nfeweb/static/css/override/xslt.css" />
+ 	<link rel="stylesheet" href="/nfeweb/static/css/app/nfce/danfeNFCe.css" />
+</div>
+</div>
+
+	<script src="/nfeweb/static/js/plugins/jquery-1.11.3.min.js"></script>
+	<script src="/nfeweb/static/js/plugins/bootstrap.min.js"></script>
+  	<script src="/nfeweb/static/js/specific/loading.js"></script>
+  	<script src="/nfeweb/static/js/specific/message.js"></script>
+
+	<script charset="utf-8" type="text/javascript">
+		new WindowModalLoading('Aguarde...');	
+	</script>
+
+</head>
+
+<body>
+	<div id="loading" style="display: none"></div>
+	<div id="message-containter" style="display: none"></div>
+
+	<div class="container" id="content">
+	<div id="danfe-nfce-container"></div>
+</div>
+
+	<footer>
+		<script src="/nfeweb/static/js/plugins/handlebars-v3.0.3.js"></script>
+    	<script src="/nfeweb/static/js/plugins/maskedinput.min.js"></script>
+	    <script src="/nfeweb/static/js/plugins/boilerplate/modernizr-2.6.2.min.js"></script>
+    	<script src="/nfeweb/static/js/plugins/boilerplate/main.js"></script>
+    	<script src="/nfeweb/static/js/plugins/boilerplate/plugins.js"></script>
+
+    	<script src="/nfeweb/static/js/specific/response.js"></script>
+    	<script src="/nfeweb/static/js/specific/normalize.js"></script>
+    	<script src="/nfeweb/static/js/specific/masks.js"></script>
+    	<script src="/nfeweb/static/js/specific/bug-fix.js"></script>
+
+    	<div>
+	<div>
+	<script charset="utf-8" src="/nfeweb/xslt/nfce/v2.05/js/jquery.js"></script>
+	<script charset="utf-8" src="/nfeweb/xslt/nfce/v2.05/js/index.js"></script>
+	<script charset="utf-8" src="/nfeweb/xslt/nfce/v2.05/js/jquery.mobile-1.4.5.min.js"></script>
+	<script charset="utf-8" src="/nfeweb/xslt/nfce/v2.05/js/jqueryui.js"></script>
+
+	<script charset="utf-8" src="/nfeweb/static/js/app/nfce/danfeNFCe.js"></script>
+
+	<script charset="utf-8" type="text/javascript">
+        new DanfeNFCe(
+			'#danfe-nfce-container',
+           	'/nfeweb/imagens/',
+      		'<div xmlns:r=\"http://www.serpro.gov.br/nfe/remessanfe.xsd\" xmlns:chave=\"http://exslt.org/chaveacesso\" xmlns:n=\"http://www.portalfiscal.inf.br/nfe\" data-role=\"header\">\n<h1 class=\"tit\">\n<img alt=\"NFC-e\" height=\"64\" width=\"90\" src=\"../resources/images/logoNFCe.png\"><p>DOCUMENTO AUXILIAR DA NOTA FISCAL DE CONSUMIDOR ELETR&Ocirc;NICA<\/p>\n<p><\/p>\n<\/h1>\n<\/div><div data-role=\"content\">\n<div id=\"conteudo\">\n<div id=\"avisos\"><\/div>\n<div class=\"txtCenter\">\n<div class=\"txtTopo\" id=\"u20\">CENCOSUD BRASIL COMERCIAL SA<\/div>\n<div class=\"text\">\n\t\t\t\t\t\t\t\tCNPJ:\n\t\t\t\t\t\t\t\t39.346.861/0224-83<\/div>\n<div class=\"text\">AV ANHANGUERA\n\t\t\t\t\t\t\t,\n\t\t\t\t\t\t\t5588\n\t\t\t\t\t\t\t,\n\t\t\t\t\t\t\t\n\t\t\t\t\t\t\t,\n\t\t\t\t\t\t\tSETOR CENTRAL\n\t\t\t\t\t\t\t,\n\t\t\t\t\t\t\tGOIANIA\n\t\t\t\t\t\t\t,\n\t\t\t\t\t\t\tGO<\/div>\n<\/div>\n<table data-filter=\"true\" id=\"tabResult\" cellspacing=\"0\" cellpadding=\"0\" align=\"center\" border=\"0\">\n<tr id=\"Item + 1\">\n<td valign=\"top\"><span class=\"txtTit\">PAO FRANCES ASSADO KG<\/span><span class=\"RCod\">\n\t\t\t\t\t\t\t\t\t\t(C&oacute;digo:\n\t\t\t\t\t\t\t\t\t\tR00001140169\n\t\t\t\t\t\t\t\t\t\t)\n\t\t\t\t\t\t\t\t\t<\/span>\n<br>\n<span class=\"Rqtd\"><strong>Qtde.:<\/strong>0,234<\/span><span class=\"RUN\"><strong>UN: <\/strong>KG<\/span><span class=\"RvlUnit\"><strong>Vl. Unit.:<\/strong>\n\t\t\t\t\t\t\t\t\t\t&nbsp;\n\t\t\t\t\t\t\t\t\t\t15,99<\/span><\/td><td class=\"txtTit noWrap\" valign=\"top\" align=\"right\">\n\t\t\t\t\t\t\t\t\tVl. Total\n\t\t\t\t\t\t\t\t\t<br>\n<span class=\"valor\">3,74<\/span><\/td>\n<\/tr>\n<tr id=\"Item + 2\">\n<td valign=\"top\"><span class=\"txtTit\">CENOURA kg KG<\/span><span class=\"RCod\">\n\t\t\t\t\t\t\t\t\t\t(C&oacute;digo:\n\t\t\t\t\t\t\t\t\t\tR00001112205\n\t\t\t\t\t\t\t\t\t\t)\n\t\t\t\t\t\t\t\t\t<\/span>\n<br>\n<span class=\"Rqtd\"><strong>Qtde.:<\/strong>0,335<\/span><span class=\"RUN\"><strong>UN: <\/strong>KG<\/span><span class=\"RvlUnit\"><strong>Vl. Unit.:<\/strong>\n\t\t\t\t\t\t\t\t\t\t&nbsp;\n\t\t\t\t\t\t\t\t\t\t8,49<\/span><\/td><td class=\"txtTit noWrap\" valign=\"top\" align=\"right\">\n\t\t\t\t\t\t\t\t\tVl. Total\n\t\t\t\t\t\t\t\t\t<br>\n<span class=\"valor\">2,84<\/span><\/td>\n<\/tr>\n<tr id=\"Item + 3\">\n<td valign=\"top\"><span class=\"txtTit\">BATATA ING BING kg KG<\/span><span class=\"RCod\">\n\t\t\t\t\t\t\t\t\t\t(C&oacute;digo:\n\t\t\t\t\t\t\t\t\t\tR00001111978\n\t\t\t\t\t\t\t\t\t\t)\n\t\t\t\t\t\t\t\t\t<\/span>\n<br>\n<span class=\"Rqtd\"><strong>Qtde.:<\/strong>0,665<\/span><span class=\"RUN\"><strong>UN: <\/strong>KG<\/span><span class=\"RvlUnit\"><strong>Vl. Unit.:<\/strong>\n\t\t\t\t\t\t\t\t\t\t&nbsp;\n\t\t\t\t\t\t\t\t\t\t6,95<\/span><\/td><td class=\"txtTit noWrap\" valign=\"top\" align=\"right\">\n\t\t\t\t\t\t\t\t\tVl. Total\n\t\t\t\t\t\t\t\t\t<br>\n<span class=\"valor\">4,62<\/span><\/td>\n<\/tr>\n<tr id=\"Item + 4\">\n<td valign=\"top\"><span class=\"txtTit\">AZEIT GALLO 500ml UN<\/span><span class=\"RCod\">\n\t\t\t\t\t\t\t\t\t\t(C&oacute;digo:\n\t\t\t\t\t\t\t\t\t\tR00001099218\n\t\t\t\t\t\t\t\t\t\t)\n\t\t\t\t\t\t\t\t\t<\/span>\n<br>\n<span class=\"Rqtd\"><strong>Qtde.:<\/strong>1<\/span><span class=\"RUN\"><strong>UN: <\/strong>UN<\/span><span class=\"RvlUnit\"><strong>Vl. Unit.:<\/strong>\n\t\t\t\t\t\t\t\t\t\t&nbsp;\n\t\t\t\t\t\t\t\t\t\t29,9<\/span><\/td><td class=\"txtTit noWrap\" valign=\"top\" align=\"right\">\n\t\t\t\t\t\t\t\t\tVl. Total\n\t\t\t\t\t\t\t\t\t<br>\n<span class=\"valor\">29,90<\/span><\/td>\n<\/tr>\n<tr id=\"Item + 5\">\n<td valign=\"top\"><span class=\"txtTit\">COXAO DURO FRIB Kg KG<\/span><span class=\"RCod\">\n\t\t\t\t\t\t\t\t\t\t(C&oacute;digo:\n\t\t\t\t\t\t\t\t\t\tR00001195229\n\t\t\t\t\t\t\t\t\t\t)\n\t\t\t\t\t\t\t\t\t<\/span>\n<br>\n<span class=\"Rqtd\"><strong>Qtde.:<\/strong>0,958<\/span><span class=\"RUN\"><strong>UN: <\/strong>KG<\/span><span class=\"RvlUnit\"><strong>Vl. Unit.:<\/strong>\n\t\t\t\t\t\t\t\t\t\t&nbsp;\n\t\t\t\t\t\t\t\t\t\t38,99<\/span><\/td><td class=\"txtTit noWrap\" valign=\"top\" align=\"right\">\n\t\t\t\t\t\t\t\t\tVl. Total\n\t\t\t\t\t\t\t\t\t<br>\n<span class=\"valor\">37,35<\/span><\/td>\n<\/tr>\n<tr id=\"Item + 6\">\n<td valign=\"top\"><span class=\"txtTit\">DOCE LEITE 395GITA UN<\/span><span class=\"RCod\">\n\t\t\t\t\t\t\t\t\t\t(C&oacute;digo:\n\t\t\t\t\t\t\t\t\t\tR00001108815\n\t\t\t\t\t\t\t\t\t\t)\n\t\t\t\t\t\t\t\t\t<\/span>\n<br>\n<span class=\"Rqtd\"><strong>Qtde.:<\/strong>1<\/span><span class=\"RUN\"><strong>UN: <\/strong>UN<\/span><span class=\"RvlUnit\"><strong>Vl. Unit.:<\/strong>\n\t\t\t\t\t\t\t\t\t\t&nbsp;\n\t\t\t\t\t\t\t\t\t\t15,69<\/span><\/td><td class=\"txtTit noWrap\" valign=\"top\" align=\"right\">\n\t\t\t\t\t\t\t\t\tVl. Total\n\t\t\t\t\t\t\t\t\t<br>\n<span class=\"valor\">15,69<\/span><\/td>\n<\/tr>\n<\/table>\n<div class=\"txtRight\" id=\"totalNota\">\n<div id=\"linhaTotal\">\n<label>Qtd. total de itens:<\/label><span class=\"totalNumb\">6<\/span>\n<\/div>\n<div class=\"linhaShade\" id=\"linhaTotal\">\n<label>Valor a pagar R$:<\/label><span class=\"totalNumb txtMax\">94,14<\/span>\n<\/div>\n<div id=\"linhaForma\">\n<label>Forma de pagamento:<\/label><span class=\"totalNumb txtTitR\">Valor pago R$:<\/span>\n<\/div>\n<div id=\"linhaTotal\">\n<label class=\"tx\">\n\t\t\t\t\t\t\t\t\t\t\tCart&atilde;o de D&eacute;bito\n\t\t\t\t\t\t\t\t\t\t<\/label><span class=\"totalNumb\">94,14<\/span>\n<\/div>\n<div id=\"linhaTotal\">\n<label class=\"tx\">Troco <\/label><span class=\"totalNumb\">NaN<\/span>\n<\/div>\n<div class=\"spcTop\" id=\"linhaTotal\">\n<label class=\"txtObs\">Informa&ccedil;&atilde;o dos Tributos Totais Incidentes\n\t\t\t\t\t\t\t\t\t(Lei Federal 12.741/2012)&nbsp;R$<\/label><span class=\"totalNumb txtObs\">5,85<\/span>\n<\/div>\n<\/div>\n<\/div>\n<div class=\"txtCenter\" id=\"infos\">\n<div data-collapsed=\"false\" data-expanded-icon=\"carat-u\" data-collapsed-icon=\"carat-d\" data-role=\"collapsible\">\n<h4>Informa&ccedil;&otilde;es gerais da Nota<\/h4>\n<ul data-inset=\"false\" data-role=\"listview\">\n<li>\n<strong>EMISS&Atilde;O NORMAL<\/strong>\n<br>\n<br>\n<strong>N&uacute;mero: <\/strong>19102<strong> S&eacute;rie: <\/strong>19<strong> Emiss&atilde;o: <\/strong>15/07/2026 19:11:01\n\t\t\t\t\t\t\t\t- Via Consumidor\n\t\t\t\t\t\t\t\t<br>\n<br>\n<strong>Protocolo de Autoriza&ccedil;&atilde;o: <\/strong>152260640278579       15/07/2026 19:11:02<br>\n<br>\n<strong>\n\t\t\t\t\t\t\t\t\t\tAmbiente de Produ&ccedil;&atilde;o -\n\t\t\t\t\t\t\t\t\t\n\t\t\t\t\t\t\t\t\tVers&atilde;o XML:\n\t\t\t\t\t\t\t\t\t4.00\n\t\t\t\t\t\t\t\t\t- Vers&atilde;o XSLT: 2.05\n\t\t\t\t\t\t\t\t<\/strong>\n<\/li>\n<\/ul>\n<\/div>\n<div data-collapsed=\"false\" data-expanded-icon=\"carat-u\" data-collapsed-icon=\"carat-d\" data-role=\"collapsible\">\n<h4>Chave de acesso<\/h4>\n<ul data-inset=\"false\" data-role=\"listview\">\n<li>\n\t\t\t\t\t\t\t\tConsulte pela Chave de Acesso em\n\t\t\t\t\t\t\t\t\n\t\t\t\t\t\t\t\twww.sefaz.go.gov.br/nfce/consulta<br>\n<br>\n<strong>Chave de acesso:<\/strong>\n<br>\n<span class=\"chave\">5226 0739 3468 6102 2483 6501 9000 0191 0211 9038 8509<\/span>\n<\/li>\n<\/ul>\n<\/div>\n<div data-collapsed=\"false\" data-expanded-icon=\"carat-u\" data-collapsed-icon=\"carat-d\" data-role=\"collapsible\">\n<h4>Consumidor<\/h4>\n<ul data-inset=\"false\" data-role=\"listview\">\n<li>\n<strong>CPF: <\/strong>***.***.***-**<\/li>\n<li>\n<strong>Nome: <\/strong>\n<\/li>\n<\/ul>\n<\/div>\n<\/div>\n<\/div>\n'
+      	);
+	</script>
+</div>
+
+	<script charset="utf-8" type="text/javascript">
+        new LoadingBar('Aguarde...');
+	</script>
+</div>
+
+		<script charset="utf-8" type="text/javascript">
+			var _message = {'SUCCESS':[],'ERROR':[],'INFO':[],'WARN':[]};
+			createGlobalMessagesFromResponse(_message);
+		</script>
+
+	</footer>
+
+
+
+
+</body></html>

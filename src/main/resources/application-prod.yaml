@@ -1,0 +1,58 @@
+# Prod profile — activate with SPRING_PROFILES_ACTIVE=prod.
+#
+# Template for the production deploy: overrides every dev-friendly fallback
+# from application.yaml with a REQUIRED env var (no default), so the app
+# FAILS AT STARTUP instead of silently booting with a weak dev value.
+#
+# Required env vars (boot fails if missing):
+#   DATABASE_URL, DB_USERNAME, DB_PASSWORD   — production Postgres
+#   JWT_SECRET                               — >= 256-bit random secret
+#   CORS_ORIGINS                             — real FE origins only, NO localhost
+#
+# Strongly recommended before going live (optional at boot, fail-closed when
+# blank — the feature just stays off):
+#   METRICS_PASSWORD                         — enables Prometheus scraping
+#   REVENUECAT_WEBHOOK_AUTH                  — enables mobile IAP webhook
+#   BILLING_WEBHOOK_SECRET                   — enables the web-billing webhook seam
+#   GOOGLE_OAUTH_CLIENT_IDS / APPLE_OAUTH_CLIENT_IDS — without these the social
+#     login audience check is SKIPPED (token replay risk); set them as soon as
+#     the FE client IDs exist
+#   SMTP_USERNAME / SMTP_PASSWORD + NOTIFICATIONS_EMAIL_ENABLED=true — email
+#   EXPO_ACCESS_TOKEN                        — higher push rate limits
+#   TWILIO_* vars                            — SMS / WhatsApp channels
+#   SUBSCRIPTION_ENFORCE=true                — flips the paywall on (see MONETIZATION.md)
+#   CAPTCHA_PROVIDER=capsolver + CAPTCHA_API_KEY — REQUIRED for MS + SC receipts
+#     (without them those UFs return 503); paid per-solve. Rotate the dev key.
+#   INFOSIMPLES_ENABLED=true + INFOSIMPLES_API_KEY — paid SEFAZ fallback, ~R$0.24
+#     PER QUERY. Leave OFF (default) until the cost is justified. See DEV_NOTES.md.
+#
+# Data note: the EAN catalog (~32k products) is NOT seeded by any migration.
+# A fresh prod DB starts with an EMPTY ean_catalog → barcode/category lookups
+# degrade to dictionary-only until re-imported. See DEV_NOTES.md "EAN catalog".
+
+spring:
+  datasource:
+    url: ${DATABASE_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
+jwt:
+  secret: ${JWT_SECRET}
+
+economizai:
+  cors:
+    allowed-origins: ${CORS_ORIGINS}
+  auth:
+    # NEVER log auth codes (password reset, email verify, phone OTP) in prod —
+    # if SMTP/Twilio are misconfigured we log the failure, not the code. No env
+    # override on purpose.
+    dev-code-log-enabled: false
+
+# No API docs in production — the surface is documented for the FE in API.md
+# and the Postman collection; swagger on a public host only helps attackers map
+# the API.
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

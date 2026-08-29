@@ -1,0 +1,142 @@
+# economizai — local / self-hosted stack
+# ========================================
+# Two usages from ONE file, controlled by Compose profiles:
+#
+#   Backend-dev machine (this Mac) — Postgres only, run the app via Maven:
+#     docker compose up -d db
+#     ./mvnw spring-boot:run
+#
+#   Server machine (hosts backend for everyone) — full stack:
+#     docker compose --profile server up -d --build
+#
+# Defaults below mirror application.yaml's localhost fallbacks, so it runs
+# with no .env. Drop a .env next to this file to override (it's auto-loaded
+# and gitignored). Flyway rebuilds the whole schema on first boot — a fresh
+# empty volume is all you need.
+
+services:
+  db:
+    image: postgres:18-alpine
+    container_name: economizai-db
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-economizai}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-economizai}
+      POSTGRES_DB: economizai
+    ports:
+      - "5432:5432"
+    volumes:
+      # postgres:18+ stores data in a major-version subdir; mount the parent,
+      # not /var/lib/postgresql/data (the old <=17 convention), or initdb refuses to run.
+      - economizai-pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-economizai} -d economizai"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    # cap container log size so a 24/7 box can't fill the disk (3 x 10MB = 30MB)
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  app:
+    build: .
+    container_name: economizai-app
+    profiles: ["server"]            # only starts with: --profile server
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # inside the compose network the DB host is the service name `db`
+      DATABASE_URL: jdbc:postgresql://db:5432/economizai
+      DB_USERNAME: ${DB_USERNAME:-economizai}
+      DB_PASSWORD: ${DB_PASSWORD:-economizai}
+      JWT_SECRET: ${JWT_SECRET:-local-dev-only-secret-not-for-production-must-be-at-least-256-bits-long}
+      # add the FE dev machine + the server's own origin here (comma-separated)
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:8081}
+      NOTIFICATIONS_EMAIL_ENABLED: ${NOTIFICATIONS_EMAIL_ENABLED:-false}
+      # SMTP — auth emails (password reset / verification) send as soon as
+      # USERNAME+PASSWORD are set, independent of NOTIFICATIONS_EMAIL_ENABLED.
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@economiz.ai}
+      # Captcha solver for SEFAZ NFC-e states that gate behind reCAPTCHA.
+      # provider=none (default) → captcha states return 503. Set provider +
+      # api-key in .env to enable (capsolver implemented).
+      CAPTCHA_PROVIDER: ${CAPTCHA_PROVIDER:-none}
+      CAPTCHA_API_KEY: ${CAPTCHA_API_KEY:-}
+      # Infosimples paid SEFAZ fallback (all UFs) when the primary scraper fails.
+      # enabled=false (default) → fallback off. Set both in .env to activate.
+      INFOSIMPLES_ENABLED: ${INFOSIMPLES_ENABLED:-false}
+      INFOSIMPLES_API_KEY: ${INFOSIMPLES_API_KEY:-}
+      # On-demand EAN catalog fill: unknown barcodes are looked up live in the
+      # Open Food/Beauty/Products Facts API and cached-through. ON for this dev
+      # server (covers any country's products without a giant pre-import).
+      EAN_LIVE_FALLBACK_ENABLED: ${EAN_LIVE_FALLBACK_ENABLED:-true}
+      # comma-separated emails auto-promoted to ADMIN on signup/startup
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      # OAuth audience allowlists — empty skips the aud check (dev only)
+      GOOGLE_OAUTH_CLIENT_IDS: ${GOOGLE_OAUTH_CLIENT_IDS:-}
+      APPLE_OAUTH_CLIENT_IDS: ${APPLE_OAUTH_CLIENT_IDS:-}
+      # Prometheus scrape auth — empty leaves /actuator/prometheus locked.
+      METRICS_PASSWORD: ${METRICS_PASSWORD:-}
+      # Billing webhooks — empty leaves each webhook seam disabled (fail-closed).
+      REVENUECAT_WEBHOOK_AUTH: ${REVENUECAT_WEBHOOK_AUTH:-}
+      BILLING_WEBHOOK_SECRET: ${BILLING_WEBHOOK_SECRET:-}
+      # Paywall enforcement — false (default) = all PRO features open in dev.
+      SUBSCRIPTION_ENFORCE: ${SUBSCRIPTION_ENFORCE:-false}
+      # Twilio — SMS / WhatsApp channels; empty degrades gracefully (dev logs OTP).
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_FROM_SMS: ${TWILIO_FROM_SMS:-}
+      TWILIO_FROM_WHATSAPP: ${TWILIO_FROM_WHATSAPP:-}
+      # Expo push — empty uses the anonymous (lower) rate limit.
+      EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN:-}
+      # profile pics live on a named volume (below) so they survive container
+      # rebuilds — /tmp is wiped on every --build redeploy, which silently
+      # orphaned the DB key and made avatars "disappear".
+      PROFILE_PICTURE_DIR: /data/profile-pics
+      # write the app log to the bind-mounted host folder below, so log HISTORY
+      # survives rebuilds/restarts (the in-container json-file log does not).
+      LOG_FILE: /var/log/economizai/app.log
+    volumes:
+      - economizai-profilepics:/data/profile-pics
+      # host-side log folder: persistent, human-readable, rotated by logback
+      # (50MB x 10, 500MB cap). ABSOLUTE machine path (NOT repo-relative) so the
+      # log lives in the machine's data dir, never inside the runner checkout /
+      # OneDrive project tree. Override with LOG_DIR in .env if the data root moves.
+      - ${LOG_DIR:-C:\economizai-data\logs\app}:/var/log/economizai
+    ports:
+      - "8080:10000"                # host 8080 -> container 10000 (Dockerfile port)
+    restart: unless-stopped
+    # keep more app history on disk (10 x 20MB = 200MB) since this is what you debug
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "10"
+
+  # Dozzle — local web UI to view / search / follow container logs in real time.
+  # http://<server>:9999  (LAN-reachable too). Read-only, no log storage of its own.
+  logs:
+    image: amir20/dozzle:latest
+    container_name: economizai-logs
+    profiles: ["server"]
+    volumes:
+      # read-only access to the Docker socket so it can stream container logs
+      - //var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "9999:8080"
+    environment:
+      DOZZLE_NO_ANALYTICS: "true"
+      # only show this project's containers, not every container on the host
+      DOZZLE_FILTER: "name=economizai-"
+    restart: unless-stopped
+
+volumes:
+  economizai-pgdata:
+  economizai-profilepics:

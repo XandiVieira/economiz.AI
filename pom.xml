@@ -10,7 +10,7 @@
 	</parent>
 	<groupId>com.relyon</groupId>
 	<artifactId>economizai</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>0.0.2-SNAPSHOT</version>
 	<name>economizai</name>
 	<description>Collaborative price intelligence from Brazilian NFC-e receipts</description>
 
@@ -19,7 +19,16 @@
 		<jjwt.version>0.12.6</jjwt.version>
 		<jsoup.version>1.18.3</jsoup.version>
 		<zxing.version>3.5.3</zxing.version>
+		<tess4j.version>5.13.0</tess4j.version>
 		<springdoc.version>2.8.6</springdoc.version>
+		<bucket4j.version>8.14.0</bucket4j.version>
+		<nimbus-jose-jwt.version>9.41.2</nimbus-jose-jwt.version>
+
+		<!-- SonarCloud (CI-based analysis — see .github/workflows/sonar.yml) -->
+		<sonar.host.url>https://sonarcloud.io</sonar.host.url>
+		<sonar.organization>relyon</sonar.organization>
+		<sonar.projectKey>XandiVieira_economiz.AI</sonar.projectKey>
+		<sonar.coverage.jacoco.xmlReportPaths>target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
 	</properties>
 
 	<dependencies>
@@ -60,6 +69,33 @@
 			<artifactId>flyway-database-postgresql</artifactId>
 		</dependency>
 
+		<!-- Email -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-mail</artifactId>
+		</dependency>
+
+		<!-- Health endpoint (used by the keep-alive cron + uptime monitors) -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
+		<!-- Caching (dashboard + spend-insights) backed by Caffeine -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-cache</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.github.ben-manes.caffeine</groupId>
+			<artifactId>caffeine</artifactId>
+		</dependency>
+		<!-- Exposes /actuator/prometheus for metrics scraping. -->
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-registry-prometheus</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+
 		<!-- Auth (JWT) -->
 		<dependency>
 			<groupId>io.jsonwebtoken</groupId>
@@ -79,6 +115,13 @@
 			<scope>runtime</scope>
 		</dependency>
 
+		<!-- Social login: verify Google/Apple ID tokens (RS256 JWT + JWKS) -->
+		<dependency>
+			<groupId>com.nimbusds</groupId>
+			<artifactId>nimbus-jose-jwt</artifactId>
+			<version>${nimbus-jose-jwt.version}</version>
+		</dependency>
+
 		<!-- NFC-e parsing: HTML + QR -->
 		<dependency>
 			<groupId>org.jsoup</groupId>
@@ -95,6 +138,14 @@
 			<artifactId>javase</artifactId>
 			<version>${zxing.version}</version>
 		</dependency>
+		<!-- OCR of the printed 44-digit chave (fallback when the QR is unreadable).
+		     Apache-2.0; needs the native Tesseract lib + eng traineddata on the host
+		     (brew install tesseract / apt install tesseract-ocr) — see DEV_NOTES.md. -->
+		<dependency>
+			<groupId>net.sourceforge.tess4j</groupId>
+			<artifactId>tess4j</artifactId>
+			<version>${tess4j.version}</version>
+		</dependency>
 
 		<!-- API docs -->
 		<dependency>
@@ -103,11 +154,38 @@
 			<version>${springdoc.version}</version>
 		</dependency>
 
+		<!-- Rate limiting (in-memory token buckets — see RateLimitFilter) -->
+		<dependency>
+			<groupId>com.bucket4j</groupId>
+			<artifactId>bucket4j_jdk17-core</artifactId>
+			<version>${bucket4j.version}</version>
+		</dependency>
+
 		<!-- Lombok -->
 		<dependency>
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>
 			<optional>true</optional>
+		</dependency>
+
+		<!-- XLSX export of purchase history (user-requested) -->
+		<dependency>
+			<groupId>org.apache.poi</groupId>
+			<artifactId>poi-ooxml</artifactId>
+			<version>5.4.0</version>
+		</dependency>
+
+		<!-- PDF purchase report (tables + charts) -->
+		<dependency>
+			<groupId>com.github.librepdf</groupId>
+			<artifactId>openpdf</artifactId>
+			<version>2.0.3</version>
+		</dependency>
+		<!-- Chart rendering to PNG for the PDF report -->
+		<dependency>
+			<groupId>org.jfree</groupId>
+			<artifactId>jfreechart</artifactId>
+			<version>1.5.5</version>
 		</dependency>
 
 		<!-- Tests -->
@@ -180,6 +258,34 @@
 								</path>
 							</annotationProcessorPaths>
 						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>0.8.12</version>
+				<configuration>
+					<excludes>
+						<exclude>**/EconomizaiApplication.*</exclude>
+						<exclude>**/dto/**</exclude>
+						<exclude>**/model/**</exclude>
+						<exclude>**/config/**</exclude>
+					</excludes>
+				</configuration>
+				<executions>
+					<execution>
+						<id>prepare-agent</id>
+						<goals>
+							<goal>prepare-agent</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>report</id>
+						<phase>test</phase>
+						<goals>
+							<goal>report</goal>
+						</goals>
 					</execution>
 				</executions>
 			</plugin>

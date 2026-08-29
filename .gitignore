@@ -3,6 +3,10 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+# Python bytecode (from .github/scripts)
+__pycache__/
+*.pyc
+
 ### STS ###
 .apt_generated
 .classpath
@@ -31,3 +35,18 @@ build/
 ### VS Code ###
 .vscode/
 .env
+tunnel-proxy-worker/.wrangler/
+postman/live.postman_environment.json
+# Runtime data (DB backups, app/tunnel/watchdog logs, images) lives OUTSIDE the
+# repo in the machine data dir C:\economizai-data (override: ECONOMIZAI_DATA_ROOT).
+# Kept off the project tree so it's never committed or OneDrive-synced. The
+# entries below are defensive: catch stray legacy files if an old script runs.
+stack-watchdog.log
+cf-quick.log
+tunnel.log
+current-tunnel-url.txt
+update-server.log
+db-backups/
+db-backup.log
+logs/
+.claude/scheduled_tasks.lock

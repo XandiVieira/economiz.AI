@@ -2,11 +2,14 @@ package com.relyon.economizai.controller;
 
 import com.relyon.economizai.config.SecurityConfig;
 import com.relyon.economizai.dto.response.PriceHistoryResponse;
+import com.relyon.economizai.dto.response.MarketDiscountResponse;
 import com.relyon.economizai.dto.response.SpendInsightsResponse;
 import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.CategoryView;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.security.JwtService;
+import com.relyon.economizai.service.InsightsQueryService;
 import com.relyon.economizai.service.InsightsService;
 import com.relyon.economizai.service.LocalizedMessageService;
 import org.junit.jupiter.api.Test;
@@ -38,6 +41,7 @@ class InsightsControllerTest {
     @Autowired private MockMvc mockMvc;
 
     @MockitoBean private InsightsService insightsService;
+    @MockitoBean private InsightsQueryService insightsQueryService;
     @MockitoBean private JwtService jwtService;
     @MockitoBean private UserDetailsService userDetailsService;
     @MockitoBean private LocalizedMessageService localizedMessageService;
@@ -51,10 +55,11 @@ class InsightsControllerTest {
     void spend_returnsAggregatedResponse() throws Exception {
         var user = buildUser();
         var response = new SpendInsightsResponse(
-                null, null, new BigDecimal("250.50"),
-                List.of(new SpendInsightsResponse.MonthBucket(2026, 4, new BigDecimal("250.50"), 3L)),
-                List.of(new SpendInsightsResponse.MarketBucket("12345678000190", "Mercado X", new BigDecimal("250.50"), 3L)),
-                List.of(new SpendInsightsResponse.CategoryBucket(ProductCategory.GROCERIES, new BigDecimal("100.00"), 5L))
+                null, null, new BigDecimal("250.50"), new BigDecimal("5.00"),
+                List.of(new SpendInsightsResponse.MonthBucket(2026, 4, new BigDecimal("250.50"), new BigDecimal("5.00"), 3L)),
+                List.of(new SpendInsightsResponse.WeekBucket(2026, 17, new BigDecimal("250.50"), new BigDecimal("5.00"), 3L)),
+                List.of(new SpendInsightsResponse.MarketBucket("12345678000190", "Mercado X", "Mercado X", new BigDecimal("250.50"), new BigDecimal("5.00"), 3L)),
+                List.of(SpendInsightsResponse.CategoryBucket.ofEnum(ProductCategory.GROCERIES, new BigDecimal("100.00"), 5L))
         );
         when(insightsService.spend(any(User.class), any(), any())).thenReturn(response);
 
@@ -70,7 +75,7 @@ class InsightsControllerTest {
     @Test
     void topMarkets_respectsLimit() throws Exception {
         var user = buildUser();
-        var bucket = new SpendInsightsResponse.MarketBucket("123", "Mercado X", new BigDecimal("100"), 2L);
+        var bucket = new SpendInsightsResponse.MarketBucket("123", "Mercado X", "Mercado X", new BigDecimal("100"), new BigDecimal("2.00"), 2L);
         when(insightsService.topMarkets(any(User.class), any(), any(), anyInt())).thenReturn(List.of(bucket));
 
         mockMvc.perform(get("/api/v1/insights/markets/top?limit=3")
@@ -80,23 +85,64 @@ class InsightsControllerTest {
     }
 
     @Test
-    void topCategories_returnsList() throws Exception {
+    void topMarketsByDiscount_returnsRankedList() throws Exception {
         var user = buildUser();
-        var bucket = new SpendInsightsResponse.CategoryBucket(ProductCategory.PRODUCE, new BigDecimal("50"), 7L);
-        when(insightsService.topCategories(any(User.class), any(), any(), anyInt())).thenReturn(List.of(bucket));
+        var market = new MarketDiscountResponse("123", "Mercado X", "Mercado X",
+                new BigDecimal("100.00"), new BigDecimal("9.00"), new BigDecimal("0.0900"), 2L);
+        when(insightsService.topMarketsByDiscount(any(User.class), any(), any(), anyInt()))
+                .thenReturn(List.of(market));
+
+        mockMvc.perform(get("/api/v1/insights/markets/top-discounts?limit=5")
+                        .with(SecurityMockMvcRequestPostProcessors.user(user)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].marketName").value("Mercado X"))
+                .andExpect(jsonPath("$[0].discount").value(9.00))
+                .andExpect(jsonPath("$[0].discountRate").value(0.09));
+    }
+
+    @Test
+    void topCategories_returnsList_defaultsToHouseholdLens() throws Exception {
+        var user = buildUser();
+        var bucket = SpendInsightsResponse.CategoryBucket.ofEnum(ProductCategory.PRODUCE, new BigDecimal("50"), 7L);
+        when(insightsService.topCategories(any(User.class), any(), any(), anyInt(), eq(CategoryView.HOUSEHOLD)))
+                .thenReturn(List.of(bucket));
 
         mockMvc.perform(get("/api/v1/insights/categories/top")
                         .with(SecurityMockMvcRequestPostProcessors.user(user)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].category").value("PRODUCE"));
+                .andExpect(jsonPath("$[0].category").value("PRODUCE"))
+                .andExpect(jsonPath("$[0].label").value("PRODUCE"));
+    }
+
+    @Test
+    void topCategories_passesGlobalLensThrough() throws Exception {
+        var user = buildUser();
+        var bucket = SpendInsightsResponse.CategoryBucket.ofEnum(ProductCategory.BEVERAGES, new BigDecimal("12"), 3L);
+        when(insightsService.topCategories(any(User.class), any(), any(), anyInt(), eq(CategoryView.GLOBAL)))
+                .thenReturn(List.of(bucket));
+
+        mockMvc.perform(get("/api/v1/insights/categories/top?categoryView=GLOBAL")
+                        .with(SecurityMockMvcRequestPostProcessors.user(user)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].category").value("BEVERAGES"));
+    }
+
+    @Test
+    void unknownInsightsPath_returns404NotInternalError() throws Exception {
+        var user = buildUser();
+
+        mockMvc.perform(get("/api/v1/insights/categories")
+                        .with(SecurityMockMvcRequestPostProcessors.user(user)))
+                .andExpect(status().isNotFound());
     }
 
     @Test
     void priceHistory_returnsPoints() throws Exception {
         var user = buildUser();
         var productId = UUID.randomUUID();
-        var response = new PriceHistoryResponse(productId, "Arroz Tio Joao",
-                List.of(new PriceHistoryResponse.PricePoint(LocalDateTime.now(), "Mercado X", new BigDecimal("28.90"), new BigDecimal("2"))));
+        var response = new PriceHistoryResponse(productId, "Arroz Tio Joao", null,
+                List.of(new PriceHistoryResponse.PricePoint(LocalDateTime.now(), "12345678000190",
+                        "Mercado X", "Mercado X", new BigDecimal("28.90"), new BigDecimal("2"))));
         when(insightsService.priceHistory(any(User.class), eq(productId), any(), any())).thenReturn(response);
 
         mockMvc.perform(get("/api/v1/insights/products/" + productId + "/price-history")

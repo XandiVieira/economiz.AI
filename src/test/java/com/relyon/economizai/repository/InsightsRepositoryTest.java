@@ -38,7 +38,10 @@ class InsightsRepositoryTest {
         household = householdRepository.save(Household.builder().inviteCode("TEST01").build());
         var user = userRepository.save(User.builder()
                 .name("Tester").email("test@test.com").password("x")
-                .household(household).build());
+                .household(household)
+                .acceptedTermsVersion("1.0").acceptedPrivacyVersion("1.0")
+                .acceptedLegalAt(LocalDateTime.of(2026, Month.JANUARY, 1, 0, 0))
+                .build());
 
         var groceries = productRepository.save(Product.builder()
                 .ean("789").normalizedName("Arroz").category(ProductCategory.GROCERIES).build());
@@ -46,17 +49,17 @@ class InsightsRepositoryTest {
                 .ean("888").normalizedName("Banana").category(ProductCategory.PRODUCE).build());
 
         receiptRepository.save(buildReceipt(user, "12345678000190", "Mercado A",
-                LocalDateTime.of(2026, 3, 10, 18, 0), new BigDecimal("100.00"),
+                LocalDateTime.of(2026, Month.MARCH, 10, 18, 0), new BigDecimal("100.00"),
                 ReceiptStatus.CONFIRMED, groceries, produce));
         receiptRepository.save(buildReceipt(user, "12345678000190", "Mercado A",
-                LocalDateTime.of(2026, 4, 5, 18, 0), new BigDecimal("80.00"),
+                LocalDateTime.of(2026, Month.APRIL, 5, 18, 0), new BigDecimal("80.00"),
                 ReceiptStatus.CONFIRMED, groceries, null));
         receiptRepository.save(buildReceipt(user, "98765432000111", "Mercado B",
-                LocalDateTime.of(2026, 4, 20, 18, 0), new BigDecimal("50.00"),
+                LocalDateTime.of(2026, Month.APRIL, 20, 18, 0), new BigDecimal("50.00"),
                 ReceiptStatus.CONFIRMED, produce, null));
         // pending — should not appear in aggregates
         receiptRepository.save(buildReceipt(user, "12345678000190", "Mercado A",
-                LocalDateTime.of(2026, 4, 22, 18, 0), new BigDecimal("999.00"),
+                LocalDateTime.of(2026, Month.APRIL, 22, 18, 0), new BigDecimal("999.00"),
                 ReceiptStatus.PENDING_CONFIRMATION, groceries, null));
     }
 
@@ -69,9 +72,12 @@ class InsightsRepositoryTest {
                 .issuedAt(issuedAt).totalAmount(total)
                 .qrPayload("payload").status(status)
                 .build();
+        // Split the total across items so item-totals sum back to the receipt total —
+        // insights now derive sums from non-excluded items rather than the receipt header.
+        var firstShare = second != null ? total.divide(new BigDecimal("2")) : total;
         receipt.addItem(ReceiptItem.builder()
                 .lineNumber(1).rawDescription(first.getNormalizedName())
-                .quantity(BigDecimal.ONE).totalPrice(total.divide(new BigDecimal("2")))
+                .quantity(BigDecimal.ONE).totalPrice(firstShare)
                 .product(first).build());
         if (second != null) {
             receipt.addItem(ReceiptItem.builder()
@@ -82,8 +88,8 @@ class InsightsRepositoryTest {
         return receipt;
     }
 
-    private static final LocalDateTime ALL_TIME_FROM = LocalDateTime.of(1900, 1, 1, 0, 0);
-    private static final LocalDateTime ALL_TIME_TO = LocalDateTime.of(2999, 12, 31, 23, 59);
+    private static final LocalDateTime ALL_TIME_FROM = LocalDateTime.of(1900, Month.JANUARY, 1, 0, 0);
+    private static final LocalDateTime ALL_TIME_TO = LocalDateTime.of(2999, Month.DECEMBER, 31, 23, 59);
 
     @Test
     void totalSpend_excludesPendingAndRespectsRange() {

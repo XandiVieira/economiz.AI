@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<!--
+  Synthetic NFC-e RS fixture carrying an explicit receipt-level discount,
+  mirroring the real SEFAZ "Descontos R$" line. We do NOT distribute it
+  across items — item prices stay gross-as-printed and the discount is
+  tracked at the receipt level (discountTotal).
+
+  Gross line totals: 50,00 + 30,00 = 80,00  (items keep these)
+  Descontos R$: 4,00                          (tracked as discountTotal)
+  Valor a pagar: 76,00                        (totalAmount = what was paid)
+  Invariant: gross item sum (80,00) == totalAmount (76,00) + discount (4,00)
+-->
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>NFC-e RS — discount fixture</title>
+</head>
+<body>
+<div id="conteudo">
+    <div id="u20">
+        <div class="txtTopo">SUPERMERCADO ZAFFARI HIGIENOPOLIS</div>
+        <div class="text">CNPJ: 12.345.678/0001-90</div>
+        <div class="text">Av. Independencia, 1234, Porto Alegre - RS</div>
+    </div>
+
+    <table id="tabResult">
+        <tr>
+            <td>
+                <span class="txtTit">ARROZ TIO J TP1 5KG</span>
+                <span class="RCod">(Código: 7891234567890)</span>
+                <span class="Rqtde">Qtde.: 2</span>
+                <span class="RUN">UN: UN</span>
+                <span class="RvlUnit">Vl. Unit.: 25,00</span>
+            </td>
+            <td>
+                <span class="valor">50,00</span>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <span class="txtTit">LEITE INTEGRAL ELEGE 1L</span>
+                <span class="RCod">(Código: 7899876543210)</span>
+                <span class="Rqtde">Qtde.: 1</span>
+                <span class="RUN">UN: UN</span>
+                <span class="RvlUnit">Vl. Unit.: 30,00</span>
+            </td>
+            <td>
+                <span class="valor">30,00</span>
+            </td>
+        </tr>
+    </table>
+
+    <div id="linhaTotal"><label>Descontos R$:</label><span class="totalNumb">4,00</span></div>
+    <div id="totalNota">
+        <span class="totalNumb txtMax">76,00</span>
+    </div>
+
+    <ul>
+        <li><strong>Emissão:</strong> 15/04/2026 18:32:45</li>
+        <li>Chave de Acesso: 4326 0412 3456 7800 0190 6500 1000 0123 4511 2345 6780</li>
+    </ul>
+</div>
+</body>
+</html>

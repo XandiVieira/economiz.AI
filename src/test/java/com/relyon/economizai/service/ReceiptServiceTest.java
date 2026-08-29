@@ -2,38 +2,66 @@ package com.relyon.economizai.service;
 
 import com.relyon.economizai.dto.request.SubmitReceiptRequest;
 import com.relyon.economizai.dto.request.UpdateReceiptItemRequest;
+import com.relyon.economizai.exception.InvalidItemPriceException;
+import com.relyon.economizai.exception.ManualChaveUnsupportedException;
+import com.relyon.economizai.exception.PaywallException;
 import com.relyon.economizai.exception.ReceiptAlreadyIngestedException;
 import com.relyon.economizai.exception.ReceiptItemNotFoundException;
 import com.relyon.economizai.exception.ReceiptNotEditableException;
 import com.relyon.economizai.exception.ReceiptNotFoundException;
+import com.relyon.economizai.exception.UnsupportedMerchantException;
 import com.relyon.economizai.model.Household;
+import com.relyon.economizai.dto.response.ReceiptItemResponse;
+import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.Receipt;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.model.enums.ReceiptStatus;
 import com.relyon.economizai.model.enums.UnidadeFederativa;
 import com.relyon.economizai.repository.ReceiptItemRepository;
 import com.relyon.economizai.repository.ReceiptRepository;
+import com.relyon.economizai.service.HouseholdProductAliasService;
+import com.relyon.economizai.service.LocalizedMessageService;
+import com.relyon.economizai.service.cache.HouseholdCacheGen;
 import com.relyon.economizai.service.canonicalization.CanonicalizationService;
+import com.relyon.economizai.service.geo.MarketLocationService;
+import com.relyon.economizai.service.geo.MarketNameService;
+import com.relyon.economizai.service.geo.MerchantSupportGate;
+import com.relyon.economizai.service.notifications.SavingsAttributionService;
+import com.relyon.economizai.service.priceindex.PriceIndexService;
+import com.relyon.economizai.service.priceindex.PromoDetector;
+import com.relyon.economizai.service.sefaz.ChaveAcessoParser;
 import com.relyon.economizai.service.sefaz.ParsedReceipt;
 import com.relyon.economizai.service.sefaz.ParsedReceiptItem;
+import com.relyon.economizai.service.sefaz.ReceiptIngestionService;
 import com.relyon.economizai.service.sefaz.SefazIngestionService;
+import com.relyon.economizai.service.subscription.SubscriptionGateService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -42,13 +70,105 @@ import static org.mockito.Mockito.when;
 class ReceiptServiceTest {
 
     private static final String CHAVE_RS = "43260412345678000190650010000123451123456780";
+    // A scanned RS QR (full signed URL). Submit's manual-chave guard rejects a
+    // BARE RS chave (gov.br wall), so the happy-path submit tests use the URL a
+    // real scan produces; it still resolves to CHAVE_RS server-side.
+    private static final String QR_RS =
+            "https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx?p=" + CHAVE_RS + "|2|1|1|hash";
 
     @Mock private ReceiptRepository receiptRepository;
     @Mock private ReceiptItemRepository receiptItemRepository;
     @Mock private SefazIngestionService sefazIngestionService;
+    @Mock private ReceiptIngestionService receiptIngestionService;
     @Mock private CanonicalizationService canonicalizationService;
+    @Mock private PriceIndexService priceIndexService;
+    @Mock private PromoDetector promoDetector;
+    @Mock private MarketLocationService marketLocationService;
+    @Mock private HouseholdProductAliasService householdProductAliasService;
+    @Mock private HouseholdProductCategoryOverrideService categoryOverrideService;
+    @Mock private HouseholdCacheGen householdCacheGen;
+    @Mock private MarketNameService marketNameService;
+    @Mock private SubscriptionGateService subscriptionGate;
+    @Mock private SavingsAttributionService savingsAttributionService;
+    @Mock private LocalizedMessageService localizedMessageService;
+    @Mock private MerchantSupportGate merchantSupportGate;
 
     @InjectMocks private ReceiptService receiptService;
+
+    @BeforeEach
+    void stubMarketNames() {
+        lenient().when(marketNameService.resolve(any(), any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(2));
+        lenient().when(marketNameService.resolveNames(any(), any())).thenReturn(Map.of());
+        lenient().when(marketNameService.applyOverride(any(), any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(2));
+        // Default: PRO (unlimited) so the monthly cap is bypassed in existing tests.
+        lenient().when(subscriptionGate.monthlyReceiptLimit(any())).thenReturn(Integer.MAX_VALUE);
+        lenient().when(sefazIngestionService.resolveChave(any()))
+                .thenAnswer(invocation -> ChaveAcessoParser.extractChave(invocation.getArgument(0)));
+        lenient().when(canonicalizationService.previewCategory(any())).thenReturn(Optional.empty());
+    }
+
+    @Test
+    void get_pendingReceipt_fillsUnlinkedItemCategoriesWithBestEffortPreview() {
+        var user = buildUser();
+        var receipt = persistedReceipt(user, ReceiptStatus.PENDING_CONFIRMATION); // item has no product
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
+        when(canonicalizationService.previewCategory(any())).thenReturn(Optional.of(ProductCategory.GROCERIES));
+
+        var response = receiptService.get(user, receipt.getId());
+
+        assertEquals("GROCERIES", response.items().get(0).category(),
+                "review screen should preview the confirm-time category");
+        assertNull(response.items().get(0).productId(), "item stays unlinked until confirm");
+    }
+
+    @Test
+    void get_confirmedReceipt_doesNotSuggestForUnlinkedItems() {
+        var user = buildUser();
+        var receipt = persistedReceipt(user, ReceiptStatus.CONFIRMED);
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
+
+        var response = receiptService.get(user, receipt.getId());
+
+        assertNull(response.items().get(0).category());
+        verify(canonicalizationService, never()).previewCategory(any());
+    }
+
+    @Test
+    void updateItemCategory_unlinkedItem_linksOrCreatesProductThenOverrides() {
+        var user = buildUser();
+        var receipt = persistedReceipt(user, ReceiptStatus.CONFIRMED); // item has no product
+        var item = receipt.getItems().get(0);
+        var created = Product.builder().id(UUID.randomUUID()).normalizedName("ARROZ TIO J 5KG").build();
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
+        // Canonicalizer creates/links the product for the unrecognized item.
+        when(canonicalizationService.linkOrCreateProduct(receipt, item)).thenReturn(created);
+
+        receiptService.updateItemCategory(user, receipt.getId(), item.getId(), ProductCategory.GROCERIES);
+
+        verify(canonicalizationService).linkOrCreateProduct(receipt, item);
+        verify(categoryOverrideService).setOverride(user, created, ProductCategory.GROCERIES);
+    }
+
+    @Test
+    void updateItemCategory_recordsHouseholdOverrideAndAppliesIt() {
+        var user = buildUser();
+        var product = Product.builder().id(UUID.randomUUID()).normalizedName("ARROZ TIO J 5KG")
+                .category(ProductCategory.OTHER).build();
+        var receipt = persistedReceipt(user, ReceiptStatus.CONFIRMED);
+        var item = receipt.getItems().get(0);
+        item.setProduct(product);
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
+        when(categoryOverrideService.overridesByProduct(eq(user.getHousehold().getId()), any()))
+                .thenReturn(Map.of(product.getId(), "GROCERIES"));
+
+        var response = receiptService.updateItemCategory(user, receipt.getId(), item.getId(), ProductCategory.GROCERIES);
+
+        verify(categoryOverrideService).setOverride(user, product, ProductCategory.GROCERIES);
+        assertEquals("GROCERIES", response.items().get(0).category(), "household override shown, global stays OTHER");
+        assertEquals(ProductCategory.OTHER, product.getCategory(), "global product untouched");
+    }
 
     private User buildUser() {
         var household = Household.builder().id(UUID.randomUUID()).inviteCode("ABC123").build();
@@ -70,7 +190,7 @@ class ReceiptServiceTest {
                 .cnpjEmitente("12345678000190")
                 .marketName("Mercado X")
                 .marketAddress("Rua Y, 123")
-                .issuedAt(LocalDateTime.of(2026, 4, 15, 18, 0))
+                .issuedAt(LocalDateTime.of(2026, Month.APRIL, 15, 18, 0))
                 .totalAmount(new BigDecimal("57.80"))
                 .sourceUrl(null)
                 .rawHtml("<html/>")
@@ -109,46 +229,226 @@ class ReceiptServiceTest {
     }
 
     @Test
-    void submit_persistsParsedReceiptInPendingStatus() {
+    void submit_persistsProcessingAndDispatchesIngestion() {
         var user = buildUser();
-        when(receiptRepository.existsByChaveAcesso(CHAVE_RS)).thenReturn(false);
-        when(sefazIngestionService.ingest(CHAVE_RS)).thenReturn(sampleParsed());
+        when(receiptRepository.findByHouseholdIdAndChaveAcesso(any(), eq(CHAVE_RS))).thenReturn(Optional.empty());
         when(receiptRepository.save(any(Receipt.class))).thenAnswer(inv -> {
             var r = inv.<Receipt>getArgument(0);
             r.setId(UUID.randomUUID());
             return r;
         });
 
-        var response = receiptService.submit(user, new SubmitReceiptRequest(CHAVE_RS));
+        var response = receiptService.submit(user, new SubmitReceiptRequest(QR_RS));
 
+        // submit returns immediately as PROCESSING (no SEFAZ work on the request thread)
         assertNotNull(response.id());
-        assertEquals(ReceiptStatus.PENDING_CONFIRMATION, response.status());
-        assertEquals(1, response.items().size());
-        assertEquals("ARROZ TIO J 5KG", response.items().get(0).rawDescription());
+        assertEquals(ReceiptStatus.PROCESSING, response.status());
+        verify(sefazIngestionService, never()).fetch(any());
+        // the slow ingestion is handed off to the background service
+        verify(receiptIngestionService).ingest(eq(response.id()), eq(QR_RS));
     }
 
     @Test
-    void submit_rejectsDuplicateChave() {
+    void submit_rejectsKnownBlockedMerchantWithoutStoringAnything() {
         var user = buildUser();
-        when(receiptRepository.existsByChaveAcesso(CHAVE_RS)).thenReturn(true);
+        when(merchantSupportGate.isKnownBlockedCnpj("12345678000190")).thenReturn(true);
 
-        assertThrows(ReceiptAlreadyIngestedException.class,
+        assertThrows(UnsupportedMerchantException.class,
+                () -> receiptService.submit(user, new SubmitReceiptRequest(QR_RS)));
+
+        verify(receiptRepository, never()).save(any());
+        verify(receiptIngestionService, never()).ingest(any(), any());
+    }
+
+    @Test
+    void submit_rejectsBareRsChaveWithLocalizedError() {
+        var user = buildUser();
+
+        // A manually-typed bare RS chave can't be looked up (gov.br wall) — reject
+        // up front, before spending any async work or paid fallback.
+        assertThrows(ManualChaveUnsupportedException.class,
                 () -> receiptService.submit(user, new SubmitReceiptRequest(CHAVE_RS)));
 
         verify(receiptRepository, never()).save(any());
+        verify(receiptIngestionService, never()).ingest(any(), any());
+    }
+
+    @Test
+    void submit_throwsPaywallWhenFreeUserAtMonthlyCap() {
+        var user = buildUser();
+        when(subscriptionGate.monthlyReceiptLimit(any())).thenReturn(5);
+        when(receiptRepository.countByUserIdAndCreatedAtGreaterThanEqual(eq(user.getId()), any()))
+                .thenReturn(5L);
+
+        var request = new SubmitReceiptRequest(QR_RS);
+        assertThrows(PaywallException.class,
+                () -> receiptService.submit(user, request));
+
+        verify(receiptIngestionService, never()).ingest(any(), any());
+        verify(receiptRepository, never()).save(any());
+    }
+
+    @Test
+    void submit_allowsWhenFreeUserUnderMonthlyCap() {
+        var user = buildUser();
+        when(subscriptionGate.monthlyReceiptLimit(any())).thenReturn(5);
+        when(receiptRepository.countByUserIdAndCreatedAtGreaterThanEqual(eq(user.getId()), any()))
+                .thenReturn(2L);
+        when(receiptRepository.findByHouseholdIdAndChaveAcesso(any(), eq(CHAVE_RS))).thenReturn(Optional.empty());
+        when(receiptRepository.save(any(Receipt.class))).thenAnswer(inv -> {
+            var r = inv.<Receipt>getArgument(0);
+            r.setId(UUID.randomUUID());
+            return r;
+        });
+
+        var response = receiptService.submit(user, new SubmitReceiptRequest(QR_RS));
+
+        assertEquals(ReceiptStatus.PROCESSING, response.status());
+        verify(receiptIngestionService).ingest(eq(response.id()), eq(QR_RS));
+    }
+
+    @Test
+    void submit_rejectsDuplicateOnlyWhenPriorIsConfirmed() {
+        var user = buildUser();
+        var existingConfirmed = persistedReceipt(user, ReceiptStatus.CONFIRMED);
+        when(receiptRepository.findByHouseholdIdAndChaveAcesso(any(), eq(CHAVE_RS)))
+                .thenReturn(Optional.of(existingConfirmed));
+
+        var request = new SubmitReceiptRequest(QR_RS);
+        assertThrows(ReceiptAlreadyIngestedException.class,
+                () -> receiptService.submit(user, request));
+
+        verify(receiptRepository, never()).save(any());
+        verify(receiptRepository, never()).delete(any(Receipt.class));
+    }
+
+    @Test
+    void submit_replacesPriorPendingReceiptInsteadOfBlocking() {
+        // FE-reported bug: user closed the app mid-review, then can't re-scan.
+        // Non-CONFIRMED prior rows must be deleted to make room for the fresh submission.
+        var user = buildUser();
+        var stale = persistedReceipt(user, ReceiptStatus.PENDING_CONFIRMATION);
+        when(receiptRepository.findByHouseholdIdAndChaveAcesso(any(), eq(CHAVE_RS)))
+                .thenReturn(Optional.of(stale));
+        when(receiptRepository.save(any(Receipt.class))).thenAnswer(inv -> {
+            var r = inv.<Receipt>getArgument(0);
+            r.setId(UUID.randomUUID());
+            return r;
+        });
+
+        var response = receiptService.submit(user, new SubmitReceiptRequest(QR_RS));
+
+        // delete(T) and delete(DeleteSpecification<T>) overload conflict — use
+        // an explicitly-typed captor to disambiguate, then check identity.
+        var captor = ArgumentCaptor.forClass(Receipt.class);
+        verify(receiptRepository).delete(captor.capture());
+        assertEquals(stale.getId(), captor.getValue().getId());
+        assertEquals(ReceiptStatus.PROCESSING, response.status());
+    }
+
+    @Test
+    void delete_callsRepositoryDeleteForOwnedReceipt() {
+        var user = buildUser();
+        var receipt = persistedReceipt(user, ReceiptStatus.CONFIRMED);
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
+
+        receiptService.delete(user, receipt.getId());
+
+        var captor = ArgumentCaptor.forClass(Receipt.class);
+        verify(receiptRepository).delete(captor.capture());
+        assertEquals(receipt.getId(), captor.getValue().getId());
+    }
+
+    @Test
+    void delete_throwsWhenReceiptBelongsToAnotherHousehold() {
+        var user = buildUser();
+        var stranger = buildUser();
+        var receipt = persistedReceipt(stranger, ReceiptStatus.CONFIRMED);
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
+        var receiptId = receipt.getId();
+
+        assertThrows(ReceiptNotFoundException.class, () -> receiptService.delete(user, receiptId));
+        verify(receiptRepository, never()).delete(any(Receipt.class));
+    }
+
+    @Test
+    void delete_throwsWhenReceiptDoesNotExist() {
+        var user = buildUser();
+        var missingId = UUID.randomUUID();
+        when(receiptRepository.findByIdWithItemsAndProducts(missingId)).thenReturn(Optional.empty());
+
+        assertThrows(ReceiptNotFoundException.class, () -> receiptService.delete(user, missingId));
+        verify(receiptRepository, never()).delete(any(Receipt.class));
     }
 
     @Test
     void confirm_marksReceiptConfirmedAndStampsTime() {
         var user = buildUser();
         var receipt = persistedReceipt(user, ReceiptStatus.PENDING_CONFIRMATION);
-        when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
         when(receiptRepository.save(receipt)).thenReturn(receipt);
+        when(promoDetector.detectPersonalPromos(receipt)).thenReturn(List.of());
 
-        var response = receiptService.confirm(user, receipt.getId());
+        var response = receiptService.confirm(user, receipt.getId(), null);
 
-        assertEquals(ReceiptStatus.CONFIRMED, response.status());
-        assertNotNull(response.confirmedAt());
+        assertEquals(ReceiptStatus.CONFIRMED, response.receipt().status());
+        assertNotNull(response.receipt().confirmedAt());
+        assertEquals(0, response.personalPromos().size());
+    }
+
+    @Test
+    void confirm_snapshotsCategoryFromLinkedProduct() {
+        var user = buildUser();
+        var receipt = persistedReceipt(user, ReceiptStatus.PENDING_CONFIRMATION);
+        var item = receipt.getItems().get(0);
+        var product = Product.builder().id(UUID.randomUUID())
+                .normalizedName("ARROZ TIO J 5KG").category(ProductCategory.GROCERIES).build();
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
+        when(receiptRepository.save(receipt)).thenReturn(receipt);
+        when(promoDetector.detectPersonalPromos(receipt)).thenReturn(List.of());
+        // canonicalize() links the item during confirm — simulate that side effect.
+        when(canonicalizationService.canonicalize(receipt)).thenAnswer(invocation -> {
+            item.setProduct(product);
+            return null;
+        });
+
+        receiptService.confirm(user, receipt.getId(), null);
+
+        assertEquals(ProductCategory.GROCERIES, item.getCategoryAtConfirmation(),
+                "category must be frozen at confirmation time");
+    }
+
+    @Test
+    void itemResponse_prefersSnapshotOverLiveProductCategory() {
+        var product = Product.builder().id(UUID.randomUUID())
+                .normalizedName("ARROZ").category(ProductCategory.OTHER).build(); // live category drifted
+        var item = ReceiptItem.builder()
+                .id(UUID.randomUUID()).lineNumber(1).rawDescription("ARROZ TIO J 5KG")
+                .quantity(BigDecimal.ONE).totalPrice(new BigDecimal("28.90"))
+                .product(product)
+                .categoryAtConfirmation(ProductCategory.GROCERIES) // what the user saw
+                .build();
+
+        var response = ReceiptItemResponse.from(item);
+
+        assertEquals("GROCERIES", response.category(),
+                "confirmed history shows the snapshot, not the drifted live category");
+    }
+
+    @Test
+    void confirm_succeedsEvenWhenSavingsAttributionThrows() {
+        var user = buildUser();
+        var receipt = persistedReceipt(user, ReceiptStatus.PENDING_CONFIRMATION);
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
+        when(receiptRepository.save(receipt)).thenReturn(receipt);
+        when(promoDetector.detectPersonalPromos(receipt)).thenReturn(List.of());
+        doThrow(new RuntimeException("boom")).when(savingsAttributionService).attribute(receipt);
+
+        var response = receiptService.confirm(user, receipt.getId(), null);
+
+        // Attribution is best-effort analytics — its failure must never break confirm.
+        assertEquals(ReceiptStatus.CONFIRMED, response.receipt().status());
+        verify(savingsAttributionService).attribute(receipt);
     }
 
     @Test
@@ -156,20 +456,22 @@ class ReceiptServiceTest {
         var user = buildUser();
         var stranger = buildUser();
         var receipt = persistedReceipt(stranger, ReceiptStatus.PENDING_CONFIRMATION);
-        when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
+        var receiptId = receipt.getId();
 
         assertThrows(ReceiptNotFoundException.class,
-                () -> receiptService.confirm(user, receipt.getId()));
+                () -> receiptService.confirm(user, receiptId, null));
     }
 
     @Test
     void confirm_throwsWhenAlreadyConfirmed() {
         var user = buildUser();
         var receipt = persistedReceipt(user, ReceiptStatus.CONFIRMED);
-        when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
+        var receiptId = receipt.getId();
 
         assertThrows(ReceiptNotEditableException.class,
-                () -> receiptService.confirm(user, receipt.getId()));
+                () -> receiptService.confirm(user, receiptId, null));
     }
 
     @Test
@@ -177,42 +479,94 @@ class ReceiptServiceTest {
         var user = buildUser();
         var receipt = persistedReceipt(user, ReceiptStatus.PENDING_CONFIRMATION);
         var item = receipt.getItems().get(0);
-        when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
 
         var request = new UpdateReceiptItemRequest(
-                "ARROZ TIO JOAO TIPO 1 5KG",
+                "IGNORED — rawDescription is immutable",
                 "7891234567890",
                 new BigDecimal("3"),
                 "UN",
                 new BigDecimal("28.90"),
-                new BigDecimal("86.70")
+                new BigDecimal("86.70"),
+                null,
+                "Arroz Tio João 5kg",
+                null,
+                null
         );
 
         var response = receiptService.updateItem(user, receipt.getId(), item.getId(), request);
 
-        assertEquals("ARROZ TIO JOAO TIPO 1 5KG", response.items().get(0).rawDescription());
-        assertEquals(new BigDecimal("3"), response.items().get(0).quantity());
-        assertEquals(new BigDecimal("86.70"), response.items().get(0).totalPrice());
+        var updated = response.items().get(0);
+        // rawDescription stays as the original (immutable audit text)
+        assertEquals("ARROZ TIO J 5KG", updated.rawDescription());
+        // friendlyDescription captures the user's display rename
+        assertEquals("Arroz Tio João 5kg", updated.friendlyDescription());
+        // displayDescription is the resolved field — friendly when set, raw otherwise
+        assertEquals("Arroz Tio João 5kg", updated.displayDescription());
+        assertEquals(new BigDecimal("3"), updated.quantity());
+        assertEquals(new BigDecimal("86.70"), updated.totalPrice());
+    }
+
+    @Test
+    void updateItem_recordsPaidPriceAndDerivesUnitForDiscountedLine() {
+        var user = buildUser();
+        var receipt = persistedReceipt(user, ReceiptStatus.PENDING_CONFIRMATION);
+        var item = receipt.getItems().get(0);
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
+
+        // Original line: qty 2 × 10.00 = 20.00 as-printed; user paid 15.00 on promo.
+        var request = new UpdateReceiptItemRequest(
+                null, item.getEan(), new BigDecimal("2"), item.getUnit(),
+                new BigDecimal("10.00"), new BigDecimal("20.00"),
+                null, null, null, new BigDecimal("15.00"));
+
+        var response = receiptService.updateItem(user, receipt.getId(), item.getId(), request);
+
+        var updated = response.items().get(0);
+        assertEquals(new BigDecimal("20.00"), updated.totalPrice()); // original stays as-printed
+        assertEquals(0, updated.paidTotalPrice().compareTo(new BigDecimal("15.00")));
+        assertEquals(0, updated.paidUnitPrice().compareTo(new BigDecimal("7.5000"))); // 15.00 ÷ 2
+        assertTrue(updated.promotional());
+    }
+
+    @Test
+    void updateItem_paidPriceAboveOriginal_throws() {
+        var user = buildUser();
+        var receipt = persistedReceipt(user, ReceiptStatus.PENDING_CONFIRMATION);
+        var item = receipt.getItems().get(0);
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
+
+        var request = new UpdateReceiptItemRequest(
+                null, item.getEan(), new BigDecimal("1"), item.getUnit(),
+                new BigDecimal("10.00"), new BigDecimal("10.00"),
+                null, null, null, new BigDecimal("12.00"));
+        var receiptId = receipt.getId();
+        var itemId = item.getId();
+
+        assertThrows(InvalidItemPriceException.class,
+                () -> receiptService.updateItem(user, receiptId, itemId, request));
     }
 
     @Test
     void updateItem_throwsForUnknownItem() {
         var user = buildUser();
         var receipt = persistedReceipt(user, ReceiptStatus.PENDING_CONFIRMATION);
-        when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
 
         var request = new UpdateReceiptItemRequest("X", null,
-                new BigDecimal("1"), null, null, new BigDecimal("1"));
+                new BigDecimal("1"), null, null, new BigDecimal("1"), null, null, null, null);
+        var receiptId = receipt.getId();
+        var missingItemId = UUID.randomUUID();
 
         assertThrows(ReceiptItemNotFoundException.class,
-                () -> receiptService.updateItem(user, receipt.getId(), UUID.randomUUID(), request));
+                () -> receiptService.updateItem(user, receiptId, missingItemId, request));
     }
 
     @Test
     void reject_marksReceiptRejected() {
         var user = buildUser();
         var receipt = persistedReceipt(user, ReceiptStatus.PENDING_CONFIRMATION);
-        when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findByIdWithItemsAndProducts(receipt.getId())).thenReturn(Optional.of(receipt));
         when(receiptRepository.save(receipt)).thenReturn(receipt);
 
         var response = receiptService.reject(user, receipt.getId());

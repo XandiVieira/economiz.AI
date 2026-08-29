@@ -1,0 +1,13 @@
+-- PRO-44 follow-up: when a household shopped together with someone outside
+-- the household, only some items belong to them. The user needs to mark
+-- the others as excluded at confirm time (or later via PATCH).
+--
+-- Excluded items stay on the receipt for audit (the original NF is a legal
+-- document, we don't rewrite it) but:
+--   - don't contribute to PriceObservations (collaborative panel)
+--   - don't count toward spend / category insights
+--   - don't feed consumption-cadence predictions
+--   - don't surface in the price-history chart
+--
+-- Default false → existing rows behave exactly as before.
+ALTER TABLE receipt_items ADD COLUMN excluded BOOLEAN NOT NULL DEFAULT FALSE;

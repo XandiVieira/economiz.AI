@@ -10,6 +10,7 @@ class EconomizaiApplicationTests {
 
 	@Test
 	void contextLoads() {
+		// Smoke test: passes if the Spring application context starts without errors.
 	}
 
 }

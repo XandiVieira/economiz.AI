@@ -1,0 +1,45 @@
+#!/bin/sh
+# economizai pre-push: Flyway duplicate-version guard.
+#
+# If two migrations claim the same Vnn, this auto-renumbers the NEWCOMER (the
+# file not yet on origin) to the next free version, stages the rename, and then
+# BLOCKS this push so you can commit the rename and push again. Auto-renaming
+# silently into the in-flight push would rewrite what you're pushing behind your
+# back; blocking once keeps it explicit and your history clean.
+#
+# Enable once per clone:  git config core.hooksPath .githooks
+# Bypass (not recommended): git push --no-verify
+branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
+[ -z "$branch" ] && branch="development"
+
+# Snapshot the migration dir, run the fixer, then compare to detect a rename.
+before="$(git status --porcelain -- src/main/resources/db/migration 2>/dev/null)"
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass \
+  -File "scripts/flyway-dedupe.ps1" -Fix -Branch "$branch"
+rc=$?
+
+if [ "$rc" = "2" ]; then
+  echo "pre-push: flyway-dedupe errored; allowing push (guard skipped)." >&2
+  exit 0
+fi
+
+after="$(git status --porcelain -- src/main/resources/db/migration 2>/dev/null)"
+
+if [ "$before" != "$after" ]; then
+  echo "" >&2
+  echo "pre-push BLOCKED: a duplicate Flyway version was auto-renumbered (staged above)." >&2
+  echo "  Commit the rename and push again, e.g.:" >&2
+  echo "    git commit -m 'fix(db): renumber duplicate migration version'" >&2
+  echo "    git push" >&2
+  exit 1
+fi
+
+# rc 1 = collision the script refused to auto-fix (e.g. both already on origin).
+if [ "$rc" = "1" ]; then
+  echo "" >&2
+  echo "pre-push BLOCKED: unresolved Flyway version collision (see above). Needs manual fix." >&2
+  exit 1
+fi
+
+exit 0

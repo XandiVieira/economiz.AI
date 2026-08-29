@@ -16,3 +16,10 @@ spring:
 jwt:
   secret: test-secret-key-must-be-at-least-256-bits-long-for-hs256-signing-algorithm
   expiration: 3600000
+
+management:
+  health:
+    # Mail health indicator tries to ping the SMTP server on every /health
+    # call — fine in prod (real SMTP), but flaky in tests (no SMTP server).
+    mail:
+      enabled: false

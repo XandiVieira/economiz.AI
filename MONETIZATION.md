@@ -7,39 +7,91 @@ their area, even if the actual paywall is unenforced for months.
 
 ## Revenue Models (by priority)
 
-### 1. Freemium — economizai Pro (R$9.90/month)
+### 1. Freemium — economizai Pro (R$9.90/month, R$89/year)
 
-**Free tier:**
-- Up to 5 receipts/month uploaded
-- Last 90 days of personal history
-- Basic spend dashboard (current month only)
-- Reference price for any product (collaborative index — read-only)
-- Ads on dashboards and between list results
+**Pricing rationale.** Anchor against streaming (R$25–R$45/mo) and Nubank Ultravioleta
+(R$24/mo) — clearly less than one streaming service. Annual pricing offers ~25%
+discount to reduce churn. The "I save R$X/mo on groceries" pitch needs the price
+small enough that the comparison is unflattering — R$9.90 is "the difference is
+one box of milk".
 
-**Pro tier:**
-- Unlimited receipt uploads
-- Unlimited history
-- Full price-evolution charts (any range)
-- Stock-out predictions and suggested shopping lists
-- Cross-market basket optimization ("split this list across nearest markets to save R$X")
-- Price-drop alerts on favorited products
-- Ad-free experience
-- Personal inflation index (basket-level IPCA equivalent)
-- Receipt export (CSV/JSON)
-- Priority support
-- Exclusive badge ("Apoiador")
+#### Built feature → tier matrix (as of 2026-05-01)
 
-**Why this works:** Heavy users (people grocery-shopping weekly for a family)
-hit the 5-receipt cap in a week. The Pro features (predictions, alerts,
-optimization) directly translate to money saved — the pitch writes itself.
+This maps what's *already shipped* to where it should live. Anything in the
+"Future" column is on the roadmap but not built yet; columns are aspirational.
 
-**Implementation needed:**
-- `User.subscriptionTier` (FREE/PRO) + `Subscription` entity
-- Receipt upload counter middleware (FREE check)
-- History range gate at query layer
-- Feature flags table (so we can roll Pro features out gradually)
-- Payment gateway (Stripe Brasil or Pagar.me — Pix-friendly)
-- Push notification system for price-drop alerts (Phase 3+)
+| Capability | FREE | PRO | Notes |
+|---|---|---|---|
+| Submit NFC-e receipt | ✅ (5/month) | ✅ unlimited | Counter middleware, easy gate. Heavy users hit 5 in a week. |
+| Receipt history | last **90 days** | unlimited | Query-layer gate on `issuedAt`. Cheap to implement, painful to discover (user opens app, sees their old data is gone). |
+| Spend dashboard `/insights/spend` | current month only | full range | Same gate as history. |
+| Top markets / categories | top 3 | top 10+ | Hard cap on `?limit` for FREE. |
+| Price history per product | current month | full | Same gate. |
+| Reference price (community) | ✅ | ✅ | Collaborative read — keep open to drive panel value perception. |
+| Best markets ranking | top 3 nearby | top 10 + watchlist + radius filter | Watchlist is FREE for first 3 markets, unlimited for PRO. |
+| Watched markets | up to **3** pinned | unlimited | Concrete, easy gate, real upgrade pressure for power users. |
+| Community promos (`/price-index/promos`) | last 7 days | full lookback + push | Same data, different freshness window. |
+| Personal promo detection | ✅ on confirm | ✅ on confirm | Free — it's the magic-moment hook on every receipt. |
+| Personal promo notifications | in-app only | push + email | The "alert me when my common stuff drops" loop. |
+| Consumption predictions (`/consumption/predictions`) | view-only | view + push when "RUNNING_LOW" | Predictions are visible, the *push* is paid. |
+| Suggested shopping list | view-only | view + basket optimization across markets | Optimization is the hard PRO sell — turns a list into "go to market A for these, B for those, save R$Y". |
+| Auto-derived preferences (`/preferences`) | view-only | view + manual override (AVOID/MUST_HAVE) | Auto-derivation for free, manual control paid. AVOID specifically can't be auto-derived → natural gate. |
+| Household sharing | up to **2 users** | up to 6 (Family plan, see §5) | Need a member-count gate at household join. |
+| Notification preferences | per-type channel choice | + custom alert rules per product | "Alert me when leite Italac < R$6 anywhere within 5km" — power feature. |
+| Data export (LGPD) | ✅ | ✅ | LGPD-mandated, never gated. |
+| Account deletion | ✅ | ✅ | LGPD-mandated. |
+| Ads on dashboards | shown | hidden | See §4. |
+| Personal inflation index | — | ✅ | Compute basket-level IPCA equivalent. Real-time, beats government numbers. Differentiator. |
+| Recipe-based shopping | — | ✅ | Input recipes, get optimized list per recipe. Future feature. |
+| CSV/Parquet export of own data | — | ✅ | Power users + tax / accounting use case. |
+
+**The PRO pitch in one sentence:** "Pay R$9.90/mo to get unlimited history,
+push alerts when your usual stuff is on sale, automatic shopping lists optimized
+across markets, and basket-level inflation tracking."
+
+**Why these gates work for grocery shoppers specifically:**
+- A weekly grocery shopper hits the 5-receipt cap in week 1 → forced to choose.
+- A new user signs up, scans a receipt, sees "you usually pay R$28 for this, you
+  paid R$22 today — save R$6/mo on average if you keep coming here" → magic
+  moment. That stays free; everything that compounds it is paid.
+- The "alert me when X drops" feature is exactly the loop that gets users to
+  reopen the app — and it's also the most friction-y to wire (FCM, email, rules
+  engine), so paywalling it has good unit economics.
+
+#### Implementation status
+- ✅ `User.subscriptionTier` (FREE/PRO) — on entity **and now enforced**.
+- ✅ Single `SubscriptionGateService` (`service/subscription`) — `allows`/`require`
+  + typed limit helpers (`watchedMarketLimit`, `monthlyReceiptLimit`,
+  `freeHistoryWindowDays`, `clampFrom`). No inline tier checks anywhere.
+  Limits tunable via `economizai.subscription.free.{watched-markets,history-days,monthly-receipts}`.
+- ✅ `PaywallException` → **HTTP 402** (`subscription.upgrade_required`).
+- ✅ Receipt upload counter — `ReceiptService.submit`, counts all statuses this calendar month.
+- ✅ Query-layer date-range cap — `clampFrom` applied in `ItemQueryService`,
+  `InsightsService`, `InsightsQueryService`. PRO bypasses.
+- ✅ Watched-markets gate — `WatchedMarketService.watch` checks count on NEW pins.
+- ✅ Delivery gate — `NotificationService.notify` persists the inbox row for all,
+  dispatches push/email only for PRO (`PUSH_AND_EMAIL_DELIVERY`).
+- ✅ Basket optimization gate — `ShoppingListOptimizer.optimize` requires PRO.
+- ✅ `Subscription` entity + `SubscriptionService.activatePro/cancel` (tier kept in sync).
+- ✅ Admin set-tier — `PUT /api/v1/admin/users/{id}/subscription-tier`.
+- ✅ Provider-agnostic webhook — `POST /api/v1/webhooks/subscription` (seam for a real provider).
+- ⬜ Payment provider (Stripe Brasil / Mercado Pago / Pagar.me + Pix) — **not chosen yet**.
+  Needs API keys + map the provider webhook onto `/api/v1/webhooks/subscription`
+  and set `economizai.billing.webhook-secret`. See DEV_NOTES.
+- ⬜ Self-serve subscription-management page + PUT `/users/me/subscription`.
+- ⬜ Feature-flag service so we can A/B individual gates.
+- ⬜ Top markets/categories `?limit` hard cap for FREE (history window is gated; the limit cap is not yet).
+- ⬜ Manual preference override (AVOID/MUST_HAVE) — depends on Phase 2.6.
+- ⬜ Household member-count gate (FREE ≤ 2).
+
+#### Gating sequence (which paywalls to ship first)
+1. ✅ **Watched markets cap** (3 free) — shipped.
+2. ✅ **History window** (90 days free) — shipped.
+3. ✅ **Push notifications** (PRO only) — delivery gate shipped (inbox stays free).
+4. ✅ **Basket optimization** (PRO only) — shipped.
+5. ⬜ **Manual preference override** (PRO only) — depends on Phase 2.6 completion.
+
+Each gate is an A/B; measure conversion before leaning harder on the next.
 
 ---
 
@@ -135,9 +187,108 @@ This trust is the entire product.
 
 - **Family plan (R$19.90/month, up to 5 users)** — shared household, split
   budgets, individual dashboards.
-- **Small business plan (R$49.90/month)** — for tiny restaurants, snack bars,
-  food trucks who buy at the same supermarkets — track COGS via NFC-e, get
-  category benchmarks against the public index.
+
+#### Business plan — volume tier (allowance + overage)
+
+**Who:** micro/small businesses that buy at retail/atacado and get NFC-e in the
+owner's CPF — bars, food trucks, snack bars, padarias, buffets, cafés, daycares,
+small offices, small markets. They want to track COGS/expenses by category,
+compare prices across Atacadão/Assaí/markets, and feed accounting. Secondary:
+bookkeepers handling several small clients; corporate expense/reimbursement.
+
+**Why a normal PRO plan doesn't fit:** a business scans **dozens–hundreds of NF/
+month**, and *our cost scales with volume* (captcha ~R$0.03–0.09/scan, CE/fallback
+~R$0.24). A flat low price loses money on the heavy user. So the Business tier is
+**usage-based**, not flat — the one place where metering by **volume is honest**
+(volume = both our cost and their value; state is never the axis — see Cost
+Structure below).
+
+**Shape (v1, numbers to validate):**
+- **Base R$79/month → 300 NF/month included.**
+- **Overage R$0.40 per NF** above the allowance.
+- Included: up to 5 users, expense categories / cost centers, monthly COGS report,
+  accounting export (CSV/Parquet), benchmark vs. the public index.
+
+**Unit-economics guardrail:** set overage (R$0.40) **above the worst-case marginal
+cost** (R$0.24, CE) so every NF past the allowance is profitable *in any state*.
+The included 300 are priced on blended expected cost + the value features. Watch
+the thin-margin edge case — a 100%-CE business at the allowance costs us ~R$72 of
+the R$79; mitigate by (a) sizing the allowance on blended cost, (b) capping CE
+share of the allowance until a native CE scraper exists, or (c) accepting it
+because CE-only bulk businesses are rare and the data is worth it. Native scrapers
+(see Cost Structure) collapse this risk — every state added drives that state's
+marginal cost toward ~R$0.
+
+**What actually justifies the price** is the *features* (accounting export, cost
+centers, COGS report, multi-user), not raw scans — lead the pitch with those.
+
+**Engineering notes (when we build it):**
+- Paid-API caps are **global today**; the Business tier needs **tier-aware caps**
+  (a business must not hit the consumer 20/60-per-day guard). Wire through
+  `SubscriptionGateService` alongside the existing tier limits.
+- Need a **monthly NF-scan meter per account** (reuse the `paid_api_call` ledger or
+  the receipt counter) and an **overage-billing hook** onto the provider webhook.
+- Bulk businesses are **gold for the B2B index** (more data) — doubly valuable,
+  *only if* priced not to lose money.
+
+---
+
+## Cost Structure & Spend Controls (the COGS side)
+
+Revenue is only half of unit economics — the other half is what each scanned
+receipt *costs us* in paid external calls. Treated as a Day-1 concern too.
+
+### What a receipt costs (marginal, per scan)
+
+| Path | Cost/receipt | Why |
+|---|---|---|
+| RS / PR / SP / MS / SC scrape | ~R$0.03–0.09 | captcha solve only (1–3 solves) |
+| **CE** | **~R$0.24** | Infosimples paid API on **every** note (no native scraper yet) |
+| Any-state fallback | +R$0.24 | primary scraper failed → Infosimples rescue |
+| OFF product enrichment | R$0.00 | Open Food Facts is free/open data |
+
+The danger case: a heavy CE user scanning 40 notes/month costs ~R$9.60 — nearly
+the whole R$9.90 subscription. **The problem is not the price, it's that CE is
+structurally expensive.**
+
+### Pricing verdict: DO NOT price by state
+
+Technically possible (we own the paywall), but rejected:
+- Users don't think in states; "R$12 in CE, R$9.90 in SP" reads as arbitrary/unfair.
+- CE is expensive because *we* lack a native scraper, not because the CE user gets
+  more value. Charging them more punishes the customer for our infra gap.
+- Kills word-of-mouth and a national brand.
+
+The honest axis, if we ever meter cost to users, is **volume** (receipts/month) —
+which already *is* the PRO pitch ("unlimited scans"). Volume correlates with both
+cost and value. **State never does.**
+
+### The real fix is structural, not tariff
+
+Build native scrapers for the expensive states so marginal cost → ~R$0 (captcha
+only). **CE is the priority** — until then treat its Infosimples spend as a capped
+**customer-acquisition cost** (each scan also warms the B2B price index), not a
+repassable COGS.
+
+### Spend controls (implemented — see `service/paidapi/PaidApiGuardService`)
+
+Every money-spending call (captcha solve, Infosimples query) is metered:
+- **Per-user daily caps** — Infosimples 20/day, captcha 60/day (config
+  `economizai.paid-api.*`; tier-independent, a pure cost/abuse guard).
+- **Global daily kill-switch** — a spend ceiling across ALL users
+  (`daily-global-budget-cents`, default R$50/day). Once today's ledger total hits
+  it, every paid call fails fast until midnight UTC. This is the insurance against
+  a viral spike — the "scaled too fast" fear.
+- **Infosimples circuit breaker** — repeated failures open the circuit for a
+  cooldown, so we stop paying while the provider is down.
+- **Ledger** — every attempt (success/failure) is written to `paid_api_call` for
+  invoice reconciliation, and surfaced at **`GET /api/v1/admin/costs`** (spend
+  total + breakdown by service and by state, plus today's spend vs the budget).
+
+All enforcement toggles via `PAID_API_GUARD_ENABLED`; logging is always on. During
+the free warm-up we deliberately bank the cost — but bounded by the caps above, so
+coverage grows without unbounded spend. (Follow-ups tracked in DEV_NOTES: captcha
+metered per-scrape not per-solve; cap enforced async not fail-fast at submit.)
 
 ---
 
@@ -159,6 +310,11 @@ This trust is the entire product.
   - Subscription management page.
   - Ad slots on dashboard for free users.
 - **Revenue target:** R$1K–R$5K MRR.
+- **Validate before building (Business tier):** do NOT build the volume/Business
+  plan yet — first prove demand. Signal to watch: users who hammer the 5-scan free
+  cap, or scan dozens/month; then talk to 3–4 small-business owners. Only if the
+  signal is real does the Business tier (allowance + overage, see §5) move to
+  Phase 4. Keep it a hypothesis until then.
 
 ### Phase 3 — Open the B2B Channel (5K MAU, ≥3 cities)
 
@@ -176,7 +332,9 @@ This trust is the entire product.
 - **Features:**
   - SEFAZ adapters for all major states.
   - Multi-region B2B reporting.
-  - Family plans + small-business plans.
+  - Family plan + **Business volume tier** (allowance + overage — §5), *only if*
+    Phase-2 validation showed real bulk-scan demand. Needs tier-aware paid-API
+    caps + a monthly scan meter + overage billing.
   - Affiliate-link program at scale.
 - **Revenue target:** R$80K+ MRR.
 
@@ -224,3 +382,25 @@ This trust is the entire product.
 The receipts/week metric is the one to obsess over — it's the panel quality
 signal that everything else (Pro retention, B2B sellability) ultimately
 depends on.
+
+## Unit economics — custo por nota ingerida (estudo 2026-07-22)
+
+Risco de bloqueio de IP: baixo hoje (volume pequeno, 1 consulta/chave, dedup
+cross-household); a resposta de escala é proxy residencial BR (~R$1-2 por
+1.000 consultas — 100x mais barato que Infosimples) e não mais API paga.
+
+| Estratégia | Custo/nota |
+|---|---|
+| Scrape gratuito (atual) | R$0 |
+| Scrape via proxy BR (escala) | ~R$0,002 |
+| Captcha solve (MS/SC) | R$0,03-0,09 |
+| LLM parseia HTML já baixado (Haiku-class, prompt cacheado) | R$0,03-0,08 |
+| LLM vision lê foto da nota (sem SEFAZ) | ~R$0,05 — degrada EAN/matching; só p/ contingência |
+| Infosimples | R$0,24 |
+
+Cadeia recomendada (cada camada resgata a anterior): scrape grátis → LLM
+extrai do HTML quando o parser falha (auto-cura mudanças de layout; substitui
+a maioria dos resgates Infosimples) → Infosimples só quando o FETCH falha →
+solver p/ captcha. Custo misto projetado: ~R$0,01-0,02/nota (vs R$0,24 se
+tudo fosse Infosimples). LLM NÃO substitui o fetch — o risco de IP/captcha
+mora no HTTP, não no parse.

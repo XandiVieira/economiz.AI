@@ -11,9 +11,12 @@ import com.relyon.economizai.exception.ProductAliasConflictException;
 import com.relyon.economizai.exception.ProductNotFoundException;
 import com.relyon.economizai.model.Household;
 import com.relyon.economizai.model.User;
+import com.relyon.economizai.model.enums.CategorizationSource;
 import com.relyon.economizai.model.enums.ProductCategory;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.LocalizedMessageService;
+import com.relyon.economizai.service.HouseholdProductService;
+import com.relyon.economizai.service.ProductRecentViewService;
 import com.relyon.economizai.service.ProductService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,6 +53,8 @@ class ProductControllerTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @MockitoBean private ProductService productService;
+    @MockitoBean private HouseholdProductService householdProductService;
+    @MockitoBean private ProductRecentViewService recentViewService;
     @MockitoBean private JwtService jwtService;
     @MockitoBean private UserDetailsService userDetailsService;
     @MockitoBean private LocalizedMessageService localizedMessageService;
@@ -60,7 +65,9 @@ class ProductControllerTest {
     }
 
     private ProductResponse sampleProduct(UUID id) {
-        return new ProductResponse(id, "789", "Arroz Tio Joao", "Tio Joao", ProductCategory.GROCERIES, "UN");
+        return new ProductResponse(id, "789", "Arroz Tio Joao", "Arroz", null, "Tio João",
+                ProductCategory.GROCERIES, "UN", new BigDecimal("5"), "KG",
+                CategorizationSource.DICTIONARY, false);
     }
 
     @Test
@@ -68,7 +75,7 @@ class ProductControllerTest {
         var user = buildUser();
         var id = UUID.randomUUID();
         Page<ProductResponse> page = new PageImpl<>(List.of(sampleProduct(id)));
-        when(productService.search(eq("arroz"), any(Pageable.class))).thenReturn(page);
+        when(productService.search(eq("arroz"), any(User.class), any(Pageable.class))).thenReturn(page);
 
         mockMvc.perform(get("/api/v1/products?query=arroz")
                         .with(SecurityMockMvcRequestPostProcessors.user(user)))
@@ -80,7 +87,7 @@ class ProductControllerTest {
     void create_returns201() throws Exception {
         var user = buildUser();
         var id = UUID.randomUUID();
-        var request = new CreateProductRequest("789", "Arroz Tio Joao", "Tio Joao", ProductCategory.GROCERIES, "UN");
+        var request = new CreateProductRequest("789", "Arroz Tio Joao", null, "Tio Joao", ProductCategory.GROCERIES, "UN", null, null);
         when(productService.create(any(CreateProductRequest.class))).thenReturn(sampleProduct(id));
 
         mockMvc.perform(post("/api/v1/products")
@@ -94,7 +101,7 @@ class ProductControllerTest {
     @Test
     void create_returns409OnDuplicateEan() throws Exception {
         var user = buildUser();
-        var request = new CreateProductRequest("789", "Arroz", null, null, null);
+        var request = new CreateProductRequest("789", "Arroz", null, null, null, null, null, null);
         when(productService.create(any(CreateProductRequest.class))).thenThrow(new EanConflictException("789"));
 
         mockMvc.perform(post("/api/v1/products")
@@ -149,7 +156,7 @@ class ProductControllerTest {
     void get_returns404WhenMissing() throws Exception {
         var user = buildUser();
         var id = UUID.randomUUID();
-        when(productService.get(id)).thenThrow(new ProductNotFoundException());
+        when(productService.get(eq(id), any(User.class))).thenThrow(new ProductNotFoundException());
 
         mockMvc.perform(get("/api/v1/products/" + id)
                         .with(SecurityMockMvcRequestPostProcessors.user(user)))

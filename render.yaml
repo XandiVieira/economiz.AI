@@ -1,0 +1,92 @@
+# Render Blueprint — economizai DEV environment.
+# ---------------------------------------------------------------------------
+# One web service (the Spring Boot app, built from the repo Dockerfile) + one
+# managed Postgres. This replaces the self-hosted Windows box for DEV.
+#
+# HOW TO USE
+#   1. Render Dashboard → New → Blueprint → connect this repo (branch: development).
+#      Render reads this file and provisions both services.
+#   2. Fill the env vars marked `sync: false` (secrets) in the dashboard — they
+#      are intentionally NOT in git. See INFRASTRUCTURE.md "Render setup".
+#   3. First deploy runs Flyway automatically (creates all tables). If you are
+#      restoring a pg_dump from the old box, do it BEFORE the first app boot or
+#      let Flyway run then load data-only (see migrate-to-render.ps1).
+#
+# NOTE ON DATABASE_URL: the app needs a JDBC url (jdbc:postgresql://host:port/db).
+# Render's `fromDatabase … property: connectionString` yields a plain
+# postgresql:// url, which the JDBC driver REJECTS. So we DON'T wire the URL
+# automatically — set DATABASE_URL, DB_USERNAME, DB_PASSWORD by hand from the
+# Postgres instance's "Info" tab (host/port/db → build the jdbc url yourself).
+# This is the one manual step; INFRASTRUCTURE.md spells it out.
+#
+# This is DEV: SPRING_PROFILES_ACTIVE is left unset → the app defaults to the
+# `dev` profile (Swagger on, lenient). Flip to `prod` only when launching.
+# ---------------------------------------------------------------------------
+
+databases:
+  - name: economizai-db
+    plan: basic-256mb          # ~US$7/mo; free tier EXPIRES in 30 days (do not use)
+    databaseName: economizai
+    user: economizai
+    postgresMajorVersion: "18"
+
+services:
+  - type: web
+    name: economizai-app
+    runtime: docker
+    plan: starter              # ~US$7/mo; never sleeps. free tier sleeps after 15min.
+    branch: development
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /actuator/health
+    autoDeploy: true           # push to `development` → auto-build+deploy
+    disk:
+      name: economizai-profilepics
+      mountPath: /data/profile-pics   # matches PROFILE_PICTURE_DIR below
+      sizeGB: 1                        # ~US$0.25/mo; keeps profile pics across deploys
+    envVars:
+      # --- App runtime ---
+      - key: PROFILE_PICTURE_DIR
+        value: /data/profile-pics       # persist on the disk above (Render /tmp is ephemeral)
+      - key: LOG_FILE
+        value: /tmp/economizai/app.log  # container-local; real log aggregation is a prod TODO
+
+      # --- Database (set BY HAND from the Postgres Info tab — see header note) ---
+      # DATABASE_URL must be the JDBC form: jdbc:postgresql://<host>:<port>/economizai
+      - key: DATABASE_URL
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+
+      # --- Security ---
+      - key: JWT_SECRET
+        generateValue: true             # Render generates a strong random secret
+      - key: CORS_ORIGINS
+        sync: false                     # the FE origin(s) + the Render app URL, comma-separated
+
+      # --- SEFAZ scanning (paid; reuse the working dev keys for now) ---
+      - key: CAPTCHA_PROVIDER
+        value: capsolver
+      - key: CAPTCHA_API_KEY
+        sync: false
+      - key: INFOSIMPLES_ENABLED
+        value: "true"
+      - key: INFOSIMPLES_API_KEY
+        sync: false
+
+      # --- Email (auth verification/reset) ---
+      - key: SMTP_HOST
+        value: smtpout.secureserver.net
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+
+      # --- Admin bootstrap (promoted to ADMIN on every boot) ---
+      - key: ADMIN_EMAILS
+        sync: false

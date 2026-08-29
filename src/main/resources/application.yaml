@@ -1,15 +1,38 @@
 spring:
   application:
     name: economizai
+  profiles:
+    # No profile set (local Maven run, current dev server) → "dev" activates.
+    # The prod deploy must set SPRING_PROFILES_ACTIVE=prod explicitly, which
+    # layers application-prod.yaml on top of this file (strict, no weak
+    # fallbacks). Values below are the shared base + dev-friendly defaults.
+    default: dev
+  servlet:
+    multipart:
+      max-file-size: 6MB     # leaves headroom over the app-level 5MB profile-picture cap
+      max-request-size: 8MB
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/economizai}
     username: ${DB_USERNAME:economizai}
     password: ${DB_PASSWORD:economizai}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      # Sized for Tomcat request threads + the 8-thread receipt-ingest pool +
+      # scheduled jobs. Ingest holds NO connection during the slow SEFAZ fetch
+      # (see ReceiptIngestionService), so 20 is headroom, not a requirement.
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:20}
+      # Log a leak trace if a connection is held >60s — nothing legitimate should.
+      leak-detection-threshold: ${DB_LEAK_DETECTION_MS:60000}
   jpa:
     hibernate:
       ddl-auto: none
     open-in-view: false
+  task:
+    scheduling:
+      # Default is a SINGLE thread — one slow job (geocoding/CNPJ lookups do
+      # HTTP with 8s timeouts) would delay every other @Scheduled job.
+      pool:
+        size: 4
   flyway:
     enabled: true
     locations: classpath:db/migration
@@ -17,27 +40,402 @@ spring:
     basename: i18n/messages
     encoding: UTF-8
     fallback-to-system-locale: false
+  mail:
+    host: ${SMTP_HOST:smtp.gmail.com}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
 
 jwt:
   secret: ${JWT_SECRET:economizai-dev-secret-key-must-be-at-least-256-bits-long-for-hs256}
-  expiration: 86400000
+  expiration: 86400000              # access token: 24h
+  refresh-expiration: 2592000000    # refresh token: 30d
 
 economizai:
   cors:
-    allowed-origins: ${CORS_ORIGINS:http://localhost:3000,http://localhost:5173}
+    allowed-origins: ${CORS_ORIGINS:http://localhost:3000,http://localhost:5173,http://localhost:8081}
   default-locale: pt
+  metrics:
+    # HTTP Basic credentials for GET /actuator/prometheus. Password BLANK by
+    # default → endpoint is fail-closed (every request 401), so metrics are
+    # never exposed unauthenticated. Set METRICS_PASSWORD to enable scraping;
+    # point Prometheus at it with basic_auth { username, password }.
+    username: ${METRICS_USERNAME:metrics}
+    password: ${METRICS_PASSWORD:}
+  admin:
+    # Comma-separated emails promoted to ROLE_ADMIN on startup (idempotent).
+    # The account must already exist (registered via the app); empty = no-op.
+    emails: ${ADMIN_EMAILS:}
+    # Enables DELETE /admin/observations/orphaned (bulk-delete deleted-account
+    # observation leftovers). DEV ONLY — on prod these are LGPD-preserved
+    # anonymized aggregates. Never set true in production.
+    dev-cleanup-enabled: ${DEV_CLEANUP_ENABLED:false}
   privacy:
     k-anonymity: 3
   ingestion:
+    # Async-ingest safety net: PROCESSING receipts older than this are failed by
+    # the sweeper so the FE never polls forever. Must exceed the worst-case
+    # legitimate ingest (MS captcha wall-clock cap 3 min + fallback).
+    processing-timeout-minutes: ${INGEST_PROCESSING_TIMEOUT_MINUTES:10}
+    sweeper-delay-ms: ${INGEST_SWEEPER_DELAY_MS:60000}
+    ean-catalog:
+      # On-demand catalog fill: when a receipt item's barcode isn't in our
+      # imported catalog, look it up live in the Open Food/Beauty/Products Facts
+      # API and cache-through the result. Covers ANY country's products (BR, US,
+      # AR…) without pre-importing gigabytes — the catalog fills with exactly what
+      # users buy. OFF fair-use: descriptive UA, only for unseen barcodes, off the
+      # request thread, capped per receipt. ON by default in the dev/base profile
+      # (this is what the dev server runs); set EAN_LIVE_FALLBACK_ENABLED=false to
+      # disable, and revisit for prod (OFF-API rate limits at scale).
+      live-fallback-enabled: ${EAN_LIVE_FALLBACK_ENABLED:true}
+      live-fallback-timeout-ms: ${EAN_LIVE_FALLBACK_TIMEOUT_MS:2500}
     sefaz:
-      timeout-ms: 10000
+      timeout-ms: 30000
       user-agent: "economizai/0.1 (+https://github.com/XandiVieira/economiz.AI)"
+      retry:
+        # SVRS portal is intermittently flaky (5xx/timeouts). Retry transient
+        # failures so the user doesn't have to re-submit. Total attempts =
+        # 1 user-triggered + retries; first retry is immediate, the rest wait
+        # delay-ms apart (default schedule: 0s, 5s, 5s, 5s). 4xx never retries.
+        max-attempts: ${SEFAZ_RETRY_MAX_ATTEMPTS:5}
+        delay-ms: ${SEFAZ_RETRY_DELAY_MS:5000}
+        # Captcha-gated portals re-solve on rejection (imperfect solver). Bounded
+        # attempts so a hostile portal can't grind forever (each attempt re-solves).
+        ms-max-attempts: ${SEFAZ_MS_RETRY_MAX_ATTEMPTS:3}
+        ms-max-total-ms: ${SEFAZ_MS_RETRY_MAX_TOTAL_MS:180000}
+        sc-max-attempts: ${SEFAZ_SC_RETRY_MAX_ATTEMPTS:3}
+      # SSRF guard: when a QR payload carries a full URL, we only fetch it if
+      # the host matches one of these suffixes (e.g. svrs.rs.gov.br admits
+      # dfe-portal.svrs.rs.gov.br). Extend when onboarding new state portals.
+      allowed-url-hosts: ${SEFAZ_ALLOWED_URL_HOSTS:svrs.rs.gov.br,sefaz.rs.gov.br,fazenda.pr.gov.br,sef.sc.gov.br,fazenda.sp.gov.br}
+      # Experimental catch-all for UFs without a dedicated adapter: fetch the QR's
+      # own portal URL (gov.br hosts only) + shared responsive-DANFE parser, then
+      # Infosimples when enabled. Attempts are recorded (admin: /state-coverage)
+      # and total failures alert the admin inbox with the evidence (1/UF/day).
+      experimental:
+        enabled: ${SEFAZ_EXPERIMENTAL_ENABLED:true}
+        allowed-host-suffixes: ${SEFAZ_EXPERIMENTAL_ALLOWED_HOSTS:gov.br}
+        max-attempts: ${SEFAZ_EXPERIMENTAL_MAX_ATTEMPTS:3}
+      # Regression watch for VERIFIED states: when a portal we already support
+      # changes its DANFE format, its parser starts failing. min-failures parse
+      # failures within window-hours on the same UF triggers ONE admin alert
+      # (per UF per day) carrying the raw HTML to fix the adapter. Kept modest so
+      # a burst of aged-out/bad scans doesn't false-alarm; tune per real traffic.
+      regression:
+        min-failures: ${SEFAZ_REGRESSION_MIN_FAILURES:5}
+        window-hours: ${SEFAZ_REGRESSION_WINDOW_HOURS:6}
+      svrs:
+        # UFs whose NFC-e consult page renders the shared responsive-DANFE
+        # layout the adapter parses. RS proven since day one; PR verified
+        # 2026-06-12 with a real RaiaDrogasil fixture (own portal, same
+        # markup, QR carries the full URL); SP verified 2026-07-06 with a real
+        # Mercadao Atacadista fixture (www.nfce.fazenda.sp.gov.br, ASP.NET
+        # ConsultaQRCode.aspx, plain GET — no captcha — same #tabResult markup).
+        # States that delegate to SVRS
+        # (AC, AL, AP, CE, ES, MA, PA, PB, PI, RJ, RN, RO, RR, SE, TO)
+        # are worth testing one at a time: submit a real chave, verify the
+        # parser extracts items correctly, then add the UF code here (and
+        # the portal host to allowed-url-hosts if it's a new domain). SC is
+        # handled by SantaCatarinaNfcePortalAdapter because it redirects through
+        # sat.sef.sc.gov.br/tax.NET/SecurityVerify.aspx and renders a different
+        # details page after Cloudflare Turnstile.
+        # States whose portal renders a DIFFERENT layout (MG, BA, PE, …)
+        # need a dedicated adapter.
+        states: ${SEFAZ_SVRS_STATES:RS,PR,SP}
+      # UFs supported ONLY via the paid Infosimples fallback (no native scraper
+      # yet — portal layout unverified). CE proven 2026-07-08 with a real A P
+      # FRIOS receipt (26 items, R$196,17) fetched by chave. Users in these states
+      # can scan the QR OR type the 44-digit chave. Requires Infosimples enabled;
+      # each fetch costs ~R$0.24. Promote a UF to a native adapter once its portal
+      # is verified with a real QR (then remove it from here).
+      infosimples-only-states: ${SEFAZ_INFOSIMPLES_ONLY_STATES:CE}
+      captcha:
+        # UFs whose consult portal gates the DANFE behind a captcha and is
+        # handled by a dedicated adapter (currently MS — www.dfe.ms.gov.br with
+        # reCAPTCHA v2; SC uses Cloudflare Turnstile in its own adapter).
+        # Solving needs a provider configured under
+        # economizai.captcha below; until then these states fail fast with a
+        # clear 503 "coming soon". Each captcha state has its own portal, so
+        # adding one usually means a dedicated adapter, not just this list.
+        states: ${SEFAZ_CAPTCHA_STATES:MS}
+  # Captcha solver — OFF by default (provider=none → captcha states 503).
+  # CapSolver supports both MS reCAPTCHA v2 and SC Turnstile. 2Captcha remains
+  # available for MS reCAPTCHA-v2 only.
+  captcha:
+    provider: ${CAPTCHA_PROVIDER:none}          # none | capsolver
+    api-key: ${CAPTCHA_API_KEY:}
+    base-url: ${CAPTCHA_BASE_URL:https://2captcha.com}
+    timeout-ms: ${CAPTCHA_TIMEOUT_MS:120000}
+    poll-interval-ms: ${CAPTCHA_POLL_INTERVAL_MS:5000}
+  # Infosimples fallback — OFF by default. When enabled, any state whose primary
+  # SEFAZ scraper exhausts all retries falls back to the Infosimples paid API
+  # (https://api.infosimples.com) at ~R$0.24/query. Set INFOSIMPLES_ENABLED=true
+  # and INFOSIMPLES_API_KEY to activate. Covers all supported UFs.
+  infosimples:
+    enabled: ${INFOSIMPLES_ENABLED:false}
+    api-key: ${INFOSIMPLES_API_KEY:}
+    base-url: ${INFOSIMPLES_BASE_URL:https://api.infosimples.com}
+  # Cost control for paid external calls (captcha solves + Infosimples). Every paid
+  # call is always logged to paid_api_call for invoice reconciliation. `enabled`
+  # gates enforcement: per-user daily caps (a hard cost/abuse guard, independent of
+  # subscription tier) and the Infosimples circuit breaker (stop paying while the
+  # provider is failing). Caps of 0 = unlimited.
+  paid-api:
+    enabled: ${PAID_API_GUARD_ENABLED:true}
+    infosimples-daily-cap-per-user: ${INFOSIMPLES_DAILY_CAP:20}
+    captcha-daily-cap-per-user: ${CAPTCHA_DAILY_CAP:60}
+    twilio-daily-cap-per-user: ${TWILIO_DAILY_CAP:10}
+    daily-global-budget-cents: ${PAID_API_DAILY_BUDGET_CENTS:5000}   # R$50/day kill-switch; 0 = unlimited
+    infosimples-failure-threshold: ${INFOSIMPLES_BREAKER_THRESHOLD:5}
+    breaker-window-seconds: ${INFOSIMPLES_BREAKER_WINDOW_S:600}
+    breaker-cooldown-seconds: ${INFOSIMPLES_BREAKER_COOLDOWN_S:300}
+  auth:
+    # Dev convenience: when SMTP/Twilio aren't configured, the auth code (password
+    # reset, email verify, phone OTP) is logged so the flow can be finished from the
+    # logs. Hard-disabled in application-prod.yaml — a code in the logs is an
+    # account-takeover vector.
+    dev-code-log-enabled: ${AUTH_DEV_CODE_LOG_ENABLED:true}
+  # Where the public contact/feedback form (POST /api/v1/contact) delivers messages.
+  # Blank + no SMTP → the message is logged (DEV-MODE) instead of emailed, never lost.
+  contact:
+    recipient: ${CONTACT_RECIPIENT:contato@economizaai.app}
+  beta:
+    # Where beta-tester signups are emailed. Falls back to the contact recipient
+    # when unset, so leads are never dropped.
+    recipient: ${BETA_RECIPIENT:}
+  subscription:
+    # Master paywall switch. OFF by default — every feature is allowed for all users
+    # and the FREE caps below are dormant. Set SUBSCRIPTION_ENFORCE=true to turn paywalls on.
+    enforce: ${SUBSCRIPTION_ENFORCE:false}
+    # Safety-net sweep: downgrades a PRO whose paid period elapsed without a renewal.
+    expiry-interval-ms: ${SUBSCRIPTION_EXPIRY_INTERVAL_MS:3600000}   # hourly
+    expiry-initial-delay-ms: 120000
+    free:
+      watched-markets: 3                       # FREE: max pinned markets (PRO unlimited)
+      history-days: 90                         # FREE: rolling analytics/history window (PRO unlimited)
+      monthly-receipts: 5                      # FREE: max receipt submissions per calendar month (PRO unlimited)
+  billing:
+    # Shared secret the provider-agnostic webhook (/api/v1/webhooks/subscription)
+    # verifies via the X-Webhook-Secret header. EMPTY in dev = check skipped.
+    # In prod set this AND configure the provider (Stripe/Mercado Pago) to send it.
+    webhook-secret: ${BILLING_WEBHOOK_SECRET:}
+    revenuecat:
+      # The fixed string RevenueCat sends in the Authorization header of its webhook
+      # (RevenueCat → Integrations → Webhooks → "Authorization header value").
+      # Empty = the /api/v1/webhooks/revenuecat endpoint is disabled (fail-closed).
+      auth-header: ${REVENUECAT_WEBHOOK_AUTH:}
+  collaborative:
+    enabled: true                              # master switch — disables all observation writes/reads
+    min-households-for-public: 3               # k-anon: aggregate queries return empty until this many distinct households contributed
+    min-observations-per-product-market: 5     # don't show reference price for (product, market) until enough samples
+    min-observations-for-community-promo: 10   # don't flag a community promo unless this much baseline exists
+    community-promo-threshold-pct: 15          # current price < (median - X%) → community promo
+    community-promo-recent-window-days: 7      # last N days = "recent" sample; older rows are baseline
+    lookback-days: 90                          # observations older than this are excluded from reference + promo calcs
+  categorizer:
+    consensus:
+      # User category corrections graduate to global truth (+ learned dictionary)
+      # once this many distinct households agree on the same product→category.
+      # A single household never changes anything globally.
+      min-households: ${CONSENSUS_MIN_HOUSEHOLDS:2}
+      # A token enters the learned dictionary only if it recurs across at least
+      # this many consensus products, with no category disagreement.
+      min-token-products: ${CONSENSUS_MIN_TOKEN_PRODUCTS:2}
+      interval-ms: ${CONSENSUS_INTERVAL_MS:86400000}
+      initial-delay-ms: ${CONSENSUS_INITIAL_DELAY_MS:86400000}
+  ml:
+    # Cascade applies ML category/genericName only when true. Currently OFF —
+    # the model is still trained + measured (shadow) via the benchmark, but its
+    # (unreliable) predictions are not written to products. Flip on once the
+    # benchmark's mlCategoryAccuracyPct is good enough.
+    category-apply-enabled: ${ML_CATEGORY_APPLY_ENABLED:false}
+    auto-promote-interval-ms: ${ML_AUTO_PROMOTE_INTERVAL_MS:86400000}
+    auto-promote-initial-delay-ms: ${ML_AUTO_PROMOTE_INITIAL_DELAY_MS:86400000}
+    retrain-interval-ms: ${ML_RETRAIN_INTERVAL_MS:604800000}
+    retrain-initial-delay-ms: ${ML_RETRAIN_INITIAL_DELAY_MS:604800000}
+  personal-promo:
+    threshold-pct: 10                          # personal promo if price < (user's own median - X%)
+    min-purchases-for-baseline: 3              # need this many prior purchases to detect personal promos
+  attribution:
+    window-days: 14                            # a surfaced deal is attributable if surfaced within this many days before the purchase
+  consumption:
+    enabled: true                              # master switch for Phase 3 consumption-intelligence endpoints
+    min-purchases-for-prediction: 2            # below this, a product is silently skipped from /predictions
+    history-lookback-days: 365                 # window for computing inter-purchase intervals
+    running-low-threshold-days: 7              # days-until-runout that flips status to RUNNING_LOW
+    ran-out-grace-days: 0                      # tolerance before flipping to RAN_OUT
+  preferences:
+    enabled: true                              # master switch for Phase 2.6 derived preferences
+    min-purchases-per-generic: 5               # below this, a generic is silently skipped (no preference shown)
+    must-have-brand-share: 0.85                # top brand >= this fraction of purchases → MUST_HAVE
+    preferred-brand-share: 0.60                # top brand in [preferred, mustHave) → PREFERRED
+  geo:
+    user-agent: "economizai/0.1 (xandivieira@gmail.com)"  # required by Nominatim usage policy
+    timeout-ms: 8000
+    geocode-interval-ms: 600000                # how often the background geocoder scans pending markets (10 min)
+    geocode-initial-delay-ms: 30000            # wait this long after startup before first scan
+    geocode-delay-ms: 1100                     # 1.1s between geocode calls — Nominatim policy is 1 req/sec/IP
+  merchant:
+    classify:
+      enabled: ${MERCHANT_CLASSIFY_ENABLED:true}   # CNAE-based supermarket/pharmacy verification (best-effort)
+      base-url: ${BRASILAPI_CNPJ_URL:https://brasilapi.com.br/api/cnpj/v1}
+      user-agent: "economizai/0.1 (+https://github.com/XandiVieira/economiz.AI)"
+      timeout-ms: 8000
+      max-attempts: 3                          # in-call retries before giving up (segment stays UNKNOWN)
+      interval-ms: 600000                      # how often the background classifier scans unclassified markets (10 min)
+      initial-delay-ms: 45000                  # wait after startup before first scan
+  notifications:
+    email:
+      enabled: ${NOTIFICATIONS_EMAIL_ENABLED:false}    # turn on once SMTP env vars (host/port/user/pass) are wired in Render
+      from: ${EMAIL_FROM:noreply@economizaai.app}
+    push:
+      expo:
+        # Optional bearer token for the Expo Push API. Unauthenticated sends still
+        # work for moderate volume; setting this raises rate limits and powers Expo's
+        # analytics dashboard. Generate at https://expo.dev → Account → Access Tokens.
+        access-token: ${EXPO_ACCESS_TOKEN:}
+    # Twilio backs BOTH the SMS and WhatsApp channels (one Messages API). Off by
+    # default — a channel only delivers when its From number + creds are set AND
+    # the target user has a verified phone; otherwise the dispatcher records a
+    # graceful "twilio_not_configured" / "phone_not_verified" failure. Swappable:
+    # TwilioMessageClient is the only seam to replace for another provider.
+    twilio:
+      account-sid: ${TWILIO_ACCOUNT_SID:}
+      auth-token: ${TWILIO_AUTH_TOKEN:}
+      from-sms: ${TWILIO_FROM_SMS:}              # e.g. +15551234567
+      from-whatsapp: ${TWILIO_FROM_WHATSAPP:}    # e.g. +14155238886 (Twilio WhatsApp sender, no whatsapp: prefix)
+    # Alexa remains a stub — structure only, dispatch records a "not implemented" failure.
+    alexa:
+      enabled: ${NOTIFICATIONS_ALEXA_ENABLED:false}     # Alexa Skill Messaging / Proactive Events
+    # Relevance-feedback filter: the user's own DISMISSED/MUTED telemetry
+    # suppresses deals from the screen + digest. Rollout via mode:
+    #   OFF    — no signal lookup at all
+    #   SHADOW — compute + log + measurable in the relevance report, UX unchanged
+    #   ON     — suppressed deals actually disappear
+    # Validate with GET /admin/notifications/relevance-report before flipping ON
+    # (near-zero regret = safe). See DEV_NOTES "Relevance filter rollout".
+    relevance:
+      mode: ${RELEVANCE_MODE:SHADOW}
+      dismissed-days: ${RELEVANCE_DISMISSED_DAYS:14}    # dismissal hides (product[, market]) this long
+      muted-days: ${RELEVANCE_MUTED_DAYS:180}           # mute hides the product everywhere this long
+    # Background jobs that drive scheduled notification types.
+    replenishment:
+      interval-ms: ${NOTIFICATIONS_REPLENISHMENT_INTERVAL_MS:21600000}   # every 6h: predict product runout
+      initial-delay-ms: 60000
+    budget:
+      interval-ms: ${NOTIFICATIONS_BUDGET_INTERVAL_MS:21600000}          # every 6h: monthly spend cap check
+      initial-delay-ms: 90000
+    digest:
+      cron: ${NOTIFICATIONS_DIGEST_CRON:0 0 8 * * MON}                   # weekly Monday 08:00
+      zone: ${NOTIFICATIONS_DIGEST_ZONE:America/Sao_Paulo}
+    deals-digest:
+      cron: ${NOTIFICATIONS_DEALS_DIGEST_CRON:0 0 * * * *}               # top of every hour: due-user deals rollup
+      zone: ${NOTIFICATIONS_DEALS_DIGEST_ZONE:America/Sao_Paulo}
+  profile-picture:
+    local-dir: ${PROFILE_PICTURE_DIR:/tmp/economizai/profile-pics}   # dev: local disk. prod: see DEV_NOTES.md
+    max-size-mb: 5
+  receipt-photo:
+    max-size-mb: 5            # QR-photo submit and chave-OCR uploads (multipart cap above must stay higher)
+  ocr:
+    # Tessdata dir for Tess4J (chave OCR). Blank = probe well-known install
+    # locations (homebrew/apt). If Tesseract isn't on the host, the OCR
+    # endpoint degrades to a localized 503 — everything else is unaffected.
+    tessdata-path: ${OCR_TESSDATA_PATH:}
+  oauth:
+    # Expected audiences (aud claim) for social-login ID tokens. Comma-separated;
+    # may be empty in dev (then the aud check is skipped with a WARN log). In prod
+    # set these so a token minted for another app can't be replayed against us.
+    google:
+      # Web + Android OAuth client IDs (PUBLIC values — safe to commit; the client
+      # SECRET is never used by the identity-token flow). Baked as the default so
+      # Google login works without a Render env var; set GOOGLE_OAUTH_CLIENT_IDS to
+      # override (e.g. a separate real-prod project).
+      client-ids: ${GOOGLE_OAUTH_CLIENT_IDS:283784305460-feu6m74o668bd4n7s0obufv68muj80qc.apps.googleusercontent.com,283784305460-m5q87ihkef9i8r3lcsfborli3oc8vmb0.apps.googleusercontent.com}
+    apple:
+      # Native iOS Sign in with Apple → the token's aud is the app Bundle ID
+      # (PUBLIC — it's in the app's Info.plist). Baked as default so Apple login
+      # works without a Render env var; set APPLE_OAUTH_CLIENT_IDS to override or
+      # to add a Service ID (comma-separated) for web/Android Sign in with Apple.
+      client-ids: ${APPLE_OAUTH_CLIENT_IDS:com.economizaaiapp.economizaai}
+
+  # LLM layers (OpenAI by default — cheapest suitable tier). Each capability has
+  # its own switch so any of them can be disabled or later gated to premium.
+  llm:
+    api-key: ${OPENAI_API_KEY:}
+    base-url: ${LLM_BASE_URL:https://api.openai.com/v1}
+    model: ${LLM_MODEL:gpt-4o-mini}
+    timeout-ms: ${LLM_TIMEOUT_MS:45000}
+    enrichment:
+      # "LLM as teacher": batch-enriches products the free layers left wanting
+      # and writes reusable keyword rules back into the curated dictionary.
+      enabled: ${LLM_ENRICHMENT_ENABLED:true}
+      batch-size: ${LLM_ENRICH_BATCH_SIZE:25}
+      interval-ms: ${LLM_ENRICH_INTERVAL_MS:600000}
+      initial-delay-ms: ${LLM_ENRICH_INITIAL_DELAY_MS:90000}
+      max-attempts: ${LLM_ENRICH_MAX_ATTEMPTS:3}
+      confidence-threshold: ${LLM_ENRICH_CONFIDENCE:0.7}
+    auditor:
+      # Nightly verification of machine labels — flags disagreements for the
+      # admin (GET /admin/llm/report); never auto-corrects.
+      enabled: ${LLM_AUDITOR_ENABLED:true}
+      cron: ${LLM_AUDITOR_CRON:0 0 4 * * *}
+      sample-size: ${LLM_AUDITOR_SAMPLE:50}
+    photo-extraction:
+      # Vision fallback: items from a photographed receipt (origin=PHOTO,
+      # excluded from the collaborative index). Per-user daily cap under
+      # economizai.paid-api (llm-vision-daily-cap-per-user).
+      enabled: ${PHOTO_EXTRACTION_ENABLED:true}
+      max-items: ${PHOTO_EXTRACTION_MAX_ITEMS:60}
 
 springdoc:
   swagger-ui:
     path: /swagger-ui
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus   # health is public; prometheus is HTTP Basic-auth protected (see economizai.metrics)
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: never    # don't leak DB/disk internals to anyone hitting /actuator/health
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  health:
+    # SMTP isn't always wired in dev / Render free tier (see DEV_NOTES) and
+    # the mail indicator otherwise tries to ping the server every /health
+    # call → returns DOWN → uptime monitors + the keep-alive cron see 503.
+    # The AuthEmailSender already degrades gracefully when SMTP is missing.
+    mail:
+      enabled: false
+
 logging:
   level:
-    com.relyon.economizai: DEBUG
+    com.relyon.economizai: INFO
     org.springframework.security: WARN
+  # Persist logs to a file as well as the console. In the container this path is a
+  # host bind-mount (see docker-compose `app.volumes`), so history SURVIVES every
+  # rebuild/redeploy and machine restart - the json-file container log does NOT
+  # (it's recreated empty on every --build). The watchdog reads this file so it
+  # can see error history beyond the current container's lifetime.
+  file:
+    name: ${LOG_FILE:logs/app.log}
+  logback:
+    rollingpolicy:
+      # Roll at 50MB, keep ~10 files, hard-cap total at 500MB - logback deletes the
+      # oldest automatically, so the disk can't fill (the "clean when too large").
+      file-name-pattern: ${LOG_FILE:logs/app.log}.%d{yyyy-MM-dd}.%i.gz
+      max-file-size: 50MB
+      max-history: 10
+      total-size-cap: 500MB
+  pattern:
+    # MDC tags in brackets: requestId user receipt item. Empty when not in scope.
+    # To deep-debug a flow: filter by receipt=<8-char-id> in your log viewer.
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [req=%X{requestId:-} user=%X{userId:-} rcpt=%X{receiptId:-} item=%X{itemId:-}] %logger{30} - %msg%n"
+    file:    "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [req=%X{requestId:-} user=%X{userId:-} rcpt=%X{receiptId:-} item=%X{itemId:-}] %logger{30} - %msg%n"

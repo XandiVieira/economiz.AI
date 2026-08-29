@@ -2,17 +2,24 @@ package com.relyon.economizai.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.relyon.economizai.config.SecurityConfig;
+import com.relyon.economizai.dto.request.GoogleLoginRequest;
 import com.relyon.economizai.dto.request.LoginRequest;
 import com.relyon.economizai.dto.request.RegisterRequest;
 import com.relyon.economizai.dto.response.AuthResponse;
 import com.relyon.economizai.dto.response.UserResponse;
 import com.relyon.economizai.exception.EmailAlreadyExistsException;
 import com.relyon.economizai.exception.InvalidCredentialsException;
+import com.relyon.economizai.exception.SocialAccountLoginException;
+import com.relyon.economizai.model.enums.AuthProvider;
 import com.relyon.economizai.model.enums.Role;
 import com.relyon.economizai.model.enums.SubscriptionTier;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.LocalizedMessageService;
 import com.relyon.economizai.service.UserService;
+import com.relyon.economizai.service.auth.EmailVerificationService;
+import com.relyon.economizai.service.auth.PasswordResetService;
+import com.relyon.economizai.service.auth.RefreshTokenService;
+import com.relyon.economizai.service.auth.oauth.SocialLoginService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -52,6 +59,18 @@ class AuthControllerTest {
     @MockitoBean
     private LocalizedMessageService localizedMessageService;
 
+    @MockitoBean
+    private PasswordResetService passwordResetService;
+
+    @MockitoBean
+    private EmailVerificationService emailVerificationService;
+
+    @MockitoBean
+    private RefreshTokenService refreshTokenService;
+
+    @MockitoBean
+    private SocialLoginService socialLoginService;
+
     private UserResponse sampleUserResponse() {
         return new UserResponse(
                 UUID.randomUUID(),
@@ -60,14 +79,23 @@ class AuthControllerTest {
                 Role.USER,
                 SubscriptionTier.FREE,
                 true,
+                true,
+                LocalDateTime.now(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 LocalDateTime.now()
         );
     }
 
     @Test
     void register_shouldReturn201WithToken() throws Exception {
-        var request = new RegisterRequest("John", "john@test.com", "password123");
-        var response = new AuthResponse("jwt-token", sampleUserResponse());
+        var request = new RegisterRequest("John", "john@test.com", "password123", "1.0", "1.0", null);
+        var response = new AuthResponse("jwt-token", "refresh-token", sampleUserResponse());
         when(userService.register(any(RegisterRequest.class))).thenReturn(response);
 
         mockMvc.perform(post("/api/v1/auth/register")
@@ -81,7 +109,7 @@ class AuthControllerTest {
 
     @Test
     void register_shouldReturn409WhenEmailExists() throws Exception {
-        var request = new RegisterRequest("John", "john@test.com", "password123");
+        var request = new RegisterRequest("John", "john@test.com", "password123", "1.0", "1.0", null);
         when(userService.register(any(RegisterRequest.class)))
                 .thenThrow(new EmailAlreadyExistsException("john@test.com"));
 
@@ -93,7 +121,7 @@ class AuthControllerTest {
 
     @Test
     void register_shouldReturn400ForInvalidInput() throws Exception {
-        var request = new RegisterRequest("", "not-an-email", "short");
+        var request = new RegisterRequest("", "not-an-email", "short", "", "", null);
 
         mockMvc.perform(post("/api/v1/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -103,8 +131,8 @@ class AuthControllerTest {
 
     @Test
     void login_shouldReturn200WithToken() throws Exception {
-        var request = new LoginRequest("john@test.com", "password123");
-        var response = new AuthResponse("jwt-token", sampleUserResponse());
+        var request = new LoginRequest("john@test.com", "password123", null);
+        var response = new AuthResponse("jwt-token", "refresh-token", sampleUserResponse());
         when(userService.login(any(LoginRequest.class))).thenReturn(response);
 
         mockMvc.perform(post("/api/v1/auth/login")
@@ -115,13 +143,57 @@ class AuthControllerTest {
     }
 
     @Test
+    void google_shouldReturn200WithToken() throws Exception {
+        var request = new GoogleLoginRequest("google-id-token", null);
+        var response = new AuthResponse("jwt-token", "refresh-token", sampleUserResponse());
+        when(socialLoginService.loginWithGoogle(any(GoogleLoginRequest.class))).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/auth/google")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").value("jwt-token"))
+                .andExpect(jsonPath("$.refreshToken").value("refresh-token"))
+                // FE-facing user shape carries verification state (added for social login).
+                .andExpect(jsonPath("$.user.emailVerified").value(true))
+                .andExpect(jsonPath("$.user.emailVerifiedAt").exists());
+    }
+
+    @Test
+    void google_shouldReturn400WhenTokenBlank() throws Exception {
+        var request = new GoogleLoginRequest("", null);
+
+        mockMvc.perform(post("/api/v1/auth/google")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void login_shouldReturn401ForInvalidCredentials() throws Exception {
-        var request = new LoginRequest("john@test.com", "wrong");
+        var request = new LoginRequest("john@test.com", "wrong", null);
         when(userService.login(any(LoginRequest.class))).thenThrow(new InvalidCredentialsException());
 
         mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void login_socialAccount_returns409WithProviderForButtonHighlight() throws Exception {
+        var request = new LoginRequest("jane@test.com", "whatever", null);
+        when(userService.login(any(LoginRequest.class)))
+                .thenThrow(new SocialAccountLoginException(AuthProvider.GOOGLE));
+        when(localizedMessageService.translate(any(SocialAccountLoginException.class)))
+                .thenReturn("Esta conta usa login com Google.");
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                // structured provider so the FE can highlight the right button
+                .andExpect(jsonPath("$.errors.provider").value("GOOGLE"))
+                .andExpect(jsonPath("$.message").value("Esta conta usa login com Google."));
     }
 }
