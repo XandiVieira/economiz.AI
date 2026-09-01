@@ -132,6 +132,8 @@ GitHub repo: `economiz.AI` (https://github.com/XandiVieira/economiz.AI.git)
 - Never touch the global git config
 
 ## Git Workflow
+- **Prod releases (2026-09-01): `main` is the prod release branch** — Render prod (`economizai-app-prod`) auto-deploys every push to `main`. Releasing = merge `development` → `main` + push, ONLY on the owner's explicit go. Never commit directly to `main`. (The old `production` branch was deleted.)
+- **GitHub account: ALWAYS `XandiVieira` for anything economizai** — if another account is active/cached (keychain may serve `wuupsuser`), override before acting: `GH_TOKEN=$(gh auth token --user XandiVieira) gh …`, or a one-off credential helper for `git push`.
 - **Deploy windows (2026-07-22): pushing `development` auto-deploys the dev server and blips availability for real users.** Commit locally as work completes, but DO NOT push during the day without an explicit go-ahead. Urgent bug fixes may ship anytime; features/docs/refactors batch up and deploy at night (or when the owner says so). One push = one downtime blip — batch commits into a single push.
 - **ALWAYS pull before push.** Before any `git push`, run `git pull --rebase origin <branch>` first so the push lands on the current tip. This repo has an autonomous watchdog that also pushes — racing it causes rejected pushes and rebase conflicts. Pull-rebase-then-push every time.
 - Before reviewing or analyzing a branch, ALWAYS run `git fetch` and confirm with the user which branch to work on if there's any ambiguity.

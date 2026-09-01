@@ -58,7 +58,7 @@ span both. **Never reason about one in isolation when a change touches the contr
 |---|---|---|
 | **Bug fixes** | Reproduce-first JS/Java fixes, tests, refactors | — |
 | **Tests** | Add/run unit + e2e (web/Android/iOS harness) | — |
-| **Deploys — backend** | Merge fixes to `development` (dev auto-deploys) within the fix contract | Anything shipped as a "feature" outside deploy windows |
+| **Deploys — backend** | Merge fixes to `development` (dev auto-deploys) within the fix contract | Anything shipped as a "feature" outside deploy windows; **prod release** (merge `development` → `main` + push — auto-deploys prod) |
 | **Deploys — frontend OTA** | `eas update` to **preview/dev** channels | `eas update` to **production** (user-facing) |
 | **Store** | Prep `eas build` + submission bundle | `eas submit` to App Store / Play Store, store metadata |
 | **Database** | Write + test Flyway migrations on a branch | Merging/deploying a migration to prod |
@@ -81,6 +81,9 @@ pings the owner. Precedent: the `NEEDS-HUMAN` tags in `AUTONOMOUS_FIXES.md`.
 
 Backend pushes to `development` auto-deploy and blip availability. Fixes may ship
 anytime; **features batch for the night / an explicit go** (see CLAUDE.md → Git Workflow).
+Backend **prod** deploys from `main` (Render `economizai-app-prod`, auto-deploy): the
+release IS the push — merge `development` → `main` only on the owner's go. See
+INFRASTRUCTURE.md → "Environments & release flow".
 Frontend OTA has no downtime, but **production** OTA is still gated (user-facing).
 
 ## Environment & continuity

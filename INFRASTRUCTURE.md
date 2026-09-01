@@ -280,6 +280,26 @@ Plus the **GitHub runner** Windows service (`actions.runner.XandiVieira-economiz
 
 ---
 
+## Environments & release flow (Render)
+
+Two Render web services, one repo, branch-per-environment (since 2026-09-01):
+
+| Env | Service | Branch | Deploys when |
+|---|---|---|---|
+| **dev** | `economiz.AI` (`srv-d7odp50k1i2s73ep8o5g`) | `development` | every push (auto-deploy) |
+| **prod** | `economizai-app-prod` (`srv-d9p4nctbedkc73e3veb0`) | `main` | every push to `main` (auto-deploy) |
+
+**Releasing to prod** = merge `development` → `main` and push `main`. That push IS the
+prod deploy — it's a GATED action (owner's go), never autonomous. `main` is otherwise
+never committed to directly.
+
+History: the prod service initially tracked `development` (every dev push hit prod);
+on 2026-08-28 a `production` branch was created to isolate releases; on 2026-09-01 it
+was deleted and the service repointed at `main` (which was code-identical), so `main`
+is now the single release branch.
+
+---
+
 ## Render migration (DEV) — pointers
 
 Full click-by-click runbook is **[`RENDER_SETUP.md`](./RENDER_SETUP.md)** (services,
@@ -339,4 +359,4 @@ workaround, use the platform feature"):
 
 ---
 
-_Last updated: 2026-07-04. Keep this in sync when infra changes._
+_Last updated: 2026-09-01. Keep this in sync when infra changes._
