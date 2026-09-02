@@ -158,7 +158,9 @@ public class EanCatalogService {
     }
 
     private static String firstBrand(String brands) {
-        return brands != null && !brands.isBlank() ? brands.split(",")[0].trim() : null;
+        if (brands == null || brands.isBlank()) return null;
+        var first = brands.split(",", -1)[0].trim();
+        return first.isBlank() ? null : first;
     }
 
     private static String truncate(String value, int max) {
