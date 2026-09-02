@@ -67,14 +67,18 @@ class ProductRepositoryTest {
 
     @Test
     void search_nullQueryReturnsWholeCatalogOrderedByName() {
-        saveProduct("Banana", null, null);
-        saveProduct("Arroz", null, null);
-        saveProduct("Cafe", null, null);
+        var banana = saveProduct("Banana", null, null);
+        var arroz = saveProduct("Arroz", null, null);
+        var cafe = saveProduct("Cafe", null, null);
+        var ownIds = Set.of(banana.getId(), arroz.getId(), cafe.getId());
 
-        var all = productRepository.search(null, PageRequest.of(0, 20)).getContent();
+        var all = productRepository.search(null, PageRequest.of(0, 100)).getContent();
 
         assertEquals(List.of("Arroz", "Banana", "Cafe"),
-                all.stream().map(Product::getNormalizedName).toList());
+                all.stream()
+                   .filter(p -> ownIds.contains(p.getId()))
+                   .map(Product::getNormalizedName)
+                   .toList());
     }
 
     // ---------------------------------------------------------- findByMetadata
@@ -95,15 +99,19 @@ class ProductRepositoryTest {
 
     @Test
     void findMissingBrand_returnsNullAndEmptyBrandsOrderedByName() {
-        saveProduct("Cenoura", null, null);
+        var cenoura = saveProduct("Cenoura", null, null);
         saveProduct("Arroz Tio Joao", null, "Tio Joao");
-        productRepository.save(Product.builder()
+        var batata = productRepository.save(Product.builder()
                 .normalizedName("Batata").brand("").category(ProductCategory.PRODUCE).build());
+        var missingBrandIds = Set.of(cenoura.getId(), batata.getId());
 
         var missing = productRepository.findMissingBrand(PageRequest.of(0, 20)).getContent();
 
         assertEquals(List.of("Batata", "Cenoura"),
-                missing.stream().map(Product::getNormalizedName).toList());
+                missing.stream()
+                       .filter(p -> missingBrandIds.contains(p.getId()))
+                       .map(Product::getNormalizedName)
+                       .toList());
     }
 
     // ---------------------------------------------------------- findDuplicateCandidates
