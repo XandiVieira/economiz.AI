@@ -735,13 +735,24 @@ opens; `GET /products/recently-viewed` powers a "vistos recentemente" shelf
 wrapped in the paged search shape, if that's more convenient.
 
 **Friendly name in search results (2026-08-27):** `ProductResponse` carries
-`friendlyDescription` — the household's own rename of the product
-(`household_product_aliases`), null when never renamed. It's populated in
-`GET /products` **search results** (so the "Adicionar item" screen shows the
-name the user knows). Since 2026-08-28 it's also populated in
-`GET /products/{id}`, `GET /products/by-ean/{ean}` (the tracked-product branch)
-and `GET /products/recently-viewed`. Prefer `friendlyDescription ??
-normalizedName` for display.
+`friendlyDescription` — the household's friendly name for the product, null
+when it has none. It's populated in `GET /products` **search results** (so
+the "Adicionar item" screen shows the name the user knows). Since 2026-08-28
+it's also populated in `GET /products/{id}`, `GET /products/by-ean/{ean}`
+(the tracked-product branch) and `GET /products/recently-viewed`. Prefer
+`friendlyDescription ?? normalizedName` for display.
+
+**Resolution order (2026-09-02):** explicit alias (`household_product_aliases`,
+set via `POST /products/{id}/aliases` or auto-remembered whenever the user
+renames a linked item pre-confirmation) → the household's friendly name from
+its most recent **confirmed** receipt for the same product. The second tier
+matters because some items get a `friendlyDescription` without ever creating
+an explicit alias (e.g. an item added via `POST /receipts/{id}/items`, which
+sets it directly on the item) — before this, those names showed up correctly
+on the shopping list and receipt screens but not in product search/detail,
+since those endpoints only checked the alias table. Both tiers are per
+household, so different households can still see different names for the
+same catalog product.
 
 `GET /products` stays the **global** catalog (for autocomplete when creating alerts/rules etc.). For "the products I buy", use the two household-scoped endpoints:
 

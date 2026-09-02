@@ -44,7 +44,7 @@ public class ProductRecentViewService {
     @Transactional(readOnly = true)
     public List<ProductResponse> listRecent(User user, int limit) {
         var views = recentViewRepository.findRecentByUserId(user.getId(), PageRequest.of(0, limit));
-        var friendlyNames = householdProductAliasService.friendlyNamesFor(user.getHousehold().getId(),
+        var friendlyNames = householdProductAliasService.resolvedNamesFor(user.getHousehold().getId(),
                 views.stream().map(view -> view.getProduct().getId()).toList());
         return views.stream()
                 .map(view -> ProductResponse.from(view.getProduct(), false,

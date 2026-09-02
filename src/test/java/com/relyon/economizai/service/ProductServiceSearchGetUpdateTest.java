@@ -60,8 +60,11 @@ class ProductServiceSearchGetUpdateTest {
 
     @BeforeEach
     void setUp() {
+        var householdProductAliasService =
+                new HouseholdProductAliasService(householdProductAliasRepository, receiptItemRepository);
         productService = new ProductService(productRepository, aliasRepository, householdProductAliasRepository,
-                receiptItemRepository, priceObservationRepository, productExtractor, eanCatalogService);
+                receiptItemRepository, priceObservationRepository, productExtractor, eanCatalogService,
+                householdProductAliasService);
     }
 
     private User user() {
@@ -136,6 +139,32 @@ class ProductServiceSearchGetUpdateTest {
 
         assertEquals("Arroz Comum", result.getContent().get(0).friendlyDescription());
         assertEquals("Arroz Tio Joao 5kg", result.getContent().get(0).normalizedName());
+    }
+
+    @Test
+    void search_fallsBackToReceiptFriendlyNameWhenNoExplicitAlias() {
+        // Bug: a product renamed only via a confirmed receipt item (e.g. added
+        // through ReceiptService.addItem, which never creates a household alias)
+        // must still show its friendly name in search results, like it already
+        // does on the shopping list / receipt screens.
+        var pageable = PageRequest.of(0, 20);
+        var id = UUID.randomUUID();
+        var product = buildProduct(id);
+        when(productRepository.searchAll("arroz")).thenReturn(List.of(product));
+        when(receiptItemRepository.findProductIdsWithHistoryForHousehold(anyList(), eq(HOUSEHOLD_ID)))
+                .thenReturn(List.of());
+        when(priceObservationRepository.findProductIdsObservedAtVisitedMarkets(anyList(), eq(HOUSEHOLD_ID)))
+                .thenReturn(List.of());
+        when(priceObservationRepository.findProductIdsObservedInHouseholdCities(anyList(), eq(HOUSEHOLD_ID)))
+                .thenReturn(List.of());
+        when(householdProductAliasRepository.findAllByHouseholdIdAndProductIdIn(eq(HOUSEHOLD_ID), anyList()))
+                .thenReturn(List.of());
+        when(receiptItemRepository.findLatestFriendlyDescriptionsForHousehold(anyList(), eq(HOUSEHOLD_ID)))
+                .thenReturn(List.<Object[]>of(new Object[]{id, "Arroz da nota"}));
+
+        var result = productService.search("arroz", user(), pageable);
+
+        assertEquals("Arroz da nota", result.getContent().get(0).friendlyDescription());
     }
 
     @Test
@@ -351,8 +380,8 @@ class ProductServiceSearchGetUpdateTest {
         var id = UUID.randomUUID();
         var caller = user();
         when(productRepository.findById(id)).thenReturn(Optional.of(buildProduct(id)));
-        when(householdProductAliasRepository.findByHouseholdIdAndProductId(caller.getHousehold().getId(), id))
-                .thenReturn(Optional.of(HouseholdProductAlias.builder()
+        when(householdProductAliasRepository.findAllByHouseholdIdAndProductIdIn(eq(caller.getHousehold().getId()), anyList()))
+                .thenReturn(List.of(HouseholdProductAlias.builder()
                         .household(caller.getHousehold())
                         .product(buildProduct(id))
                         .friendlyName("Arroz da casa")
@@ -361,5 +390,20 @@ class ProductServiceSearchGetUpdateTest {
         var response = productService.get(id, caller);
 
         assertEquals("Arroz da casa", response.friendlyDescription());
+    }
+
+    @Test
+    void get_fallsBackToReceiptFriendlyNameWhenNoExplicitAlias() {
+        var id = UUID.randomUUID();
+        var caller = user();
+        when(productRepository.findById(id)).thenReturn(Optional.of(buildProduct(id)));
+        when(householdProductAliasRepository.findAllByHouseholdIdAndProductIdIn(eq(caller.getHousehold().getId()), anyList()))
+                .thenReturn(List.of());
+        when(receiptItemRepository.findLatestFriendlyDescriptionsForHousehold(anyList(), eq(caller.getHousehold().getId())))
+                .thenReturn(List.<Object[]>of(new Object[]{id, "Arroz da nota"}));
+
+        var response = productService.get(id, caller);
+
+        assertEquals("Arroz da nota", response.friendlyDescription());
     }
 }

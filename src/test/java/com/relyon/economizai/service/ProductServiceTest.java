@@ -53,6 +53,7 @@ class ProductServiceTest {
     @Mock private PriceObservationRepository priceObservationRepository;
     @Mock private ProductExtractor productExtractor;
     @Mock private EanCatalogService eanCatalogService;
+    @Mock private HouseholdProductAliasService householdProductAliasService;
 
     @InjectMocks private ProductService productService;
 

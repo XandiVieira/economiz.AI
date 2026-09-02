@@ -16,6 +16,18 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-09-02 — Corrigido: `friendlyDescription` faltando na busca/detalhe de produto para itens só renomeados via nota
+
+`GET /products` (busca), `GET /products/{id}`, `GET /products/by-ean/{ean}` e
+`GET /products/recently-viewed` agora também caem de volta no nome amigável
+que o domicílio deu ao produto na nota fiscal confirmada, quando não existe
+um alias explícito (`household_product_aliases`). Antes, esses endpoints só
+olhavam o alias explícito — um produto renomeado apenas ao adicionar um item
+faltante na nota (`POST /receipts/{id}/items`) aparecia certo na lista de
+compras/nota, mas em branco (`friendlyDescription: null`) na busca. Ordem de
+resolução: alias explícito → nome mais recente de nota confirmada → `null`.
+Nenhuma mudança de shape, só de quando o campo vem preenchido.
+
 ## 2026-08-28 — `friendlyDescription` em TODOS os endpoints que retornam produto
 
 Todo endpoint que devolve um nome de produto agora traz **os dois campos**: o
