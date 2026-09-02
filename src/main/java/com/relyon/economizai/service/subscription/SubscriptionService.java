@@ -1,5 +1,6 @@
 package com.relyon.economizai.service.subscription;
 
+import com.relyon.economizai.config.CollaborativeProperties;
 import com.relyon.economizai.dto.response.SubscriptionStatusResponse;
 import com.relyon.economizai.model.Subscription;
 import com.relyon.economizai.model.User;
@@ -27,6 +28,7 @@ public class SubscriptionService {
 
     private final SubscriptionRepository subscriptionRepository;
     private final UserRepository userRepository;
+    private final CollaborativeProperties collaborativeProperties;
 
     /**
      * Upsert the user's subscription to ACTIVE and set their tier to PRO. Used
@@ -64,6 +66,29 @@ public class SubscriptionService {
         userRepository.save(user);
         log.info("subscription.expired user={} periodEnd={}",
                 LogMasker.email(user.getEmail()), subscription.getCurrentPeriodEnd());
+    }
+
+    /**
+     * Signup promo hook ("até segunda ordem"): grants a freshly-registered user
+     * PRO for {@code economizai.subscription.promo.months} from today, when the
+     * promo is enabled. Called right after user creation by both the
+     * email/password and social registration flows.
+     *
+     * @return the granted period end, or {@code null} when the promo is
+     * disabled (no grant happened) — callers use this to tell the FE whether
+     * to show the signup-promo banner.
+     */
+    @Transactional
+    public LocalDateTime grantSignupPromoIfEnabled(User user) {
+        var promo = collaborativeProperties.getSubscription().getPromo();
+        if (!promo.isEnabled()) {
+            return null;
+        }
+        var periodEnd = LocalDateTime.now().plusMonths(promo.getMonths());
+        activatePro(user, "manual", null, periodEnd);
+        log.info("subscription.signup_promo_granted user={} months={}",
+                LogMasker.email(user.getEmail()), promo.getMonths());
+        return periodEnd;
     }
 
     /** Current tier + provider lifecycle for the self-serve status endpoint. */

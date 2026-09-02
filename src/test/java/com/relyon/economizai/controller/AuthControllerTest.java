@@ -95,7 +95,8 @@ class AuthControllerTest {
     @Test
     void register_shouldReturn201WithToken() throws Exception {
         var request = new RegisterRequest("John", "john@test.com", "password123", "1.0", "1.0", null);
-        var response = new AuthResponse("jwt-token", "refresh-token", sampleUserResponse());
+        var promoValidUntil = LocalDateTime.now().plusMonths(3);
+        var response = new AuthResponse("jwt-token", "refresh-token", sampleUserResponse(), true, promoValidUntil);
         when(userService.register(any(RegisterRequest.class))).thenReturn(response);
 
         mockMvc.perform(post("/api/v1/auth/register")
@@ -104,7 +105,9 @@ class AuthControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.token").value("jwt-token"))
                 .andExpect(jsonPath("$.user.name").value("John"))
-                .andExpect(jsonPath("$.user.subscriptionTier").value("FREE"));
+                .andExpect(jsonPath("$.user.subscriptionTier").value("FREE"))
+                .andExpect(jsonPath("$.signupPromoGranted").value(true))
+                .andExpect(jsonPath("$.signupPromoValidUntil").exists());
     }
 
     @Test
@@ -132,7 +135,7 @@ class AuthControllerTest {
     @Test
     void login_shouldReturn200WithToken() throws Exception {
         var request = new LoginRequest("john@test.com", "password123", null);
-        var response = new AuthResponse("jwt-token", "refresh-token", sampleUserResponse());
+        var response = new AuthResponse("jwt-token", "refresh-token", sampleUserResponse(), false, null);
         when(userService.login(any(LoginRequest.class))).thenReturn(response);
 
         mockMvc.perform(post("/api/v1/auth/login")
@@ -145,7 +148,7 @@ class AuthControllerTest {
     @Test
     void google_shouldReturn200WithToken() throws Exception {
         var request = new GoogleLoginRequest("google-id-token", null);
-        var response = new AuthResponse("jwt-token", "refresh-token", sampleUserResponse());
+        var response = new AuthResponse("jwt-token", "refresh-token", sampleUserResponse(), false, null);
         when(socialLoginService.loginWithGoogle(any(GoogleLoginRequest.class))).thenReturn(response);
 
         mockMvc.perform(post("/api/v1/auth/google")

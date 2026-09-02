@@ -44,6 +44,7 @@ import com.relyon.economizai.repository.NotificationRuleRepository;
 import com.relyon.economizai.repository.ReceiptRepository;
 import com.relyon.economizai.repository.ShoppingListRepository;
 import com.relyon.economizai.repository.SubscriptionRepository;
+import com.relyon.economizai.service.subscription.SubscriptionService;
 import com.relyon.economizai.repository.UserRepository;
 import com.relyon.economizai.repository.UserWatchedMarketRepository;
 import com.relyon.economizai.security.JwtService;
@@ -164,6 +165,9 @@ class UserServiceTest {
     @Mock
     private LoginActivityRecorder loginActivityRecorder;
 
+    @Mock
+    private SubscriptionService subscriptionService;
+
     @InjectMocks
     private UserService userService;
 
@@ -211,7 +215,28 @@ class UserServiceTest {
         assertEquals("John", response.user().name());
         assertEquals("john@test.com", response.user().email());
         assertEquals(SubscriptionTier.FREE, response.user().subscriptionTier());
+        assertEquals(false, response.signupPromoGranted());
+        assertEquals(null, response.signupPromoValidUntil());
         verify(userRepository).save(any(User.class));
+        verify(subscriptionService).grantSignupPromoIfEnabled(any(User.class));
+    }
+
+    @Test
+    void register_reflectsSignupPromoGrantInResponse() {
+        var request = new RegisterRequest("John", "john@test.com", "password123", "1.0", "1.0", null);
+        var household = Household.builder().id(UUID.randomUUID()).inviteCode("ABC123").build();
+        when(userRepository.existsByEmail("john@test.com")).thenReturn(false);
+        when(householdService.createSoloHousehold()).thenReturn(household);
+        when(passwordEncoder.encode("password123")).thenReturn("encoded");
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(jwtService.generateToken(any(User.class))).thenReturn("jwt-token");
+        var promoValidUntil = LocalDateTime.now().plusMonths(3);
+        when(subscriptionService.grantSignupPromoIfEnabled(any(User.class))).thenReturn(promoValidUntil);
+
+        var response = userService.register(request);
+
+        assertEquals(true, response.signupPromoGranted());
+        assertEquals(promoValidUntil, response.signupPromoValidUntil());
     }
 
     @Test

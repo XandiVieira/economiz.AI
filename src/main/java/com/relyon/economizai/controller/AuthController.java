@@ -103,7 +103,7 @@ public class AuthController {
         var user = refreshTokenService.rotate(request.refreshToken());
         var accessToken = jwtService.generateToken(user);
         var newRefresh = refreshTokenService.issue(user);
-        return ResponseEntity.ok(new AuthResponse(accessToken, newRefresh, UserResponse.from(user)));
+        return ResponseEntity.ok(new AuthResponse(accessToken, newRefresh, UserResponse.from(user), false, null));
     }
 
     @PostMapping("/logout")

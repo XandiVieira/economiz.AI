@@ -17,6 +17,7 @@ import com.relyon.economizai.service.auth.LoginActivityRecorder;
 import com.relyon.economizai.service.auth.RefreshTokenService;
 import com.relyon.economizai.service.notifications.NotificationRuleService;
 import com.relyon.economizai.service.privacy.LogMasker;
+import com.relyon.economizai.service.subscription.SubscriptionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -51,6 +52,7 @@ public class SocialLoginService {
     private final HouseholdService householdService;
     private final NotificationRuleService notificationRuleService;
     private final LoginActivityRecorder loginActivityRecorder;
+    private final SubscriptionService subscriptionService;
 
     @Transactional
     public AuthResponse loginWithGoogle(GoogleLoginRequest request) {
@@ -58,9 +60,9 @@ public class SocialLoginService {
         if (claims.subject() == null || claims.subject().isBlank()) {
             throw new InvalidOAuthTokenException();
         }
-        var user = resolveOrCreateUser(AuthProvider.GOOGLE, claims.subject(), claims.email(),
+        var resolved = resolveOrCreateUser(AuthProvider.GOOGLE, claims.subject(), claims.email(),
                 claims.emailVerified(), claims.name(), request.platform());
-        return issueAuth(user);
+        return issueAuth(resolved.user(), resolved.signupPromoValidUntil());
     }
 
     @Transactional
@@ -69,26 +71,29 @@ public class SocialLoginService {
         if (claims.subject() == null || claims.subject().isBlank()) {
             throw new InvalidOAuthTokenException();
         }
-        var user = resolveOrCreateUser(AuthProvider.APPLE, claims.subject(), claims.email(),
+        var resolved = resolveOrCreateUser(AuthProvider.APPLE, claims.subject(), claims.email(),
                 claims.emailVerified(), claims.name(), request.platform());
-        return issueAuth(user);
+        return issueAuth(resolved.user(), resolved.signupPromoValidUntil());
     }
 
-    private User resolveOrCreateUser(AuthProvider provider, String subject, String email,
+    /** {@code signupPromoValidUntil} is non-null only when this call just created the account and granted it the promo. */
+    private record ResolvedUser(User user, LocalDateTime signupPromoValidUntil) {}
+
+    private ResolvedUser resolveOrCreateUser(AuthProvider provider, String subject, String email,
                                      boolean emailVerified, String name, Platform platform) {
         var bySubject = userRepository.findByAuthProviderAndProviderSubject(provider, subject);
         if (bySubject.isPresent()) {
             var user = bySubject.get();
             log.info("social.login matched_by_subject provider={} user={}", provider, LogMasker.email(user.getEmail()));
             loginActivityRecorder.recordLogin(user, platform);
-            return user;
+            return new ResolvedUser(user, null);
         }
         if (email != null && !email.isBlank()) {
             var byEmail = userRepository.findByEmail(email);
             if (byEmail.isPresent()) {
                 var user = linkProvider(byEmail.get(), provider, subject, emailVerified);
                 loginActivityRecorder.recordLogin(user, platform);
-                return user;
+                return new ResolvedUser(user, null);
             }
         }
         return createSocialUser(provider, subject, email, emailVerified, name, platform);
@@ -114,7 +119,7 @@ public class SocialLoginService {
         return user;
     }
 
-    private User createSocialUser(AuthProvider provider, String subject, String email,
+    private ResolvedUser createSocialUser(AuthProvider provider, String subject, String email,
                                   boolean emailVerified, String name, Platform platform) {
         if (email == null || email.isBlank()) {
             log.warn("social.login create_rejected_missing_email provider={}", provider);
@@ -138,15 +143,17 @@ public class SocialLoginService {
                 .build();
         var savedUser = userRepository.save(user);
         notificationRuleService.ensureDefaults(savedUser);
+        var signupPromoValidUntil = subscriptionService.grantSignupPromoIfEnabled(savedUser);
         loginActivityRecorder.recordRegistration(savedUser, platform);
         log.info("social.login created provider={} user={} household={}",
                 provider, LogMasker.email(savedUser.getEmail()), household.getId());
-        return savedUser;
+        return new ResolvedUser(savedUser, signupPromoValidUntil);
     }
 
-    private AuthResponse issueAuth(User user) {
+    private AuthResponse issueAuth(User user, LocalDateTime signupPromoValidUntil) {
         var token = jwtService.generateToken(user);
         var refreshToken = refreshTokenService.issue(user);
-        return new AuthResponse(token, refreshToken, UserResponse.from(user));
+        return new AuthResponse(token, refreshToken, UserResponse.from(user),
+                signupPromoValidUntil != null, signupPromoValidUntil);
     }
 }

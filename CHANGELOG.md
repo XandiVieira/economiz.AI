@@ -16,6 +16,26 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-09-02 — Promo: todo usuário vira PRO ("até segunda ordem")
+
+Toda conta existente foi promovida para `subscriptionTier: "PRO"` com validade
+de **6 meses** a partir de hoje (migration `V68__grant_premium_promo.sql`).
+Toda conta **nova** (registro por senha ou social login) recebe PRO
+automático por **3 meses** a partir do próprio cadastro, enquanto a promo
+estiver ligada (`economizai.subscription.promo.enabled`, ON por padrão — pode
+ser desligada via env var `SUBSCRIPTION_PROMO_ENABLED=false` sem deploy de
+código; duração ajustável via `SUBSCRIPTION_PROMO_MONTHS`). `GET
+/subscriptions/status` reflete isso normalmente (`provider: "manual"`,
+`currentPeriodEnd` = data do grant + duração da promo).
+
+**Mudança de shape:** `POST /auth/register`, `/auth/google` e `/auth/apple`
+agora retornam dois campos novos, sempre presentes: `signupPromoGranted`
+(boolean) e `signupPromoValidUntil` (ISO datetime ou `null`). Vêm `true` +
+preenchido **só** na chamada que efetivamente criou a conta e recebeu a
+promo — nunca em `/login` nem `/refresh`. Use isso pra disparar o banner
+"você ganhou N meses grátis" uma única vez, logo após o cadastro, sem
+precisar inferir nada a partir de `subscriptionTier`.
+
 ## 2026-09-02 — Corrigido: `friendlyDescription` faltando na busca/detalhe de produto para itens só renomeados via nota
 
 `GET /products` (busca), `GET /products/{id}`, `GET /products/by-ean/{ean}` e
