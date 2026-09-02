@@ -9,7 +9,6 @@ import com.relyon.economizai.dto.response.UnmatchedItemResponse;
 import com.relyon.economizai.exception.EanConflictException;
 import com.relyon.economizai.exception.ProductAliasConflictException;
 import com.relyon.economizai.exception.ProductNotFoundException;
-import com.relyon.economizai.model.HouseholdProductAlias;
 import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.ProductAlias;
 import com.relyon.economizai.model.ReceiptItem;
@@ -35,7 +34,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -54,6 +52,7 @@ public class ProductService {
     private final PriceObservationRepository priceObservationRepository;
     private final ProductExtractor productExtractor;
     private final EanCatalogService eanCatalogService;
+    private final HouseholdProductAliasService householdProductAliasService;
 
     @Transactional(readOnly = true)
     public Page<ProductResponse> search(String query, User user, Pageable pageable) {
@@ -68,7 +67,7 @@ public class ProductService {
         var productIds = products.stream().map(Product::getId).toList();
         var ranking = ProductSearchRanking.from(productIds, householdId, user,
                 receiptItemRepository, priceObservationRepository);
-        var friendlyByProduct = friendlyNamesByProduct(householdId, productIds);
+        var friendlyByProduct = householdProductAliasService.resolvedNamesFor(householdId, productIds);
         var sorted = products.stream()
                 .sorted(ranking.comparator())
                 .map(product -> ProductResponse.from(product, ranking.wasBought(product.getId()),
@@ -77,25 +76,11 @@ public class ProductService {
         return page(sorted, pageable);
     }
 
-    /** The household's own renames (household_product_aliases) for these products, keyed by product id. */
-    private Map<UUID, String> friendlyNamesByProduct(UUID householdId, List<UUID> productIds) {
-        if (productIds.isEmpty()) return Map.of();
-        return householdProductAliasRepository.findAllByHouseholdIdAndProductIdIn(householdId, productIds).stream()
-                .collect(Collectors.toMap(alias -> alias.getProduct().getId(), HouseholdProductAlias::getFriendlyName));
-    }
-
     @Transactional(readOnly = true)
     public ProductResponse get(UUID id, User user) {
         var product = loadProduct(id);
-        return ProductResponse.from(product, false, friendlyNameFor(user, product));
-    }
-
-    /** The caller household's own rename of this product, null when never renamed. */
-    private String friendlyNameFor(User user, Product product) {
-        return householdProductAliasRepository
-                .findByHouseholdIdAndProductId(user.getHousehold().getId(), product.getId())
-                .map(HouseholdProductAlias::getFriendlyName)
-                .orElse(null);
+        return ProductResponse.from(product, false,
+                householdProductAliasService.resolvedNameFor(user.getHousehold().getId(), product.getId()));
     }
 
     /**
@@ -130,7 +115,8 @@ public class ProductService {
         var product = productRepository.findByEan(digits);
         if (product.isPresent()) {
             return EanLookupResponse.ofProduct(
-                    ProductResponse.from(product.get(), false, friendlyNameFor(user, product.get())));
+                    ProductResponse.from(product.get(), false,
+                            householdProductAliasService.resolvedNameFor(user.getHousehold().getId(), product.get().getId())));
         }
         return eanCatalogService.lookup(digits)
                 .map(EanLookupResponse::ofCatalog)
@@ -204,7 +190,8 @@ public class ProductService {
         var linked = backfillByDescription(unmatched, normalized, product);
         log.info("Alias '{}' → product {}; backfilled {} items in household {}",
                 normalized, product.getId(), linked, user.getHousehold().getId());
-        return ProductResponse.from(product, false, friendlyNameFor(user, product));
+        return ProductResponse.from(product, false,
+                householdProductAliasService.resolvedNameFor(user.getHousehold().getId(), product.getId()));
     }
 
     @Transactional(readOnly = true)

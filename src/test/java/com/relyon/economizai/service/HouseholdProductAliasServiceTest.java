@@ -5,6 +5,7 @@ import com.relyon.economizai.model.HouseholdProductAlias;
 import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.repository.HouseholdProductAliasRepository;
+import com.relyon.economizai.repository.ReceiptItemRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -12,13 +13,18 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -28,6 +34,7 @@ import static org.mockito.Mockito.when;
 class HouseholdProductAliasServiceTest {
 
     @Mock private HouseholdProductAliasRepository repository;
+    @Mock private ReceiptItemRepository receiptItemRepository;
     @InjectMocks private HouseholdProductAliasService service;
 
     private Household household() {
@@ -140,5 +147,74 @@ class HouseholdProductAliasServiceTest {
                 .thenReturn(Optional.empty());
 
         assertNull(service.findFor(household, product));
+    }
+
+    @Test
+    void resolvedNamesFor_emptyIds_returnsEmptyMapWithoutQuerying() {
+        var result = service.resolvedNamesFor(UUID.randomUUID(), List.of());
+
+        assertTrue(result.isEmpty());
+        verifyNoInteractions(repository, receiptItemRepository);
+    }
+
+    @Test
+    void resolvedNamesFor_explicitAliasTakesPrecedenceOverReceiptName() {
+        var householdId = UUID.randomUUID();
+        var product = product();
+        var alias = HouseholdProductAlias.builder().product(product).friendlyName("Arroz da casa").build();
+        when(repository.findAllByHouseholdIdAndProductIdIn(eq(householdId), anyList()))
+                .thenReturn(List.of(alias));
+        when(receiptItemRepository.findLatestFriendlyDescriptionsForHousehold(anyList(), eq(householdId)))
+                .thenReturn(List.<Object[]>of(new Object[]{product.getId(), "Arroz da nota"}));
+
+        var result = service.resolvedNamesFor(householdId, List.of(product.getId()));
+
+        assertEquals("Arroz da casa", result.get(product.getId()));
+    }
+
+    @Test
+    void resolvedNamesFor_noAlias_fallsBackToLatestConfirmedReceiptFriendlyName() {
+        var householdId = UUID.randomUUID();
+        var product = product();
+        when(repository.findAllByHouseholdIdAndProductIdIn(eq(householdId), anyList()))
+                .thenReturn(List.of());
+        when(receiptItemRepository.findLatestFriendlyDescriptionsForHousehold(anyList(), eq(householdId)))
+                .thenReturn(List.<Object[]>of(new Object[]{product.getId(), "Arroz da nota"}));
+
+        var result = service.resolvedNamesFor(householdId, List.of(product.getId()));
+
+        assertEquals("Arroz da nota", result.get(product.getId()));
+    }
+
+    @Test
+    void resolvedNamesFor_neitherAliasNorReceiptName_omitsProduct() {
+        var householdId = UUID.randomUUID();
+        var product = product();
+        when(repository.findAllByHouseholdIdAndProductIdIn(eq(householdId), anyList()))
+                .thenReturn(List.of());
+        when(receiptItemRepository.findLatestFriendlyDescriptionsForHousehold(anyList(), eq(householdId)))
+                .thenReturn(List.of());
+
+        var result = service.resolvedNamesFor(householdId, List.of(product.getId()));
+
+        assertEquals(Map.of(), result);
+    }
+
+    @Test
+    void resolvedNameFor_nullProductId_returnsNullWithoutQuerying() {
+        assertNull(service.resolvedNameFor(UUID.randomUUID(), null));
+        verifyNoInteractions(repository, receiptItemRepository);
+    }
+
+    @Test
+    void resolvedNameFor_delegatesToBatchResolution() {
+        var householdId = UUID.randomUUID();
+        var product = product();
+        when(repository.findAllByHouseholdIdAndProductIdIn(eq(householdId), anyList()))
+                .thenReturn(List.of());
+        when(receiptItemRepository.findLatestFriendlyDescriptionsForHousehold(anyList(), eq(householdId)))
+                .thenReturn(List.<Object[]>of(new Object[]{product.getId(), "Arroz da nota"}));
+
+        assertEquals("Arroz da nota", service.resolvedNameFor(householdId, product.getId()));
     }
 }

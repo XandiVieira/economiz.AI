@@ -5,12 +5,14 @@ import com.relyon.economizai.model.HouseholdProductAlias;
 import com.relyon.economizai.model.Product;
 import com.relyon.economizai.model.ReceiptItem;
 import com.relyon.economizai.repository.HouseholdProductAliasRepository;
+import com.relyon.economizai.repository.ReceiptItemRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -22,6 +24,7 @@ import java.util.stream.Collectors;
 public class HouseholdProductAliasService {
 
     private final HouseholdProductAliasRepository repository;
+    private final ReceiptItemRepository receiptItemRepository;
 
     /**
      * If the user named this item AND it's linked to a Product, remember
@@ -68,5 +71,32 @@ public class HouseholdProductAliasService {
         return repository.findAllByHouseholdIdAndProductIdIn(householdId, List.copyOf(productIds)).stream()
                 .collect(Collectors.toMap(alias -> alias.getProduct().getId(),
                         HouseholdProductAlias::getFriendlyName));
+    }
+
+    /**
+     * Display-friendly name per product: the explicit alias when set, else the
+     * household's most recent friendly name from a confirmed receipt for the
+     * same product. The second tier catches items renamed via {@code
+     * ReceiptService.addItem} (or before their product link existed) — those
+     * never create an explicit alias, but should still surface consistently
+     * with the shopping list / receipt screens. Null when neither exists.
+     * Batch variant for list endpoints (product search, recently-viewed).
+     */
+    @Transactional(readOnly = true)
+    public Map<UUID, String> resolvedNamesFor(UUID householdId, Collection<UUID> productIds) {
+        if (productIds.isEmpty()) return Map.of();
+        var ids = List.copyOf(productIds);
+        var resolved = new HashMap<>(friendlyNamesFor(householdId, ids));
+        for (var row : receiptItemRepository.findLatestFriendlyDescriptionsForHousehold(ids, householdId)) {
+            resolved.putIfAbsent((UUID) row[0], (String) row[1]);
+        }
+        return resolved;
+    }
+
+    /** Single-product convenience wrapper around {@link #resolvedNamesFor}. */
+    @Transactional(readOnly = true)
+    public String resolvedNameFor(UUID householdId, UUID productId) {
+        if (productId == null) return null;
+        return resolvedNamesFor(householdId, List.of(productId)).get(productId);
     }
 }
