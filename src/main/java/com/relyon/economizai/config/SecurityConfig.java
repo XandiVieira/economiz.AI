@@ -3,7 +3,9 @@ package com.relyon.economizai.config;
 import com.relyon.economizai.security.JwtAuthenticationFilter;
 import com.relyon.economizai.security.ratelimit.RateLimitFilter;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -27,9 +29,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.filter.CorsFilter;
 
 import java.util.List;
 
+@Slf4j
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
@@ -87,7 +91,8 @@ public class SecurityConfig {
     @Order(2)
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                // Picks up the corsFilter bean below (logs rejected origins).
+                .cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
@@ -146,8 +151,25 @@ public class SecurityConfig {
         return config.getAuthenticationManager();
     }
 
+    /** Picked up by {@code .cors()} in the main chain; rejections get logged. */
+    @Bean
+    public CorsFilter corsFilter() {
+        var filter = new CorsFilter(corsConfigurationSource());
+        filter.setCorsProcessor(new LoggingCorsProcessor());
+        return filter;
+    }
+
+    /** Keep the CorsFilter inside the security chain only — no container-level auto-registration. */
+    @Bean
+    public FilterRegistrationBean<CorsFilter> corsFilterRegistration(CorsFilter corsFilter) {
+        var registration = new FilterRegistrationBean<>(corsFilter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
+        log.info("cors.configured allowed-origins={}", allowedOrigins);
         var configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of(allowedOrigins.split(",")));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
