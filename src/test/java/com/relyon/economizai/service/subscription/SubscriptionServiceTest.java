@@ -1,5 +1,6 @@
 package com.relyon.economizai.service.subscription;
 
+import com.relyon.economizai.config.CollaborativeProperties;
 import com.relyon.economizai.model.Subscription;
 import com.relyon.economizai.model.User;
 import com.relyon.economizai.model.enums.SubscriptionStatus;
@@ -18,7 +19,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -27,6 +30,7 @@ class SubscriptionServiceTest {
 
     @Mock private SubscriptionRepository subscriptionRepository;
     @Mock private UserRepository userRepository;
+    @Mock private CollaborativeProperties collaborativeProperties;
 
     @InjectMocks private SubscriptionService service;
 
@@ -127,6 +131,44 @@ class SubscriptionServiceTest {
         assertEquals(SubscriptionStatus.ACTIVE, status.status());
         assertEquals("revenuecat", status.provider());
         assertEquals(periodEnd, status.currentPeriodEnd());
+    }
+
+    @Test
+    void grantSignupPromoIfEnabled_grantsProForConfiguredMonthsWhenEnabled() {
+        var user = freeUser();
+        var subscription = new CollaborativeProperties.Subscription();
+        subscription.getPromo().setEnabled(true);
+        subscription.getPromo().setMonths(6);
+        when(collaborativeProperties.getSubscription()).thenReturn(subscription);
+        when(subscriptionRepository.findByUserId(user.getId())).thenReturn(Optional.empty());
+        when(subscriptionRepository.save(any(Subscription.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var before = LocalDateTime.now().plusMonths(6);
+        var returned = service.grantSignupPromoIfEnabled(user);
+        var after = LocalDateTime.now().plusMonths(6);
+
+        assertEquals(SubscriptionTier.PRO, user.getSubscriptionTier());
+        var captor = ArgumentCaptor.forClass(Subscription.class);
+        verify(subscriptionRepository).save(captor.capture());
+        var saved = captor.getValue();
+        assertEquals("manual", saved.getProvider());
+        assertTrue(!saved.getCurrentPeriodEnd().isBefore(before) && !saved.getCurrentPeriodEnd().isAfter(after));
+        assertEquals(saved.getCurrentPeriodEnd(), returned);
+    }
+
+    @Test
+    void grantSignupPromoIfEnabled_doesNothingWhenPromoDisabled() {
+        var user = freeUser();
+        var subscription = new CollaborativeProperties.Subscription();
+        subscription.getPromo().setEnabled(false);
+        when(collaborativeProperties.getSubscription()).thenReturn(subscription);
+
+        var returned = service.grantSignupPromoIfEnabled(user);
+
+        assertEquals(SubscriptionTier.FREE, user.getSubscriptionTier());
+        assertEquals(null, returned);
+        verify(subscriptionRepository, never()).save(any());
+        verify(userRepository, never()).save(any());
     }
 
     @Test

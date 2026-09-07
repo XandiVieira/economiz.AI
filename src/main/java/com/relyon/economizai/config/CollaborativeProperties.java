@@ -47,10 +47,28 @@ public class CollaborativeProperties {
          */
         private boolean enforce = false;
         private final Free free = new Free();
+        private final Promo promo = new Promo();
 
         public boolean isEnforce() { return enforce; }
         public void setEnforce(boolean v) { this.enforce = v; }
         public Free getFree() { return free; }
+        public Promo getPromo() { return promo; }
+
+        /**
+         * Signup promo (2026-09-02, "até segunda ordem"): every new user is
+         * granted PRO for {@code months} from their own registration date.
+         * Toggle {@code enabled} off via {@code SUBSCRIPTION_PROMO_ENABLED=false}
+         * to end the promo without a code change/revert.
+         */
+        public static class Promo {
+            private boolean enabled = true;
+            private int months = 3;
+
+            public boolean isEnabled() { return enabled; }
+            public void setEnabled(boolean v) { this.enabled = v; }
+            public int getMonths() { return months; }
+            public void setMonths(int v) { this.months = v; }
+        }
 
         public static class Free {
             /** Max pinned watched markets for FREE users. */

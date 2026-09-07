@@ -5270,10 +5270,10 @@
 								"type": "text/javascript",
 								"exec": [
 									"pm.test('Register returns 201', function () { pm.response.to.have.status(201); });",
-									"pm.test('Response has token, default FREE tier, contributionOptIn=true', function () {",
+									"pm.test('Response has token, tier matches signup promo, contributionOptIn=true', function () {",
 									"    var d = pm.response.json();",
 									"    pm.expect(d.token).to.be.a('string');",
-									"    pm.expect(d.user.subscriptionTier).to.eql('FREE');",
+									"    pm.expect(d.user.subscriptionTier).to.eql(d.signupPromoGranted ? 'PRO' : 'FREE');",
 									"    pm.expect(d.user.contributionOptIn).to.eql(true);",
 									"    pm.collectionVariables.set('token', d.token);",
 									"    pm.collectionVariables.set('e2eUserId', d.user.id);",

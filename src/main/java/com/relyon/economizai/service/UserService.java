@@ -50,6 +50,7 @@ import com.relyon.economizai.repository.ShoppingListRepository;
 import com.relyon.economizai.repository.SubscriptionRepository;
 import com.relyon.economizai.repository.UserRepository;
 import com.relyon.economizai.repository.UserWatchedMarketRepository;
+import com.relyon.economizai.service.subscription.SubscriptionService;
 import com.relyon.economizai.repository.NotificationPreferenceRepository;
 import com.relyon.economizai.repository.NotificationEventRepository;
 import com.relyon.economizai.repository.ConsumptionSnoozeRepository;
@@ -62,6 +63,7 @@ import com.relyon.economizai.model.UserWatchedMarket;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.auth.EmailVerificationService;
 import com.relyon.economizai.service.auth.LoginActivityRecorder;
+import com.relyon.economizai.service.auth.SignupAlertService;
 import com.relyon.economizai.service.auth.RefreshTokenService;
 import com.relyon.economizai.service.notifications.NotificationRuleService;
 import com.relyon.economizai.service.privacy.LogMasker;
@@ -112,6 +114,8 @@ public class UserService {
     private final RefreshTokenService refreshTokenService;
     private final NotificationRuleService notificationRuleService;
     private final LoginActivityRecorder loginActivityRecorder;
+    private final SubscriptionService subscriptionService;
+    private final SignupAlertService signupAlertService;
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -141,14 +145,17 @@ public class UserService {
 
         var savedUser = userRepository.save(user);
         notificationRuleService.ensureDefaults(savedUser);
+        var signupPromoValidUntil = subscriptionService.grantSignupPromoIfEnabled(savedUser);
         loginActivityRecorder.recordRegistration(savedUser, request.platform());
+        signupAlertService.notifyNewAccount(savedUser, "e-mail/senha");
         emailVerificationService.sendVerificationFor(savedUser);
         var token = jwtService.generateToken(savedUser);
         var refreshToken = refreshTokenService.issue(savedUser);
         log.info("New user registered: {} (household {}, terms v{}, privacy v{})",
                 LogMasker.email(savedUser.getEmail()), household.getId(),
                 savedUser.getAcceptedTermsVersion(), savedUser.getAcceptedPrivacyVersion());
-        return new AuthResponse(token, refreshToken, UserResponse.from(savedUser));
+        return new AuthResponse(token, refreshToken, UserResponse.from(savedUser),
+                signupPromoValidUntil != null, signupPromoValidUntil);
     }
 
     public AuthResponse login(LoginRequest request) {
@@ -170,7 +177,7 @@ public class UserService {
         var token = jwtService.generateToken(user);
         var refreshToken = refreshTokenService.issue(user);
         log.info("User logged in: {}", LogMasker.email(user.getEmail()));
-        return new AuthResponse(token, refreshToken, UserResponse.from(user));
+        return new AuthResponse(token, refreshToken, UserResponse.from(user), false, null);
     }
 
     public UserResponse getProfile(User user) {

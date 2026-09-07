@@ -13,7 +13,9 @@ import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.HouseholdService;
 import com.relyon.economizai.service.auth.LoginActivityRecorder;
 import com.relyon.economizai.service.auth.RefreshTokenService;
+import com.relyon.economizai.service.auth.SignupAlertService;
 import com.relyon.economizai.service.notifications.NotificationRuleService;
+import com.relyon.economizai.service.subscription.SubscriptionService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -21,6 +23,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -60,6 +63,12 @@ class SocialLoginServiceTest {
 
     @Mock
     private LoginActivityRecorder loginActivityRecorder;
+
+    @Mock
+    private SubscriptionService subscriptionService;
+
+    @Mock
+    private SignupAlertService signupAlertService;
 
     @InjectMocks
     private SocialLoginService socialLoginService;
@@ -103,6 +112,29 @@ class SocialLoginServiceTest {
         assertEquals(LegalDocuments.CURRENT_PRIVACY_VERSION, saved.getAcceptedPrivacyVersion());
         verify(householdService).createSoloHousehold();
         verify(notificationRuleService).ensureDefaults(saved);
+        verify(subscriptionService).grantSignupPromoIfEnabled(saved);
+        assertEquals(false, response.signupPromoGranted());
+        assertNull(response.signupPromoValidUntil());
+    }
+
+    @Test
+    void loginWithGoogle_newUser_reflectsSignupPromoGrantInResponse() {
+        when(googleTokenVerifier.verify("id-token"))
+                .thenReturn(new GoogleTokenVerifier.GoogleClaims("sub-1", "maria@example.com", true, "Maria"));
+        when(userRepository.findByAuthProviderAndProviderSubject(AuthProvider.GOOGLE, "sub-1"))
+                .thenReturn(Optional.empty());
+        when(userRepository.findByEmail("maria@example.com")).thenReturn(Optional.empty());
+        when(householdService.createSoloHousehold())
+                .thenReturn(Household.builder().id(UUID.randomUUID()).inviteCode("ABC123").build());
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        var promoValidUntil = LocalDateTime.now().plusMonths(3);
+        when(subscriptionService.grantSignupPromoIfEnabled(any(User.class))).thenReturn(promoValidUntil);
+        stubTokenIssue();
+
+        var response = socialLoginService.loginWithGoogle(new GoogleLoginRequest("id-token", null));
+
+        assertEquals(true, response.signupPromoGranted());
+        assertEquals(promoValidUntil, response.signupPromoValidUntil());
     }
 
     @Test
@@ -126,6 +158,7 @@ class SocialLoginServiceTest {
         verify(userRepository, never()).save(any(User.class));
         verify(householdService, never()).createSoloHousehold();
         verify(notificationRuleService, never()).ensureDefaults(any(User.class));
+        verify(subscriptionService, never()).grantSignupPromoIfEnabled(any(User.class));
     }
 
     @Test
@@ -254,6 +287,7 @@ class SocialLoginServiceTest {
         assertTrue(saved.isEmailVerified());
         assertNull(saved.getPassword());
         verify(notificationRuleService).ensureDefaults(saved);
+        verify(subscriptionService).grantSignupPromoIfEnabled(saved);
     }
 
     @Test

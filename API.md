@@ -98,8 +98,21 @@ POST /api/v1/auth/register
   "acceptedPrivacyVersion": "1.0",
   "platform": "WEB"                // optional: WEB | ANDROID | IOS
 }
-→ 201 { "token": "...", "refreshToken": "...", "user": { ... } }
+→ 201 {
+  "token": "...", "refreshToken": "...", "user": { ... },
+  "signupPromoGranted": true,
+  "signupPromoValidUntil": "2027-03-02T12:00:00"
+}
 ```
+
+**Signup promo banner ("até segunda ordem"):** while the promo is on, every brand-new
+account is granted PRO automatically. `signupPromoGranted` is `true` only on the exact
+`register` / `google` / `apple` call that just created the account **and** the promo was
+active for it; `signupPromoValidUntil` is the PRO expiry to show ("grátis até DD/MM").
+Both are always `false`/`null` on `/login` and `/refresh` — check them right after
+register/social-login to fire a one-time banner, don't poll for them elsewhere. If the
+promo is later turned off, new signups simply get `signupPromoGranted: false` again — no
+contract change needed on your side.
 
 `platform` is **optional** on all auth endpoints (`/register`, `/login`, `/google`,
 `/apple`). Send `WEB`, `ANDROID`, or `IOS`. It records the **registration platform**
@@ -137,9 +150,12 @@ POST /api/v1/auth/login
 The mobile app runs the **native** Google / Apple sign-in SDK, gets the provider token, and sends it here. The backend verifies the token (RS256 against the provider's JWKS; issuer/expiry checks, and audience when client IDs are configured), then **finds-or-creates** the user and returns the **same `AuthResponse`** as password login.
 
 ```
-POST /api/v1/auth/google   { "idToken": "<google id_token>", "platform": "ANDROID" }                 → 200 { token, refreshToken, user }
-POST /api/v1/auth/apple    { "identityToken": "<apple identity_token>", "name": "Maria Silva", "platform": "IOS" } → 200 { token, refreshToken, user }
+POST /api/v1/auth/google   { "idToken": "<google id_token>", "platform": "ANDROID" }                 → 200 { token, refreshToken, user, signupPromoGranted, signupPromoValidUntil }
+POST /api/v1/auth/apple    { "identityToken": "<apple identity_token>", "name": "Maria Silva", "platform": "IOS" } → 200 { token, refreshToken, user, signupPromoGranted, signupPromoValidUntil }
 ```
+
+`signupPromoGranted`/`signupPromoValidUntil` behave exactly as in `/register` above —
+`true`/set only when this call just created the account (not on a returning user's login).
 
 - First-time social users get a **solo household**, `emailVerified=true` (the provider already verified it — no verification email is sent), and the current legal versions are accepted on their behalf (show terms in the app before the social button).
 - If an existing **local** account has the same email, the provider is **linked** to it.
