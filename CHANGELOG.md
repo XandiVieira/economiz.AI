@@ -16,6 +16,16 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-09-07 — Alerta de nova conta no e-mail do admin
+
+Toda conta nova (senha ou social login) dispara um e-mail pro destinatário de
+contato (`CONTACT_RECIPIENT`) com nome, e-mail, método, plataforma, idioma,
+IP e país (via Cloudflare). Não muda nada no contrato da API nem no fluxo de
+cadastro — o envio é assíncrono e nunca bloqueia/falha o registro. Desligar:
+`SIGNUP_ALERT_ENABLED=false` (env var, sem deploy).
+
+---
+
 ## 2026-09-07 — Web dashboard: login destravado (CORS) + pedido pro FE
 
 `https://dashboard.economizaai.app` agora está no `CORS_ORIGINS` dos dois

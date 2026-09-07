@@ -202,6 +202,11 @@ economizai:
   # Blank + no SMTP → the message is logged (DEV-MODE) instead of emailed, never lost.
   contact:
     recipient: ${CONTACT_RECIPIENT:contato@economizaai.app}
+  # Admin heads-up e-mail on every new account (password or social), sent to the
+  # contact recipient with name/e-mail/platform/IP/country. Advisory only — never
+  # blocks registration. Kill switch: SIGNUP_ALERT_ENABLED=false (no deploy needed).
+  signup-alert:
+    enabled: ${SIGNUP_ALERT_ENABLED:true}
   beta:
     # Where beta-tester signups are emailed. Falls back to the contact recipient
     # when unset, so leads are never dropped.

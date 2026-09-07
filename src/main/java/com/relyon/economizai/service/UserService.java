@@ -63,6 +63,7 @@ import com.relyon.economizai.model.UserWatchedMarket;
 import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.auth.EmailVerificationService;
 import com.relyon.economizai.service.auth.LoginActivityRecorder;
+import com.relyon.economizai.service.auth.SignupAlertService;
 import com.relyon.economizai.service.auth.RefreshTokenService;
 import com.relyon.economizai.service.notifications.NotificationRuleService;
 import com.relyon.economizai.service.privacy.LogMasker;
@@ -114,6 +115,7 @@ public class UserService {
     private final NotificationRuleService notificationRuleService;
     private final LoginActivityRecorder loginActivityRecorder;
     private final SubscriptionService subscriptionService;
+    private final SignupAlertService signupAlertService;
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -145,6 +147,7 @@ public class UserService {
         notificationRuleService.ensureDefaults(savedUser);
         var signupPromoValidUntil = subscriptionService.grantSignupPromoIfEnabled(savedUser);
         loginActivityRecorder.recordRegistration(savedUser, request.platform());
+        signupAlertService.notifyNewAccount(savedUser, "e-mail/senha");
         emailVerificationService.sendVerificationFor(savedUser);
         var token = jwtService.generateToken(savedUser);
         var refreshToken = refreshTokenService.issue(savedUser);

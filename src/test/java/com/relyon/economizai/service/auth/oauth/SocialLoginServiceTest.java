@@ -13,6 +13,7 @@ import com.relyon.economizai.security.JwtService;
 import com.relyon.economizai.service.HouseholdService;
 import com.relyon.economizai.service.auth.LoginActivityRecorder;
 import com.relyon.economizai.service.auth.RefreshTokenService;
+import com.relyon.economizai.service.auth.SignupAlertService;
 import com.relyon.economizai.service.notifications.NotificationRuleService;
 import com.relyon.economizai.service.subscription.SubscriptionService;
 import org.junit.jupiter.api.Test;
@@ -65,6 +66,9 @@ class SocialLoginServiceTest {
 
     @Mock
     private SubscriptionService subscriptionService;
+
+    @Mock
+    private SignupAlertService signupAlertService;
 
     @InjectMocks
     private SocialLoginService socialLoginService;

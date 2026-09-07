@@ -15,6 +15,7 @@ import com.relyon.economizai.service.HouseholdService;
 import com.relyon.economizai.service.LocalizedMessageService;
 import com.relyon.economizai.service.auth.LoginActivityRecorder;
 import com.relyon.economizai.service.auth.RefreshTokenService;
+import com.relyon.economizai.service.auth.SignupAlertService;
 import com.relyon.economizai.service.notifications.NotificationRuleService;
 import com.relyon.economizai.service.privacy.LogMasker;
 import com.relyon.economizai.service.subscription.SubscriptionService;
@@ -53,6 +54,7 @@ public class SocialLoginService {
     private final NotificationRuleService notificationRuleService;
     private final LoginActivityRecorder loginActivityRecorder;
     private final SubscriptionService subscriptionService;
+    private final SignupAlertService signupAlertService;
 
     @Transactional
     public AuthResponse loginWithGoogle(GoogleLoginRequest request) {
@@ -145,6 +147,7 @@ public class SocialLoginService {
         notificationRuleService.ensureDefaults(savedUser);
         var signupPromoValidUntil = subscriptionService.grantSignupPromoIfEnabled(savedUser);
         loginActivityRecorder.recordRegistration(savedUser, platform);
+        signupAlertService.notifyNewAccount(savedUser, "social login " + provider);
         log.info("social.login created provider={} user={} household={}",
                 provider, LogMasker.email(savedUser.getEmail()), household.getId());
         return new ResolvedUser(savedUser, signupPromoValidUntil);

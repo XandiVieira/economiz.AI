@@ -52,6 +52,7 @@ import com.relyon.economizai.model.enums.Platform;
 import com.relyon.economizai.service.auth.EmailVerificationService;
 import com.relyon.economizai.service.auth.LoginActivityRecorder;
 import com.relyon.economizai.service.auth.RefreshTokenService;
+import com.relyon.economizai.service.auth.SignupAlertService;
 import com.relyon.economizai.service.notifications.NotificationRuleService;
 import org.mockito.ArgumentMatchers;
 import org.springframework.data.domain.PageImpl;
@@ -167,6 +168,9 @@ class UserServiceTest {
 
     @Mock
     private SubscriptionService subscriptionService;
+
+    @Mock
+    private SignupAlertService signupAlertService;
 
     @InjectMocks
     private UserService userService;
