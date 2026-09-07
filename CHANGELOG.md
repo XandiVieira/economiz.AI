@@ -16,6 +16,24 @@ For the complete API contract see [API.md](./API.md) (walk-through) or
 
 ---
 
+## 2026-09-07 — Web dashboard: login destravado (CORS) + pedido pro FE
+
+`https://dashboard.economizaai.app` agora está no `CORS_ORIGINS` dos dois
+ambientes — antes o backend rejeitava toda requisição do dashboard com
+403 "Invalid CORS request" **antes** de autenticar, então o login web nunca
+funcionou (e o worker às vezes reportava 503). Nada mudou no contrato da API.
+
+**Pedido pro FE:** a tela de login engole falhas silenciosamente — nem o 403
+de CORS nem um 401 de senha errada mostram qualquer feedback. Exibam o
+`parseErrorMessage`/mensagem localizada do corpo da resposta (ou um toast
+genérico em erro de rede).
+
+O backend também passou a logar rejeições de CORS
+(`cors.rejected origin=... method=... path=...`) — se um novo domínio de FE
+subir e "nada acontecer", esse log entrega o motivo na hora.
+
+---
+
 ## 2026-09-02 — Promo: todo usuário vira PRO ("até segunda ordem")
 
 Toda conta existente foi promovida para `subscriptionTier: "PRO"` com validade
